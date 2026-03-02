@@ -137,6 +137,7 @@ function VehicleForm({
     type_wagen: vehicle?.type_wagen || '',
     ritnummer: vehicle?.ritnummer || '',
     bedrijf: vehicle?.bedrijf?.toString() || '',
+    minimum_weken_per_jaar: vehicle?.minimum_weken_per_jaar?.toString() || '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -163,6 +164,7 @@ function VehicleForm({
       type_wagen: formData.type_wagen || undefined,
       ritnummer: formData.ritnummer || undefined,
       bedrijf: formData.bedrijf,
+      minimum_weken_per_jaar: formData.minimum_weken_per_jaar ? parseInt(formData.minimum_weken_per_jaar) : null,
     }
     onSave(saveData)
   }
@@ -230,6 +232,23 @@ function VehicleForm({
           ))}
         </select>
         {errors.bedrijf && <p className="text-red-500 text-xs mt-1">{errors.bedrijf}</p>}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {t('fleet.minimumWeeksPerYear')}
+        </label>
+        <input
+          type="number"
+          name="minimum_weken_per_jaar"
+          value={formData.minimum_weken_per_jaar}
+          onChange={handleChange}
+          placeholder={t('fleet.minimumWeeksPlaceholder')}
+          className="input"
+          min="0"
+          max="52"
+        />
+        <p className="text-xs text-gray-500 mt-1">{t('fleet.minimumWeeksHelp')}</p>
       </div>
 
       <div className="flex justify-end gap-3 pt-4 border-t">

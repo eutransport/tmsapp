@@ -475,7 +475,7 @@ function TimeEntryForm({
           type="button"
           onClick={addFollowUpTrip}
           disabled={!canAddFollowUp()}
-          className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-primary-400 hover:text-primary-600 hover:bg-primary-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-300 disabled:hover:text-gray-600 disabled:hover:bg-transparent"
+          className="w-full py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-green-600"
         >
           <PlusIcon className="w-4 h-4" />
           {t('timeEntries.addFollowUpTrip')}

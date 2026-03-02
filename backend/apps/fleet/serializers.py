@@ -8,6 +8,7 @@ class VehicleSerializer(serializers.ModelSerializer):
         model = Vehicle
         fields = [
             'id', 'kenteken', 'type_wagen', 'ritnummer',
-            'bedrijf', 'bedrijf_naam', 'created_at', 'updated_at'
+            'bedrijf', 'bedrijf_naam', 'minimum_weken_per_jaar',
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']

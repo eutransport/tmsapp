@@ -16,6 +16,12 @@ class Vehicle(models.Model):
         verbose_name='Bedrijf'
     )
     
+    minimum_weken_per_jaar = models.PositiveIntegerField(
+        null=True, blank=True,
+        verbose_name='Minimum weken per jaar',
+        help_text='Minimaal aantal weken dat dit voertuig per jaar moet draaien. Laat leeg om niet bij te houden.'
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

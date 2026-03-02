@@ -59,69 +59,67 @@ export default function Pagination({
       </div>
 
       {/* Right: Pagination controls */}
-      {totalPages > 1 && (
-        <div className="flex items-center gap-1 sm:gap-2">
-          <button
-            onClick={() => onPageChange(1)}
-            disabled={currentPage === 1}
-            className="p-2 min-w-[44px] min-h-[44px] text-sm text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
-            title={t('common.firstPage')}
-          >
-            ««
-          </button>
-          <button
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="p-2 min-w-[44px] min-h-[44px] text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
-            title={t('common.previousPage')}
-          >
-            <ChevronLeftIcon className="h-5 w-5" />
-          </button>
-          
-          {/* Mobile: Simple page indicator */}
-          <span className="xs:hidden px-3 py-2 text-sm text-gray-600">
-            {currentPage} / {totalPages}
-          </span>
-          
-          {/* Desktop: Page numbers */}
-          <div className="hidden xs:flex items-center gap-1">
-            {generatePageNumbers(currentPage, totalPages).map((pageNum, idx) => (
-              pageNum === '...' ? (
-                <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
-              ) : (
-                <button
-                  key={pageNum}
-                  onClick={() => onPageChange(pageNum as number)}
-                  className={`min-w-[44px] min-h-[44px] px-3 py-2 text-sm rounded ${
-                    pageNum === currentPage
-                      ? 'bg-primary-600 text-white'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              )
-            ))}
-          </div>
-          
-          <button
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="p-2 min-w-[44px] min-h-[44px] text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
-            title={t('common.nextPage')}
-          >
-            <ChevronRightIcon className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => onPageChange(totalPages)}
-            disabled={currentPage === totalPages}
-            className="p-2 min-w-[44px] min-h-[44px] text-sm text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
-            title={t('common.lastPage')}
-          >
-            »»
-          </button>
+      <div className="flex items-center gap-1 sm:gap-2">
+        <button
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="p-2 min-w-[44px] min-h-[44px] text-sm text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
+          title={t('common.firstPage')}
+        >
+          ««
+        </button>
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="p-2 min-w-[44px] min-h-[44px] text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
+          title={t('common.previousPage')}
+        >
+          <ChevronLeftIcon className="h-5 w-5" />
+        </button>
+        
+        {/* Mobile: Simple page indicator */}
+        <span className="xs:hidden px-3 py-2 text-sm text-gray-600">
+          {currentPage} / {totalPages}
+        </span>
+        
+        {/* Desktop: Page numbers */}
+        <div className="hidden xs:flex items-center gap-1">
+          {generatePageNumbers(currentPage, totalPages).map((pageNum, idx) => (
+            pageNum === '...' ? (
+              <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
+            ) : (
+              <button
+                key={pageNum}
+                onClick={() => onPageChange(pageNum as number)}
+                className={`min-w-[44px] min-h-[44px] px-3 py-2 text-sm rounded ${
+                  pageNum === currentPage
+                    ? 'bg-primary-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {pageNum}
+              </button>
+            )
+          ))}
         </div>
-      )}
+        
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="p-2 min-w-[44px] min-h-[44px] text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
+          title={t('common.nextPage')}
+        >
+          <ChevronRightIcon className="h-5 w-5" />
+        </button>
+        <button
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className="p-2 min-w-[44px] min-h-[44px] text-sm text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
+          title={t('common.lastPage')}
+        >
+          »»
+        </button>
+      </div>
     </div>
   )
 }

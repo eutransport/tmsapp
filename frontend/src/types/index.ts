@@ -146,6 +146,7 @@ export interface Vehicle {
   ritnummer: string
   bedrijf: string
   bedrijf_naam: string
+  minimum_weken_per_jaar: number | null
   created_at: string
   updated_at: string
 }

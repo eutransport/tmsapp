@@ -278,3 +278,81 @@ export function formatMinutesToDuration(minutes: number): string {
   const mins = minutes % 60
   return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:00`
 }
+
+// ============================================
+// Weekly Hours Overview API
+// ============================================
+
+export interface WeeklyHoursOverview {
+  user_id: string
+  user_naam: string
+  user_email: string
+  user_bedrijf: string
+  jaar: number
+  weeknummer: number
+  gewerkte_uren: number
+  minimum_uren: number | null
+  gemiste_uren: number | null
+  totaal_km: number
+  entries_count: number
+}
+
+/**
+ * Get weekly hours overview for all users (admin only)
+ */
+export async function getWeeklyHoursOverview(jaar?: number, userId?: string): Promise<WeeklyHoursOverview[]> {
+  const params = new URLSearchParams()
+  if (jaar) params.append('jaar', jaar.toString())
+  if (userId) params.append('user', userId)
+  
+  const response = await api.get(`/time-entries/weekly_hours_overview/?${params.toString()}`)
+  return response.data
+}
+
+/**
+ * Set minimum hours for a user for a specific week
+ */
+export async function setMinimumHours(data: {
+  user_id: string
+  jaar: number
+  weeknummer: number
+  minimum_uren: number
+}): Promise<{ success: boolean; created: boolean }> {
+  const response = await api.post('/time-entries/set_minimum_hours/', data)
+  return response.data
+}
+
+/**
+ * Set minimum hours for a user for ALL weeks in a year
+ */
+export async function setMinimumHoursBulk(data: {
+  user_id: string
+  jaar: number
+  minimum_uren: number
+}): Promise<{ success: boolean; created: number; updated: number; total_weeks: number }> {
+  const response = await api.post('/time-entries/set_minimum_hours_bulk/', data)
+  return response.data
+}
+
+/**
+ * Add missed hours as invoice line item
+ */
+export async function addMissedHoursToInvoice(data: {
+  user_id: string
+  jaar: number
+  weeknummer: number
+  invoice_id?: string
+  bedrijf_id?: string
+  prijs_per_uur: number
+}): Promise<{
+  success: boolean
+  invoice_id: string
+  factuurnummer: string
+  line_id: string
+  gemiste_uren: number
+  omschrijving: string
+  totaal: number
+}> {
+  const response = await api.post('/time-entries/add_missed_hours_to_invoice/', data)
+  return response.data
+}

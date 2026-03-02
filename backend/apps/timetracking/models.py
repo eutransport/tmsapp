@@ -11,7 +11,6 @@ class TimeEntryStatus(models.TextChoices):
 
 
 class TimeEntry(models.Model):
-    """Urenregistratie model."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -72,3 +71,32 @@ class TimeEntry(models.Model):
         self.totaal_uren = werk_tijd - self.pauze
         
         super().save(*args, **kwargs)
+
+
+class WeeklyMinimumHours(models.Model):
+    """Minimum uren per gebruiker per week."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='weekly_minimum_hours',
+        verbose_name='Gebruiker'
+    )
+    jaar = models.PositiveIntegerField(verbose_name='Jaar')
+    weeknummer = models.PositiveIntegerField(verbose_name='Weeknummer')
+    minimum_uren = models.DecimalField(
+        max_digits=5, decimal_places=2, default=40,
+        verbose_name='Minimale uren'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Minimale weekuren'
+        verbose_name_plural = 'Minimale weekuren'
+        unique_together = ['user', 'jaar', 'weeknummer']
+        ordering = ['-jaar', '-weeknummer']
+    
+    def __str__(self):
+        return f"{self.user} - {self.jaar} W{self.weeknummer}: {self.minimum_uren}u"

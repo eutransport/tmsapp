@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import TimeEntry
+from .models import TimeEntry, WeeklyMinimumHours
 
 
 class TimeEntrySerializer(serializers.ModelSerializer):
@@ -78,3 +78,12 @@ class TimeEntrySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Datum mag niet meer dan 1 jaar in het verleden liggen.')
         
         return value
+
+
+class WeeklyMinimumHoursSerializer(serializers.ModelSerializer):
+    user_naam = serializers.CharField(source='user.full_name', read_only=True)
+    
+    class Meta:
+        model = WeeklyMinimumHours
+        fields = ['id', 'user', 'user_naam', 'jaar', 'weeknummer', 'minimum_uren', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']

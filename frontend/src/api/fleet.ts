@@ -7,12 +7,33 @@ import { Vehicle } from '@/types'
 
 export interface VehicleCreate {
   kenteken: string
-  type_wagen: string
-  ritnummer: string
+  type_wagen?: string
+  ritnummer?: string
   bedrijf: string
+  minimum_weken_per_jaar?: number | null
 }
 
 export interface VehicleUpdate extends Partial<VehicleCreate> {}
+
+// Vehicle weeks overview
+export interface VehicleWeeksOverview {
+  vehicle_id: string
+  kenteken: string
+  type_wagen: string
+  ritnummer: string
+  bedrijf_naam: string
+  minimum_weken: number
+  gewerkte_weken: number
+  gemiste_weken: number
+  percentage: number
+}
+
+export async function getVehicleWeeksOverview(jaar?: number): Promise<VehicleWeeksOverview[]> {
+  const params = new URLSearchParams()
+  if (jaar) params.append('jaar', jaar.toString())
+  const response = await api.get(`/fleet/vehicle_weeks_overview/?${params.toString()}`)
+  return response.data
+}
 
 export interface VehiclesResponse {
   count: number

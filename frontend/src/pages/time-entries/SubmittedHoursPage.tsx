@@ -10,7 +10,11 @@ import {
   PencilIcon,
   XMarkIcon,
   ClockIcon,
+  ChartBarIcon,
+  TruckIcon,
 } from '@heroicons/react/24/outline'
+import WeeklyHoursTab from './WeeklyHoursTab'
+import VehicleWeeksTab from './VehicleWeeksTab'
 import { TimeEntry } from '@/types'
 import {
   getTimeEntries,
@@ -43,6 +47,9 @@ function formatDate(dateStr: string): string {
 
 export default function SubmittedHoursPage() {
   const { t } = useTranslation()
+  
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'submitted' | 'weekly' | 'vehicleWeeks'>('submitted')
   
   // State
   const [loading, setLoading] = useState(true)
@@ -209,6 +216,53 @@ export default function SubmittedHoursPage() {
         </div>
       </div>
 
+      {/* Tab navigation */}
+      <div className="mb-6 border-b border-gray-200">
+        <nav className="-mb-px flex gap-6" aria-label="Tabs">
+          <button
+            onClick={() => setActiveTab('submitted')}
+            className={`flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+              activeTab === 'submitted'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <ClockIcon className="h-5 w-5" />
+            {t('timeEntries.submittedHoursTab')}
+          </button>
+          <button
+            onClick={() => setActiveTab('weekly')}
+            className={`flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+              activeTab === 'weekly'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <ChartBarIcon className="h-5 w-5" />
+            {t('weeklyHours.title')}
+          </button>
+          <button
+            onClick={() => setActiveTab('vehicleWeeks')}
+            className={`flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+              activeTab === 'vehicleWeeks'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <TruckIcon className="h-5 w-5" />
+            {t('vehicleWeeks.title')}
+          </button>
+        </nav>
+      </div>
+
+      {/* Weekly Hours Tab */}
+      {activeTab === 'weekly' && <WeeklyHoursTab />}
+
+      {/* Vehicle Weeks Tab */}
+      {activeTab === 'vehicleWeeks' && <VehicleWeeksTab />}
+
+      {/* Submitted Hours Tab */}
+      {activeTab === 'submitted' && <>
       {/* Search bar and filters */}
       <div className="card mb-6">
         <div className="p-4">
@@ -668,6 +722,7 @@ export default function SubmittedHoursPage() {
           </div>
         </Dialog>
       </Transition>
+      </>}
     </div>
   )
 }
