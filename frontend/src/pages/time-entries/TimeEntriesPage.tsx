@@ -145,25 +145,14 @@ function TimeEntryForm({
 }: {
   entry?: TimeEntry
   vehicles: Vehicle[]
-  onSave: (data: TimeEntryCreate | TimeEntryUpdate) => void
+  onSave: (data: TimeEntryCreate[] | TimeEntryUpdate) => void
   onCancel: () => void
   isLoading: boolean
   t: (key: string) => string
 }) {
-  const [formData, setFormData] = useState({
-    ritnummer: entry?.ritnummer || '',
-    datum: entry?.datum || new Date().toISOString().split('T')[0],
-    kenteken: entry?.kenteken || '',
-    km_start: entry?.km_start?.toString() || '',
-    km_eind: entry?.km_eind?.toString() || '',
-    aanvang: entry?.aanvang || '07:00',
-    eind: entry?.eind || '16:00',
-    pauze_minuten: entry?.pauze ? Math.floor(parsePauze(entry.pauze) / 60) : 30,
-  })
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const isEditMode = !!entry
 
   function parsePauze(pauze: string): number {
-    // Parse pauze duration to seconds
     if (!pauze) return 0
     if (pauze.includes(':')) {
       const parts = pauze.split(':')
@@ -172,29 +161,72 @@ function TimeEntryForm({
     return 0
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-    setErrors(prev => ({ ...prev, [name]: '' }))
+  // Shared state (datum + kenteken)
+  const [datum, setDatum] = useState(entry?.datum || new Date().toISOString().split('T')[0])
+  const [kenteken, setKenteken] = useState(entry?.kenteken || '')
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // Per-trip state
+  const [trips, setTrips] = useState<Array<{
+    ritnummer: string
+    km_start: string
+    km_eind: string
+    aanvang: string
+    eind: string
+    pauze_minuten: number
+  }>>([{
+    ritnummer: entry?.ritnummer || '',
+    km_start: entry?.km_start?.toString() || '',
+    km_eind: entry?.km_eind?.toString() || '',
+    aanvang: entry?.aanvang || '07:00',
+    eind: entry?.eind || '16:00',
+    pauze_minuten: entry?.pauze ? Math.floor(parsePauze(entry.pauze) / 60) : 30,
+  }])
+
+  const updateTrip = (index: number, field: string, value: string | number) => {
+    setTrips(prev => prev.map((trip, i) =>
+      i === index ? { ...trip, [field]: value } : trip
+    ))
+    setErrors(prev => ({ ...prev, [`${index}_${field}`]: '' }))
+  }
+
+  const addFollowUpTrip = () => {
+    const lastTrip = trips[trips.length - 1]
+    setTrips(prev => [...prev, {
+      ritnummer: '',
+      km_start: lastTrip.km_eind,
+      km_eind: '',
+      aanvang: lastTrip.eind,
+      eind: '',
+      pauze_minuten: 30,
+    }])
+  }
+
+  const removeTrip = (index: number) => {
+    if (trips.length <= 1) return
+    setTrips(prev => prev.filter((_, i) => i !== index))
   }
 
   const validate = () => {
     const newErrors: Record<string, string> = {}
     
-    if (!formData.ritnummer.trim()) newErrors.ritnummer = t('timeEntries.errors.routeNumberRequired')
-    if (!formData.datum) newErrors.datum = t('timeEntries.errors.dateRequired')
-    if (!formData.kenteken.trim()) newErrors.kenteken = t('timeEntries.errors.licensePlateRequired')
-    if (!formData.km_start) newErrors.km_start = t('timeEntries.errors.kmStartRequired')
-    if (!formData.km_eind) newErrors.km_eind = t('timeEntries.errors.kmEndRequired')
-    if (!formData.aanvang) newErrors.aanvang = t('timeEntries.errors.startTimeRequired')
-    if (!formData.eind) newErrors.eind = t('timeEntries.errors.endTimeRequired')
+    if (!datum) newErrors.datum = t('timeEntries.errors.dateRequired')
+    if (!kenteken.trim()) newErrors.kenteken = t('timeEntries.errors.licensePlateRequired')
     
-    // Validate km_eind > km_start
-    const kmStart = parseInt(formData.km_start)
-    const kmEind = parseInt(formData.km_eind)
-    if (!isNaN(kmStart) && !isNaN(kmEind) && kmEind < kmStart) {
-      newErrors.km_eind = t('timeEntries.errors.kmEndGreater')
-    }
+    trips.forEach((trip, idx) => {
+      const prefix = `${idx}_`
+      if (!trip.ritnummer.trim()) newErrors[`${prefix}ritnummer`] = t('timeEntries.errors.routeNumberRequired')
+      if (!trip.km_start) newErrors[`${prefix}km_start`] = t('timeEntries.errors.kmStartRequired')
+      if (!trip.km_eind) newErrors[`${prefix}km_eind`] = t('timeEntries.errors.kmEndRequired')
+      if (!trip.aanvang) newErrors[`${prefix}aanvang`] = t('timeEntries.errors.startTimeRequired')
+      if (!trip.eind) newErrors[`${prefix}eind`] = t('timeEntries.errors.endTimeRequired')
+      
+      const kmStart = parseInt(trip.km_start)
+      const kmEind = parseInt(trip.km_eind)
+      if (!isNaN(kmStart) && !isNaN(kmEind) && kmEind < kmStart) {
+        newErrors[`${prefix}km_eind`] = t('timeEntries.errors.kmEndGreater')
+      }
+    })
     
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -204,83 +236,87 @@ function TimeEntryForm({
     e.preventDefault()
     if (!validate()) return
     
-    const saveData: TimeEntryCreate = {
-      ritnummer: formData.ritnummer,
-      datum: formData.datum,
-      kenteken: formData.kenteken.toUpperCase(),
-      km_start: parseInt(formData.km_start),
-      km_eind: parseInt(formData.km_eind),
-      aanvang: formData.aanvang,
-      eind: formData.eind,
-      pauze: formatMinutesToDuration(formData.pauze_minuten),
+    if (isEditMode) {
+      const trip = trips[0]
+      const saveData: TimeEntryUpdate = {
+        ritnummer: trip.ritnummer,
+        datum,
+        kenteken: kenteken.toUpperCase(),
+        km_start: parseInt(trip.km_start),
+        km_eind: parseInt(trip.km_eind),
+        aanvang: trip.aanvang,
+        eind: trip.eind,
+        pauze: formatMinutesToDuration(trip.pauze_minuten),
+      }
+      onSave(saveData)
+    } else {
+      const entries: TimeEntryCreate[] = trips.map(trip => ({
+        ritnummer: trip.ritnummer,
+        datum,
+        kenteken: kenteken.toUpperCase(),
+        km_start: parseInt(trip.km_start),
+        km_eind: parseInt(trip.km_eind),
+        aanvang: trip.aanvang,
+        eind: trip.eind,
+        pauze: formatMinutesToDuration(trip.pauze_minuten),
+      }))
+      onSave(entries)
     }
-    onSave(saveData)
   }
 
-  // Calculate totals
-  const totaalKm = Math.max(0, (parseInt(formData.km_eind) || 0) - (parseInt(formData.km_start) || 0))
-  
-  const calculateTotaalUren = () => {
-    if (!formData.aanvang || !formData.eind) return '0:00'
+  // Calculate totals for a trip
+  const calculateTripTotals = (trip: typeof trips[0]) => {
+    const totaalKm = Math.max(0, (parseInt(trip.km_eind) || 0) - (parseInt(trip.km_start) || 0))
     
-    const [aH, aM] = formData.aanvang.split(':').map(Number)
-    const [eH, eM] = formData.eind.split(':').map(Number)
-    
-    let aanvangMinutes = aH * 60 + aM
-    let eindMinutes = eH * 60 + eM
-    
-    // Handle overnight
-    if (eindMinutes < aanvangMinutes) {
-      eindMinutes += 24 * 60
+    let totaalUren = '0:00'
+    if (trip.aanvang && trip.eind) {
+      const [aH, aM] = trip.aanvang.split(':').map(Number)
+      const [eH, eM] = trip.eind.split(':').map(Number)
+      
+      let aanvangMinutes = aH * 60 + aM
+      let eindMinutes = eH * 60 + eM
+      
+      if (eindMinutes < aanvangMinutes) {
+        eindMinutes += 24 * 60
+      }
+      
+      const werkMinutes = eindMinutes - aanvangMinutes - trip.pauze_minuten
+      const hours = Math.floor(Math.max(0, werkMinutes) / 60)
+      const minutes = Math.max(0, werkMinutes) % 60
+      totaalUren = `${hours}:${minutes.toString().padStart(2, '0')}`
     }
-    
-    const werkMinutes = eindMinutes - aanvangMinutes - formData.pauze_minuten
-    const hours = Math.floor(werkMinutes / 60)
-    const minutes = werkMinutes % 60
-    
-    return `${hours}:${minutes.toString().padStart(2, '0')}`
+    return { totaalKm, totaalUren }
+  }
+
+  const canAddFollowUp = () => {
+    const lastTrip = trips[trips.length - 1]
+    return lastTrip.km_eind !== '' && lastTrip.eind !== ''
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('common.date')} *
-          </label>
-          <input
-            type="date"
-            name="datum"
-            value={formData.datum}
-            onChange={handleChange}
-            className={`input ${errors.datum ? 'border-red-500' : ''}`}
-          />
-          {errors.datum && <p className="text-red-500 text-xs mt-1">{errors.datum}</p>}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('timeEntries.routeNumber')} *
-          </label>
-          <input
-            type="text"
-            name="ritnummer"
-            value={formData.ritnummer}
-            onChange={handleChange}
-            placeholder={t('timeEntries.routeNumberPlaceholder')}
-            className={`input ${errors.ritnummer ? 'border-red-500' : ''}`}
-          />
-          {errors.ritnummer && <p className="text-red-500 text-xs mt-1">{errors.ritnummer}</p>}
-        </div>
+      {/* Shared: Datum */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {t('common.date')} *
+        </label>
+        <input
+          type="date"
+          value={datum}
+          onChange={(e) => { setDatum(e.target.value); setErrors(prev => ({ ...prev, datum: '' })) }}
+          className={`input ${errors.datum ? 'border-red-500' : ''}`}
+        />
+        {errors.datum && <p className="text-red-500 text-xs mt-1">{errors.datum}</p>}
       </div>
 
+      {/* Shared: Kenteken */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           {t('fleet.licensePlate')} *
         </label>
         <select
-          name="kenteken"
-          value={formData.kenteken}
-          onChange={handleChange}
+          value={kenteken}
+          onChange={(e) => { setKenteken(e.target.value); setErrors(prev => ({ ...prev, kenteken: '' })) }}
           className={`input ${errors.kenteken ? 'border-red-500' : ''}`}
         >
           <option value="">{t('timeEntries.selectVehicle')}</option>
@@ -291,107 +327,160 @@ function TimeEntryForm({
           ))}
         </select>
         {errors.kenteken && <p className="text-red-500 text-xs mt-1">{errors.kenteken}</p>}
-        {formData.kenteken && !vehicles.find(v => v.kenteken === formData.kenteken) && (
+        {kenteken && !vehicles.find(v => v.kenteken === kenteken) && (
           <input
             type="text"
-            name="kenteken"
-            value={formData.kenteken}
-            onChange={handleChange}
+            value={kenteken}
+            onChange={(e) => setKenteken(e.target.value)}
             placeholder={t('timeEntries.orEnterManually')}
             className="input mt-2 uppercase"
           />
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('timeEntries.kmStart')} *
-          </label>
-          <input
-            type="number"
-            name="km_start"
-            value={formData.km_start}
-            onChange={handleChange}
-            min="0"
-            className={`input ${errors.km_start ? 'border-red-500' : ''}`}
-          />
-          {errors.km_start && <p className="text-red-500 text-xs mt-1">{errors.km_start}</p>}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('timeEntries.kmEnd')} *
-          </label>
-          <input
-            type="number"
-            name="km_eind"
-            value={formData.km_eind}
-            onChange={handleChange}
-            min="0"
-            className={`input ${errors.km_eind ? 'border-red-500' : ''}`}
-          />
-          {errors.km_eind && <p className="text-red-500 text-xs mt-1">{errors.km_eind}</p>}
-        </div>
-      </div>
+      {/* Per-trip sections */}
+      {trips.map((trip, idx) => {
+        const prefix = `${idx}_`
+        const { totaalKm, totaalUren } = calculateTripTotals(trip)
 
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('timeEntries.startTime')} *
-          </label>
-          <input
-            type="time"
-            name="aanvang"
-            value={formData.aanvang}
-            onChange={handleChange}
-            className={`input ${errors.aanvang ? 'border-red-500' : ''}`}
-          />
-          {errors.aanvang && <p className="text-red-500 text-xs mt-1">{errors.aanvang}</p>}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('timeEntries.endTime')} *
-          </label>
-          <input
-            type="time"
-            name="eind"
-            value={formData.eind}
-            onChange={handleChange}
-            className={`input ${errors.eind ? 'border-red-500' : ''}`}
-          />
-          {errors.eind && <p className="text-red-500 text-xs mt-1">{errors.eind}</p>}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('timeEntries.breakMinutes')}
-          </label>
-          <select
-            name="pauze_minuten"
-            value={formData.pauze_minuten}
-            onChange={(e) => setFormData(prev => ({ ...prev, pauze_minuten: parseInt(e.target.value) }))}
-            className="input"
-          >
-            <option value={0}>0 {t('timeEntries.minutes')}</option>
-            <option value={15}>15 {t('timeEntries.minutes')}</option>
-            <option value={30}>30 {t('timeEntries.minutes')}</option>
-            <option value={45}>45 {t('timeEntries.minutes')}</option>
-            <option value={60}>1 {t('timeEntries.hour')}</option>
-            <option value={90}>1,5 {t('timeEntries.hour')}</option>
-          </select>
-        </div>
-      </div>
+        return (
+          <div key={idx} className={trips.length > 1 ? 'bg-blue-50/50 rounded-lg p-4 border border-blue-200 space-y-3' : 'space-y-4'}>
+            {/* Trip header (only when multiple trips) */}
+            {trips.length > 1 && (
+              <div className="flex items-center justify-between mb-1">
+                <h4 className="text-sm font-semibold text-blue-800">
+                  {t('timeEntries.tripLabel')} {idx + 1}
+                </h4>
+                {idx > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => removeTrip(idx)}
+                    className="text-red-500 hover:text-red-700 text-xs flex items-center gap-1"
+                  >
+                    <XMarkIcon className="w-3.5 h-3.5" />
+                    {t('common.remove')}
+                  </button>
+                )}
+              </div>
+            )}
 
-      {/* Calculated values */}
-      <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-2 gap-4">
-        <div>
-          <span className="text-sm text-gray-500">{t('timeEntries.totalKm')}</span>
-          <p className="text-lg font-semibold text-gray-900">{totaalKm} {t('timeEntries.km')}</p>
-        </div>
-        <div>
-          <span className="text-sm text-gray-500">{t('timeEntries.totalHours')}</span>
-          <p className="text-lg font-semibold text-gray-900">{calculateTotaalUren()}</p>
-        </div>
-      </div>
+            {/* Ritnummer */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {t('timeEntries.routeNumber')} *
+              </label>
+              <input
+                type="text"
+                value={trip.ritnummer}
+                onChange={(e) => updateTrip(idx, 'ritnummer', e.target.value)}
+                placeholder={t('timeEntries.routeNumberPlaceholder')}
+                className={`input ${errors[`${prefix}ritnummer`] ? 'border-red-500' : ''}`}
+              />
+              {errors[`${prefix}ritnummer`] && <p className="text-red-500 text-xs mt-1">{errors[`${prefix}ritnummer`]}</p>}
+            </div>
+
+            {/* KM */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('timeEntries.kmStart')} *
+                </label>
+                <input
+                  type="number"
+                  value={trip.km_start}
+                  onChange={(e) => updateTrip(idx, 'km_start', e.target.value)}
+                  min="0"
+                  className={`input ${errors[`${prefix}km_start`] ? 'border-red-500' : ''}`}
+                />
+                {errors[`${prefix}km_start`] && <p className="text-red-500 text-xs mt-1">{errors[`${prefix}km_start`]}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('timeEntries.kmEnd')} *
+                </label>
+                <input
+                  type="number"
+                  value={trip.km_eind}
+                  onChange={(e) => updateTrip(idx, 'km_eind', e.target.value)}
+                  min="0"
+                  className={`input ${errors[`${prefix}km_eind`] ? 'border-red-500' : ''}`}
+                />
+                {errors[`${prefix}km_eind`] && <p className="text-red-500 text-xs mt-1">{errors[`${prefix}km_eind`]}</p>}
+              </div>
+            </div>
+
+            {/* Times */}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('timeEntries.startTime')} *
+                </label>
+                <input
+                  type="time"
+                  value={trip.aanvang}
+                  onChange={(e) => updateTrip(idx, 'aanvang', e.target.value)}
+                  className={`input ${errors[`${prefix}aanvang`] ? 'border-red-500' : ''}`}
+                />
+                {errors[`${prefix}aanvang`] && <p className="text-red-500 text-xs mt-1">{errors[`${prefix}aanvang`]}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('timeEntries.endTime')} *
+                </label>
+                <input
+                  type="time"
+                  value={trip.eind}
+                  onChange={(e) => updateTrip(idx, 'eind', e.target.value)}
+                  className={`input ${errors[`${prefix}eind`] ? 'border-red-500' : ''}`}
+                />
+                {errors[`${prefix}eind`] && <p className="text-red-500 text-xs mt-1">{errors[`${prefix}eind`]}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('timeEntries.breakMinutes')}
+                </label>
+                <select
+                  value={trip.pauze_minuten}
+                  onChange={(e) => updateTrip(idx, 'pauze_minuten', parseInt(e.target.value))}
+                  className="input"
+                >
+                  <option value={0}>0 {t('timeEntries.minutes')}</option>
+                  <option value={15}>15 {t('timeEntries.minutes')}</option>
+                  <option value={30}>30 {t('timeEntries.minutes')}</option>
+                  <option value={45}>45 {t('timeEntries.minutes')}</option>
+                  <option value={60}>1 {t('timeEntries.hour')}</option>
+                  <option value={90}>1,5 {t('timeEntries.hour')}</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Calculated values */}
+            <div className={`${trips.length > 1 ? 'bg-white' : 'bg-gray-50'} rounded-lg p-3 grid grid-cols-2 gap-4`}>
+              <div>
+                <span className="text-sm text-gray-500">{t('timeEntries.totalKm')}</span>
+                <p className="text-lg font-semibold text-gray-900">{totaalKm} {t('timeEntries.km')}</p>
+              </div>
+              <div>
+                <span className="text-sm text-gray-500">{t('timeEntries.totalHours')}</span>
+                <p className="text-lg font-semibold text-gray-900">{totaalUren}</p>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Add follow-up trip button (only in create mode) */}
+      {!isEditMode && (
+        <button
+          type="button"
+          onClick={addFollowUpTrip}
+          disabled={!canAddFollowUp()}
+          className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-primary-400 hover:text-primary-600 hover:bg-primary-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-300 disabled:hover:text-gray-600 disabled:hover:bg-transparent"
+        >
+          <PlusIcon className="w-4 h-4" />
+          {t('timeEntries.addFollowUpTrip')}
+        </button>
+      )}
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <button
@@ -683,13 +772,20 @@ export default function TimeEntriesPage() {
     setPage(1)
   }
 
-  // Handle create
-  const handleCreate = async (data: TimeEntryCreate | TimeEntryUpdate) => {
+  // Handle create (supports multiple trips)
+  const handleCreate = async (data: TimeEntryCreate[] | TimeEntryUpdate) => {
     setIsActionLoading(true)
     try {
-      await createTimeEntry(data as TimeEntryCreate)
+      const entries = Array.isArray(data) ? data : [data as TimeEntryCreate]
+      for (const entry of entries) {
+        await createTimeEntry(entry as TimeEntryCreate)
+      }
       setShowCreateModal(false)
-      showSuccess(t('timeEntries.entryCreated'))
+      showSuccess(
+        entries.length > 1
+          ? t('timeEntries.entriesCreated', { count: entries.length })
+          : t('timeEntries.entryCreated')
+      )
       fetchEntries()
     } catch (err: any) {
       setError(getErrorMessage(err, t('timeEntries.createError')))
@@ -699,11 +795,12 @@ export default function TimeEntriesPage() {
   }
 
   // Handle update
-  const handleUpdate = async (data: TimeEntryCreate | TimeEntryUpdate) => {
+  const handleUpdate = async (data: TimeEntryCreate[] | TimeEntryUpdate) => {
     if (!selectedEntry) return
     setIsActionLoading(true)
     try {
-      await updateTimeEntry(selectedEntry.id, data as TimeEntryUpdate)
+      const updateData = Array.isArray(data) ? data[0] as unknown as TimeEntryUpdate : data as TimeEntryUpdate
+      await updateTimeEntry(selectedEntry.id, updateData)
       setShowEditModal(false)
       setSelectedEntry(null)
       showSuccess(t('timeEntries.entryUpdated'))
