@@ -289,12 +289,33 @@ export interface WeeklyHoursOverview {
   user_email: string
   user_bedrijf: string
   jaar: number
-  weeknummer: number
+  periode: number
+  week_start: number
+  week_eind: number
   gewerkte_uren: number
   minimum_uren: number | null
   gemiste_uren: number | null
   totaal_km: number
   entries_count: number
+  minimum_uren_per_week: number | null
+  weken_met_uren: number
+}
+
+export interface MonthlyHoursOverview {
+  user_id: string
+  user_naam: string
+  user_email: string
+  user_bedrijf: string
+  jaar: number
+  maand: number
+  maand_naam: string
+  weken_in_maand: number
+  gewerkte_uren: number
+  minimum_uren: number | null
+  gemiste_uren: number | null
+  totaal_km: number
+  entries_count: number
+  minimum_uren_per_week: number | null
 }
 
 /**
@@ -306,6 +327,18 @@ export async function getWeeklyHoursOverview(jaar?: number, userId?: string): Pr
   if (userId) params.append('user', userId)
   
   const response = await api.get(`/time-entries/weekly_hours_overview/?${params.toString()}`)
+  return response.data
+}
+
+/**
+ * Get monthly hours overview for all users (admin only)
+ */
+export async function getMonthlyHoursOverview(jaar?: number, userId?: string): Promise<MonthlyHoursOverview[]> {
+  const params = new URLSearchParams()
+  if (jaar) params.append('jaar', jaar.toString())
+  if (userId) params.append('user', userId)
+  
+  const response = await api.get(`/time-entries/monthly_hours_overview/?${params.toString()}`)
   return response.data
 }
 
@@ -340,7 +373,7 @@ export async function setMinimumHoursBulk(data: {
 export async function addMissedHoursToInvoice(data: {
   user_id: string
   jaar: number
-  weeknummer: number
+  periode: number
   invoice_id?: string
   bedrijf_id?: string
   prijs_per_uur: number
@@ -354,5 +387,28 @@ export async function addMissedHoursToInvoice(data: {
   totaal: number
 }> {
   const response = await api.post('/time-entries/add_missed_hours_to_invoice/', data)
+  return response.data
+}
+
+/**
+ * Add missed hours for a calendar month as invoice line item
+ */
+export async function addMissedHoursToInvoiceMonthly(data: {
+  user_id: string
+  jaar: number
+  maand: number
+  invoice_id?: string
+  bedrijf_id?: string
+  prijs_per_uur: number
+}): Promise<{
+  success: boolean
+  invoice_id: string
+  factuurnummer: string
+  line_id: string
+  gemiste_uren: number
+  omschrijving: string
+  totaal: number
+}> {
+  const response = await api.post('/time-entries/add_missed_hours_to_invoice_monthly/', data)
   return response.data
 }

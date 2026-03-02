@@ -315,10 +315,12 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='weekly_hours_overview')
     def weekly_hours_overview(self, request):
         """
-        Get weekly hours overview for all users.
-        Shows: user, week, year, worked hours, minimum hours, missed hours.
+        Get 4-week period hours overview for all users.
+        Groups weeks into 4-week periods (1-4, 5-8, 9-12, ...).
+        Shows: user, period, year, worked hours, minimum hours (weekly×4), missed hours.
         Only accessible by admins.
         """
+        import math
         user = request.user
         if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
             return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
@@ -346,19 +348,6 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             entries_count=Count('id'),
         ).order_by('-jaar', '-weeknummer', 'user__achternaam')
         
-        # Get all minimum hours settings
-        min_hours_qs = WeeklyMinimumHours.objects.all()
-        if jaar:
-            min_hours_qs = min_hours_qs.filter(jaar=int(jaar))
-        if user_filter:
-            min_hours_qs = min_hours_qs.filter(user_id=user_filter)
-        
-        # Build lookup dict
-        min_hours_lookup = {}
-        for mh in min_hours_qs:
-            key = f"{mh.user_id}-{mh.jaar}-{mh.weeknummer}"
-            min_hours_lookup[key] = float(mh.minimum_uren)
-        
         # Build driver default minimum hours lookup (via gekoppelde_gebruiker)
         from apps.drivers.models import Driver
         driver_defaults = {}
@@ -369,9 +358,153 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         for user_id, min_uren in driver_qs:
             driver_defaults[str(user_id)] = float(min_uren)
         
-        results = []
+        # Aggregate into 4-week periods
+        # Period 1 = weeks 1-4, Period 2 = weeks 5-8, etc.
+        period_data = {}  # key: "user_id-jaar-periode"
         for row in weekly_data:
-            # Calculate worked hours from duration
+            periode = math.ceil(row['weeknummer'] / 4)
+            week_start = (periode - 1) * 4 + 1
+            week_eind = periode * 4
+            
+            pkey = f"{row['user_id']}-{row['jaar']}-{periode}"
+            
+            if pkey not in period_data:
+                period_data[pkey] = {
+                    'user_id': str(row['user_id']),
+                    'user_naam': f"{row['user__voornaam']} {row['user__achternaam']}",
+                    'user_email': row['user__email'],
+                    'user_bedrijf': row['user__bedrijf'] or '',
+                    'jaar': row['jaar'],
+                    'periode': periode,
+                    'week_start': week_start,
+                    'week_eind': week_eind,
+                    'worked_seconds': 0,
+                    'totaal_km': 0,
+                    'entries_count': 0,
+                    'weken_in_periode': set(),
+                }
+            
+            total_duration = row['totaal_seconds']
+            if total_duration and isinstance(total_duration, timedelta):
+                worked_seconds = total_duration.total_seconds()
+            elif total_duration:
+                worked_seconds = float(total_duration)
+            else:
+                worked_seconds = 0
+            
+            period_data[pkey]['worked_seconds'] += worked_seconds
+            period_data[pkey]['totaal_km'] += row['totaal_km'] or 0
+            period_data[pkey]['entries_count'] += row['entries_count']
+            period_data[pkey]['weken_in_periode'].add(row['weeknummer'])
+        
+        results = []
+        for pkey, pd in period_data.items():
+            worked_hours = round(pd['worked_seconds'] / 3600, 2)
+            
+            # Minimum hours = driver weekly minimum × 4
+            weekly_min = driver_defaults.get(pd['user_id'], None)
+            if weekly_min is not None:
+                minimum_hours = round(weekly_min * 4, 2)
+            else:
+                minimum_hours = None
+            
+            missed_hours = None
+            if minimum_hours is not None:
+                missed = minimum_hours - worked_hours
+                missed_hours = round(max(0, missed), 2)
+            
+            results.append({
+                'user_id': pd['user_id'],
+                'user_naam': pd['user_naam'],
+                'user_email': pd['user_email'],
+                'user_bedrijf': pd['user_bedrijf'],
+                'jaar': pd['jaar'],
+                'periode': pd['periode'],
+                'week_start': pd['week_start'],
+                'week_eind': pd['week_eind'],
+                'gewerkte_uren': worked_hours,
+                'minimum_uren': minimum_hours,
+                'gemiste_uren': missed_hours,
+                'totaal_km': pd['totaal_km'],
+                'entries_count': pd['entries_count'],
+                'minimum_uren_per_week': weekly_min,
+                'weken_met_uren': len(pd['weken_in_periode']),
+            })
+        
+        # Sort by year desc, period desc, then user name
+        results.sort(key=lambda x: (-x['jaar'], -x['periode'], x['user_naam']))
+        
+        return Response(results)
+
+    @action(detail=False, methods=['get'], url_path='monthly_hours_overview')
+    def monthly_hours_overview(self, request):
+        """
+        Get monthly hours overview for all users.
+        Groups by calendar month. Minimum hours = weekly minimum × number of weeks in that month.
+        A month's week count is based on how many distinct ISO weeks have at least one working day
+        falling in that month (using the date's month, not ISO week year).
+        Only accessible by admins.
+        """
+        import calendar
+        from django.db.models.functions import ExtractYear, ExtractMonth
+        
+        user = request.user
+        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+            return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
+        
+        jaar = request.query_params.get('jaar')
+        user_filter = request.query_params.get('user')
+        
+        queryset = TimeEntry.objects.filter(status=TimeEntryStatus.INGEDIEND)
+        
+        if jaar:
+            queryset = queryset.filter(datum__year=int(jaar))
+        if user_filter:
+            queryset = queryset.filter(user_id=user_filter)
+        
+        # Group by user, year, month
+        monthly_data = queryset.annotate(
+            jaar=ExtractYear('datum'),
+            maand=ExtractMonth('datum'),
+        ).values(
+            'user_id', 'user__voornaam', 'user__achternaam', 'user__email',
+            'user__bedrijf', 'jaar', 'maand'
+        ).annotate(
+            totaal_seconds=Sum('totaal_uren'),
+            totaal_km=Sum('totaal_km'),
+            entries_count=Count('id'),
+        ).order_by('-jaar', '-maand', 'user__achternaam')
+        
+        # Build driver default minimum hours lookup
+        from apps.drivers.models import Driver
+        driver_defaults = {}
+        driver_qs = Driver.objects.filter(
+            minimum_uren_per_week__isnull=False,
+            gekoppelde_gebruiker__isnull=False,
+        ).values_list('gekoppelde_gebruiker_id', 'minimum_uren_per_week')
+        for uid, min_uren in driver_qs:
+            driver_defaults[str(uid)] = float(min_uren)
+        
+        # Calculate weeks per month: count Mondays in a given month
+        def weeks_in_month(year, month):
+            """Count how many full weeks (Mon-Fri work weeks) touch this month."""
+            _, days_in_month = calendar.monthrange(year, month)
+            # Count distinct ISO week numbers for all days in the month
+            from datetime import date as dt_date
+            week_numbers = set()
+            for day in range(1, days_in_month + 1):
+                d = dt_date(year, month, day)
+                if d.weekday() < 5:  # Monday-Friday
+                    week_numbers.add(d.isocalendar()[1])
+            return len(week_numbers)
+        
+        MONTH_NAMES_NL = [
+            '', 'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
+            'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'
+        ]
+        
+        results = []
+        for row in monthly_data:
             total_duration = row['totaal_seconds']
             if total_duration and isinstance(total_duration, timedelta):
                 worked_seconds = total_duration.total_seconds()
@@ -382,12 +515,13 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             
             worked_hours = round(worked_seconds / 3600, 2)
             
-            key = f"{row['user_id']}-{row['jaar']}-{row['weeknummer']}"
-            minimum_hours = min_hours_lookup.get(key, None)
+            weekly_min = driver_defaults.get(str(row['user_id']), None)
+            weken = weeks_in_month(row['jaar'], row['maand'])
             
-            # Fallback to driver's default minimum hours
-            if minimum_hours is None:
-                minimum_hours = driver_defaults.get(str(row['user_id']), None)
+            if weekly_min is not None:
+                minimum_hours = round(weekly_min * weken, 2)
+            else:
+                minimum_hours = None
             
             missed_hours = None
             if minimum_hours is not None:
@@ -400,15 +534,184 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
                 'user_email': row['user__email'],
                 'user_bedrijf': row['user__bedrijf'] or '',
                 'jaar': row['jaar'],
-                'weeknummer': row['weeknummer'],
+                'maand': row['maand'],
+                'maand_naam': MONTH_NAMES_NL[row['maand']],
+                'weken_in_maand': weken,
                 'gewerkte_uren': worked_hours,
                 'minimum_uren': minimum_hours,
                 'gemiste_uren': missed_hours,
                 'totaal_km': row['totaal_km'] or 0,
                 'entries_count': row['entries_count'],
+                'minimum_uren_per_week': weekly_min,
             })
         
         return Response(results)
+
+    @action(detail=False, methods=['post'], url_path='add_missed_hours_to_invoice_monthly')
+    def add_missed_hours_to_invoice_monthly(self, request):
+        """
+        Add missed hours for a calendar month as a line item to an existing or new invoice.
+        Body: { user_id, jaar, maand, invoice_id (optional), bedrijf_id, prijs_per_uur }
+        """
+        import calendar
+        user = request.user
+        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+            return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
+        
+        target_user_id = request.data.get('user_id')
+        jaar = request.data.get('jaar')
+        maand = request.data.get('maand')
+        invoice_id = request.data.get('invoice_id')
+        bedrijf_id = request.data.get('bedrijf_id')
+        prijs_per_uur = request.data.get('prijs_per_uur', 0)
+        
+        if not all([target_user_id, jaar, maand]):
+            return Response(
+                {'error': 'user_id, jaar en maand zijn verplicht.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        jaar_int = int(jaar)
+        maand_int = int(maand)
+        
+        # Calculate worked hours for this month
+        entries = TimeEntry.objects.filter(
+            user_id=target_user_id,
+            datum__year=jaar_int,
+            datum__month=maand_int,
+            status=TimeEntryStatus.INGEDIEND,
+        )
+        
+        total_duration = entries.aggregate(total=Sum('totaal_uren'))['total']
+        if total_duration and isinstance(total_duration, timedelta):
+            worked_hours = total_duration.total_seconds() / 3600
+        else:
+            worked_hours = 0
+        
+        # Get minimum hours: weekly default × weeks in month
+        from apps.drivers.models import Driver
+        try:
+            driver = Driver.objects.get(
+                gekoppelde_gebruiker_id=target_user_id,
+                minimum_uren_per_week__isnull=False,
+            )
+            weekly_min = float(driver.minimum_uren_per_week)
+        except Driver.DoesNotExist:
+            return Response(
+                {'error': 'Geen minimale uren ingesteld voor deze chauffeur.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Count weeks in month
+        _, days_in_month = calendar.monthrange(jaar_int, maand_int)
+        from datetime import date as dt_date
+        week_numbers = set()
+        for day in range(1, days_in_month + 1):
+            d = dt_date(jaar_int, maand_int, day)
+            if d.weekday() < 5:
+                week_numbers.add(d.isocalendar()[1])
+        weken = len(week_numbers)
+        
+        minimum_hours = weekly_min * weken
+        
+        MONTH_NAMES_NL = [
+            '', 'januari', 'februari', 'maart', 'april', 'mei', 'juni',
+            'juli', 'augustus', 'september', 'oktober', 'november', 'december'
+        ]
+        maand_naam = MONTH_NAMES_NL[maand_int]
+        
+        missed = round(minimum_hours - worked_hours, 2)
+        if missed <= 0:
+            return Response(
+                {'error': f'Er zijn geen gemiste uren voor {maand_naam} {jaar_int}.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        from apps.invoicing.models import Invoice, InvoiceLine, InvoiceStatus as InvStatus
+        from apps.accounts.models import User
+        from datetime import date
+        
+        target_user = User.objects.get(id=target_user_id)
+        
+        if invoice_id:
+            try:
+                invoice = Invoice.objects.get(id=invoice_id)
+            except Invoice.DoesNotExist:
+                return Response({'error': 'Factuur niet gevonden.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            if not bedrijf_id:
+                return Response(
+                    {'error': 'bedrijf_id is verplicht bij het aanmaken van een nieuwe factuur.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            today = date.today()
+            prefix = f"F-{today.year}"
+            
+            from apps.core.models import AppSettings
+            app_settings = AppSettings.objects.first()
+            start_number = getattr(app_settings, 'invoice_start_number_verkoop', 1) if app_settings else 1
+            
+            last_invoice = Invoice.objects.filter(
+                factuurnummer__startswith=prefix
+            ).order_by('-factuurnummer').first()
+            
+            if last_invoice:
+                try:
+                    last_num = int(last_invoice.factuurnummer.split('-')[-1])
+                    next_num = max(last_num + 1, start_number)
+                except (ValueError, IndexError):
+                    next_num = start_number
+            else:
+                next_num = start_number
+            
+            factuurnummer = f"{prefix}-{next_num:04d}"
+            
+            invoice = Invoice.objects.create(
+                factuurnummer=factuurnummer,
+                type='verkoop',
+                status=InvStatus.CONCEPT,
+                bedrijf_id=bedrijf_id,
+                factuurdatum=today,
+                vervaldatum=today + timedelta(days=30),
+                created_by=user,
+                week_year=jaar_int,
+                chauffeur=target_user,
+            )
+        
+        max_volgorde = invoice.lines.aggregate(max_v=Max('volgorde'))['max_v'] or 0
+        
+        line = InvoiceLine.objects.create(
+            invoice=invoice,
+            omschrijving=f"Gemiste werkuren {maand_naam} {jaar_int} - {target_user.full_name}",
+            aantal=Decimal(str(missed)),
+            eenheid='uur',
+            prijs_per_eenheid=Decimal(str(prijs_per_uur)),
+            extra_data={
+                'type': 'missed_hours_monthly',
+                'user_id': str(target_user_id),
+                'jaar': jaar_int,
+                'maand': maand_int,
+                'maand_naam': maand_naam,
+                'weken_in_maand': weken,
+                'minimum_uren': minimum_hours,
+                'gewerkte_uren': round(worked_hours, 2),
+                'gemiste_uren': missed,
+            },
+            volgorde=max_volgorde + 1,
+        )
+        
+        invoice.calculate_totals()
+        
+        return Response({
+            'success': True,
+            'invoice_id': str(invoice.id),
+            'factuurnummer': invoice.factuurnummer,
+            'line_id': str(line.id),
+            'gemiste_uren': missed,
+            'omschrijving': line.omschrijving,
+            'totaal': float(line.totaal),
+        })
 
     @action(detail=False, methods=['post'], url_path='set_minimum_hours')
     def set_minimum_hours(self, request):
@@ -520,33 +823,40 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='add_missed_hours_to_invoice')
     def add_missed_hours_to_invoice(self, request):
         """
-        Add missed hours as a line item to an existing or new invoice.
-        Body: { user_id, jaar, weeknummer, invoice_id (optional), bedrijf_id, prijs_per_uur }
+        Add missed hours for a 4-week period as a line item to an existing or new invoice.
+        Body: { user_id, jaar, periode, invoice_id (optional), bedrijf_id, prijs_per_uur }
+        Period: 1 = weeks 1-4, 2 = weeks 5-8, etc.
         If invoice_id is given, adds a line to that invoice.
         If not, creates a new concept invoice.
         """
+        import math
         user = request.user
         if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
             return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
         
         target_user_id = request.data.get('user_id')
         jaar = request.data.get('jaar')
-        weeknummer = request.data.get('weeknummer')
+        periode = request.data.get('periode')
         invoice_id = request.data.get('invoice_id')
         bedrijf_id = request.data.get('bedrijf_id')
         prijs_per_uur = request.data.get('prijs_per_uur', 0)
         
-        if not all([target_user_id, jaar, weeknummer]):
+        if not all([target_user_id, jaar, periode]):
             return Response(
-                {'error': 'user_id, jaar en weeknummer zijn verplicht.'},
+                {'error': 'user_id, jaar en periode zijn verplicht.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Calculate missed hours
+        periode = int(periode)
+        week_start = (periode - 1) * 4 + 1
+        week_eind = periode * 4
+        
+        # Calculate worked hours across all weeks in this period
         entries = TimeEntry.objects.filter(
             user_id=target_user_id,
             datum__year=int(jaar),
-            weeknummer=int(weeknummer),
+            weeknummer__gte=week_start,
+            weeknummer__lte=week_eind,
             status=TimeEntryStatus.INGEDIEND,
         )
         
@@ -556,32 +866,24 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         else:
             worked_hours = 0
         
+        # Get minimum hours from driver's weekly default × 4
+        from apps.drivers.models import Driver
         try:
-            min_hours_obj = WeeklyMinimumHours.objects.get(
-                user_id=target_user_id,
-                jaar=int(jaar),
-                weeknummer=int(weeknummer),
+            driver = Driver.objects.get(
+                gekoppelde_gebruiker_id=target_user_id,
+                minimum_uren_per_week__isnull=False,
             )
-            minimum_hours = float(min_hours_obj.minimum_uren)
-        except WeeklyMinimumHours.DoesNotExist:
-            # Fallback to driver's default minimum hours
-            from apps.drivers.models import Driver
-            try:
-                driver = Driver.objects.get(
-                    gekoppelde_gebruiker_id=target_user_id,
-                    minimum_uren_per_week__isnull=False,
-                )
-                minimum_hours = float(driver.minimum_uren_per_week)
-            except Driver.DoesNotExist:
-                return Response(
-                    {'error': 'Geen minimale uren ingesteld voor deze week.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            minimum_hours = float(driver.minimum_uren_per_week) * 4
+        except Driver.DoesNotExist:
+            return Response(
+                {'error': 'Geen minimale uren ingesteld voor deze chauffeur.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         missed = round(minimum_hours - worked_hours, 2)
         if missed <= 0:
             return Response(
-                {'error': 'Er zijn geen gemiste uren voor deze week.'},
+                {'error': 'Er zijn geen gemiste uren voor deze periode.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -636,7 +938,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
                 factuurdatum=today,
                 vervaldatum=today + timedelta(days=30),
                 created_by=user,
-                week_number=int(weeknummer),
+                week_number=week_start,
                 week_year=int(jaar),
                 chauffeur=target_user,
             )
@@ -647,7 +949,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         # Add invoice line
         line = InvoiceLine.objects.create(
             invoice=invoice,
-            omschrijving=f"Gemiste werkuren week {weeknummer} - {target_user.full_name}",
+            omschrijving=f"Gemiste werkuren periode {periode} (week {week_start}-{week_eind}) - {target_user.full_name}",
             aantal=Decimal(str(missed)),
             eenheid='uur',
             prijs_per_eenheid=Decimal(str(prijs_per_uur)),
@@ -655,7 +957,9 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
                 'type': 'missed_hours',
                 'user_id': str(target_user_id),
                 'jaar': int(jaar),
-                'weeknummer': int(weeknummer),
+                'periode': periode,
+                'week_start': week_start,
+                'week_eind': week_eind,
                 'minimum_uren': minimum_hours,
                 'gewerkte_uren': round(worked_hours, 2),
                 'gemiste_uren': missed,
