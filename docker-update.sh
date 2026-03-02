@@ -165,10 +165,10 @@ fi
 # =========================================
 log_info "Applicatie health check..."
 sleep 5
-BACKEND_STATUS=$(docker compose exec -T backend curl -sf http://localhost:8000/api/ -o /dev/null -w "%{http_code}" 2>/dev/null || echo "000")
-FRONTEND_STATUS=$(docker compose exec -T frontend curl -sf http://localhost:80/ -o /dev/null -w "%{http_code}" 2>/dev/null || echo "000")
+BACKEND_STATUS=$(docker compose exec -T backend curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/health/ 2>/dev/null || echo "000")
+FRONTEND_STATUS=$(docker compose exec -T frontend curl -s -o /dev/null -w "%{http_code}" http://localhost:80/ 2>/dev/null || echo "000")
 
-if [[ "$BACKEND_STATUS" =~ ^(200|301|302|401)$ ]]; then
+if [[ "$BACKEND_STATUS" =~ ^(200|301|302)$ ]]; then
     log_success "Backend bereikbaar (HTTP $BACKEND_STATUS)"
 else
     log_warning "Backend geeft HTTP $BACKEND_STATUS — controleer logs: docker compose logs backend"

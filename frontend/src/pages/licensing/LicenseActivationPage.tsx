@@ -4,7 +4,7 @@
  * Shown when no valid license is detected.
  * Allows entering a license key to activate the application.
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -15,21 +15,43 @@ import {
 } from '@heroicons/react/24/outline'
 import { licensingApi } from '@/api/licensing'
 import { useAppStore } from '@/stores/appStore'
+import { useLicenseStore } from '@/stores/licenseStore'
+import { useAuthStore } from '@/stores/authStore'
 
 export default function LicenseActivationPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { settings } = useAppStore()
+  const { checkLicense } = useLicenseStore()
+  const { isAuthenticated } = useAuthStore()
   
   const [licenseKey, setLicenseKey] = useState('')
   const [activating, setActivating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [checkingLicense, setCheckingLicense] = useState(true)
   const [licenseInfo, setLicenseInfo] = useState<{
     customer: string
     expires_at: string
     days_remaining: number
   } | null>(null)
+
+  // On mount, check if license is already active
+  useEffect(() => {
+    const verify = async () => {
+      const licensed = await checkLicense()
+      setCheckingLicense(false)
+      if (licensed) {
+        // License is already active, redirect appropriately
+        if (isAuthenticated) {
+          navigate('/', { replace: true })
+        } else {
+          navigate('/login', { replace: true })
+        }
+      }
+    }
+    verify()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleActivate = async () => {
     const key = licenseKey.trim()
@@ -52,6 +74,9 @@ export default function LicenseActivationPage() {
           expires_at: result.license.expires_at,
           days_remaining: result.license.days_remaining,
         })
+        
+        // Update the license store so ProtectedRoute knows we're licensed
+        await checkLicense()
         
         // After 2 seconds, redirect to login
         setTimeout(() => {
@@ -78,6 +103,15 @@ export default function LicenseActivationPage() {
     if (e.key === 'Enter' && !activating) {
       handleActivate()
     }
+  }
+
+  // Show loading while checking license status
+  if (checkingLicense) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    )
   }
 
   return (
