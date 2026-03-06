@@ -12,9 +12,13 @@ import {
   CalendarDaysIcon,
   TruckIcon,
   MapPinIcon,
+  DocumentArrowDownIcon,
+  TableCellsIcon,
 } from '@heroicons/react/24/outline'
 import { TimeEntry } from '@/types'
 import { getTimeEntries } from '@/api/timetracking'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import toast from 'react-hot-toast'
 
 interface HoursDetailModalProps {
@@ -142,6 +146,190 @@ export default function HoursDetailModal({
   const title = maandNaam
     ? `${userName} — ${maandNaam} ${jaar}`
     : `${userName} — ${periodLabel || `W${weekStart}-${weekEnd}`} ${jaar}`
+
+  const fileTitle = maandNaam
+    ? `Overzicht_Uren_${userName.replace(/\s+/g, '_')}_${maandNaam}_${jaar}`
+    : `Overzicht_Uren_${userName.replace(/\s+/g, '_')}_${periodLabel || `W${weekStart}-${weekEnd}`}_${jaar}`
+
+  // PDF Export
+  const handleExportPDF = () => {
+    if (entries.length === 0) return
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+
+    // Title
+    doc.setFontSize(16)
+    doc.text('Overzicht Uren', 14, 15)
+    doc.setFontSize(11)
+    doc.text(title, 14, 22)
+
+    // Summary line
+    doc.setFontSize(9)
+    doc.setTextColor(100)
+    doc.text(
+      `Totaal Uren: ${totalHours}u ${totalMins}m  |  Totaal KM: ${totalKm.toLocaleString('nl-NL')} km  |  Aantal Ritten: ${entries.length}`,
+      14, 29
+    )
+    doc.setTextColor(0)
+
+    // Table
+    const tableData = entries.map((e) => [
+      formatDate(e.datum),
+      `W${e.weeknummer}`,
+      String(e.ritnummer),
+      e.kenteken || '-',
+      formatTime(e.aanvang),
+      formatTime(e.eind),
+      formatDuration(e.pauze),
+      formatDuration(e.totaal_uren),
+      `${e.totaal_km} km`,
+    ])
+
+    autoTable(doc, {
+      head: [['Datum', 'Week', 'Ritnr', 'Kenteken', 'Begin', 'Eind', 'Pauze', 'Totaal Uren', 'Totaal KM']],
+      body: tableData,
+      foot: [['Totaal', '', '', '', '', '', '', `${totalHours}u ${totalMins}m`, `${totalKm.toLocaleString('nl-NL')} km`]],
+      startY: 34,
+      styles: { fontSize: 9, cellPadding: 2.5 },
+      headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+      footStyles: { fillColor: [243, 244, 246], textColor: [0, 0, 0], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+    })
+
+    // Footer
+    const pageCount = doc.getNumberOfPages()
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i)
+      doc.setFontSize(8)
+      doc.setTextColor(128)
+      doc.text(
+        `Gegenereerd op ${new Date().toLocaleDateString('nl-NL')} om ${new Date().toLocaleTimeString('nl-NL')}`,
+        14, doc.internal.pageSize.height - 10
+      )
+    }
+
+    doc.save(`${fileTitle}.pdf`)
+    toast.success('PDF geëxporteerd')
+  }
+
+  // Excel Export
+  const handleExportExcel = async () => {
+    if (entries.length === 0) return
+
+    try {
+      const ExcelJS = await import('exceljs')
+      const workbook = new ExcelJS.Workbook()
+      const sheet = workbook.addWorksheet('Overzicht Uren')
+
+      // Title row
+      sheet.mergeCells('A1:I1')
+      const titleCell = sheet.getCell('A1')
+      titleCell.value = 'Overzicht Uren'
+      titleCell.font = { size: 16, bold: true }
+      titleCell.alignment = { vertical: 'middle' }
+      sheet.getRow(1).height = 30
+
+      // Subtitle row
+      sheet.mergeCells('A2:I2')
+      const subtitleCell = sheet.getCell('A2')
+      subtitleCell.value = title
+      subtitleCell.font = { size: 11, color: { argb: '666666' } }
+
+      // Summary row
+      sheet.mergeCells('A3:I3')
+      const summaryCell = sheet.getCell('A3')
+      summaryCell.value = `Totaal Uren: ${totalHours}u ${totalMins}m  |  Totaal KM: ${totalKm}  |  Aantal Ritten: ${entries.length}`
+      summaryCell.font = { size: 9, italic: true, color: { argb: '888888' } }
+
+      // Empty row
+      sheet.addRow([])
+
+      // Header row
+      const headerRow = sheet.addRow(['Datum', 'Week', 'Ritnr', 'Kenteken', 'Begin', 'Eind', 'Pauze', 'Totaal Uren', 'Totaal KM'])
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFF' }, size: 10 }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '3B82F6' } }
+        cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'D1D5DB' } },
+          bottom: { style: 'thin', color: { argb: 'D1D5DB' } },
+          left: { style: 'thin', color: { argb: 'D1D5DB' } },
+          right: { style: 'thin', color: { argb: 'D1D5DB' } },
+        }
+      })
+      headerRow.height = 22
+
+      // Data rows
+      entries.forEach((e, idx) => {
+        const row = sheet.addRow([
+          formatDate(e.datum),
+          `W${e.weeknummer}`,
+          e.ritnummer,
+          e.kenteken || '-',
+          formatTime(e.aanvang),
+          formatTime(e.eind),
+          formatDuration(e.pauze),
+          formatDuration(e.totaal_uren),
+          `${e.totaal_km} km`,
+        ])
+        row.eachCell((cell) => {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' }
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'E5E7EB' } },
+            bottom: { style: 'thin', color: { argb: 'E5E7EB' } },
+            left: { style: 'thin', color: { argb: 'E5E7EB' } },
+            right: { style: 'thin', color: { argb: 'E5E7EB' } },
+          }
+          if (idx % 2 === 1) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F9FAFB' } }
+          }
+        })
+      })
+
+      // Totals row
+      const totalRow = sheet.addRow(['Totaal', '', '', '', '', '', '', `${totalHours}u ${totalMins}m`, `${totalKm} km`])
+      totalRow.eachCell((cell) => {
+        cell.font = { bold: true, size: 10 }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F3F4F6' } }
+        cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'D1D5DB' } },
+          bottom: { style: 'thin', color: { argb: 'D1D5DB' } },
+          left: { style: 'thin', color: { argb: 'D1D5DB' } },
+          right: { style: 'thin', color: { argb: 'D1D5DB' } },
+        }
+      })
+      // Left-align "Totaal" label
+      totalRow.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' }
+
+      // Column widths
+      sheet.columns = [
+        { width: 22 }, // Datum
+        { width: 10 }, // Week
+        { width: 8 },  // Ritnr
+        { width: 14 }, // Kenteken
+        { width: 10 }, // Begin
+        { width: 10 }, // Eind
+        { width: 10 }, // Pauze
+        { width: 14 }, // Totaal Uren
+        { width: 12 }, // Totaal KM
+      ]
+
+      // Download
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${fileTitle}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Excel geëxporteerd')
+    } catch (error) {
+      console.error('Excel export error:', error)
+      toast.error('Fout bij exporteren naar Excel')
+    }
+  }
 
   return (
     <Transition appear show={show} as={Fragment}>
@@ -323,7 +511,25 @@ export default function HoursDetailModal({
                 </div>
 
                 {/* Footer */}
-                <div className="flex justify-end p-4 border-t bg-gray-50">
+                <div className="flex justify-end gap-2 p-4 border-t bg-gray-50">
+                  {entries.length > 0 && (
+                    <>
+                      <button
+                        onClick={handleExportPDF}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                      >
+                        <DocumentArrowDownIcon className="h-4 w-4" />
+                        PDF
+                      </button>
+                      <button
+                        onClick={handleExportExcel}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+                      >
+                        <TableCellsIcon className="h-4 w-4" />
+                        Excel
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={onClose}
                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"

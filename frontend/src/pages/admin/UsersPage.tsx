@@ -14,7 +14,7 @@ import {
   ChevronDownIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline'
-import { User, UserCreate } from '@/types'
+import { User, UserCreate, Company } from '@/types'
 import { 
   getUsers, 
   createUser, 
@@ -26,6 +26,7 @@ import {
   UserFilters,
   UserUpdate,
 } from '@/api/users'
+import { getAllCompanies } from '@/api/companies'
 import Pagination, { PageSize } from '@/components/common/Pagination'
 
 // Role labels and colors
@@ -144,6 +145,7 @@ function UserForm({
   isLoading: boolean
 }) {
   const { t } = useTranslation()
+  const [companies, setCompanies] = useState<Company[]>([])
   const [formData, setFormData] = useState({
     email: user?.email || '',
     username: user?.username || '',
@@ -158,6 +160,10 @@ function UserForm({
     password_confirm: '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    getAllCompanies().then(setCompanies).catch(console.error)
+  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
@@ -311,13 +317,17 @@ function UserForm({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {t('companies.title')}
           </label>
-          <input
-            type="text"
+          <select
             name="bedrijf"
             value={formData.bedrijf}
             onChange={handleChange}
             className="input min-h-[44px]"
-          />
+          >
+            <option value="">-- Selecteer bedrijf --</option>
+            {companies.map(c => (
+              <option key={c.id} value={c.naam}>{c.naam}</option>
+            ))}
+          </select>
         </div>
       </div>
 
