@@ -75,6 +75,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Timestamps
     date_joined = models.DateTimeField(auto_now_add=True, verbose_name='Aangemaakt op')
     last_login = models.DateTimeField(null=True, blank=True, verbose_name='Laatste login')
+    last_activity = models.DateTimeField(null=True, blank=True, verbose_name='Laatste activiteit')
     
     objects = UserManager()
     

@@ -7,6 +7,8 @@ from .views import (
     PublicSettingsView, 
     AdminSettingsViewSet, 
     DashboardStatsView,
+    OnlineUsersView,
+    RecentLoginsView,
     RecentActivityView,
     ActivityListView,
     ImageUploadView,
@@ -27,6 +29,12 @@ urlpatterns = [
     
     # Dashboard stats
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
+    
+    # Online users (polled every 2 minutes)
+    path('dashboard/online-users/', OnlineUsersView.as_view(), name='online-users'),
+    
+    # Recent logins (paginated)
+    path('dashboard/recent-logins/', RecentLoginsView.as_view(), name='recent-logins'),
     
     # Recent activity (dashboard - max 10)
     path('dashboard/activity/', RecentActivityView.as_view(), name='recent-activity'),

@@ -1,12 +1,45 @@
 import api from './client'
 import type { AppSettings, AppSettingsAdmin } from '@/types'
 
-export interface ActiveUser {
+export interface OnlineUser {
+  id: string
+  full_name: string
+  email: string
+  rol: string
+  last_activity: string | null
+}
+
+export interface OnlineUsersResponse {
+  online_users: OnlineUser[]
+  online_count: number
+}
+
+export interface RecentLogin {
   id: string
   full_name: string
   email: string
   rol: string
   last_login: string | null
+}
+
+export interface RecentLoginsResponse {
+  logins: RecentLogin[]
+  pagination: {
+    page: number
+    per_page: number
+    total: number
+    total_pages: number
+    has_next: boolean
+    has_previous: boolean
+  }
+}
+
+export interface DashboardFinancial {
+  income: number
+  expenses: number
+  profit: number
+  collected: number
+  outstanding: number
 }
 
 export interface DashboardStats {
@@ -17,8 +50,7 @@ export interface DashboardStats {
   open_invoices: number
   week_number: number
   year: number
-  active_users: ActiveUser[]
-  active_users_count: number
+  financial: DashboardFinancial
 }
 
 export interface ActivityItem {
@@ -110,6 +142,18 @@ export const settingsApi = {
     return response.data
   },
   
+  // Online users (polled every 2 minutes)
+  getOnlineUsers: async (): Promise<OnlineUsersResponse> => {
+    const response = await api.get('/core/dashboard/online-users/')
+    return response.data
+  },
+  
+  // Recent logins (paginated)
+  getRecentLogins: async (page: number = 1, perPage: number = 10): Promise<RecentLoginsResponse> => {
+    const response = await api.get(`/core/dashboard/recent-logins/?page=${page}&per_page=${perPage}`)
+    return response.data
+  },
+
   // Recent activity (dashboard - max 10)
   getRecentActivity: async (limit: number = 10): Promise<RecentActivityResponse> => {
     const response = await api.get(`/core/dashboard/activity/?limit=${limit}`)

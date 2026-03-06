@@ -412,7 +412,8 @@ class ImageUploadView(APIView):
 class DashboardStatsView(APIView):
     """
     Dashboard statistics endpoint.
-    Returns counts for users, companies, vehicles, hours this week, and open invoices.
+    Returns counts for users, companies, vehicles, hours this week, open invoices,
+    and financial totals (income, expenses, profit, collected, outstanding) for the current year.
     """
     permission_classes = [IsAuthenticated]
     
@@ -421,7 +422,8 @@ class DashboardStatsView(APIView):
         from apps.companies.models import Company
         from apps.fleet.models import Vehicle
         from apps.timetracking.models import TimeEntry
-        from apps.invoicing.models import Invoice
+        from apps.invoicing.models import Invoice, InvoiceType, InvoiceStatus, Expense
+        from datetime import date
         
         # Get current week number
         today = timezone.now().date()
@@ -460,24 +462,63 @@ class DashboardStatsView(APIView):
             status__in=['concept', 'definitief', 'verzonden']
         ).count()
         
-        # Active users: logged in within the last 24 hours
-        from datetime import timedelta
-        recent_threshold = timezone.now() - timedelta(hours=24)
-        active_users_qs = User.objects.filter(
-            is_active=True,
-            last_login__gte=recent_threshold,
-        ).order_by('-last_login')[:20]
+        # ── Financial totals for current year ──
+        start_of_year = date(year, 1, 1)
         
-        active_users = [
-            {
-                'id': str(u.id),
-                'full_name': u.full_name,
-                'email': u.email,
-                'rol': u.rol,
-                'last_login': u.last_login.isoformat() if u.last_login else None,
-            }
-            for u in active_users_qs
-        ]
+        active_statuses = [InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN, InvoiceStatus.BETAALD]
+        
+        # Total income (verkoop)
+        income_agg = Invoice.objects.filter(
+            type=InvoiceType.VERKOOP,
+            status__in=active_statuses,
+            factuurdatum__gte=start_of_year,
+            factuurdatum__lte=today,
+        ).aggregate(total=Sum('totaal'))
+        total_income = float(income_agg['total'] or 0)
+        
+        # Total expenses (inkoop + credit + direct expenses)
+        invoice_expenses_agg = Invoice.objects.filter(
+            type=InvoiceType.INKOOP,
+            status__in=active_statuses,
+            factuurdatum__gte=start_of_year,
+            factuurdatum__lte=today,
+        ).aggregate(total=Sum('totaal'))
+        
+        credit_expenses_agg = Invoice.objects.filter(
+            type=InvoiceType.CREDIT,
+            status__in=active_statuses,
+            factuurdatum__gte=start_of_year,
+            factuurdatum__lte=today,
+        ).aggregate(total=Sum('totaal'))
+        
+        direct_expenses_agg = Expense.objects.filter(
+            datum__gte=start_of_year,
+            datum__lte=today,
+        ).aggregate(total=Sum('totaal'))
+        
+        total_expenses = (
+            float(invoice_expenses_agg['total'] or 0) +
+            float(credit_expenses_agg['total'] or 0) +
+            float(direct_expenses_agg['total'] or 0)
+        )
+        
+        # Collected (betaald)
+        collected_agg = Invoice.objects.filter(
+            type=InvoiceType.VERKOOP,
+            status=InvoiceStatus.BETAALD,
+            factuurdatum__gte=start_of_year,
+            factuurdatum__lte=today,
+        ).aggregate(total=Sum('totaal'))
+        total_collected = float(collected_agg['total'] or 0)
+        
+        # Outstanding (not betaald: definitief + verzonden)
+        outstanding_agg = Invoice.objects.filter(
+            type=InvoiceType.VERKOOP,
+            status__in=[InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
+            factuurdatum__gte=start_of_year,
+            factuurdatum__lte=today,
+        ).aggregate(total=Sum('totaal'))
+        total_outstanding = float(outstanding_agg['total'] or 0)
         
         return Response({
             'users': user_count,
@@ -487,8 +528,97 @@ class DashboardStatsView(APIView):
             'open_invoices': open_invoice_count,
             'week_number': week_number,
             'year': year,
-            'active_users': active_users,
-            'active_users_count': len(active_users),
+            'financial': {
+                'income': round(total_income, 2),
+                'expenses': round(total_expenses, 2),
+                'profit': round(total_income - total_expenses, 2),
+                'collected': round(total_collected, 2),
+                'outstanding': round(total_outstanding, 2),
+            },
+        })
+
+
+class OnlineUsersView(APIView):
+    """
+    Online users endpoint — users with activity in the last 2 minutes.
+    Polled every 2 minutes by the frontend.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.accounts.models import User
+
+        # Also update caller's own last_activity so they show as online
+        User.objects.filter(pk=request.user.pk).update(last_activity=timezone.now())
+
+        threshold = timezone.now() - timedelta(minutes=2)
+        online_qs = User.objects.filter(
+            is_active=True,
+            last_activity__gte=threshold,
+        ).order_by('-last_activity')
+
+        online_users = [
+            {
+                'id': str(u.id),
+                'full_name': u.full_name,
+                'email': u.email,
+                'rol': u.rol,
+                'last_activity': u.last_activity.isoformat() if u.last_activity else None,
+            }
+            for u in online_qs
+        ]
+
+        return Response({
+            'online_users': online_users,
+            'online_count': len(online_users),
+        })
+
+
+class RecentLoginsView(APIView):
+    """
+    Recent logins endpoint — paginated list of users who logged in recently.
+    Ordered by last_login descending.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.accounts.models import User
+
+        page = int(request.query_params.get('page', 1))
+        per_page = min(int(request.query_params.get('per_page', 10)), 50)
+
+        qs = User.objects.filter(
+            is_active=True,
+            last_login__isnull=False,
+        ).order_by('-last_login')
+
+        total = qs.count()
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        page = max(1, min(page, total_pages))
+        offset = (page - 1) * per_page
+
+        users = qs[offset:offset + per_page]
+        logins = [
+            {
+                'id': str(u.id),
+                'full_name': u.full_name,
+                'email': u.email,
+                'rol': u.rol,
+                'last_login': u.last_login.isoformat() if u.last_login else None,
+            }
+            for u in users
+        ]
+
+        return Response({
+            'logins': logins,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_previous': page > 1,
+            },
         })
 
 

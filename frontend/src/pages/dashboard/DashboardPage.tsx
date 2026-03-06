@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
-import { settingsApi, DashboardStats, ActiveUser, ActivityItem } from '@/api/settings'
+import { settingsApi, DashboardStats, OnlineUser, RecentLogin, ActivityItem } from '@/api/settings'
 import {
   UsersIcon,
   BuildingOfficeIcon,
@@ -12,7 +12,19 @@ import {
   CalendarDaysIcon,
   ClipboardDocumentListIcon,
   ArrowRightIcon,
+  SignalIcon,
+  ArrowRightOnRectangleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  BanknotesIcon,
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon,
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline'
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(value)
+}
 
 // Chauffeur-specific dashboard
 function ChauffeurDashboard({ user }: { user: any }) {
@@ -104,9 +116,35 @@ function AdminDashboard({ user }: { user: any }) {
   const [loading, setLoading] = useState(true)
   const [activitiesLoading, setActivitiesLoading] = useState(true)
 
+  // Online users state + polling
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([])
+  const [onlineCount, setOnlineCount] = useState(0)
+  const [onlineLoading, setOnlineLoading] = useState(true)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Recent logins state + pagination
+  const [recentLogins, setRecentLogins] = useState<RecentLogin[]>([])
+  const [loginsPage, setLoginsPage] = useState(1)
+  const [loginsPagination, setLoginsPagination] = useState({ total: 0, total_pages: 1, has_next: false, has_previous: false })
+  const [loginsLoading, setLoginsLoading] = useState(true)
+
+  // Tabs: online | logins | activity
+  const [activeTab, setActiveTab] = useState<'online' | 'logins' | 'activity'>('online')
+
   useEffect(() => {
     loadStats()
     loadActivities()
+    loadOnlineUsers()
+    loadRecentLogins(1)
+
+    // Poll online users every 2 minutes
+    pollingRef.current = setInterval(() => {
+      loadOnlineUsers()
+    }, 120_000)
+
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current)
+    }
   }, [])
 
   const loadStats = async () => {
@@ -122,12 +160,38 @@ function AdminDashboard({ user }: { user: any }) {
 
   const loadActivities = async () => {
     try {
-      const data = await settingsApi.getRecentActivity(8)
+      const data = await settingsApi.getRecentActivity(10)
       setActivities(Array.isArray(data.activities) ? data.activities : [])
     } catch (err) {
       console.error('Failed to load recent activity:', err)
     } finally {
       setActivitiesLoading(false)
+    }
+  }
+
+  const loadOnlineUsers = useCallback(async () => {
+    try {
+      const data = await settingsApi.getOnlineUsers()
+      setOnlineUsers(data.online_users)
+      setOnlineCount(data.online_count)
+    } catch (err) {
+      console.error('Failed to load online users:', err)
+    } finally {
+      setOnlineLoading(false)
+    }
+  }, [])
+
+  const loadRecentLogins = async (page: number) => {
+    setLoginsLoading(true)
+    try {
+      const data = await settingsApi.getRecentLogins(page, 10)
+      setRecentLogins(data.logins)
+      setLoginsPage(data.pagination.page)
+      setLoginsPagination(data.pagination)
+    } catch (err) {
+      console.error('Failed to load recent logins:', err)
+    } finally {
+      setLoginsLoading(false)
     }
   }
 
@@ -151,21 +215,6 @@ function AdminDashboard({ user }: { user: any }) {
       case 'company': return 'text-indigo-600 bg-indigo-50'
       default: return 'text-gray-600 bg-gray-50'
     }
-  }
-
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
-
-    if (diffMins < 1) return t('dashboard.justNow')
-    if (diffMins < 60) return t('dashboard.minutesAgo', { count: diffMins })
-    if (diffHours < 24) return t('dashboard.hoursAgo', { count: diffHours })
-    if (diffDays < 7) return t('dashboard.daysAgo', { count: diffDays })
-    return date.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })
   }
 
   const statCards = [
@@ -210,12 +259,56 @@ function AdminDashboard({ user }: { user: any }) {
       bgColor: 'bg-red-50',
     },
   ]
+
+  const fin = stats?.financial
+  const financialCards = [
+    {
+      name: t('dashboard.totalIncome'),
+      value: fin ? formatCurrency(fin.income) : '-',
+      icon: ArrowTrendingUpIcon,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+      borderColor: 'border-green-200',
+    },
+    {
+      name: t('dashboard.totalExpenses'),
+      value: fin ? formatCurrency(fin.expenses) : '-',
+      icon: ArrowTrendingDownIcon,
+      color: 'text-red-600',
+      bgColor: 'bg-red-50',
+      borderColor: 'border-red-200',
+    },
+    {
+      name: t('dashboard.profit'),
+      value: fin ? formatCurrency(fin.profit) : '-',
+      icon: BanknotesIcon,
+      color: fin && fin.profit >= 0 ? 'text-blue-600' : 'text-red-600',
+      bgColor: fin && fin.profit >= 0 ? 'bg-blue-50' : 'bg-red-50',
+      borderColor: fin && fin.profit >= 0 ? 'border-blue-200' : 'border-red-200',
+    },
+    {
+      name: t('dashboard.totalCollected'),
+      value: fin ? formatCurrency(fin.collected) : '-',
+      icon: CheckCircleIcon,
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-50',
+      borderColor: 'border-emerald-200',
+    },
+    {
+      name: t('dashboard.totalOutstanding'),
+      value: fin ? formatCurrency(fin.outstanding) : '-',
+      icon: ClockIcon,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50',
+      borderColor: 'border-purple-200',
+    },
+  ]
   
   return (
-    <div>
+    <div className="space-y-6">
       {/* Welcome message */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">
+      <div>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
           {t('dashboard.welcomeDriver', { name: user?.voornaam })}
         </h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -223,23 +316,23 @@ function AdminDashboard({ user }: { user: any }) {
         </p>
       </div>
       
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-5">
+      {/* Stats grid — 2 cols mobile, 3 cols md, 5 cols xl */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-5">
         {statCards.map((stat) => (
           <Link
             key={stat.name}
             to={stat.href}
-            className="card p-3 sm:p-6 hover:shadow-md transition-shadow"
+            className="card p-3 sm:p-4 hover:shadow-md transition-shadow"
           >
-            <div className="flex items-center">
-              <div className={`flex-shrink-0 p-2 sm:p-3 rounded-lg ${stat.bgColor}`}>
-                <stat.icon className={`h-5 w-5 sm:h-6 sm:w-6 ${stat.color}`} />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className={`flex-shrink-0 p-1.5 sm:p-2.5 rounded-lg ${stat.bgColor}`}>
+                <stat.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${stat.color}`} />
               </div>
-              <div className="ml-2 sm:ml-4 min-w-0">
-                <p className="text-xs sm:text-sm font-medium text-gray-500 truncate">{stat.name}</p>
-                <p className="text-lg sm:text-2xl font-semibold text-gray-900">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] sm:text-xs font-medium text-gray-500 truncate">{stat.name}</p>
+                <p className="text-base sm:text-xl font-semibold text-gray-900">
                   {loading ? (
-                    <span className="inline-block w-8 h-6 bg-gray-200 rounded animate-pulse"></span>
+                    <span className="inline-block w-8 h-5 bg-gray-200 rounded animate-pulse" />
                   ) : (
                     stat.value
                   )}
@@ -249,167 +342,319 @@ function AdminDashboard({ user }: { user: any }) {
           </Link>
         ))}
       </div>
+
+      {/* Financial cards — 2 cols mobile, 3 md, 5 xl */}
+      <div>
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">{t('dashboard.financialOverview')} {stats?.year}</h2>
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-5">
+          {financialCards.map((card) => (
+            <div
+              key={card.name}
+              className={`rounded-xl border p-3 sm:p-4 ${card.bgColor} ${card.borderColor}`}
+            >
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className={`flex-shrink-0 p-1.5 sm:p-2 rounded-lg ${card.bgColor}`}>
+                  <card.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${card.color}`} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] sm:text-xs font-medium opacity-70 truncate">{card.name}</p>
+                  <p className={`text-sm sm:text-lg font-bold ${card.color} truncate`}>
+                    {loading ? (
+                      <span className="inline-block w-16 h-5 bg-gray-200/50 rounded animate-pulse" />
+                    ) : (
+                      card.value
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
       
-      {/* Quick actions */}
-      <div className="mt-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('dashboard.quickActions')}</h2>
-        <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-5">
-          <Link to="/time-entries" className="btn-primary text-center text-sm sm:text-base py-2 sm:py-2.5">
+      {/* Quick actions — 2 cols mobile, 3 md, 5 lg */}
+      <div>
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">{t('dashboard.quickActions')}</h2>
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
+          <Link to="/time-entries" className="btn-primary text-center text-xs sm:text-sm py-2 sm:py-2.5">
             + {t('dashboard.registerHoursAction')}
           </Link>
-          <Link to="/leave" className="btn-secondary text-center text-sm sm:text-base py-2 sm:py-2.5">
+          <Link to="/leave" className="btn-secondary text-center text-xs sm:text-sm py-2 sm:py-2.5">
             {t('dashboard.requestLeaveAction')}
           </Link>
-          <Link to="/planning" className="btn-secondary text-center text-sm sm:text-base py-2 sm:py-2.5">
+          <Link to="/planning" className="btn-secondary text-center text-xs sm:text-sm py-2 sm:py-2.5">
             + {t('dashboard.newPlanningAction')}
           </Link>
-          <Link to="/invoices/new" className="btn-secondary text-center text-sm sm:text-base py-2 sm:py-2.5">
+          <Link to="/invoices/new" className="btn-secondary text-center text-xs sm:text-sm py-2 sm:py-2.5">
             + {t('dashboard.createInvoiceAction')}
           </Link>
-          <Link to="/companies" className="btn-secondary text-center text-sm sm:text-base py-2 sm:py-2.5 col-span-2 lg:col-span-1">
+          <Link to="/companies" className="btn-secondary text-center text-xs sm:text-sm py-2 sm:py-2.5 col-span-2 md:col-span-1">
             + {t('companies.addCompany')}
           </Link>
         </div>
       </div>
       
-      {/* Active users */}
-      <div className="mt-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">{t('dashboard.activeUsers')}</h2>
-          <span className="text-sm text-gray-500">{t('dashboard.activeUsersDesc')}</span>
+      {/* Tabbed section: Online Users | Recent Logins | Recent Activity */}
+      <div>
+        {/* Tab headers — scrollable on mobile */}
+        <div className="border-b border-gray-200 mb-0 overflow-x-auto">
+          <nav className="-mb-px flex space-x-4 sm:space-x-6 min-w-max">
+            <button
+              onClick={() => setActiveTab('online')}
+              className={`flex items-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-1 border-b-2 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+                activeTab === 'online'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <SignalIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              {t('dashboard.onlineNow')}
+              <span className={`inline-flex items-center justify-center min-w-[18px] h-4 sm:h-5 px-1 sm:px-1.5 rounded-full text-[10px] sm:text-xs font-semibold ${
+                onlineCount > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+              }`}>
+                {onlineCount}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('logins')}
+              className={`flex items-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-1 border-b-2 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+                activeTab === 'logins'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <ArrowRightOnRectangleIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              {t('dashboard.recentLogins')}
+            </button>
+            <button
+              onClick={() => setActiveTab('activity')}
+              className={`flex items-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-1 border-b-2 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+                activeTab === 'activity'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <ClipboardDocumentListIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              {t('dashboard.recentActivity')}
+            </button>
+          </nav>
         </div>
-        <div className="card overflow-hidden">
-          {loading ? (
-            <div className="p-6 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
-            </div>
-          ) : !stats?.active_users?.length ? (
-            <div className="p-6">
-              <p className="text-gray-500 text-center py-4">{t('dashboard.noActiveUsers')}</p>
-            </div>
-          ) : (
-            <ul className="divide-y divide-gray-100">
-              {stats.active_users.map((activeUser: ActiveUser) => {
-                const roleBadge = {
-                  admin: { label: t('dashboard.roleAdmin'), color: 'bg-red-100 text-red-700' },
-                  gebruiker: { label: t('dashboard.roleGebruiker'), color: 'bg-blue-100 text-blue-700' },
-                  chauffeur: { label: t('dashboard.roleChauffeur'), color: 'bg-green-100 text-green-700' },
-                }[activeUser.rol] || { label: activeUser.rol, color: 'bg-gray-100 text-gray-700' }
 
-                return (
-                  <li key={activeUser.id} className="flex items-center gap-4 px-4 py-3">
-                    <div className="flex-shrink-0 relative">
-                      <div className="h-9 w-9 rounded-full bg-primary-100 flex items-center justify-center">
-                        <span className="text-sm font-medium text-primary-700">
-                          {activeUser.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+        {/* Tab content */}
+        <div className="card overflow-hidden rounded-t-none border-t-0">
+          {/* === Online Users Tab === */}
+          {activeTab === 'online' && (
+            onlineLoading ? (
+              <div className="p-6 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
+              </div>
+            ) : onlineUsers.length === 0 ? (
+              <div className="p-6">
+                <p className="text-gray-500 text-center py-4">{t('dashboard.noOnlineUsers')}</p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {onlineUsers.map((u) => {
+                  const roleBadge = getRoleBadge(u.rol, t)
+                  return (
+                    <li key={u.id} className="flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3">
+                      <div className="flex-shrink-0 relative">
+                        <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-primary-100 flex items-center justify-center">
+                          <span className="text-xs sm:text-sm font-medium text-primary-700">
+                            {u.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                          </span>
+                        </div>
+                        <span className="absolute -bottom-0.5 -right-0.5 block h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-green-400 ring-2 ring-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{u.full_name}</p>
+                        <p className="text-[11px] sm:text-xs text-gray-500 truncate">{u.email}</p>
+                      </div>
+                      <div className="flex-shrink-0 flex items-center gap-2 sm:gap-3">
+                        <span className={`hidden sm:inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${roleBadge.color}`}>
+                          {roleBadge.label}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs text-green-600 font-medium">
+                          <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                          {t('dashboard.online')}
                         </span>
                       </div>
-                      <span className="absolute -bottom-0.5 -right-0.5 block h-3 w-3 rounded-full bg-green-400 ring-2 ring-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{activeUser.full_name}</p>
-                      <p className="text-xs text-gray-500 truncate">{activeUser.email}</p>
-                    </div>
-                    <div className="flex-shrink-0 flex items-center gap-3">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${roleBadge.color}`}>
-                        {roleBadge.label}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {activeUser.last_login ? formatTimestamp(activeUser.last_login) : ''}
-                      </span>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      {/* Recent activity placeholder */}
-      <div className="mt-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">{t('dashboard.recentActivity')}</h2>
-          <Link to="/activities" className="text-sm text-primary-600 hover:text-primary-700">
-            {t('common.viewAll')} →
-          </Link>
-        </div>
-        <div className="card overflow-hidden">
-          {activitiesLoading ? (
-            <div className="p-6 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
-            </div>
-          ) : activities.length === 0 ? (
-            <div className="p-6">
-              <p className="text-gray-500 text-center py-8">
-                {t('dashboard.noActivity')}
-              </p>
-            </div>
-          ) : (
-            <>
-              <ul className="divide-y divide-gray-100">
-                {(activities || []).slice(0, 10).map((activity, idx) => {
-                  const Icon = getActivityIcon(activity.type)
-                  const colorClass = getActivityColor(activity.type)
-                  const isClickable = activity.link && activity.link !== '/'
-                  
-                  return (
-                    <li key={activity.id || idx}>
-                      {isClickable ? (
-                        <Link 
-                          to={activity.link} 
-                          className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors"
-                        >
-                          <div className={`flex-shrink-0 p-2 rounded-lg ${colorClass}`}>
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {activity.title}
-                            </p>
-                            <p className="text-sm text-gray-500 truncate">
-                              {activity.description}
-                              {activity.user_name && <span className="ml-2 text-gray-400">• {t('dashboard.by')} {activity.user_name}</span>}
-                            </p>
-                          </div>
-                          <div className="flex-shrink-0 flex items-center gap-3">
-                            <span className="text-xs text-gray-400">
-                              {formatTimestamp(activity.timestamp)}
-                            </span>
-                            <ArrowRightIcon className="h-4 w-4 text-gray-400" />
-                          </div>
-                        </Link>
-                      ) : (
-                        <div className="flex items-center gap-4 p-4">
-                          <div className={`flex-shrink-0 p-2 rounded-lg ${colorClass}`}>
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {activity.title}
-                            </p>
-                            <p className="text-sm text-gray-500 truncate">
-                              {activity.description}
-                              {activity.user_name && <span className="ml-2 text-gray-400">• {t('dashboard.by')} {activity.user_name}</span>}
-                            </p>
-                          </div>
-                          <div className="flex-shrink-0">
-                            <span className="text-xs text-gray-400">
-                              {formatTimestamp(activity.timestamp)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
                     </li>
                   )
                 })}
               </ul>
-            </>
+            )
+          )}
+
+          {/* === Recent Logins Tab === */}
+          {activeTab === 'logins' && (
+            loginsLoading ? (
+              <div className="p-6 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
+              </div>
+            ) : recentLogins.length === 0 ? (
+              <div className="p-6">
+                <p className="text-gray-500 text-center py-4">{t('dashboard.noRecentLogins')}</p>
+              </div>
+            ) : (
+              <>
+                <ul className="divide-y divide-gray-100">
+                  {recentLogins.map((u) => {
+                    const roleBadge = getRoleBadge(u.rol, t)
+                    const isOnline = onlineUsers.some(o => o.id === u.id)
+                    return (
+                      <li key={u.id} className="flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3">
+                        <div className="flex-shrink-0 relative">
+                          <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-primary-100 flex items-center justify-center">
+                            <span className="text-xs sm:text-sm font-medium text-primary-700">
+                              {u.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                            </span>
+                          </div>
+                          {isOnline && (
+                            <span className="absolute -bottom-0.5 -right-0.5 block h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-green-400 ring-2 ring-white" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{u.full_name}</p>
+                          <p className="text-[11px] sm:text-xs text-gray-500 truncate">{u.email}</p>
+                        </div>
+                        <div className="flex-shrink-0 flex items-center gap-2 sm:gap-3">
+                          <span className={`hidden sm:inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${roleBadge.color}`}>
+                            {roleBadge.label}
+                          </span>
+                          <span className="text-[11px] sm:text-xs text-gray-400 text-right">
+                            {u.last_login ? formatTimestamp(u.last_login, t) : '-'}
+                          </span>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+                {/* Pagination */}
+                {loginsPagination.total_pages > 1 && (
+                  <div className="flex items-center justify-between border-t border-gray-100 px-3 sm:px-4 py-2.5 sm:py-3">
+                    <p className="text-[11px] sm:text-xs text-gray-500">
+                      {t('dashboard.pageOf', { page: loginsPage, total: loginsPagination.total_pages })}
+                      <span className="hidden sm:inline">{' · '}{loginsPagination.total} {t('dashboard.totalEntries')}</span>
+                    </p>
+                    <div className="flex gap-1.5 sm:gap-2">
+                      <button
+                        onClick={() => loadRecentLogins(loginsPage - 1)}
+                        disabled={!loginsPagination.has_previous}
+                        className="inline-flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeftIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                        <span className="hidden sm:inline">{t('common.previous')}</span>
+                      </button>
+                      <button
+                        onClick={() => loadRecentLogins(loginsPage + 1)}
+                        disabled={!loginsPagination.has_next}
+                        className="inline-flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <span className="hidden sm:inline">{t('common.next')}</span>
+                        <ChevronRightIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )
+          )}
+
+          {/* === Recent Activity Tab === */}
+          {activeTab === 'activity' && (
+            activitiesLoading ? (
+              <div className="p-6 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
+              </div>
+            ) : activities.length === 0 ? (
+              <div className="p-6">
+                <p className="text-gray-500 text-center py-8">
+                  {t('dashboard.noActivity')}
+                </p>
+              </div>
+            ) : (
+              <>
+                <ul className="divide-y divide-gray-100">
+                  {(activities || []).slice(0, 10).map((activity, idx) => {
+                    const Icon = getActivityIcon(activity.type)
+                    const colorClass = getActivityColor(activity.type)
+                    const isClickable = activity.link && activity.link !== '/'
+                    
+                    const content = (
+                      <>
+                        <div className={`flex-shrink-0 p-1.5 sm:p-2 rounded-lg ${colorClass}`}>
+                          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">
+                            {activity.title}
+                          </p>
+                          <p className="text-[11px] sm:text-sm text-gray-500 truncate">
+                            {activity.description}
+                            {activity.user_name && <span className="hidden sm:inline ml-2 text-gray-400">· {t('dashboard.by')} {activity.user_name}</span>}
+                          </p>
+                        </div>
+                        <div className="flex-shrink-0 flex items-center gap-2">
+                          <span className="text-[11px] sm:text-xs text-gray-400">
+                            {formatTimestamp(activity.timestamp, t)}
+                          </span>
+                          {isClickable && <ArrowRightIcon className="hidden sm:block h-4 w-4 text-gray-400" />}
+                        </div>
+                      </>
+                    )
+
+                    return (
+                      <li key={activity.id || idx}>
+                        {isClickable ? (
+                          <Link to={activity.link} className="flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 hover:bg-gray-50 transition-colors">
+                            {content}
+                          </Link>
+                        ) : (
+                          <div className="flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3">
+                            {content}
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+                <div className="border-t border-gray-100 px-3 sm:px-4 py-2.5 sm:py-3 text-right">
+                  <Link to="/activities" className="text-xs sm:text-sm text-primary-600 hover:text-primary-700 font-medium">
+                    {t('common.viewAll')} →
+                  </Link>
+                </div>
+              </>
+            )
           )}
         </div>
       </div>
     </div>
   )
+}
+
+// Helper functions
+function getRoleBadge(rol: string, t: any) {
+  return {
+    admin: { label: t('dashboard.roleAdmin'), color: 'bg-red-100 text-red-700' },
+    gebruiker: { label: t('dashboard.roleGebruiker'), color: 'bg-blue-100 text-blue-700' },
+    chauffeur: { label: t('dashboard.roleChauffeur'), color: 'bg-green-100 text-green-700' },
+  }[rol] || { label: rol, color: 'bg-gray-100 text-gray-700' }
+}
+
+function formatTimestamp(timestamp: string, t: any) {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+
+  if (diffMins < 1) return t('dashboard.justNow')
+  if (diffMins < 60) return t('dashboard.minutesAgo', { count: diffMins })
+  if (diffHours < 24) return t('dashboard.hoursAgo', { count: diffHours })
+  if (diffDays < 7) return t('dashboard.daysAgo', { count: diffDays })
+  return date.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 export default function DashboardPage() {
