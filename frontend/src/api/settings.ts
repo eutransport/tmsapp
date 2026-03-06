@@ -1,6 +1,14 @@
 import api from './client'
 import type { AppSettings, AppSettingsAdmin } from '@/types'
 
+export interface ActiveUser {
+  id: string
+  full_name: string
+  email: string
+  rol: string
+  last_login: string | null
+}
+
 export interface DashboardStats {
   users: number
   companies: number
@@ -9,6 +17,8 @@ export interface DashboardStats {
   open_invoices: number
   week_number: number
   year: number
+  active_users: ActiveUser[]
+  active_users_count: number
 }
 
 export interface ActivityItem {

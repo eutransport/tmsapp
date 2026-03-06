@@ -61,16 +61,31 @@ echo ""
 cd "$TMS_DIR"
 
 # =========================================
+# 0. Environment symlink herstellen (nodig voor docker compose)
+# =========================================
+if [ ! -L "$TMS_DIR/.env" ] || [ ! -e "$TMS_DIR/.env" ]; then
+    ln -sf "$ENV_FILE" "$TMS_DIR/.env"
+    log_success "Environment symlink hersteld"
+fi
+
+# =========================================
 # 1. Database backup
 # =========================================
 BACKUP_FILE="$BACKUP_DIR/db-pre-update-$(date +%Y%m%d%H%M%S).sql"
 log_info "Database backup maken..."
 mkdir -p "$BACKUP_DIR"
-if docker compose exec -T db pg_dump -U "${DB_USER:-tms_user}" "${DB_NAME:-tms_db}" > "$BACKUP_FILE" 2>/dev/null; then
+
+# Controleer of de db container draait
+DB_STATUS=$(docker compose ps -q db 2>/dev/null)
+if [ -z "$DB_STATUS" ]; then
+    log_warning "Database container draait niet — backup overgeslagen"
+elif docker compose exec -T db pg_dump -U "${DB_USER:-tms_user}" "${DB_NAME:-tms_db}" > "$BACKUP_FILE" 2>/tmp/tms_backup_err.log; then
     BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
     log_success "Backup aangemaakt: $BACKUP_FILE ($BACKUP_SIZE)"
 else
-    log_warning "Geen draaiende database — backup overgeslagen"
+    BACKUP_ERR=$(cat /tmp/tms_backup_err.log 2>/dev/null | tail -3)
+    log_warning "Database backup mislukt — overgeslagen"
+    [ -n "$BACKUP_ERR" ] && log_warning "Reden: $BACKUP_ERR"
     rm -f "$BACKUP_FILE"
 fi
 
@@ -96,9 +111,9 @@ git reset --hard origin/main
 log_success "Code bijgewerkt naar $(git rev-parse --short HEAD)"
 
 # =========================================
-# 3. Environment symlink herstellen
+# 3. Environment symlink opnieuw controleren (git reset kan hem verwijderen)
 # =========================================
-if [ ! -L "$TMS_DIR/.env" ]; then
+if [ ! -L "$TMS_DIR/.env" ] || [ ! -e "$TMS_DIR/.env" ]; then
     ln -sf "$ENV_FILE" "$TMS_DIR/.env"
     log_success "Environment symlink hersteld"
 fi

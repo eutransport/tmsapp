@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
-import { settingsApi, DashboardStats, ActivityItem } from '@/api/settings'
+import { settingsApi, DashboardStats, ActiveUser, ActivityItem } from '@/api/settings'
 import {
   UsersIcon,
   BuildingOfficeIcon,
@@ -272,6 +272,60 @@ function AdminDashboard({ user }: { user: any }) {
         </div>
       </div>
       
+      {/* Active users */}
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">{t('dashboard.activeUsers')}</h2>
+          <span className="text-sm text-gray-500">{t('dashboard.activeUsersDesc')}</span>
+        </div>
+        <div className="card overflow-hidden">
+          {loading ? (
+            <div className="p-6 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
+            </div>
+          ) : !stats?.active_users?.length ? (
+            <div className="p-6">
+              <p className="text-gray-500 text-center py-4">{t('dashboard.noActiveUsers')}</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {stats.active_users.map((activeUser: ActiveUser) => {
+                const roleBadge = {
+                  admin: { label: t('dashboard.roleAdmin'), color: 'bg-red-100 text-red-700' },
+                  gebruiker: { label: t('dashboard.roleGebruiker'), color: 'bg-blue-100 text-blue-700' },
+                  chauffeur: { label: t('dashboard.roleChauffeur'), color: 'bg-green-100 text-green-700' },
+                }[activeUser.rol] || { label: activeUser.rol, color: 'bg-gray-100 text-gray-700' }
+
+                return (
+                  <li key={activeUser.id} className="flex items-center gap-4 px-4 py-3">
+                    <div className="flex-shrink-0 relative">
+                      <div className="h-9 w-9 rounded-full bg-primary-100 flex items-center justify-center">
+                        <span className="text-sm font-medium text-primary-700">
+                          {activeUser.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="absolute -bottom-0.5 -right-0.5 block h-3 w-3 rounded-full bg-green-400 ring-2 ring-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{activeUser.full_name}</p>
+                      <p className="text-xs text-gray-500 truncate">{activeUser.email}</p>
+                    </div>
+                    <div className="flex-shrink-0 flex items-center gap-3">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${roleBadge.color}`}>
+                        {roleBadge.label}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {activeUser.last_login ? formatTimestamp(activeUser.last_login) : ''}
+                      </span>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+
       {/* Recent activity placeholder */}
       <div className="mt-8">
         <div className="flex items-center justify-between mb-4">

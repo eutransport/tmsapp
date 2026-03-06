@@ -460,6 +460,25 @@ class DashboardStatsView(APIView):
             status__in=['concept', 'definitief', 'verzonden']
         ).count()
         
+        # Active users: logged in within the last 24 hours
+        from datetime import timedelta
+        recent_threshold = timezone.now() - timedelta(hours=24)
+        active_users_qs = User.objects.filter(
+            is_active=True,
+            last_login__gte=recent_threshold,
+        ).order_by('-last_login')[:20]
+        
+        active_users = [
+            {
+                'id': str(u.id),
+                'full_name': u.full_name,
+                'email': u.email,
+                'rol': u.rol,
+                'last_login': u.last_login.isoformat() if u.last_login else None,
+            }
+            for u in active_users_qs
+        ]
+        
         return Response({
             'users': user_count,
             'companies': company_count,
@@ -468,6 +487,8 @@ class DashboardStatsView(APIView):
             'open_invoices': open_invoice_count,
             'week_number': week_number,
             'year': year,
+            'active_users': active_users,
+            'active_users_count': len(active_users),
         })
 
 

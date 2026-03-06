@@ -210,7 +210,15 @@
     "justNow": "Just now",
     "minutesAgo": "{{count}} minutes ago",
     "hoursAgo": "{{count}} hours ago",
-    "daysAgo": "{{count}} days ago"
+    "daysAgo": "{{count}} days ago",
+    "activeUsers": "Active users",
+    "activeUsersDesc": "Logged in within the last 24 hours",
+    "noActiveUsers": "No active users",
+    "lastSeen": "Last seen",
+    "online": "Online",
+    "roleAdmin": "Admin",
+    "roleGebruiker": "User",
+    "roleChauffeur": "Driver"
   },
   "companies": {
     "title": "Companies",

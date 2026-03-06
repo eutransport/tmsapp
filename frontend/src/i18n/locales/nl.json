@@ -210,7 +210,15 @@
     "justNow": "Zojuist",
     "minutesAgo": "{{count}} minuten geleden",
     "hoursAgo": "{{count}} uur geleden",
-    "daysAgo": "{{count}} dagen geleden"
+    "daysAgo": "{{count}} dagen geleden",
+    "activeUsers": "Actieve gebruikers",
+    "activeUsersDesc": "Ingelogd in de afgelopen 24 uur",
+    "noActiveUsers": "Geen actieve gebruikers",
+    "lastSeen": "Laatst gezien",
+    "online": "Online",
+    "roleAdmin": "Admin",
+    "roleGebruiker": "Gebruiker",
+    "roleChauffeur": "Chauffeur"
   },
   "companies": {
     "title": "Bedrijven",
