@@ -13,7 +13,9 @@ import {
   ExclamationTriangleIcon,
   DocumentPlusIcon,
   XMarkIcon,
+  EyeIcon,
 } from '@heroicons/react/24/outline'
+import HoursDetailModal from './HoursDetailModal'
 import {
   MonthlyHoursOverview,
   getMonthlyHoursOverview,
@@ -41,6 +43,10 @@ export default function MonthlyHoursTab() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 20
+
+  // Hours detail modal state
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [detailRow, setDetailRow] = useState<MonthlyHoursOverview | null>(null)
 
   // Invoice modal state
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
@@ -281,6 +287,9 @@ export default function MonthlyHoursTab() {
                       {t('timeEntries.totalKm')}
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Overzicht
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('common.actions')}
                     </th>
                   </tr>
@@ -334,6 +343,16 @@ export default function MonthlyHoursTab() {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-700">
                           {row.totaal_km} km
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-center">
+                          <button
+                            onClick={() => { setDetailRow(row); setShowDetailModal(true) }}
+                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors font-medium"
+                            title="Overzicht Uren"
+                          >
+                            <EyeIcon className="h-3.5 w-3.5" />
+                            Overzicht Uren
+                          </button>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-center">
                           {hasMissed && (
@@ -397,6 +416,13 @@ export default function MonthlyHoursTab() {
                       </div>
                     </div>
 
+                    <button
+                      onClick={() => { setDetailRow(row); setShowDetailModal(true) }}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 min-h-[44px] text-sm mt-1"
+                    >
+                      <EyeIcon className="h-4 w-4" />
+                      Overzicht Uren
+                    </button>
                     {hasMissed && (
                       <button
                         onClick={() => openInvoiceModal(row)}
@@ -729,6 +755,19 @@ export default function MonthlyHoursTab() {
           </div>
         </Dialog>
       </Transition>
+
+      {/* Hours Detail Modal */}
+      {detailRow && (
+        <HoursDetailModal
+          show={showDetailModal}
+          onClose={() => { setShowDetailModal(false); setDetailRow(null) }}
+          userId={detailRow.user_id}
+          userName={detailRow.user_naam}
+          jaar={detailRow.jaar}
+          maand={detailRow.maand}
+          maandNaam={detailRow.maand_naam}
+        />
+      )}
     </div>
   )
 }

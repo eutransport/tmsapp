@@ -8,8 +8,12 @@ export interface TimeEntryFilters {
   search?: string
   status?: 'concept' | 'ingediend'
   weeknummer?: number
+  weeknummer__gte?: number
+  weeknummer__lte?: number
   ritnummer?: string
   datum?: string
+  datum__gte?: string
+  datum__lte?: string
   user?: string
   jaar?: number
   ordering?: string
@@ -72,8 +76,12 @@ export async function getTimeEntries(filters?: TimeEntryFilters): Promise<Pagina
   if (filters?.search) params.append('search', filters.search)
   if (filters?.status) params.append('status', filters.status)
   if (filters?.weeknummer) params.append('weeknummer', filters.weeknummer.toString())
+  if (filters?.weeknummer__gte) params.append('weeknummer__gte', filters.weeknummer__gte.toString())
+  if (filters?.weeknummer__lte) params.append('weeknummer__lte', filters.weeknummer__lte.toString())
   if (filters?.ritnummer) params.append('ritnummer', filters.ritnummer)
   if (filters?.datum) params.append('datum', filters.datum)
+  if (filters?.datum__gte) params.append('datum__gte', filters.datum__gte)
+  if (filters?.datum__lte) params.append('datum__lte', filters.datum__lte)
   if (filters?.user) params.append('user', filters.user)
   if (filters?.jaar) params.append('jaar', filters.jaar.toString())
   if (filters?.ordering) params.append('ordering', filters.ordering)

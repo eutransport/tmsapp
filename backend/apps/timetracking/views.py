@@ -55,6 +55,22 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         if jaar:
             queryset = queryset.filter(datum__year=int(jaar))
         
+        # Filter by date range if provided
+        datum_gte = self.request.query_params.get('datum__gte')
+        datum_lte = self.request.query_params.get('datum__lte')
+        if datum_gte:
+            queryset = queryset.filter(datum__gte=datum_gte)
+        if datum_lte:
+            queryset = queryset.filter(datum__lte=datum_lte)
+        
+        # Filter by week number range if provided
+        weeknummer_gte = self.request.query_params.get('weeknummer__gte')
+        weeknummer_lte = self.request.query_params.get('weeknummer__lte')
+        if weeknummer_gte:
+            queryset = queryset.filter(weeknummer__gte=int(weeknummer_gte))
+        if weeknummer_lte:
+            queryset = queryset.filter(weeknummer__lte=int(weeknummer_lte))
+        
         return queryset
     
     def perform_create(self, serializer):
