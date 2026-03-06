@@ -108,7 +108,7 @@ export default function MaintenanceOverviewPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <WrenchScrewdriverIcon className="w-7 h-7 text-primary-600" />
@@ -116,7 +116,7 @@ export default function MaintenanceOverviewPage() {
           </h1>
           <p className="text-gray-500 mt-1">{t('maintenance.subtitle')}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => navigate('/maintenance/settings')}
             className="btn-secondary flex items-center gap-2"
@@ -193,14 +193,14 @@ export default function MaintenanceOverviewPage() {
               </div>
             ) : (
               apkCountdowns.slice(0, 8).map((apk) => (
-                <div key={apk.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
+                <div key={apk.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 hover:bg-gray-50 gap-2">
                   <div className="flex items-center gap-3">
                     <LicensePlate kenteken={apk.vehicle_kenteken} size="sm" />
                     <div className="text-xs text-gray-500">
                       {apk.vehicle_type || '—'}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 ml-0 sm:ml-0">
                     <div className="text-xs text-gray-500">
                       {new Date(apk.expiry_date).toLocaleDateString('nl-NL')}
                     </div>
@@ -373,7 +373,7 @@ export default function MaintenanceOverviewPage() {
       {/* Most expensive vehicle */}
       {stats?.most_expensive_vehicle && (
         <div className="bg-gradient-to-r from-primary-50 to-blue-50 rounded-xl border border-primary-100 p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h3 className="text-sm font-medium text-gray-600">{t('maintenance.stats.mostExpensive')}</h3>
               <div className="flex items-center gap-3 mt-2">

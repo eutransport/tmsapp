@@ -119,7 +119,7 @@ export default function TemplatesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t('templates.title')}</h1>
           <p className="mt-1 text-sm text-gray-500">
@@ -194,7 +194,8 @@ export default function TemplatesPage() {
         </div>
       ) : (
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-          <table className="min-w-full divide-y divide-gray-200">
+          {/* Desktop Table */}
+          <table className="hidden md:table min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -285,6 +286,69 @@ export default function TemplatesPage() {
               ))}
             </tbody>
           </table>
+
+          {/* Mobile Card Layout */}
+          <div className="md:hidden divide-y divide-gray-200">
+            {templates.map((template) => (
+              <div key={template.id} className="p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <DocumentDuplicateIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">{template.naam}</div>
+                      {template.beschrijving && (
+                        <div className="text-xs text-gray-500 truncate">{template.beschrijving}</div>
+                      )}
+                    </div>
+                  </div>
+                  {template.is_active ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 flex-shrink-0">
+                      <CheckCircleIcon className="h-3 w-3 mr-1" />
+                      {t('common.active')}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 flex-shrink-0">
+                      {t('common.inactive')}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {t('common.updated')}: {new Date(template.updated_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </div>
+                <div className="flex items-center gap-1 pt-1 border-t border-gray-100">
+                  <button
+                    onClick={() => handleExport(template)}
+                    className="flex-1 flex items-center justify-center gap-1 p-2 text-xs text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
+                  >
+                    <ArrowDownTrayIcon className="h-4 w-4" />
+                    {t('templates.export')}
+                  </button>
+                  <button
+                    onClick={() => handleCopy(template)}
+                    disabled={isCopying}
+                    className="flex-1 flex items-center justify-center gap-1 p-2 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                  >
+                    <DocumentDuplicateIcon className="h-4 w-4" />
+                    {t('templates.copy')}
+                  </button>
+                  <button
+                    onClick={() => navigate(`/invoices/templates/${template.id}/edit`)}
+                    className="flex-1 flex items-center justify-center gap-1 p-2 text-xs text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-md transition-colors"
+                  >
+                    <PencilIcon className="h-4 w-4" />
+                    {t('common.edit')}
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirmId(template.id)}
+                    className="flex-1 flex items-center justify-center gap-1 p-2 text-xs text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                    {t('common.delete')}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

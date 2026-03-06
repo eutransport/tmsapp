@@ -72,15 +72,15 @@ function StatCard({ title, value, icon: Icon, color, subtitle }: StatCardProps) 
   }
 
   return (
-    <div className={`rounded-xl border p-6 ${colorClasses[color]}`}>
+    <div className={`rounded-xl border p-4 sm:p-6 ${colorClasses[color]}`}>
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium opacity-80">{title}</p>
-          <p className="text-2xl font-bold mt-1">{formatCurrency(value)}</p>
-          {subtitle && <p className="text-xs opacity-60 mt-1">{subtitle}</p>}
+        <div className="min-w-0">
+          <p className="text-xs sm:text-sm font-medium opacity-80 truncate">{title}</p>
+          <p className="text-lg sm:text-2xl font-bold mt-1">{formatCurrency(value)}</p>
+          {subtitle && <p className="text-xs opacity-60 mt-1 hidden sm:block">{subtitle}</p>}
         </div>
-        <div className={`p-3 rounded-xl ${iconClasses[color]}`}>
-          <Icon className="h-6 w-6" />
+        <div className={`p-2 sm:p-3 rounded-xl ${iconClasses[color]} flex-shrink-0`}>
+          <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
         </div>
       </div>
     </div>
@@ -223,7 +223,7 @@ export default function RevenuePage() {
       {!loading && data && (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             <StatCard
               title={t('revenue.totalIncome', 'Totale Inkomsten')}
               value={data.totals.income}
@@ -271,12 +271,12 @@ export default function RevenuePage() {
           {/* Charts Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Income Chart */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">
                 <ArrowTrendingUpIcon className="inline h-5 w-5 mr-2 text-green-500" />
                 {t('revenue.income', 'Inkomsten')}
               </h3>
-              <div className="h-64">
+              <div className="h-48 sm:h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -304,12 +304,12 @@ export default function RevenuePage() {
             </div>
 
             {/* Expenses Chart */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">
                 <ArrowTrendingDownIcon className="inline h-5 w-5 mr-2 text-red-500" />
                 {t('revenue.expenses', 'Uitgaven')}
               </h3>
-              <div className="h-64">
+              <div className="h-48 sm:h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -337,12 +337,12 @@ export default function RevenuePage() {
             </div>
 
             {/* Profit Chart - Full Width */}
-            <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">
                 <BanknotesIcon className="inline h-5 w-5 mr-2 text-blue-500" />
                 {t('revenue.profitOverview', 'Winst Overzicht')}
               </h3>
-              <div className="h-72">
+              <div className="h-56 sm:h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -392,10 +392,11 @@ export default function RevenuePage() {
 
           {/* Data Table */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">{t('revenue.detailOverview', 'Detail Overzicht')}</h3>
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900">{t('revenue.detailOverview', 'Detail Overzicht')}</h3>
             </div>
-            <div className="overflow-x-auto">
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -474,6 +475,45 @@ export default function RevenuePage() {
                   </tr>
                 </tbody>
               </table>
+            </div>
+            {/* Mobile Card Layout */}
+            <div className="md:hidden divide-y divide-gray-200">
+              {data.data.map((item, index) => {
+                const margin = item.income > 0 
+                  ? ((item.profit / item.income) * 100).toFixed(1) 
+                  : '0.0'
+                return (
+                  <div key={index} className="p-4 space-y-2">
+                    <div className="text-sm font-semibold text-gray-900">{item.label}</div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                      <span className="text-gray-500">{t('revenue.income', 'Inkomsten')}</span>
+                      <span className="text-right text-green-600 font-medium">{formatCurrency(item.income)}</span>
+                      <span className="text-gray-500">{t('revenue.creditInvoices', 'Credit')}</span>
+                      <span className="text-right text-orange-600 font-medium">{formatCurrency(item.credit)}</span>
+                      <span className="text-gray-500">{t('revenue.expenses', 'Uitgaven')}</span>
+                      <span className="text-right text-red-600 font-medium">{formatCurrency(item.expenses)}</span>
+                      <span className="text-gray-500">{t('revenue.profit', 'Winst')}</span>
+                      <span className={`text-right font-bold ${item.profit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{formatCurrency(item.profit)}</span>
+                      <span className="text-gray-500">{t('revenue.margin', 'Marge')}</span>
+                      <span className="text-right text-gray-500">{margin}%</span>
+                    </div>
+                  </div>
+                )
+              })}
+              {/* Totals */}
+              <div className="p-4 bg-gray-100 space-y-2">
+                <div className="text-sm font-bold text-gray-900">{t('common.total')}</div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm font-bold">
+                  <span className="text-gray-600">{t('revenue.income', 'Inkomsten')}</span>
+                  <span className="text-right text-green-700">{formatCurrency(data.totals.income)}</span>
+                  <span className="text-gray-600">{t('revenue.expenses', 'Uitgaven')}</span>
+                  <span className="text-right text-red-700">{formatCurrency(data.totals.expenses)}</span>
+                  <span className="text-gray-600">{t('revenue.profit', 'Winst')}</span>
+                  <span className={`text-right ${data.totals.profit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>{formatCurrency(data.totals.profit)}</span>
+                  <span className="text-gray-600">{t('revenue.margin', 'Marge')}</span>
+                  <span className="text-right text-gray-700">{data.summary.profit_margin}%</span>
+                </div>
+              </div>
             </div>
           </div>
 

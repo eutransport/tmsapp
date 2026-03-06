@@ -10,6 +10,7 @@ import {
   CalendarDaysIcon,
   PaperAirplaneIcon,
   CheckCircleIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline'
 import NotificationGroupsTab from '@/components/settings/NotificationGroupsTab'
 import NotificationSchedulesTab from '@/components/settings/NotificationSchedulesTab'
@@ -70,8 +71,8 @@ export default function NotificationsPage() {
         </div>
       )}
 
-      {/* Sub-tabs Navigation */}
-      <div className="border-b border-gray-200 mb-6">
+      {/* Desktop Tabs - hidden on mobile */}
+      <div className="hidden md:block border-b border-gray-200 mb-6">
         <nav className="-mb-px flex space-x-8">
           {subTabs.map((tab) => (
             <button
@@ -92,20 +93,61 @@ export default function NotificationsPage() {
         </nav>
       </div>
 
-      {/* Tab Content */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        {activeSubTab === 'groups' && (
-          <NotificationGroupsTab onSuccess={handleSuccess} onError={handleError} />
-        )}
-        {activeSubTab === 'schedules' && (
-          <NotificationSchedulesTab onSuccess={handleSuccess} onError={handleError} />
-        )}
-        {activeSubTab === 'send' && (
-          <SendUserNotificationTab onSuccess={handleSuccess} onError={handleError} />
-        )}
-        {activeSubTab === 'sent' && (
-          <SentNotificationsTab />
-        )}
+      {/* Mobile Accordion - hidden on desktop */}
+      <div className="md:hidden space-y-2 mb-4">
+        {subTabs.map((tab) => {
+          const isOpen = activeSubTab === tab.id
+          return (
+            <div key={tab.id}>
+              <button
+                onClick={() => setActiveSubTab(isOpen ? '' as SubTab : tab.id)}
+                className={`flex items-center gap-3 w-full p-4 bg-white rounded-xl border shadow-sm text-sm font-medium transition-colors ${
+                  isOpen
+                    ? 'border-primary-300 text-primary-600 bg-primary-50 rounded-b-none'
+                    : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <tab.icon className={`h-5 w-5 ${isOpen ? 'text-primary-600' : 'text-gray-400'}`} />
+                {tab.name}
+                <ChevronDownIcon className={`h-4 w-4 ml-auto transition-transform duration-200 ${isOpen ? 'rotate-180 text-primary-600' : 'text-gray-400'}`} />
+              </button>
+              {isOpen && (
+                <div className="bg-white rounded-b-xl border border-t-0 border-primary-300 shadow-sm p-4">
+                  {activeSubTab === 'groups' && (
+                    <NotificationGroupsTab onSuccess={handleSuccess} onError={handleError} />
+                  )}
+                  {activeSubTab === 'schedules' && (
+                    <NotificationSchedulesTab onSuccess={handleSuccess} onError={handleError} />
+                  )}
+                  {activeSubTab === 'send' && (
+                    <SendUserNotificationTab onSuccess={handleSuccess} onError={handleError} />
+                  )}
+                  {activeSubTab === 'sent' && (
+                    <SentNotificationsTab />
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Desktop Tab Content */}
+      <div className="hidden md:block">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          {activeSubTab === 'groups' && (
+            <NotificationGroupsTab onSuccess={handleSuccess} onError={handleError} />
+          )}
+          {activeSubTab === 'schedules' && (
+            <NotificationSchedulesTab onSuccess={handleSuccess} onError={handleError} />
+          )}
+          {activeSubTab === 'send' && (
+            <SendUserNotificationTab onSuccess={handleSuccess} onError={handleError} />
+          )}
+          {activeSubTab === 'sent' && (
+            <SentNotificationsTab />
+          )}
+        </div>
       </div>
     </div>
   )

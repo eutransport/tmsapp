@@ -25,6 +25,7 @@ import {
   ServerIcon,
   LanguageIcon,
   SparklesIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline'
 import { Link } from 'react-router-dom'
 import { settingsApi } from '@/api/settings'
@@ -254,85 +255,8 @@ export default function SettingsPage() {
     )
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="page-header">
-        <div className="flex items-center gap-3">
-          <Cog6ToothIcon className="h-8 w-8 text-gray-400" />
-          <h1 className="page-title">{t('settings.title')}</h1>
-        </div>
-        
-        {hasChanges && (
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="btn-primary"
-          >
-            {saving ? (
-              <ArrowPathIcon className="h-5 w-5 mr-2 animate-spin" />
-            ) : (
-              <CheckCircleIcon className="h-5 w-5 mr-2" />
-            )}
-            {t('common.save')}
-          </button>
-        )}
-      </div>
-
-      {/* Messages */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center justify-between">
-          <span>{error}</span>
-          <button onClick={() => setError(null)}>
-            <XMarkIcon className="h-5 w-5" />
-          </button>
-        </div>
-      )}
-      
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center justify-between">
-          <span>{success}</span>
-          <button onClick={() => setSuccess(null)}>
-            <XMarkIcon className="h-5 w-5" />
-          </button>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
-          {tabs.map((tab) => (
-            tab.link ? (
-              <Link
-                key={tab.id}
-                to={tab.link}
-                className="flex items-center gap-2 py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors"
-              >
-                <tab.icon className="h-5 w-5" />
-                {tab.name}
-              </Link>
-            ) : (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`
-                  flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors
-                  ${activeTab === tab.id
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-                `}
-              >
-                <tab.icon className="h-5 w-5" />
-                {tab.name}
-              </button>
-            )
-          ))}
-        </nav>
-      </div>
-
-      {/* Tab Content */}
-      <div className="card">
-        <div className="p-6">
+  const renderTabContent = () => (
+    <>
           {/* Branding Tab */}
           {activeTab === 'branding' && (
             <div className="space-y-6">
@@ -1203,7 +1127,136 @@ export default function SettingsPage() {
               <LicenseStatusCard />
             </div>
           )}
+    </>
+  )
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="page-header">
+        <div className="flex items-center gap-3">
+          <Cog6ToothIcon className="h-8 w-8 text-gray-400" />
+          <h1 className="page-title">{t('settings.title')}</h1>
         </div>
+        
+        {hasChanges && (
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="btn-primary"
+          >
+            {saving ? (
+              <ArrowPathIcon className="h-5 w-5 mr-2 animate-spin" />
+            ) : (
+              <CheckCircleIcon className="h-5 w-5 mr-2" />
+            )}
+            {t('common.save')}
+          </button>
+        )}
+      </div>
+
+      {/* Messages */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)}>
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+      
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center justify-between">
+          <span>{success}</span>
+          <button onClick={() => setSuccess(null)}>
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
+      {/* Desktop Tabs - hidden on mobile */}
+      <div className="hidden md:block border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8 overflow-x-auto">
+          {tabs.map((tab) => (
+            tab.link ? (
+              <Link
+                key={tab.id}
+                to={tab.link}
+                className="flex items-center gap-2 py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap"
+              >
+                <tab.icon className="h-5 w-5" />
+                {tab.name}
+              </Link>
+            ) : (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`
+                  flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap
+                  ${activeTab === tab.id
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                `}
+              >
+                <tab.icon className="h-5 w-5" />
+                {tab.name}
+              </button>
+            )
+          ))}
+        </nav>
+      </div>
+
+      {/* Mobile Accordion Navigation - hidden on desktop */}
+      {/* Mobile Accordion Navigation with inline content */}
+      <div className="md:hidden space-y-2">
+        {tabs.map((tab) => {
+          const isOpen = activeTab === tab.id
+          if (tab.link) {
+            return (
+              <Link
+                key={tab.id}
+                to={tab.link}
+                className="flex items-center gap-3 w-full p-4 bg-white rounded-xl border border-gray-200 shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <tab.icon className="h-5 w-5 text-gray-400" />
+                {tab.name}
+                <ChevronDownIcon className="h-4 w-4 ml-auto text-gray-400 -rotate-90" />
+              </Link>
+            )
+          }
+          return (
+            <div key={tab.id}>
+              <button
+                onClick={() => setActiveTab(isOpen ? '' : tab.id)}
+                className={`flex items-center gap-3 w-full p-4 bg-white rounded-xl border shadow-sm text-sm font-medium transition-colors ${
+                  isOpen
+                    ? 'border-primary-300 text-primary-600 bg-primary-50 rounded-b-none'
+                    : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <tab.icon className={`h-5 w-5 ${isOpen ? 'text-primary-600' : 'text-gray-400'}`} />
+                {tab.name}
+                <ChevronDownIcon className={`h-4 w-4 ml-auto transition-transform duration-200 ${isOpen ? 'rotate-180 text-primary-600' : 'text-gray-400'}`} />
+              </button>
+              {isOpen && (
+                <div className="bg-white rounded-b-xl border border-t-0 border-primary-300 shadow-sm p-4">
+                  {renderTabContent()}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Desktop Tab Content */}
+      <div className="hidden md:block">
+        {activeTab && !tabs.find(t => t.id === activeTab)?.link && (
+        <div className="card">
+          <div className="p-6">
+            {renderTabContent()}
+          </div>
+        </div>
+        )}
       </div>
 
       {/* Save Button (sticky at bottom for mobile) */}

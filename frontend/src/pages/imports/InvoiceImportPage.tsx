@@ -263,12 +263,12 @@ const InvoiceImportPage: React.FC = () => {
 
       {/* Recent Imports */}
       <div className="mt-12">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
           <h2 className="text-lg font-semibold text-gray-900">{t('imports.recentImports', 'Recente Imports')}</h2>
           
           {/* Bulk Actions */}
           {imports.length > 0 && (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {selectedIds.size > 0 && (
                 <>
                   <span className="text-sm text-gray-600">{selectedIds.size} {t('common.selected', 'geselecteerd')}</span>
@@ -326,7 +326,8 @@ const InvoiceImportPage: React.FC = () => {
           </div>
         ) : (
           <div className="bg-white shadow rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
+            {/* Desktop Table */}
+            <table className="hidden md:table min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left">
@@ -447,6 +448,97 @@ const InvoiceImportPage: React.FC = () => {
                 })}
               </tbody>
             </table>
+
+            {/* Mobile Card Layout */}
+            <div className="md:hidden">
+              {/* Mobile Select All */}
+              <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b">
+                <button
+                  onClick={toggleSelectAll}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  {selectedIds.size === imports.length ? (
+                    <CheckSquare className="w-5 h-5 text-blue-600" />
+                  ) : (
+                    <Square className="w-5 h-5" />
+                  )}
+                </button>
+                <span className="text-xs text-gray-500 uppercase font-medium">{t('common.selectAll', 'Alles selecteren')}</span>
+              </div>
+              <div className="divide-y divide-gray-200">
+                {imports.map((imp: InvoiceImport) => {
+                  const status = statusConfig[imp.status] || statusConfig.pending;
+                  const isSelected = selectedIds.has(imp.id);
+                  
+                  return (
+                    <div
+                      key={imp.id}
+                      className={`p-4 space-y-3 ${isSelected ? 'bg-blue-50' : ''}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <button
+                          onClick={() => toggleSelect(imp.id)}
+                          className="text-gray-500 hover:text-gray-700 mt-0.5 flex-shrink-0"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-5 h-5 text-blue-600" />
+                          ) : (
+                            <Square className="w-5 h-5" />
+                          )}
+                        </button>
+                        <div
+                          className="flex-1 min-w-0 cursor-pointer"
+                          onClick={() => navigate(`/imports/${imp.id}`)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="text-sm font-medium text-gray-900 truncate">{imp.file_name}</span>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">{formatFileSize(imp.file_size)}</div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 ml-8">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
+                          {status.icon}
+                          {status.label}
+                        </span>
+                        {imp.pattern_name && (
+                          <span className="text-xs text-gray-500">{imp.pattern_name}</span>
+                        )}
+                        {imp.ocr_confidence !== undefined && imp.ocr_confidence !== null && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-12 bg-gray-200 rounded-full h-1.5">
+                              <div 
+                                className={`h-1.5 rounded-full ${
+                                  imp.ocr_confidence >= 0.8 ? 'bg-green-500' :
+                                  imp.ocr_confidence >= 0.6 ? 'bg-yellow-500' : 'bg-red-500'
+                                }`}
+                                style={{ width: `${imp.ocr_confidence * 100}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-500">{(imp.ocr_confidence * 100).toFixed(0)}%</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between ml-8">
+                        <span className="text-xs text-gray-400">{formatDate(imp.created_at)}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(t('imports.deleteImportConfirm', 'Weet je zeker dat je deze import wilt verwijderen?'))) {
+                              deleteMutation.mutate(imp.id);
+                            }
+                          }}
+                          className="text-xs text-red-600 hover:text-red-900 font-medium"
+                        >
+                          {t('common.delete')}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>
