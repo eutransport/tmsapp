@@ -46,6 +46,28 @@ set -a
 source "$ENV_FILE"
 set +a
 
+# =========================================
+# Controleer vereiste variabelen — voeg toe als ze ontbreken
+# =========================================
+UPDATED_ENV=false
+
+if [ -z "$REDIS_PASSWORD" ]; then
+    REDIS_PASSWORD=$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 32)
+    echo "" >> "$ENV_FILE"
+    echo "# Redis wachtwoord (automatisch gegenereerd door update script)" >> "$ENV_FILE"
+    echo "REDIS_PASSWORD=$REDIS_PASSWORD" >> "$ENV_FILE"
+    export REDIS_PASSWORD
+    UPDATED_ENV=true
+    log_success "REDIS_PASSWORD gegenereerd en toegevoegd aan secrets"
+fi
+
+if [ "$UPDATED_ENV" = true ]; then
+    # Herlaad environment met nieuwe variabelen
+    set -a
+    source "$ENV_FILE"
+    set +a
+fi
+
 # Check of docker draait
 if ! docker info &>/dev/null; then
     log_error "Docker is niet actief. Start Docker eerst: systemctl start docker"
