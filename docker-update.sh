@@ -155,6 +155,14 @@ docker compose down --remove-orphans
 log_info "Images herbouwen..."
 docker compose build --no-cache
 
+# Fix volume permissions vóór start (static files waren eigendom van root uit eerdere builds)
+log_info "Volume permissions fixen..."
+docker run --rm -u root --entrypoint "" \
+    -v tms_static_files:/app/staticfiles \
+    -v tms_media_files:/app/media \
+    -v tms_logs:/app/logs \
+    tmsapp-backend chown -R app:app /app/staticfiles /app/media /app/logs 2>/dev/null || true
+
 log_info "Containers starten..."
 docker compose up -d
 
