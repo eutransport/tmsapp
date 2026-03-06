@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # Replace this with your actual public key after running: python manage.py generate_license_keys
 # ============================================================================
 LICENSE_PUBLIC_KEY_PEM = b"""-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEA4Mi2yuDfFsXzcSFkdgjhurcicm0Q2b4fddYpy//1YHk=
+MCowBQYDK2VwAyEAAKJU3k5CAXFKCRXd4Z8EYwBzVw8ayG7VtNxIvb/MHzg=
 -----END PUBLIC KEY-----"""
 
 
