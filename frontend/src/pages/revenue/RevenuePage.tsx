@@ -11,6 +11,9 @@ import {
   BanknotesIcon,
   CalendarIcon,
   ArrowPathIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  ReceiptRefundIcon,
 } from '@heroicons/react/24/outline'
 import {
   BarChart,
@@ -45,7 +48,7 @@ interface StatCardProps {
   title: string
   value: number
   icon: React.ComponentType<{ className?: string }>
-  color: 'green' | 'red' | 'blue'
+  color: 'green' | 'red' | 'blue' | 'orange' | 'purple' | 'emerald'
   subtitle?: string
 }
 
@@ -54,12 +57,18 @@ function StatCard({ title, value, icon: Icon, color, subtitle }: StatCardProps) 
     green: 'bg-green-50 text-green-600 border-green-200',
     red: 'bg-red-50 text-red-600 border-red-200',
     blue: 'bg-blue-50 text-blue-600 border-blue-200',
+    orange: 'bg-orange-50 text-orange-600 border-orange-200',
+    purple: 'bg-purple-50 text-purple-600 border-purple-200',
+    emerald: 'bg-emerald-50 text-emerald-600 border-emerald-200',
   }
   
   const iconClasses = {
     green: 'bg-green-100 text-green-600',
     red: 'bg-red-100 text-red-600',
     blue: 'bg-blue-100 text-blue-600',
+    orange: 'bg-orange-100 text-orange-600',
+    purple: 'bg-purple-100 text-purple-600',
+    emerald: 'bg-emerald-100 text-emerald-600',
   }
 
   return (
@@ -214,13 +223,20 @@ export default function RevenuePage() {
       {!loading && data && (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <StatCard
               title={t('revenue.totalIncome', 'Totale Inkomsten')}
               value={data.totals.income}
               icon={ArrowTrendingUpIcon}
               color="green"
               subtitle={`${t('revenue.avg', 'Gem.')} ${formatCurrency(data.summary.avg_income)} ${t('common.per')} ${period === 'week' ? t('common.week').toLowerCase() : period === 'month' ? t('common.month').toLowerCase() : period === 'quarter' ? t('revenue.quarter', 'kwartaal') : t('common.year').toLowerCase()}`}
+            />
+            <StatCard
+              title={t('revenue.creditInvoices', 'Creditfacturen')}
+              value={data.totals.credit}
+              icon={ReceiptRefundIcon}
+              color="orange"
+              subtitle={t('revenue.creditSubtitle', 'Creditfacturen als uitgaven')}
             />
             <StatCard
               title={t('revenue.totalExpenses', 'Totale Uitgaven')}
@@ -235,6 +251,20 @@ export default function RevenuePage() {
               icon={BanknotesIcon}
               color={data.totals.profit >= 0 ? 'blue' : 'red'}
               subtitle={`${t('revenue.profitMargin', 'Winstmarge')}: ${data.summary.profit_margin}%`}
+            />
+            <StatCard
+              title={t('revenue.totalCollected', 'Totaal Gevorderd')}
+              value={data.totals.collected}
+              icon={CheckCircleIcon}
+              color="emerald"
+              subtitle={t('revenue.collectedSubtitle', 'Facturen gemarkeerd als betaald')}
+            />
+            <StatCard
+              title={t('revenue.totalOutstanding', 'Totaal Nog Te Vorderen')}
+              value={data.totals.outstanding}
+              icon={ClockIcon}
+              color="purple"
+              subtitle={t('revenue.outstandingSubtitle', 'Facturen nog niet betaald')}
             />
           </div>
 
@@ -376,6 +406,9 @@ export default function RevenuePage() {
                       {t('revenue.income', 'Inkomsten')}
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {t('revenue.creditInvoices', 'Creditfacturen')}
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('revenue.expenses', 'Uitgaven')}
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -399,6 +432,9 @@ export default function RevenuePage() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-green-600 font-medium">
                           {formatCurrency(item.income)}
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-orange-600 font-medium">
+                          {formatCurrency(item.credit)}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-red-600 font-medium">
                           {formatCurrency(item.expenses)}
                         </td>
@@ -420,6 +456,9 @@ export default function RevenuePage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-green-700">
                       {formatCurrency(data.totals.income)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-orange-700">
+                      {formatCurrency(data.totals.credit)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-red-700">
                       {formatCurrency(data.totals.expenses)}

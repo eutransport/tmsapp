@@ -868,6 +868,8 @@ class RevenueView(APIView):
     """
     API endpoint voor omzet/winst statistieken.
     Ondersteunt week/maand/kwartaal/jaar aggregatie.
+    Bevat: inkomsten (verkoop), uitgaven (inkoop + credit + directe kosten),
+    totaal gevorderd (betaald) en totaal nog te vorderen (niet betaald).
     """
     permission_classes = [IsAuthenticated, IsAdminOrManager]
     
@@ -922,6 +924,18 @@ class RevenueView(APIView):
             totaal=Sum('totaal')
         ).order_by('period')
         
+        # Get credit invoices as expenses (creditfacturen)
+        credit_expenses_qs = Invoice.objects.filter(
+            type=InvoiceType.CREDIT,
+            status__in=income_statuses,
+            factuurdatum__gte=start_date,
+            factuurdatum__lte=end_date,
+        ).annotate(
+            period=trunc_func('factuurdatum')
+        ).values('period').annotate(
+            totaal=Sum('totaal')
+        ).order_by('period')
+        
         # Get expenses from Expense model
         direct_expenses_qs = Expense.objects.filter(
             datum__gte=start_date,
@@ -935,12 +949,14 @@ class RevenueView(APIView):
         # Combine all data into a timeline
         income_dict = {item['period']: float(item['totaal'] or 0) for item in income_qs}
         invoice_exp_dict = {item['period']: float(item['totaal'] or 0) for item in invoice_expenses_qs}
+        credit_exp_dict = {item['period']: float(item['totaal'] or 0) for item in credit_expenses_qs}
         direct_exp_dict = {item['period']: float(item['totaal'] or 0) for item in direct_expenses_qs}
         
         # Get all unique periods
         all_periods = sorted(set(
             list(income_dict.keys()) + 
             list(invoice_exp_dict.keys()) + 
+            list(credit_exp_dict.keys()) +
             list(direct_exp_dict.keys())
         ))
         
@@ -948,14 +964,17 @@ class RevenueView(APIView):
         data = []
         total_income = 0
         total_expenses = 0
+        total_credit = 0
         
         for period_date in all_periods:
             income = income_dict.get(period_date, 0)
-            expenses = invoice_exp_dict.get(period_date, 0) + direct_exp_dict.get(period_date, 0)
+            credit = credit_exp_dict.get(period_date, 0)
+            expenses = invoice_exp_dict.get(period_date, 0) + credit + direct_exp_dict.get(period_date, 0)
             profit = income - expenses
             
             total_income += income
             total_expenses += expenses
+            total_credit += credit
             
             # Format period label
             if period == 'week':
@@ -972,12 +991,31 @@ class RevenueView(APIView):
                 'period': period_date.isoformat(),
                 'label': label,
                 'income': round(income, 2),
+                'credit': round(credit, 2),
                 'expenses': round(expenses, 2),
                 'profit': round(profit, 2),
             })
         
         # Calculate totals and summary
         total_profit = total_income - total_expenses
+        
+        # Totaal gevorderd: verkoop facturen die betaald zijn
+        collected_agg = Invoice.objects.filter(
+            type=InvoiceType.VERKOOP,
+            status=InvoiceStatus.BETAALD,
+            factuurdatum__gte=start_date,
+            factuurdatum__lte=end_date,
+        ).aggregate(total=Sum('totaal'))
+        total_collected = float(collected_agg['total'] or 0)
+        
+        # Totaal nog te vorderen: verkoop facturen die NIET betaald zijn (definitief + verzonden)
+        outstanding_agg = Invoice.objects.filter(
+            type=InvoiceType.VERKOOP,
+            status__in=[InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
+            factuurdatum__gte=start_date,
+            factuurdatum__lte=end_date,
+        ).aggregate(total=Sum('totaal'))
+        total_outstanding = float(outstanding_agg['total'] or 0)
         
         return Response({
             'period_type': period,
@@ -987,8 +1025,11 @@ class RevenueView(APIView):
             'data': data,
             'totals': {
                 'income': round(total_income, 2),
+                'credit': round(total_credit, 2),
                 'expenses': round(total_expenses, 2),
                 'profit': round(total_profit, 2),
+                'collected': round(total_collected, 2),
+                'outstanding': round(total_outstanding, 2),
             },
             'summary': {
                 'avg_income': round(total_income / len(data), 2) if data else 0,

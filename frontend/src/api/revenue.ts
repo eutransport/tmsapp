@@ -57,6 +57,7 @@ export interface RevenueDataPoint {
   period: string
   label: string
   income: number
+  credit: number
   expenses: number
   profit: number
 }
@@ -69,8 +70,11 @@ export interface RevenueResponse {
   data: RevenueDataPoint[]
   totals: {
     income: number
+    credit: number
     expenses: number
     profit: number
+    collected: number
+    outstanding: number
   }
   summary: {
     avg_income: number
