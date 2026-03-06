@@ -75,11 +75,11 @@ BACKUP_FILE="$BACKUP_DIR/db-pre-update-$(date +%Y%m%d%H%M%S).sql"
 log_info "Database backup maken..."
 mkdir -p "$BACKUP_DIR"
 
-# Controleer of de db container draait
-DB_STATUS=$(docker compose ps -q db 2>/dev/null)
-if [ -z "$DB_STATUS" ]; then
-    log_warning "Database container draait niet — backup overgeslagen"
-elif docker compose exec -T db pg_dump -U "${DB_USER:-tms_user}" "${DB_NAME:-tms_db}" > "$BACKUP_FILE" 2>/tmp/tms_backup_err.log; then
+# Controleer of de db container draait (gebruik docker ps i.p.v. docker compose om .env problemen te vermijden)
+DB_RUNNING=$(docker ps --filter "name=tms_db" --filter "status=running" -q 2>/dev/null)
+if [ -z "$DB_RUNNING" ]; then
+    log_warning "Database container (tms_db) draait niet — backup overgeslagen"
+elif docker exec tms_db pg_dump -U "${DB_USER:-tms_user}" "${DB_NAME:-tms_db}" > "$BACKUP_FILE" 2>/tmp/tms_backup_err.log; then
     BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
     log_success "Backup aangemaakt: $BACKUP_FILE ($BACKUP_SIZE)"
 else
