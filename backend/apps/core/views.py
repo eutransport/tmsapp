@@ -815,3 +815,106 @@ class CustomFontViewSet(viewsets.ModelViewSet):
         response = HttpResponse(css_content, content_type='text/css')
         response['Cache-Control'] = 'public, max-age=3600'  # Cache for 1 hour
         return response
+
+
+# ==========================================
+# Server Monitoring Views
+# ==========================================
+
+class ServerStatsView(APIView):
+    """
+    Get current server stats: CPU, RAM, disk, uptime, load average.
+    Admin only.
+    """
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request):
+        from .monitoring import get_current_stats
+        stats = get_current_stats()
+        return Response(stats)
+
+
+class ServerHistoryView(APIView):
+    """
+    Get historical server metrics from Redis.
+    Query param: period = 1h | 12h | 1d | 1w | 1m
+    Admin only.
+    """
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request):
+        from .monitoring import get_metrics_history
+        period = request.query_params.get('period', '1h')
+        if period not in ('1h', '12h', '1d', '1w', '1m'):
+            period = '1h'
+        
+        data = get_metrics_history(period)
+        return Response({
+            'period': period,
+            'points': data,
+            'count': len(data),
+        })
+
+
+class ServerContainersView(APIView):
+    """
+    List Docker containers with status and optional per-container stats.
+    Admin only.
+    """
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request):
+        from .monitoring import docker_client
+        
+        if not docker_client.available:
+            return Response({
+                'available': False,
+                'containers': [],
+                'message': 'Docker socket niet beschikbaar. Mount /var/run/docker.sock in de container.',
+            })
+        
+        containers = docker_client.list_containers()
+        
+        # Optionally include resource stats per container
+        include_stats = request.query_params.get('stats', 'false').lower() == 'true'
+        if include_stats:
+            for container in containers:
+                if container['state'] == 'running':
+                    stats = docker_client.get_container_stats(container['id'])
+                    container['stats'] = stats
+                else:
+                    container['stats'] = None
+        
+        return Response({
+            'available': True,
+            'containers': containers,
+        })
+
+
+class ServerContainerLogsView(APIView):
+    """
+    Get logs for a specific Docker container.
+    URL param: container_id
+    Query param: tail (default 100, max 500)
+    Admin only.
+    """
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request, container_id):
+        from .monitoring import docker_client
+        
+        if not docker_client.available:
+            return Response({
+                'available': False,
+                'logs': [],
+                'message': 'Docker socket niet beschikbaar.',
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        
+        tail = min(int(request.query_params.get('tail', 100)), 500)
+        logs = docker_client.get_container_logs(container_id, tail=tail)
+        
+        return Response({
+            'container_id': container_id,
+            'lines': logs,
+            'count': len(logs),
+        })

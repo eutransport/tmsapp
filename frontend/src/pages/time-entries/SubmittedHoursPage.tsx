@@ -13,6 +13,7 @@ import {
   ChartBarIcon,
   TruckIcon,
   CalendarDaysIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline'
 import WeeklyHoursTab from './WeeklyHoursTab'
 import MonthlyHoursTab from './MonthlyHoursTab'
@@ -218,8 +219,8 @@ export default function SubmittedHoursPage() {
         </div>
       </div>
 
-      {/* Tab navigation */}
-      <div className="mb-6 border-b border-gray-200">
+      {/* Desktop Tab navigation - hidden on mobile */}
+      <div className="hidden md:block mb-6 border-b border-gray-200">
         <nav className="-mb-px flex gap-6" aria-label="Tabs">
           <button
             onClick={() => setActiveTab('submitted')}
@@ -268,14 +269,47 @@ export default function SubmittedHoursPage() {
         </nav>
       </div>
 
-      {/* Weekly Hours Tab */}
-      {activeTab === 'weekly' && <WeeklyHoursTab />}
+      {/* Mobile Accordion - hidden on desktop */}
+      <div className="md:hidden space-y-2 mb-4">
+        {[
+          { id: 'submitted' as const, name: t('timeEntries.submittedHoursTab'), icon: ClockIcon },
+          { id: 'weekly' as const, name: t('weeklyHours.title'), icon: ChartBarIcon },
+          { id: 'monthly' as const, name: t('monthlyHours.title'), icon: CalendarDaysIcon },
+          { id: 'vehicleWeeks' as const, name: t('vehicleWeeks.title'), icon: TruckIcon },
+        ].map((tab) => {
+          const isOpen = activeTab === tab.id
+          return (
+            <div key={tab.id}>
+              <button
+                onClick={() => setActiveTab(isOpen ? '' as any : tab.id)}
+                className={`flex items-center gap-3 w-full p-4 bg-white rounded-xl border shadow-sm text-sm font-medium transition-colors ${
+                  isOpen
+                    ? 'border-primary-300 text-primary-600 bg-primary-50 rounded-b-none'
+                    : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <tab.icon className={`h-5 w-5 ${isOpen ? 'text-primary-600' : 'text-gray-400'}`} />
+                {tab.name}
+                <ChevronDownIcon className={`h-4 w-4 ml-auto transition-transform duration-200 ${isOpen ? 'rotate-180 text-primary-600' : 'text-gray-400'}`} />
+              </button>
+              {isOpen && (
+                <div className="bg-white rounded-b-xl border border-t-0 border-primary-300 shadow-sm p-4">
+                  {tab.id === 'weekly' && <WeeklyHoursTab />}
+                  {tab.id === 'monthly' && <MonthlyHoursTab />}
+                  {tab.id === 'vehicleWeeks' && <VehicleWeeksTab />}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
 
-      {/* Monthly Hours Tab */}
-      {activeTab === 'monthly' && <MonthlyHoursTab />}
-
-      {/* Vehicle Weeks Tab */}
-      {activeTab === 'vehicleWeeks' && <VehicleWeeksTab />}
+      {/* Desktop tab content */}
+      <div className="hidden md:block">
+        {activeTab === 'weekly' && <WeeklyHoursTab />}
+        {activeTab === 'monthly' && <MonthlyHoursTab />}
+        {activeTab === 'vehicleWeeks' && <VehicleWeeksTab />}
+      </div>
 
       {/* Submitted Hours Tab */}
       {activeTab === 'submitted' && <>

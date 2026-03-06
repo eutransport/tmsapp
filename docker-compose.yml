@@ -85,6 +85,11 @@ services:
       - static_files:/app/staticfiles
       - media_files:/app/media
       - logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    group_add:
+      - "0"  # root group for Docker socket access
     depends_on:
       db:
         condition: service_healthy

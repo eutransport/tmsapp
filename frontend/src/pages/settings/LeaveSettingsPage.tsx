@@ -24,7 +24,7 @@ import {
   LeaveBalance,
 } from '@/api/leave'
 
-export default function LeaveSettingsPage() {
+export default function LeaveSettingsPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation()
   
   // Global settings state
@@ -135,19 +135,21 @@ export default function LeaveSettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <Link
-          to="/settings"
-          className="flex items-center text-gray-600 hover:text-gray-900 mb-2"
-        >
-          <ArrowLeftIcon className="w-4 h-4 mr-2" />
-          {t('common.back')}
-        </Link>
-        <h1 className="text-2xl font-bold text-gray-900">{t('settings.leaveSettings')}</h1>
-        <p className="text-gray-500">{t('leave.title')}</p>
-      </div>
+    <div className={embedded ? 'space-y-4' : 'space-y-6'}>
+      {/* Header - hidden when embedded */}
+      {!embedded && (
+        <div>
+          <Link
+            to="/settings"
+            className="flex items-center text-gray-600 hover:text-gray-900 mb-2"
+          >
+            <ArrowLeftIcon className="w-4 h-4 mr-2" />
+            {t('common.back')}
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-900">{t('settings.leaveSettings')}</h1>
+          <p className="text-gray-500">{t('leave.title')}</p>
+        </div>
+      )}
 
       {/* Alerts */}
       {error && (

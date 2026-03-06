@@ -14,6 +14,10 @@ from .views import (
     ImageUploadView,
     HealthCheckView,
     CustomFontViewSet,
+    ServerStatsView,
+    ServerHistoryView,
+    ServerContainersView,
+    ServerContainerLogsView,
 )
 
 # Router for viewsets
@@ -68,4 +72,10 @@ urlpatterns = [
     path('admin/settings/test-email/', AdminSettingsViewSet.as_view({
         'post': 'test_email',
     }), name='admin-settings-test-email'),
+    
+    # Server monitoring (admin only)
+    path('server/stats/', ServerStatsView.as_view(), name='server-stats'),
+    path('server/history/', ServerHistoryView.as_view(), name='server-history'),
+    path('server/containers/', ServerContainersView.as_view(), name='server-containers'),
+    path('server/containers/<str:container_id>/logs/', ServerContainerLogsView.as_view(), name='server-container-logs'),
 ]

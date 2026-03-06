@@ -35,6 +35,9 @@ import ThemeSelector from '@/components/settings/ThemeSelector'
 import type { AppSettingsAdmin } from '@/types'
 import { CalendarDaysIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
 import LicenseStatusCard from '@/components/licensing/LicenseStatusCard'
+import FontManagementPage from '@/pages/settings/FontManagementPage'
+import LeaveSettingsPage from '@/pages/settings/LeaveSettingsPage'
+import ServerMonitoringPanel from '@/components/ServerMonitoringPanel'
 
 export default function SettingsPage() {
   const { t } = useTranslation()
@@ -1094,6 +1097,12 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              {/* Server Monitoring */}
+              <div className="border-t pt-6">
+                <h3 className="text-md font-medium text-gray-900 dark:text-white mb-4">Server Monitoring</h3>
+                <ServerMonitoringPanel />
+              </div>
+
               <div className="border-t pt-6">
                 <h3 className="text-md font-medium text-gray-900 mb-2">Andere server gebruiken</h3>
                 <p className="text-sm text-gray-500 mb-4">
@@ -1206,24 +1215,10 @@ export default function SettingsPage() {
         </nav>
       </div>
 
-      {/* Mobile Accordion Navigation - hidden on desktop */}
       {/* Mobile Accordion Navigation with inline content */}
       <div className="md:hidden space-y-2">
         {tabs.map((tab) => {
           const isOpen = activeTab === tab.id
-          if (tab.link) {
-            return (
-              <Link
-                key={tab.id}
-                to={tab.link}
-                className="flex items-center gap-3 w-full p-4 bg-white rounded-xl border border-gray-200 shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <tab.icon className="h-5 w-5 text-gray-400" />
-                {tab.name}
-                <ChevronDownIcon className="h-4 w-4 ml-auto text-gray-400 -rotate-90" />
-              </Link>
-            )
-          }
           return (
             <div key={tab.id}>
               <button
@@ -1240,7 +1235,13 @@ export default function SettingsPage() {
               </button>
               {isOpen && (
                 <div className="bg-white rounded-b-xl border border-t-0 border-primary-300 shadow-sm p-4">
-                  {renderTabContent()}
+                  {tab.id === 'fonts' ? (
+                    <FontManagementPage embedded />
+                  ) : tab.id === 'leave' ? (
+                    <LeaveSettingsPage embedded />
+                  ) : (
+                    renderTabContent()
+                  )}
                 </div>
               )}
             </div>

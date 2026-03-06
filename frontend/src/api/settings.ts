@@ -85,6 +85,92 @@ export interface ActivityListResponse {
   }
 }
 
+// Server Monitoring types
+export interface ServerStats {
+  timestamp: string
+  cpu: {
+    percent: number
+    cores: number
+    load: {
+      load_1: number
+      load_5: number
+      load_15: number
+    }
+  }
+  memory: {
+    total: number
+    available: number
+    used: number
+    percent: number
+  }
+  disk: {
+    total: number
+    used: number
+    free: number
+    percent: number
+  }
+  disk_io: {
+    read_bytes: number
+    write_bytes: number
+    read_count: number
+    write_count: number
+  }
+  network: {
+    bytes_sent: number
+    bytes_recv: number
+  }
+  uptime: number
+}
+
+export interface MetricsPoint {
+  t: number
+  cpu: number
+  ram_pct: number
+  ram_used: number
+  ram_total: number
+  disk_pct: number
+  disk_used: number
+  disk_total: number
+  dio_r: number
+  dio_w: number
+  net_s: number
+  net_r: number
+}
+
+export interface ServerHistory {
+  period: string
+  points: MetricsPoint[]
+  count: number
+}
+
+export interface ContainerInfo {
+  id: string
+  name: string
+  image: string
+  status: string
+  state: string
+  created: number
+  ports: Array<{ PrivatePort?: number; PublicPort?: number; Type?: string }>
+  stats?: {
+    cpu_percent: number
+    memory_usage: number
+    memory_limit: number
+    memory_percent: number
+  } | null
+}
+
+export interface ContainersResponse {
+  available: boolean
+  containers: ContainerInfo[]
+  message?: string
+}
+
+export interface ContainerLogsResponse {
+  container_id: string
+  lines: string[]
+  count: number
+}
+
 export const settingsApi = {
   // Public settings (no auth required)
   getPublic: async (): Promise<AppSettings> => {
@@ -176,6 +262,27 @@ export const settingsApi = {
     const response = await api.post('/core/upload/image/', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
+    return response.data
+  },
+
+  // Server monitoring
+  getServerStats: async (): Promise<ServerStats> => {
+    const response = await api.get('/core/server/stats/')
+    return response.data
+  },
+
+  getServerHistory: async (period: string = '1h'): Promise<ServerHistory> => {
+    const response = await api.get(`/core/server/history/?period=${period}`)
+    return response.data
+  },
+
+  getServerContainers: async (includeStats: boolean = false): Promise<ContainersResponse> => {
+    const response = await api.get(`/core/server/containers/?stats=${includeStats}`)
+    return response.data
+  },
+
+  getContainerLogs: async (containerId: string, tail: number = 100): Promise<ContainerLogsResponse> => {
+    const response = await api.get(`/core/server/containers/${containerId}/logs/?tail=${tail}`)
     return response.data
   },
 }

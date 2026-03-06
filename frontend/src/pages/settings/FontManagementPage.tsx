@@ -55,7 +55,7 @@ const FONT_WEIGHTS = [
 const ALLOWED_EXTENSIONS = ['.woff', '.woff2', '.ttf', '.otf']
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 
-export default function FontManagementPage() {
+export default function FontManagementPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation()
   
   // State
@@ -188,52 +188,66 @@ export default function FontManagementPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="page-header">
-        <div className="flex items-center gap-3">
-          <Cog6ToothIcon className="h-8 w-8 text-gray-400" />
-          <h1 className="page-title">{t('settings.title')}</h1>
+    <div className={embedded ? 'space-y-4' : 'space-y-6'}>
+      {/* Header - hidden when embedded */}
+      {!embedded && (
+        <div className="page-header">
+          <div className="flex items-center gap-3">
+            <Cog6ToothIcon className="h-8 w-8 text-gray-400" />
+            <h1 className="page-title">{t('settings.title')}</h1>
+          </div>
+          
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="btn-primary"
+          >
+            <PlusIcon className="h-5 w-5 mr-2" />
+            {t('common.upload')}
+          </button>
         </div>
-        
-        <button
-          onClick={() => setShowUploadModal(true)}
-          className="btn-primary"
-        >
-          <PlusIcon className="h-5 w-5 mr-2" />
-          {t('common.upload')}
-        </button>
-      </div>
+      )}
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
-          {tabs.map((tab) => (
-            tab.link ? (
-              <Link
-                key={tab.id}
-                to={tab.link}
-                className="flex items-center gap-2 py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors"
-              >
-                <tab.icon className="h-5 w-5" />
-                {tab.name}
-              </Link>
-            ) : (
-              <button
-                key={tab.id}
-                className="flex items-center gap-2 py-4 px-1 border-b-2 border-primary-500 text-primary-600 font-medium text-sm transition-colors"
-              >
-                <tab.icon className="h-5 w-5" />
-                {tab.name}
-              </button>
-            )
-          ))}
-        </nav>
-      </div>
+      {/* Tabs - hidden when embedded */}
+      {!embedded && (
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            {tabs.map((tab) => (
+              tab.link ? (
+                <Link
+                  key={tab.id}
+                  to={tab.link}
+                  className="flex items-center gap-2 py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors"
+                >
+                  <tab.icon className="h-5 w-5" />
+                  {tab.name}
+                </Link>
+              ) : (
+                <button
+                  key={tab.id}
+                  className="flex items-center gap-2 py-4 px-1 border-b-2 border-primary-500 text-primary-600 font-medium text-sm transition-colors"
+                >
+                  <tab.icon className="h-5 w-5" />
+                  {tab.name}
+                </button>
+              )
+            ))}
+          </nav>
+        </div>
+      )}
+
+      {/* Upload button when embedded */}
+      {embedded && (
+        <div className="flex justify-end">
+          <button onClick={() => setShowUploadModal(true)} className="btn-primary text-sm">
+            <PlusIcon className="h-4 w-4 mr-1" />
+            {t('common.upload')}
+          </button>
+        </div>
+      )}
 
       {/* Content */}
-      <div className="card">
-        <div className="p-6">
+      <div className={embedded ? '' : 'card'}>
+        <div className={embedded ? '' : 'p-6'}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">{t('settings.fontManagement')}</h2>

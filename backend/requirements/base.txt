@@ -49,3 +49,7 @@ openai>=1.0,<2.0
 
 # Email Import (IMAP/MS365)
 requests>=2.31,<3.0
+
+# System Monitoring
+psutil>=5.9,<7.0
+django-redis>=5.4,<6.0
