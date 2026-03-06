@@ -26,9 +26,13 @@ python manage.py migrate --noinput
 echo "Seeding maintenance data..."
 python manage.py seed_maintenance || echo "Warning: seed_maintenance failed, continuing..."
 
-# Collect static files (without --clear to avoid permission issues with non-root user)
+# Collect static files — handle permission issues from volume ownership changes
 echo "Collecting static files..."
-python manage.py collectstatic --noinput
+if ! python manage.py collectstatic --noinput 2>/dev/null; then
+    echo "Warning: collectstatic had permission issues, retrying with --clear..."
+    rm -rf /app/staticfiles/* 2>/dev/null || true
+    python manage.py collectstatic --noinput || echo "Warning: collectstatic failed, continuing..."
+fi
 
 echo "Starting Gunicorn..."
 exec gunicorn \
