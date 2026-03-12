@@ -1459,35 +1459,6 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
                 'chauffeur_km': ch['chauffeur_km'],
             })
 
-        # Also include weeks where chauffeur has data but no imports
-        seen_keys = {f"{r['user_id']}-{r['jaar']}-{r['weeknummer']}" for r in results}
-        for row in chauffeur_data:
-            key = f"{row['user_id']}-{row['jaar']}-{row['weeknummer']}"
-            if key not in seen_keys:
-                dur = row['chauffeur_seconds']
-                if dur and isinstance(dur, timedelta):
-                    ch_uren = round(dur.total_seconds() / 3600, 2)
-                else:
-                    ch_uren = 0
-                # Need user name
-                from apps.accounts.models import User as UserModel
-                try:
-                    u = UserModel.objects.get(id=row['user_id'])
-                    naam = u.full_name
-                except UserModel.DoesNotExist:
-                    naam = ''
-                results.append({
-                    'user_id': str(row['user_id']),
-                    'user_naam': naam,
-                    'jaar': row['jaar'],
-                    'weeknummer': row['weeknummer'],
-                    'import_uren': 0,
-                    'chauffeur_uren': ch_uren,
-                    'verschil': round(-ch_uren, 2),
-                    'import_km': 0,
-                    'chauffeur_km': row['chauffeur_km'] or 0,
-                })
-
         results.sort(key=lambda x: (-x['jaar'], -x['weeknummer'], x['user_naam']))
         return Response(results)
 

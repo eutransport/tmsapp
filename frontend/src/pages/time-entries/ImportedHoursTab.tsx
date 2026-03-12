@@ -3,12 +3,16 @@
  * and comparison with chauffeur-submitted hours.
  * Visible to both admins and chauffeurs (chauffeurs see their own data only).
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Dialog, Transition } from '@headlessui/react'
 import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
   MinusIcon,
+  EyeIcon,
+  XMarkIcon,
+  ClockIcon,
 } from '@heroicons/react/24/outline'
 import { useAuthStore } from '@/stores/authStore'
 import {
@@ -17,6 +21,8 @@ import {
   ImportedTimeEntry,
   WeekComparison,
 } from '@/api/urenImport'
+import { getTimeEntries } from '@/api/timetracking'
+import { TimeEntry } from '@/types'
 import toast from 'react-hot-toast'
 
 // Format date to Dutch format
@@ -25,6 +31,18 @@ function formatDate(dateStr: string): string {
   const days = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za']
   const months = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
   return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`
+}
+
+// Format duration (HH:MM:SS) to readable string
+function formatDuration(duration: string | null): string {
+  if (!duration) return '-'
+  if (duration.includes(':')) {
+    const parts = duration.split(':')
+    const hours = parseInt(parts[0]) || 0
+    const minutes = parseInt(parts[1]) || 0
+    return `${hours}u ${minutes}m`
+  }
+  return duration
 }
 
 interface WeekGroup {
@@ -43,6 +61,12 @@ export default function ImportedHoursTab() {
   const [weekGroups, setWeekGroups] = useState<WeekGroup[]>([])
   const [comparison, setComparison] = useState<WeekComparison[]>([])
   const [expandedWeek, setExpandedWeek] = useState<string | null>(null)
+
+  // Week detail modal state
+  const [showWeekModal, setShowWeekModal] = useState(false)
+  const [selectedGroup, setSelectedGroup] = useState<WeekGroup | null>(null)
+  const [weekEntries, setWeekEntries] = useState<TimeEntry[]>([])
+  const [loadingEntries, setLoadingEntries] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -94,6 +118,46 @@ export default function ImportedHoursTab() {
   const toggleWeek = (key: string) => {
     setExpandedWeek(expandedWeek === key ? null : key)
   }
+
+  const handleViewWeek = async (group: WeekGroup) => {
+    setSelectedGroup(group)
+    setShowWeekModal(true)
+    setLoadingEntries(true)
+    try {
+      const response = await getTimeEntries({
+        weeknummer: group.weeknummer,
+        jaar: group.jaar,
+        status: 'ingediend',
+        page_size: 50,
+        ordering: 'datum',
+      })
+      setWeekEntries(response.results)
+    } catch (err) {
+      console.error('Failed to load submitted entries:', err)
+    } finally {
+      setLoadingEntries(false)
+    }
+  }
+
+  // Compute totals for submitted entries
+  const submittedTotalSeconds = weekEntries.reduce((sum, e) => {
+    if (!e.totaal_uren) return sum
+    const parts = e.totaal_uren.split(':')
+    return sum + ((parseInt(parts[0]) || 0) * 3600 + (parseInt(parts[1]) || 0) * 60 + (parseInt(parts[2]) || 0))
+  }, 0)
+  const submittedTotalHours = Math.floor(submittedTotalSeconds / 3600)
+  const submittedTotalMins = Math.floor((submittedTotalSeconds % 3600) / 60)
+  const submittedTotalKm = weekEntries.reduce((sum, e) => sum + (Number(e.totaal_km) || 0), 0)
+
+  // Totals for imported entries in modal
+  const modalImportedEntries = selectedGroup?.entries?.sort((a, b) => a.datum.localeCompare(b.datum)) || []
+  const importedTotalUren = modalImportedEntries.reduce((sum, e) => sum + Number(e.uren_factuur || 0), 0)
+  const importedTotalKm = modalImportedEntries.reduce((sum, e) => sum + Number(e.km || 0), 0)
+
+  // Difference
+  const chauffeurUrenDecimal = submittedTotalSeconds / 3600
+  const verschilUren = importedTotalUren - chauffeurUrenDecimal
+  const verschilKm = importedTotalKm - submittedTotalKm
 
   if (loading) {
     return (
@@ -166,9 +230,21 @@ export default function ImportedHoursTab() {
                           {group.totaal_km} km
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <button className="btn-secondary text-sm">
-                            {isExpanded ? t('common.close') : t('urenImport.details')}
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleViewWeek(group) }}
+                              className="btn-primary text-sm flex items-center gap-1"
+                            >
+                              <EyeIcon className="h-4 w-4" />
+                              {t('common.view')}
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleWeek(key) }}
+                              className="btn-secondary text-sm"
+                            >
+                              {isExpanded ? t('common.close') : t('urenImport.details')}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                       {isExpanded && (
@@ -243,6 +319,15 @@ export default function ImportedHoursTab() {
                         <p className="font-bold text-sm">{Number(group.totaal_uren).toFixed(2)}u</p>
                         <p className="text-xs text-gray-500">{group.totaal_km} km</p>
                       </div>
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleViewWeek(group) }}
+                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100 text-sm font-medium min-h-[44px]"
+                      >
+                        <EyeIcon className="h-4 w-4" />
+                        {t('common.view')}
+                      </button>
                     </div>
                   </div>
                   {isExpanded && (
@@ -378,6 +463,233 @@ export default function ImportedHoursTab() {
           </div>
         </div>
       )}
+
+      {/* Week Detail Modal */}
+      <Transition appear show={showWeekModal} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setShowWeekModal(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100"
+            leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-4xl transform overflow-hidden rounded-lg bg-white shadow-xl transition-all">
+                  {selectedGroup && (
+                    <>
+                      {/* Header */}
+                      <div className="flex items-center justify-between p-4 sm:p-6 border-b">
+                        <div>
+                          <Dialog.Title className="text-lg font-bold text-gray-900">
+                            Week {selectedGroup.weeknummer} - {selectedGroup.jaar}
+                          </Dialog.Title>
+                        </div>
+                        <button onClick={() => setShowWeekModal(false)} className="text-gray-400 hover:text-gray-500">
+                          <XMarkIcon className="h-6 w-6" />
+                        </button>
+                      </div>
+
+                      <div className="max-h-[70vh] overflow-y-auto">
+                        {/* Submitted Hours Section */}
+                        <div className="px-4 sm:px-6 pt-4">
+                          <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                            <ClockIcon className="h-4 w-4 text-primary-500" />
+                            {t('timeEntries.mySubmittedHours')}
+                          </h3>
+                          {loadingEntries ? (
+                            <div className="text-center py-4">
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500 mx-auto"></div>
+                            </div>
+                          ) : weekEntries.length === 0 ? (
+                            <p className="text-gray-400 text-sm text-center py-4">{t('timeEntries.noSubmittedHoursForWeek')}</p>
+                          ) : (
+                            <>
+                              {/* Desktop Table */}
+                              <div className="hidden md:block overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                  <thead className="bg-gray-50">
+                                    <tr>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('common.date')}</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('timeEntries.routeNumber')}</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('fleet.licensePlate')}</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('timeEntries.times')}</th>
+                                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('timeEntries.hours')}</th>
+                                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('timeEntries.km')}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-200">
+                                    {weekEntries.map(entry => (
+                                      <tr key={entry.id} className="hover:bg-gray-50">
+                                        <td className="px-4 py-2 text-sm">{formatDate(entry.datum)}</td>
+                                        <td className="px-4 py-2 text-sm font-medium">{entry.ritnummer}</td>
+                                        <td className="px-4 py-2 text-sm font-mono">{entry.kenteken}</td>
+                                        <td className="px-4 py-2 text-sm">{entry.aanvang} - {entry.eind}</td>
+                                        <td className="px-4 py-2 text-sm text-right">{formatDuration(entry.totaal_uren)}</td>
+                                        <td className="px-4 py-2 text-sm text-right font-medium">{entry.totaal_km}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                  <tfoot className="bg-gray-50">
+                                    <tr>
+                                      <td colSpan={4} className="px-4 py-2 text-sm font-semibold text-right">Totaal:</td>
+                                      <td className="px-4 py-2 text-sm text-right font-bold">{submittedTotalHours}u {submittedTotalMins}m</td>
+                                      <td className="px-4 py-2 text-sm text-right font-bold">{submittedTotalKm}</td>
+                                    </tr>
+                                  </tfoot>
+                                </table>
+                              </div>
+                              {/* Mobile Card View */}
+                              <div className="md:hidden divide-y divide-gray-200 -mx-4">
+                                {weekEntries.map(entry => (
+                                  <div key={entry.id} className="p-3 hover:bg-gray-50">
+                                    <div className="flex justify-between items-start mb-1">
+                                      <div>
+                                        <h4 className="font-semibold text-gray-900 text-sm">{formatDate(entry.datum)}</h4>
+                                        <p className="text-xs text-gray-500 font-mono">{entry.ritnummer}</p>
+                                      </div>
+                                      <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{entry.kenteken}</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-4 text-xs">
+                                      <div><span className="text-gray-500">{t('timeEntries.hours')}: </span><span className="font-bold text-primary-600">{formatDuration(entry.totaal_uren)}</span></div>
+                                      <div><span className="text-gray-500">{t('timeEntries.km')}: </span><span className="font-medium">{entry.totaal_km}</span></div>
+                                    </div>
+                                  </div>
+                                ))}
+                                <div className="p-3 bg-gray-50 flex justify-between text-sm font-bold">
+                                  <span>Totaal:</span>
+                                  <div className="flex gap-4">
+                                    <span>{submittedTotalHours}u {submittedTotalMins}m</span>
+                                    <span>{submittedTotalKm} km</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Imported Hours Section */}
+                        <div className="px-4 sm:px-6 pb-4">
+                          <div className="border-t pt-4 mt-2">
+                            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                              <ClockIcon className="h-4 w-4 text-orange-500" />
+                              {t('urenImport.importedTab')} (Excel)
+                            </h3>
+                            {/* Desktop Table */}
+                            <div className="hidden md:block overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-orange-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('common.date')}</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ritlijst</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('fleet.licensePlate')}</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('timeEntries.times')}</th>
+                                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('urenImport.invoiceHours')}</th>
+                                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('timeEntries.km')}</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {modalImportedEntries.map(entry => (
+                                    <tr key={entry.id} className="hover:bg-orange-50/50">
+                                      <td className="px-4 py-2 text-sm">{formatDate(entry.datum)}</td>
+                                      <td className="px-4 py-2 text-sm font-medium">{entry.ritlijst}</td>
+                                      <td className="px-4 py-2 text-sm font-mono">{entry.kenteken_import}</td>
+                                      <td className="px-4 py-2 text-sm">{entry.begintijd_rit || '-'} - {entry.eindtijd_rit || '-'}</td>
+                                      <td className="px-4 py-2 text-sm text-right">{Number(entry.uren_factuur || 0).toFixed(2)}</td>
+                                      <td className="px-4 py-2 text-sm text-right font-medium">{Number(entry.km || 0)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot className="bg-orange-50">
+                                  <tr>
+                                    <td colSpan={4} className="px-4 py-2 text-sm font-semibold text-right">Totaal:</td>
+                                    <td className="px-4 py-2 text-sm text-right font-bold">{importedTotalUren.toFixed(2)}</td>
+                                    <td className="px-4 py-2 text-sm text-right font-bold">{importedTotalKm}</td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                            {/* Mobile Card View */}
+                            <div className="md:hidden divide-y divide-gray-200 -mx-4">
+                              {modalImportedEntries.map(entry => (
+                                <div key={entry.id} className="p-3 hover:bg-orange-50/50">
+                                  <div className="flex justify-between items-start mb-1">
+                                    <div>
+                                      <p className="font-medium text-sm">{formatDate(entry.datum)}</p>
+                                      <p className="text-xs text-gray-500 font-mono">{entry.kenteken_import}</p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="font-bold text-sm">{Number(entry.uren_factuur || 0).toFixed(2)}u</p>
+                                      <p className="text-xs text-gray-500">{Number(entry.km || 0)} km</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                              <div className="p-3 bg-orange-50 flex justify-between text-sm font-bold">
+                                <span>Totaal:</span>
+                                <div className="flex gap-4">
+                                  <span>{importedTotalUren.toFixed(2)}u</span>
+                                  <span>{importedTotalKm} km</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Difference Section */}
+                        {weekEntries.length > 0 && modalImportedEntries.length > 0 && (
+                          <div className="px-4 sm:px-6 pb-4">
+                            <div className="border-t pt-4">
+                              <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                                Verschil (Geïmporteerd - Chauffeur)
+                              </h3>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                                <div>
+                                  <p className="text-gray-500 text-xs">Chauffeur Uren</p>
+                                  <p className="font-bold">{chauffeurUrenDecimal.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500 text-xs">Geïmporteerd Uren</p>
+                                  <p className="font-bold">{importedTotalUren.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500 text-xs">Verschil Uren</p>
+                                  <p className={`font-bold ${verschilUren > 0 ? 'text-green-600' : verschilUren < 0 ? 'text-red-600' : ''}`}>
+                                    {verschilUren.toFixed(2)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500 text-xs">Verschil KM</p>
+                                  <p className={`font-bold ${verschilKm > 0 ? 'text-green-600' : verschilKm < 0 ? 'text-red-600' : ''}`}>
+                                    {verschilKm}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Footer */}
+                      <div className="flex justify-end p-4 sm:p-6 border-t">
+                        <button onClick={() => setShowWeekModal(false)} className="btn-secondary">
+                          {t('common.close')}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
     </div>
   )
 }
