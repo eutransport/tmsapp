@@ -14,7 +14,11 @@ import {
   TruckIcon,
   CalendarDaysIcon,
   ChevronDownIcon,
+  DocumentArrowDownIcon,
+  TableCellsIcon,
 } from '@heroicons/react/24/outline'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import WeeklyHoursTab from './WeeklyHoursTab'
 import MonthlyHoursTab from './MonthlyHoursTab'
 import VehicleWeeksTab from './VehicleWeeksTab'
@@ -25,6 +29,7 @@ import {
   WeekHistory,
   getWeekHistory,
 } from '@/api/timetracking'
+import { getImportedEntries, ImportedTimeEntry } from '@/api/urenImport'
 import toast from 'react-hot-toast'
 import Pagination, { PageSize } from '@/components/common/Pagination'
 
@@ -68,6 +73,8 @@ export default function SubmittedHoursPage() {
   const [selectedWeek, setSelectedWeek] = useState<WeekHistory | null>(null)
   const [weekEntries, setWeekEntries] = useState<TimeEntry[]>([])
   const [loadingEntries, setLoadingEntries] = useState(false)
+  const [weekImportedEntries, setWeekImportedEntries] = useState<ImportedTimeEntry[]>([])
+  const [loadingImported, setLoadingImported] = useState(false)
   
   // Edit entry state
   const [showEditModal, setShowEditModal] = useState(false)
@@ -147,10 +154,26 @@ export default function SubmittedHoursPage() {
     }
   }
 
+  const loadImportedForWeek = async (week: WeekHistory) => {
+    try {
+      setLoadingImported(true)
+      const data = await getImportedEntries({
+        weeknummer: week.weeknummer,
+        user: week.user_id,
+        jaar: week.jaar,
+      })
+      setWeekImportedEntries(data)
+    } catch (err) {
+      console.error('Failed to load imported entries:', err)
+    } finally {
+      setLoadingImported(false)
+    }
+  }
+
   const handleViewWeek = async (week: WeekHistory) => {
     setSelectedWeek(week)
     setShowWeekModal(true)
-    await loadWeekEntries(week)
+    await Promise.all([loadWeekEntries(week), loadImportedForWeek(week)])
   }
 
   const handleEditEntry = (entry: TimeEntry) => {
@@ -200,6 +223,326 @@ export default function SubmittedHoursPage() {
       toast.error(t('timeEntries.updateFailed'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Chauffeur entry totals
+  const chauffeurTotalMinutes = weekEntries.reduce((sum, e) => {
+    if (!e.totaal_uren) return sum
+    const parts = e.totaal_uren.split(':')
+    return sum + (parseInt(parts[0]) || 0) * 60 + (parseInt(parts[1]) || 0)
+  }, 0)
+  const chauffeurTotalHours = Math.floor(chauffeurTotalMinutes / 60)
+  const chauffeurTotalMins = chauffeurTotalMinutes % 60
+  const chauffeurTotalKm = weekEntries.reduce((sum, e) => sum + (e.totaal_km || 0), 0)
+
+  // Imported entry totals
+  const importedTotalUren = weekImportedEntries.reduce((sum, e) => sum + Number(e.uren_factuur || 0), 0)
+  const importedTotalKm = weekImportedEntries.reduce((sum, e) => sum + Number(e.km || 0), 0)
+
+  // PDF Export for week overview
+  const handleExportWeekPDF = () => {
+    if (!selectedWeek) return
+    const userName = `${selectedWeek.user__voornaam} ${selectedWeek.user__achternaam}`
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+
+    doc.setFontSize(16)
+    doc.text(`Weekoverzicht Uren - Week ${selectedWeek.weeknummer} / ${selectedWeek.jaar}`, 14, 15)
+    doc.setFontSize(11)
+    doc.text(userName, 14, 22)
+    doc.setFontSize(9)
+    doc.setTextColor(100)
+    doc.text(`Ingediende uren: ${chauffeurTotalHours}u ${chauffeurTotalMins}m | ${chauffeurTotalKm} km | ${weekEntries.length} ritten`, 14, 29)
+    doc.setTextColor(0)
+
+    // Chauffeur entries table
+    if (weekEntries.length > 0) {
+      doc.setFontSize(10)
+      doc.text('Ingediende Uren (Chauffeur)', 14, 36)
+      autoTable(doc, {
+        head: [['Datum', 'Ritnr', 'Kenteken', 'Begin', 'Eind', 'Uren', 'KM']],
+        body: weekEntries.map(e => [
+          formatDate(e.datum),
+          String(e.ritnummer),
+          e.kenteken || '-',
+          e.aanvang || '-',
+          e.eind || '-',
+          formatDuration(e.totaal_uren),
+          `${e.totaal_km}`,
+        ]),
+        foot: [['Totaal', '', '', '', '', `${chauffeurTotalHours}u ${chauffeurTotalMins}m`, `${chauffeurTotalKm}`]],
+        startY: 39,
+        styles: { fontSize: 9, cellPadding: 2.5 },
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+        footStyles: { fillColor: [243, 244, 246], textColor: [0, 0, 0], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [249, 250, 251] },
+      })
+    }
+
+    // Imported entries table
+    if (weekImportedEntries.length > 0) {
+      const lastY = (doc as any).lastAutoTable?.finalY || 45
+      doc.setFontSize(10)
+      doc.text('Geïmporteerde Uren (Excel)', 14, lastY + 10)
+      autoTable(doc, {
+        head: [['Datum', 'Ritlijst', 'Kenteken', 'Begin', 'Eind', 'Factuur Uren', 'KM']],
+        body: weekImportedEntries.map(e => [
+          e.datum,
+          e.ritlijst,
+          e.kenteken_import,
+          e.begintijd_rit || '-',
+          e.eindtijd_rit || '-',
+          Number(e.uren_factuur || 0).toFixed(2),
+          `${Number(e.km || 0)}`,
+        ]),
+        foot: [['Totaal', '', '', '', '', importedTotalUren.toFixed(2), `${importedTotalKm}`]],
+        startY: lastY + 13,
+        styles: { fontSize: 9, cellPadding: 2.5 },
+        headStyles: { fillColor: [234, 138, 46], textColor: 255, fontStyle: 'bold' },
+        footStyles: { fillColor: [255, 243, 224], textColor: [0, 0, 0], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [255, 251, 245] },
+      })
+    }
+
+    // Difference summary
+    if (weekEntries.length > 0 && weekImportedEntries.length > 0) {
+      const lastY2 = (doc as any).lastAutoTable?.finalY || 45
+      const chauffeurDecimal = chauffeurTotalMinutes / 60
+      const verschilUren = importedTotalUren - chauffeurDecimal
+      const verschilKm = importedTotalKm - chauffeurTotalKm
+
+      doc.setFontSize(10)
+      doc.text('Verschil (Ge\u00efmporteerd - Chauffeur)', 14, lastY2 + 10)
+
+      autoTable(doc, {
+        head: [['', 'Chauffeur Uren', 'Ge\u00efmporteerd Uren', 'Verschil Uren', 'Verschil KM']],
+        body: [[
+          '',
+          chauffeurDecimal.toFixed(2),
+          importedTotalUren.toFixed(2),
+          `${verschilUren > 0 ? '+' : ''}${verschilUren.toFixed(2)}`,
+          `${verschilKm > 0 ? '+' : ''}${verschilKm}`,
+        ]],
+        startY: lastY2 + 13,
+        styles: { fontSize: 10, cellPadding: 3 },
+        headStyles: { fillColor: [107, 114, 128], textColor: 255, fontStyle: 'bold' },
+        bodyStyles: { fontStyle: 'bold' },
+        didParseCell: (data: any) => {
+          if (data.section === 'body') {
+            if (data.column.index === 3) {
+              data.cell.styles.textColor = verschilUren > 0.01 ? [22, 163, 74] : verschilUren < -0.01 ? [220, 38, 38] : [75, 85, 99]
+            }
+            if (data.column.index === 4) {
+              data.cell.styles.textColor = verschilKm > 0 ? [22, 163, 74] : verschilKm < 0 ? [220, 38, 38] : [75, 85, 99]
+            }
+          }
+        },
+      })
+    }
+
+    // Footer
+    const pageCount = doc.getNumberOfPages()
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i)
+      doc.setFontSize(8)
+      doc.setTextColor(128)
+      doc.text(
+        `Gegenereerd op ${new Date().toLocaleDateString('nl-NL')} om ${new Date().toLocaleTimeString('nl-NL')}`,
+        14, doc.internal.pageSize.height - 10
+      )
+    }
+
+    const fileName = `Weekoverzicht_${userName.replace(/\s+/g, '_')}_W${selectedWeek.weeknummer}_${selectedWeek.jaar}`
+    doc.save(`${fileName}.pdf`)
+    toast.success('PDF geëxporteerd')
+  }
+
+  // Excel Export for week overview
+  const handleExportWeekExcel = async () => {
+    if (!selectedWeek) return
+    const userName = `${selectedWeek.user__voornaam} ${selectedWeek.user__achternaam}`
+
+    try {
+      const ExcelJS = await import('exceljs')
+      const workbook = new ExcelJS.Workbook()
+      const sheet = workbook.addWorksheet('Weekoverzicht')
+
+      const headerStyle = (cell: any) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFF' }, size: 10 }
+        cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        cell.border = {
+          top: { style: 'thin' as const, color: { argb: 'D1D5DB' } },
+          bottom: { style: 'thin' as const, color: { argb: 'D1D5DB' } },
+          left: { style: 'thin' as const, color: { argb: 'D1D5DB' } },
+          right: { style: 'thin' as const, color: { argb: 'D1D5DB' } },
+        }
+      }
+      const cellBorder = {
+        top: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
+        bottom: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
+        left: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
+        right: { style: 'thin' as const, color: { argb: 'E5E7EB' } },
+      }
+
+      // Title
+      sheet.mergeCells('A1:G1')
+      const titleCell = sheet.getCell('A1')
+      titleCell.value = `Weekoverzicht Uren - Week ${selectedWeek.weeknummer} / ${selectedWeek.jaar}`
+      titleCell.font = { size: 14, bold: true }
+      sheet.getRow(1).height = 28
+
+      sheet.mergeCells('A2:G2')
+      sheet.getCell('A2').value = userName
+      sheet.getCell('A2').font = { size: 11, color: { argb: '666666' } }
+
+      // Chauffeur entries
+      let rowNum = 4
+      if (weekEntries.length > 0) {
+        sheet.getCell(`A${rowNum}`).value = 'Ingediende Uren (Chauffeur)'
+        sheet.getCell(`A${rowNum}`).font = { size: 11, bold: true }
+        rowNum++
+
+        const hdr = sheet.addRow(['Datum', 'Ritnr', 'Kenteken', 'Begin', 'Eind', 'Uren', 'KM'])
+        hdr.eachCell(cell => {
+          headerStyle(cell)
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '3B82F6' } }
+        })
+        hdr.height = 22
+        rowNum++
+
+        weekEntries.forEach((e, idx) => {
+          const row = sheet.addRow([
+            formatDate(e.datum),
+            e.ritnummer,
+            e.kenteken || '-',
+            e.aanvang || '-',
+            e.eind || '-',
+            formatDuration(e.totaal_uren),
+            e.totaal_km,
+          ])
+          row.eachCell(cell => {
+            cell.alignment = { horizontal: 'center', vertical: 'middle' }
+            cell.border = cellBorder
+            if (idx % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F9FAFB' } }
+          })
+          rowNum++
+        })
+
+        const totRow = sheet.addRow(['Totaal', '', '', '', '', `${chauffeurTotalHours}u ${chauffeurTotalMins}m`, chauffeurTotalKm])
+        totRow.eachCell(cell => {
+          cell.font = { bold: true, size: 10 }
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F3F4F6' } }
+          cell.alignment = { horizontal: 'center', vertical: 'middle' }
+          cell.border = cellBorder
+        })
+        totRow.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' }
+        rowNum += 2
+      }
+
+      // Imported entries
+      if (weekImportedEntries.length > 0) {
+        sheet.addRow([])
+        rowNum++
+        sheet.getCell(`A${rowNum}`).value = 'Geïmporteerde Uren (Excel)'
+        sheet.getCell(`A${rowNum}`).font = { size: 11, bold: true }
+        rowNum++
+
+        const hdr2 = sheet.addRow(['Datum', 'Ritlijst', 'Kenteken', 'Begin', 'Eind', 'Factuur Uren', 'KM'])
+        hdr2.eachCell(cell => {
+          headerStyle(cell)
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'EA8A2E' } }
+        })
+        hdr2.height = 22
+        rowNum++
+
+        weekImportedEntries.forEach((e, idx) => {
+          const row = sheet.addRow([
+            e.datum,
+            e.ritlijst,
+            e.kenteken_import,
+            e.begintijd_rit || '-',
+            e.eindtijd_rit || '-',
+            Number(e.uren_factuur || 0).toFixed(2),
+            Number(e.km || 0),
+          ])
+          row.eachCell(cell => {
+            cell.alignment = { horizontal: 'center', vertical: 'middle' }
+            cell.border = cellBorder
+            if (idx % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFBF5' } }
+          })
+          rowNum++
+        })
+
+        const totRow2 = sheet.addRow(['Totaal', '', '', '', '', importedTotalUren.toFixed(2), importedTotalKm])
+        totRow2.eachCell(cell => {
+          cell.font = { bold: true, size: 10 }
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3E0' } }
+          cell.alignment = { horizontal: 'center', vertical: 'middle' }
+          cell.border = cellBorder
+        })
+        totRow2.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' }
+      }
+
+      // Difference summary
+      if (weekEntries.length > 0 && weekImportedEntries.length > 0) {
+        const chauffeurDecimal = chauffeurTotalMinutes / 60
+        const verschilUren = importedTotalUren - chauffeurDecimal
+        const verschilKm = importedTotalKm - chauffeurTotalKm
+
+        sheet.addRow([])
+        sheet.addRow([])
+        const diffTitle = sheet.addRow(['Verschil (Ge\u00efmporteerd - Chauffeur)'])
+        diffTitle.getCell(1).font = { size: 11, bold: true }
+
+        const diffHdr = sheet.addRow(['', 'Chauffeur Uren', 'Ge\u00efmporteerd Uren', 'Verschil Uren', 'Verschil KM'])
+        diffHdr.eachCell((cell, colNumber) => {
+          if (colNumber > 1) {
+            cell.font = { bold: true, color: { argb: 'FFFFFF' }, size: 10 }
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '6B7280' } }
+            cell.alignment = { horizontal: 'center', vertical: 'middle' }
+            cell.border = cellBorder
+          }
+        })
+
+        const diffRow = sheet.addRow([
+          '',
+          chauffeurDecimal.toFixed(2),
+          importedTotalUren.toFixed(2),
+          `${verschilUren > 0 ? '+' : ''}${verschilUren.toFixed(2)}`,
+          `${verschilKm > 0 ? '+' : ''}${verschilKm}`,
+        ])
+        diffRow.eachCell((cell, colNumber) => {
+          if (colNumber > 1) {
+            cell.font = { bold: true, size: 11 }
+            cell.alignment = { horizontal: 'center', vertical: 'middle' }
+            cell.border = cellBorder
+            if (colNumber === 4) {
+              cell.font = { bold: true, size: 11, color: { argb: verschilUren > 0.01 ? '16A34A' : verschilUren < -0.01 ? 'DC2626' : '4B5563' } }
+            }
+            if (colNumber === 5) {
+              cell.font = { bold: true, size: 11, color: { argb: verschilKm > 0 ? '16A34A' : verschilKm < 0 ? 'DC2626' : '4B5563' } }
+            }
+          }
+        })
+      }
+
+      sheet.columns = [
+        { width: 20 }, { width: 14 }, { width: 14 }, { width: 12 }, { width: 12 }, { width: 14 }, { width: 10 },
+      ]
+
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const fileName = `Weekoverzicht_${userName.replace(/\s+/g, '_')}_W${selectedWeek.weeknummer}_${selectedWeek.jaar}`
+      a.download = `${fileName}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Excel geëxporteerd')
+    } catch (error) {
+      console.error('Excel export error:', error)
+      toast.error('Fout bij exporteren naar Excel')
     }
   }
 
@@ -573,6 +916,14 @@ export default function SubmittedHoursPage() {
                                 </tr>
                               ))}
                             </tbody>
+                            <tfoot className="bg-gray-50">
+                              <tr>
+                                <td colSpan={4} className="px-4 py-3 text-sm font-semibold text-right">Totaal:</td>
+                                <td className="px-4 py-3 text-sm text-right font-bold">{chauffeurTotalHours}u {chauffeurTotalMins}m</td>
+                                <td className="px-4 py-3 text-sm text-right font-bold">{chauffeurTotalKm}</td>
+                                <td></td>
+                              </tr>
+                            </tfoot>
                           </table>
                         </div>
 
@@ -613,12 +964,172 @@ export default function SubmittedHoursPage() {
                               </div>
                             </div>
                           ))}
+                          {/* Mobile totals */}
+                          <div className="p-3 bg-gray-50">
+                            <div className="flex justify-between text-sm font-bold">
+                              <span>Totaal:</span>
+                              <div className="flex gap-4">
+                                <span>{chauffeurTotalHours}u {chauffeurTotalMins}m</span>
+                                <span>{chauffeurTotalKm} km</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </>
                     )}
                   </div>
 
-                  <div className="px-4 sm:px-6 py-4 border-t flex justify-end">
+                  {/* Imported Hours (Excel) Section */}
+                  <div className="px-4 sm:px-6 pb-4">
+                    <div className="border-t pt-4 mt-2">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <ClockIcon className="h-4 w-4 text-orange-500" />
+                        Geïmporteerde Uren (Excel)
+                      </h3>
+                      {loadingImported ? (
+                        <div className="text-center py-4">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500 mx-auto"></div>
+                        </div>
+                      ) : weekImportedEntries.length === 0 ? (
+                        <p className="text-gray-400 text-sm text-center py-4">Geen geïmporteerde uren voor deze week</p>
+                      ) : (
+                        <>
+                          {/* Desktop Table */}
+                          <div className="hidden md:block overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-orange-50">
+                                <tr>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('common.date')}</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ritlijst</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('fleet.licensePlate')}</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('timeEntries.times')}</th>
+                                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Factuur Uren</th>
+                                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('timeEntries.km')}</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200">
+                                {weekImportedEntries.map(entry => (
+                                  <tr key={entry.id} className="hover:bg-orange-50/50">
+                                    <td className="px-4 py-2 text-sm">{entry.datum}</td>
+                                    <td className="px-4 py-2 text-sm font-medium">{entry.ritlijst}</td>
+                                    <td className="px-4 py-2 text-sm font-mono">{entry.kenteken_import}</td>
+                                    <td className="px-4 py-2 text-sm">{entry.begintijd_rit || '-'} - {entry.eindtijd_rit || '-'}</td>
+                                    <td className="px-4 py-2 text-sm text-right">{Number(entry.uren_factuur || 0).toFixed(2)}</td>
+                                    <td className="px-4 py-2 text-sm text-right font-medium">{Number(entry.km || 0)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot className="bg-orange-50">
+                                <tr>
+                                  <td colSpan={4} className="px-4 py-2 text-sm font-semibold text-right">Totaal:</td>
+                                  <td className="px-4 py-2 text-sm text-right font-bold">
+                                    {weekImportedEntries.reduce((sum, e) => sum + Number(e.uren_factuur || 0), 0).toFixed(2)}
+                                  </td>
+                                  <td className="px-4 py-2 text-sm text-right font-bold">
+                                    {weekImportedEntries.reduce((sum, e) => sum + Number(e.km || 0), 0)}
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+
+                          {/* Mobile Card View */}
+                          <div className="md:hidden divide-y divide-gray-200 -mx-4">
+                            {weekImportedEntries.map(entry => (
+                              <div key={entry.id} className="p-3 hover:bg-orange-50/50">
+                                <div className="flex justify-between items-start mb-1">
+                                  <div>
+                                    <h4 className="font-semibold text-gray-900 text-sm">{entry.datum}</h4>
+                                    <p className="text-xs text-gray-500">{entry.ritlijst}</p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                                  <div>
+                                    <span className="text-gray-500">{t('fleet.licensePlate')}: </span>
+                                    <span className="font-mono font-medium">{entry.kenteken_import}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">{t('common.time')}: </span>
+                                    <span className="font-medium">{entry.begintijd_rit || '-'}-{entry.eindtijd_rit || '-'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">Factuur Uren: </span>
+                                    <span className="font-bold text-orange-600">{Number(entry.uren_factuur || 0).toFixed(2)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">{t('timeEntries.km')}: </span>
+                                    <span className="font-medium">{Number(entry.km || 0)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Difference summary */}
+                  {weekEntries.length > 0 && weekImportedEntries.length > 0 && (
+                    <div className="px-4 sm:px-6 pb-4">
+                      <div className="border-t pt-4 mt-2">
+                        {(() => {
+                          const chauffeurDecimal = chauffeurTotalMinutes / 60
+                          const verschilUren = importedTotalUren - chauffeurDecimal
+                          const verschilKm = importedTotalKm - chauffeurTotalKm
+                          const urenColor = verschilUren > 0.01 ? 'text-green-600' : verschilUren < -0.01 ? 'text-red-600' : 'text-gray-600'
+                          const kmColor = verschilKm > 0 ? 'text-green-600' : verschilKm < 0 ? 'text-red-600' : 'text-gray-600'
+                          return (
+                            <div className="bg-gray-50 rounded-lg p-4">
+                              <h4 className="text-sm font-semibold text-gray-700 mb-3">Verschil (Geïmporteerd - Chauffeur)</h4>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                                <div>
+                                  <p className="text-gray-500 text-xs">Chauffeur Uren</p>
+                                  <p className="font-semibold">{chauffeurDecimal.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500 text-xs">Geïmporteerd Uren</p>
+                                  <p className="font-semibold">{importedTotalUren.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500 text-xs">Verschil Uren</p>
+                                  <p className={`font-bold ${urenColor}`}>
+                                    {verschilUren > 0 ? '+' : ''}{verschilUren.toFixed(2)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500 text-xs">Verschil KM</p>
+                                  <p className={`font-bold ${kmColor}`}>
+                                    {verschilKm > 0 ? '+' : ''}{verschilKm}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="px-4 sm:px-6 py-4 border-t flex flex-col-reverse sm:flex-row justify-between gap-3">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleExportWeekPDF}
+                        className="btn-secondary min-h-[44px] flex items-center gap-2 text-sm"
+                        disabled={weekEntries.length === 0 && weekImportedEntries.length === 0}
+                      >
+                        <DocumentArrowDownIcon className="h-4 w-4" />
+                        PDF
+                      </button>
+                      <button
+                        onClick={handleExportWeekExcel}
+                        className="btn-secondary min-h-[44px] flex items-center gap-2 text-sm"
+                        disabled={weekEntries.length === 0 && weekImportedEntries.length === 0}
+                      >
+                        <TableCellsIcon className="h-4 w-4" />
+                        Excel
+                      </button>
+                    </div>
                     <button onClick={() => setShowWeekModal(false)} className="btn-secondary min-h-[44px]">
                       {t('common.close')}
                     </button>

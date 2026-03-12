@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.conf import settings as django_settings
 from apps.core.security import sanitize_filename
+from apps.core.permissions import IsAdminOrManager
 
 from .models import InvoiceImport, InvoicePattern, FieldMapping, ImportedInvoiceLine
 from .serializers import (
@@ -59,9 +60,10 @@ def _safe_content_disposition(disposition_type, filename):
 class InvoiceImportViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing invoice imports.
+    Only admin and manager roles can access OCR imports.
     """
     queryset = InvoiceImport.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrManager]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get_serializer_class(self):
@@ -793,10 +795,11 @@ class InvoiceImportViewSet(viewsets.ModelViewSet):
 class InvoicePatternViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing invoice patterns (self-learning templates).
+    Only admins can manage OCR patterns.
     """
     queryset = InvoicePattern.objects.all()
     serializer_class = InvoicePatternSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrManager]
     
     def get_queryset(self):
         queryset = InvoicePattern.objects.select_related('company').prefetch_related(

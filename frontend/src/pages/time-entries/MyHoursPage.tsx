@@ -13,7 +13,10 @@ import {
   XMarkIcon,
   ExclamationTriangleIcon,
   ClockIcon,
+  ArrowDownTrayIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline'
+import ImportedHoursTab from './ImportedHoursTab'
 import { TimeEntry } from '@/types'
 import {
   getTimeEntries,
@@ -56,6 +59,9 @@ function getCurrentWeekNumber(): number {
 
 export default function MyHoursPage() {
   const { t } = useTranslation()
+  
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'myHours' | 'imported'>('myHours')
   
   // State - initialize with current week/year
   const [loading, setLoading] = useState(true)
@@ -174,6 +180,74 @@ export default function MyHoursPage() {
         </div>
       </div>
 
+      {/* Desktop Tab navigation - hidden on mobile */}
+      <div className="hidden md:block mb-6 border-b border-gray-200">
+        <nav className="-mb-px flex gap-6" aria-label="Tabs">
+          <button
+            onClick={() => setActiveTab('myHours')}
+            className={`flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+              activeTab === 'myHours'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <ClockIcon className="h-5 w-5" />
+            {t('timeEntries.mySubmittedHours')}
+          </button>
+          <button
+            onClick={() => setActiveTab('imported')}
+            className={`flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+              activeTab === 'imported'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <ArrowDownTrayIcon className="h-5 w-5" />
+            {t('urenImport.importedTab')}
+          </button>
+        </nav>
+      </div>
+
+      {/* Mobile Tab Accordion - hidden on desktop */}
+      <div className="md:hidden space-y-2 mb-4">
+        {[
+          { id: 'myHours' as const, name: t('timeEntries.mySubmittedHours'), icon: ClockIcon },
+          { id: 'imported' as const, name: t('urenImport.importedTab'), icon: ArrowDownTrayIcon },
+        ].map((tab) => {
+          const isOpen = activeTab === tab.id
+          return (
+            <div key={tab.id}>
+              <button
+                onClick={() => setActiveTab(isOpen ? 'myHours' : tab.id)}
+                className={`flex items-center gap-3 w-full p-4 bg-white rounded-xl border shadow-sm text-sm font-medium transition-colors ${
+                  isOpen
+                    ? 'border-primary-300 text-primary-600 bg-primary-50 rounded-b-none'
+                    : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <tab.icon className={`h-5 w-5 ${isOpen ? 'text-primary-600' : 'text-gray-400'}`} />
+                {tab.name}
+                <ChevronDownIcon className={`h-4 w-4 ml-auto transition-transform duration-200 ${isOpen ? 'rotate-180 text-primary-600' : 'text-gray-400'}`} />
+              </button>
+              {isOpen && tab.id === 'imported' && (
+                <div className="bg-white rounded-b-xl border border-t-0 border-primary-300 shadow-sm p-4">
+                  <ImportedHoursTab />
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Imported Hours Tab - Desktop */}
+      {activeTab === 'imported' && (
+        <div className="hidden md:block">
+          <ImportedHoursTab />
+        </div>
+      )}
+
+      {/* My Hours Tab Content */}
+      {activeTab === 'myHours' && <>
       {/* Week selector with search and summary */}
       <div className="card mb-6">
         <div className="p-4">
@@ -573,6 +647,7 @@ export default function MyHoursPage() {
           </div>
         </Dialog>
       </Transition>
+      </>}
     </div>
   )
 }

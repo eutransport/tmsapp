@@ -35,6 +35,7 @@ def safe_str(value):
     return s.encode('ascii', 'replace').decode('ascii')
 
 from .models import AppSettings, CustomFont
+from .permissions import IsAdminOrManager, IsAdminOnly, IsAdminOrManagerStrict
 from .serializers import (
     AppSettingsSerializer, 
     AppSettingsAdminSerializer,
@@ -334,8 +335,9 @@ class ImageUploadView(APIView):
     General image upload endpoint for templates and other purposes.
     Uploads images to media/uploads/ folder and returns the URL.
     SVG is excluded to prevent stored XSS.
+    Only admin and manager roles can upload images.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
     
     # Magic byte signatures for image validation
     IMAGE_SIGNATURES = [
@@ -414,8 +416,9 @@ class DashboardStatsView(APIView):
     Dashboard statistics endpoint.
     Returns counts for users, companies, vehicles, hours this week, open invoices,
     and financial totals (income, expenses, profit, collected, outstanding) for the current year.
+    Only admin and manager roles can access financial data.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrManagerStrict]
     
     def get(self, request):
         from apps.accounts.models import User
@@ -542,8 +545,9 @@ class OnlineUsersView(APIView):
     """
     Online users endpoint — users with activity in the last 2 minutes.
     Polled every 2 minutes by the frontend.
+    Only admin and manager roles can see all online users.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrManagerStrict]
 
     def get(self, request):
         from apps.accounts.models import User
@@ -578,8 +582,9 @@ class RecentLoginsView(APIView):
     """
     Recent logins endpoint — paginated list of users who logged in recently.
     Ordered by last_login descending.
+    Only admin and manager roles can see login history.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrManagerStrict]
 
     def get(self, request):
         from apps.accounts.models import User

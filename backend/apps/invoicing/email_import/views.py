@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q
 from django.utils import timezone
+from apps.core.permissions import IsAdminOrManager
 
 from .models import MailboxConfig, EmailImport, EmailAttachment
 from .serializers import (
@@ -44,8 +45,10 @@ class MailboxConfigViewSet(viewsets.ModelViewSet):
         """Set permissions based on action."""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             permission_classes = [permissions.IsAdminUser]
+        elif self.action in ['test_connection', 'fetch_emails', 'list_folders']:
+            permission_classes = [permissions.IsAuthenticated, IsAdminOrManager]
         else:
-            permission_classes = [permissions.IsAuthenticated]
+            permission_classes = [permissions.IsAuthenticated, IsAdminOrManager]
         return [permission() for permission in permission_classes]
     
     def get_queryset(self):
@@ -166,9 +169,10 @@ class EmailImportViewSet(viewsets.ModelViewSet):
     ViewSet for managing email imports.
     
     Provides list, retrieve, and review actions.
+    Only admin and manager roles can access email imports.
     """
     pagination_class = EmailImportPagination
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrManager]
     http_method_names = ['get', 'post', 'head', 'options']  # No PUT/DELETE
     
     def get_queryset(self):

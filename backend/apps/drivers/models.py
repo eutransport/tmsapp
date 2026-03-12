@@ -25,6 +25,14 @@ class Driver(models.Model):
         related_name='driver_profile',
         verbose_name='Gekoppelde Gebruiker'
     )
+    voertuig = models.ForeignKey(
+        'fleet.Vehicle',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='chauffeurs',
+        verbose_name='Voertuig (Ritnummer)'
+    )
     adr = models.BooleanField(default=False, verbose_name='ADR Gecertificeerd')
     minimum_uren_per_week = models.DecimalField(
         max_digits=5, decimal_places=2,

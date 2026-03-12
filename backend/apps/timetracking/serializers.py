@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import TimeEntry, WeeklyMinimumHours
+from .models import TimeEntry, WeeklyMinimumHours, ImportBatch, ImportedTimeEntry
 
 
 class TimeEntrySerializer(serializers.ModelSerializer):
@@ -87,3 +87,53 @@ class WeeklyMinimumHoursSerializer(serializers.ModelSerializer):
         model = WeeklyMinimumHours
         fields = ['id', 'user', 'user_naam', 'jaar', 'weeknummer', 'minimum_uren', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ImportedTimeEntrySerializer(serializers.ModelSerializer):
+    user_naam = serializers.CharField(source='user.full_name', read_only=True, default='')
+    voertuig_kenteken = serializers.CharField(
+        source='gekoppeld_voertuig.kenteken', read_only=True, default=''
+    )
+    voertuig_ritnummer = serializers.CharField(
+        source='gekoppeld_voertuig.ritnummer', read_only=True, default=''
+    )
+    pauze_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ImportedTimeEntry
+        fields = [
+            'id', 'batch', 'user', 'user_naam',
+            'weeknummer', 'periode', 'datum', 'ritlijst',
+            'kenteken_import', 'km', 'uurtarief', 'dot',
+            'geplande_vertrektijd', 'ingelogd_bc',
+            'begintijd_rit', 'eindtijd_rit',
+            'uren', 'pauze', 'pauze_display', 'netto_uren',
+            'uren_factuur', 'factuur_bedrag',
+            'gekoppeld_voertuig', 'voertuig_kenteken', 'voertuig_ritnummer',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_pauze_display(self, obj):
+        if obj.pauze:
+            total_seconds = int(obj.pauze.total_seconds())
+            hours, remainder = divmod(total_seconds, 3600)
+            minutes, _ = divmod(remainder, 60)
+            if hours > 0:
+                return f"{hours}:{minutes:02d}"
+            return f"{minutes} min"
+        return "0 min"
+
+
+class ImportBatchSerializer(serializers.ModelSerializer):
+    geimporteerd_door_naam = serializers.CharField(
+        source='geimporteerd_door.full_name', read_only=True, default=''
+    )
+
+    class Meta:
+        model = ImportBatch
+        fields = [
+            'id', 'bestandsnaam', 'geimporteerd_door', 'geimporteerd_door_naam',
+            'totaal_rijen', 'gekoppeld', 'niet_gekoppeld', 'created_at',
+        ]
+        read_only_fields = fields

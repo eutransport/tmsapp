@@ -24,6 +24,7 @@ import { getTemplates, createInvoice, createInvoiceLine, getNextInvoiceNumber } 
 import { getCompanies } from '@/api/companies'
 import { getTimeEntries } from '@/api/timetracking'
 import { getSpreadsheets } from '@/api/spreadsheets'
+import { getImportedEntries, ImportedTimeEntry } from '@/api/urenImport'
 import { 
   InvoiceTemplate, 
   Company, 
@@ -51,6 +52,16 @@ interface ChauffeurWeekGroup {
   chauffeurNaam: string
   bedrijfNaam: string
   entries: TimeEntry[]
+  selected: boolean
+}
+
+interface ImportedChauffeurWeekGroup {
+  key: string
+  weeknummer: number
+  jaar: number
+  userId: string
+  chauffeurNaam: string
+  entries: ImportedTimeEntry[]
   selected: boolean
 }
 
@@ -287,11 +298,15 @@ function TimeEntryImportModal({
   isOpen,
   onClose,
   onImport,
+  onImportImported,
 }: {
   isOpen: boolean
   onClose: () => void
   onImport: (entries: TimeEntry[]) => void
+  onImportImported: (entries: ImportedTimeEntry[], chauffeurEntries: TimeEntry[]) => void
 }) {
+  const [activeTab, setActiveTab] = useState<'chauffeur' | 'imported'>('chauffeur')
+  // Chauffeur tab state
   const [chauffeurGroups, setChauffeurGroups] = useState<ChauffeurWeekGroup[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -299,11 +314,23 @@ function TimeEntryImportModal({
   const [weekFilter, setWeekFilter] = useState<string>('') // '' = alle weken
   const itemsPerPage = 20
 
+  // Imported tab state
+  const [importedGroups, setImportedGroups] = useState<ImportedChauffeurWeekGroup[]>([])
+  const [chauffeurEntriesForMatch, setChauffeurEntriesForMatch] = useState<TimeEntry[]>([])
+  const [isLoadingImported, setIsLoadingImported] = useState(false)
+  const [importedPage, setImportedPage] = useState(1)
+  const [expandedImportedGroup, setExpandedImportedGroup] = useState<string | null>(null)
+  const [importedWeekFilter, setImportedWeekFilter] = useState<string>('')
+
   useEffect(() => {
     if (isOpen) {
       loadTimeEntries()
+      loadImportedEntries()
       setCurrentPage(1)
+      setImportedPage(1)
       setWeekFilter('')
+      setImportedWeekFilter('')
+      setActiveTab('chauffeur')
     }
   }, [isOpen])
 
@@ -354,14 +381,67 @@ function TimeEntryImportModal({
     }
   }
 
+  const loadImportedEntries = async () => {
+    setIsLoadingImported(true)
+    try {
+      // Load imported entries and chauffeur entries in parallel
+      const [importedData, chauffeurData] = await Promise.all([
+        getImportedEntries(),
+        getTimeEntries({ status: 'ingediend', page_size: 1000, ordering: '-datum' }),
+      ])
+
+      setChauffeurEntriesForMatch(chauffeurData.results)
+
+      // Group imported entries by week + chauffeur
+      const groups: Record<string, ImportedChauffeurWeekGroup> = {}
+      importedData.forEach((entry) => {
+        const key = `imp-${entry.weeknummer}-${entry.user}`
+        if (!groups[key]) {
+          groups[key] = {
+            key,
+            weeknummer: entry.weeknummer,
+            jaar: new Date(entry.datum).getFullYear(),
+            userId: entry.user || '',
+            chauffeurNaam: entry.user_naam || 'Onbekend',
+            entries: [],
+            selected: false,
+          }
+        }
+        groups[key].entries.push(entry)
+      })
+
+      const sortedGroups = Object.values(groups).sort((a, b) => {
+        if (a.jaar !== b.jaar) return b.jaar - a.jaar
+        if (a.weeknummer !== b.weeknummer) return b.weeknummer - a.weeknummer
+        return a.chauffeurNaam.localeCompare(b.chauffeurNaam)
+      })
+
+      setImportedGroups(sortedGroups)
+    } catch (err) {
+      console.error('Failed to load imported entries:', err)
+    } finally {
+      setIsLoadingImported(false)
+    }
+  }
+
   const toggleSelection = (key: string) => {
     setChauffeurGroups(prev => prev.map(g => 
       g.key === key ? { ...g, selected: !g.selected } : g
     ))
   }
 
+  const toggleImportedSelection = (key: string) => {
+    setImportedGroups(prev => prev.map(g =>
+      g.key === key ? { ...g, selected: !g.selected } : g
+    ))
+  }
+
   const toggleExpand = (key: string) => {
     setExpandedGroup(prev => prev === key ? null : key)
+  }
+
+  const toggleImportedExpand = (key: string) => {
+    setExpandedImportedGroup(prev => prev === key ? null : key)
   }
 
   const handleImport = () => {
@@ -372,6 +452,17 @@ function TimeEntryImportModal({
       }
     })
     onImport(entriesToImport)
+    onClose()
+  }
+
+  const handleImportImported = () => {
+    const entriesToImport: ImportedTimeEntry[] = []
+    importedGroups.forEach(group => {
+      if (group.selected) {
+        entriesToImport.push(...group.entries)
+      }
+    })
+    onImportImported(entriesToImport, chauffeurEntriesForMatch)
     onClose()
   }
 
@@ -388,6 +479,34 @@ function TimeEntryImportModal({
   const totalEntries = filteredGroups
     .filter(g => g.selected)
     .reduce((sum, g) => sum + g.entries.length, 0)
+
+  // Imported tab filtering & pagination
+  const availableImportedWeeks = [...new Set(importedGroups.map(g => `${g.jaar}-W${g.weeknummer}`))]
+    .sort((a, b) => b.localeCompare(a))
+
+  const filteredImportedGroups = importedWeekFilter
+    ? importedGroups.filter(g => `${g.jaar}-W${g.weeknummer}` === importedWeekFilter)
+    : importedGroups
+
+  const selectedImportedCount = filteredImportedGroups.filter(g => g.selected).length
+  const totalImportedEntries = filteredImportedGroups
+    .filter(g => g.selected)
+    .reduce((sum, g) => sum + g.entries.length, 0)
+
+  const totalImportedPages = Math.ceil(filteredImportedGroups.length / itemsPerPage)
+  const paginatedImportedGroups = filteredImportedGroups.slice(
+    (importedPage - 1) * itemsPerPage,
+    importedPage * itemsPerPage
+  )
+
+  // Helper: find chauffeur km for a given user+datum
+  const findChauffeurKm = (userId: string | null, datum: string): number => {
+    if (!userId) return 0
+    const match = chauffeurEntriesForMatch.find(e => e.user === userId && e.datum === datum)
+    return match?.totaal_km || 0
+  }
+
+  useEffect(() => { setImportedPage(1) }, [importedWeekFilter])
 
   // Pagination (on filtered groups)
   const totalPages = Math.ceil(filteredGroups.length / itemsPerPage)
@@ -408,233 +527,347 @@ function TimeEntryImportModal({
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="fixed inset-0 bg-gray-500/75" onClick={onClose} />
         <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col">
-          <div className="px-6 py-4 border-b flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          {/* Header with tabs */}
+          <div className="border-b">
+            <div className="px-6 py-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold">Uren Importeren</h3>
-              {/* Week Filter */}
+              <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+                <XCircleIcon className="h-5 w-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="px-6 flex gap-4">
+              <button
+                onClick={() => setActiveTab('chauffeur')}
+                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'chauffeur'
+                    ? 'border-primary-600 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Chauffeur Uren
+              </button>
+              <button
+                onClick={() => setActiveTab('imported')}
+                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'imported'
+                    ? 'border-primary-600 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Geïmporteerde Uren
+              </button>
+            </div>
+          </div>
+
+          {/* Tab: Chauffeur Uren */}
+          {activeTab === 'chauffeur' && (
+            <>
+              {/* Filter bar */}
               {availableWeeks.length > 0 && (
-                <select
-                  value={weekFilter}
-                  onChange={(e) => setWeekFilter(e.target.value)}
-                  className="text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="">Alle weken</option>
-                  {availableWeeks.map(week => (
-                    <option key={week} value={week}>{week.replace('-W', ' Week ')}</option>
-                  ))}
-                </select>
+                <div className="px-6 py-2 border-b bg-gray-50 flex items-center gap-2">
+                  <span className="text-sm text-gray-500">Filter:</span>
+                  <select
+                    value={weekFilter}
+                    onChange={(e) => setWeekFilter(e.target.value)}
+                    className="text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="">Alle weken</option>
+                    {availableWeeks.map(week => (
+                      <option key={week} value={week}>{week.replace('-W', ' Week ')}</option>
+                    ))}
+                  </select>
+                </div>
               )}
-            </div>
-            <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
-              <XCircleIcon className="h-5 w-5 text-gray-400" />
-            </button>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto">
-            {isLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
-              </div>
-            ) : chauffeurGroups.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <ClockIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p>Geen ingediende uren gevonden</p>
-                <p className="text-sm mt-1">Alleen ingediende uren kunnen worden geïmporteerd</p>
-              </div>
-            ) : filteredGroups.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <ClockIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p>Geen uren gevonden voor deze week</p>
-              </div>
-            ) : (
-              <>
-                {/* Table header */}
-                <table className="w-full">
-                  <thead className="bg-gray-50 sticky top-0">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
-                        <input
-                          type="checkbox"
-                          checked={paginatedGroups.every(g => g.selected)}
-                          onChange={() => {
-                            const allSelected = paginatedGroups.every(g => g.selected)
-                            const pageKeys = new Set(paginatedGroups.map(g => g.key))
-                            setChauffeurGroups(prev => prev.map(g => 
-                              pageKeys.has(g.key) ? { ...g, selected: !allSelected } : g
-                            ))
-                          }}
-                          className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                        />
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Week
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Chauffeur
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Bedrijf
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Regels
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Totaal Uren
-                      </th>
-                      <th className="px-4 py-3 w-10"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {paginatedGroups.map((group) => {
-                      const totalUren = group.entries.reduce((sum, e) => {
-                        const parts = (e.totaal_uren || '0:00').split(':')
-                        const h = parseInt(parts[0]) || 0
-                        const m = parseInt(parts[1]) || 0
-                        return sum + h + (m / 60)
-                      }, 0)
-                      const isExpanded = expandedGroup === group.key
-                      
-                      return (
-                        <Fragment key={group.key}>
-                          <tr 
-                            className={`hover:bg-gray-50 cursor-pointer ${group.selected ? 'bg-primary-50' : ''}`}
-                            onClick={() => toggleSelection(group.key)}
-                          >
-                            <td className="px-4 py-3">
-                              <input
-                                type="checkbox"
-                                checked={group.selected}
-                                onChange={() => toggleSelection(group.key)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                              />
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <span className="font-medium">Week {group.weeknummer}</span>
-                              <span className="text-gray-400 ml-1">{group.jaar}</span>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              {group.chauffeurNaam}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-gray-500">
-                              {group.bedrijfNaam}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                {group.entries.length}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-right whitespace-nowrap">
-                              {totalUren.toFixed(1)} uur
-                            </td>
-                            <td className="px-4 py-3">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  toggleExpand(group.key)
-                                }}
-                                className="p-1 hover:bg-gray-200 rounded"
-                              >
-                                {isExpanded ? (
-                                  <ChevronDownIcon className="h-4 w-4 text-gray-400" />
-                                ) : (
-                                  <ChevronRightIcon className="h-4 w-4 text-gray-400" />
-                                )}
-                              </button>
-                            </td>
-                          </tr>
-                          
-                          {/* Expanded details */}
-                          {isExpanded && (
-                            <tr>
-                              <td colSpan={7} className="px-4 py-0">
-                                <div className="bg-gray-50 rounded-lg my-2 overflow-hidden">
-                                  <table className="w-full text-sm">
-                                    <thead className="bg-gray-100">
-                                      <tr>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Datum</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Ritnummer</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Kenteken</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Uren</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Km</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-200">
-                                      {group.entries.map((entry) => (
-                                        <tr key={entry.id}>
-                                          <td className="px-4 py-2">
-                                            {new Date(entry.datum).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' })}
-                                          </td>
-                                          <td className="px-4 py-2">{entry.ritnummer}</td>
-                                          <td className="px-4 py-2 font-mono text-xs">{entry.kenteken}</td>
-                                          <td className="px-4 py-2 text-right">{entry.totaal_uren || '0:00'}</td>
-                                          <td className="px-4 py-2 text-right">{entry.totaal_km || 0}</td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      )
-                    })}
-                  </tbody>
-                </table>
-                
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="px-4 py-3 border-t bg-gray-50 flex items-center justify-between">
-                    <div className="text-sm text-gray-500">
-                      Pagina {currentPage} van {totalPages} ({chauffeurGroups.length} groepen)
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 text-sm border rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Vorige
-                      </button>
-                      <button
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-1 text-sm border rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Volgende
-                      </button>
-                    </div>
+              <div className="flex-1 overflow-y-auto">
+                {isLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
                   </div>
+                ) : chauffeurGroups.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <ClockIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>Geen ingediende uren gevonden</p>
+                    <p className="text-sm mt-1">Alleen ingediende uren kunnen worden geïmporteerd</p>
+                  </div>
+                ) : filteredGroups.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <ClockIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>Geen uren gevonden voor deze week</p>
+                  </div>
+                ) : (
+                  <>
+                    <table className="w-full">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                            <input
+                              type="checkbox"
+                              checked={paginatedGroups.every(g => g.selected)}
+                              onChange={() => {
+                                const allSelected = paginatedGroups.every(g => g.selected)
+                                const pageKeys = new Set(paginatedGroups.map(g => g.key))
+                                setChauffeurGroups(prev => prev.map(g => 
+                                  pageKeys.has(g.key) ? { ...g, selected: !allSelected } : g
+                                ))
+                              }}
+                              className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chauffeur</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bedrijf</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Regels</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Totaal Uren</th>
+                          <th className="px-4 py-3 w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {paginatedGroups.map((group) => {
+                          const totalUren = group.entries.reduce((sum, e) => {
+                            const parts = (e.totaal_uren || '0:00').split(':')
+                            const h = parseInt(parts[0]) || 0
+                            const m = parseInt(parts[1]) || 0
+                            return sum + h + (m / 60)
+                          }, 0)
+                          const isExpanded = expandedGroup === group.key
+                          return (
+                            <Fragment key={group.key}>
+                              <tr 
+                                className={`hover:bg-gray-50 cursor-pointer ${group.selected ? 'bg-primary-50' : ''}`}
+                                onClick={() => toggleSelection(group.key)}
+                              >
+                                <td className="px-4 py-3">
+                                  <input type="checkbox" checked={group.selected} onChange={() => toggleSelection(group.key)} onClick={(e) => e.stopPropagation()} className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className="font-medium">Week {group.weeknummer}</span>
+                                  <span className="text-gray-400 ml-1">{group.jaar}</span>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">{group.chauffeurNaam}</td>
+                                <td className="px-4 py-3 whitespace-nowrap text-gray-500">{group.bedrijfNaam}</td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">{group.entries.length}</span>
+                                </td>
+                                <td className="px-4 py-3 text-right whitespace-nowrap">{totalUren.toFixed(1)} uur</td>
+                                <td className="px-4 py-3">
+                                  <button onClick={(e) => { e.stopPropagation(); toggleExpand(group.key) }} className="p-1 hover:bg-gray-200 rounded">
+                                    {isExpanded ? <ChevronDownIcon className="h-4 w-4 text-gray-400" /> : <ChevronRightIcon className="h-4 w-4 text-gray-400" />}
+                                  </button>
+                                </td>
+                              </tr>
+                              {isExpanded && (
+                                <tr>
+                                  <td colSpan={7} className="px-4 py-0">
+                                    <div className="bg-gray-50 rounded-lg my-2 overflow-hidden">
+                                      <table className="w-full text-sm">
+                                        <thead className="bg-gray-100">
+                                          <tr>
+                                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Datum</th>
+                                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Ritnummer</th>
+                                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Kenteken</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Uren</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Km</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-200">
+                                          {group.entries.map((entry) => (
+                                            <tr key={entry.id}>
+                                              <td className="px-4 py-2">{new Date(entry.datum).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' })}</td>
+                                              <td className="px-4 py-2">{entry.ritnummer}</td>
+                                              <td className="px-4 py-2 font-mono text-xs">{entry.kenteken}</td>
+                                              <td className="px-4 py-2 text-right">{entry.totaal_uren || '0:00'}</td>
+                                              <td className="px-4 py-2 text-right">{entry.totaal_km || 0}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                    {totalPages > 1 && (
+                      <div className="px-4 py-3 border-t bg-gray-50 flex items-center justify-between">
+                        <div className="text-sm text-gray-500">Pagina {currentPage} van {totalPages} ({chauffeurGroups.length} groepen)</div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 text-sm border rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">Vorige</button>
+                          <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 text-sm border rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">Volgende</button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-          </div>
-          
-          <div className="px-6 py-4 border-t bg-gray-50 flex items-center justify-between">
-            <span className="text-sm text-gray-600">
-              {selectedCount > 0 ? (
-                <>{selectedCount} groepen geselecteerd ({totalEntries} regels)</>
-              ) : (
-                'Selecteer chauffeur/week combinaties om te importeren'
+              </div>
+              <div className="px-6 py-4 border-t bg-gray-50 flex items-center justify-between">
+                <span className="text-sm text-gray-600">
+                  {selectedCount > 0 ? <>{selectedCount} groepen geselecteerd ({totalEntries} regels)</> : 'Selecteer chauffeur/week combinaties om te importeren'}
+                </span>
+                <div className="flex gap-3">
+                  <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Annuleren</button>
+                  <button onClick={handleImport} disabled={totalEntries === 0} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Importeren ({totalEntries} regels)
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Tab: Geïmporteerde Uren */}
+          {activeTab === 'imported' && (
+            <>
+              {/* Filter bar */}
+              {availableImportedWeeks.length > 0 && (
+                <div className="px-6 py-2 border-b bg-gray-50 flex items-center gap-2">
+                  <span className="text-sm text-gray-500">Filter:</span>
+                  <select
+                    value={importedWeekFilter}
+                    onChange={(e) => setImportedWeekFilter(e.target.value)}
+                    className="text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="">Alle weken</option>
+                    {availableImportedWeeks.map(week => (
+                      <option key={week} value={week}>{week.replace('-W', ' Week ')}</option>
+                    ))}
+                  </select>
+                </div>
               )}
-            </span>
-            <div className="flex gap-3">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                Annuleren
-              </button>
-              <button
-                onClick={handleImport}
-                disabled={totalEntries === 0}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Importeren ({totalEntries} regels)
-              </button>
-            </div>
-          </div>
+              <div className="flex-1 overflow-y-auto">
+                {isLoadingImported ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+                  </div>
+                ) : importedGroups.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <ClockIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>Geen geïmporteerde uren gevonden</p>
+                    <p className="text-sm mt-1">Importeer eerst uren via de Uren Import pagina</p>
+                  </div>
+                ) : filteredImportedGroups.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <ClockIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>Geen uren gevonden voor deze week</p>
+                  </div>
+                ) : (
+                  <>
+                    <table className="w-full">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                            <input
+                              type="checkbox"
+                              checked={paginatedImportedGroups.every(g => g.selected)}
+                              onChange={() => {
+                                const allSelected = paginatedImportedGroups.every(g => g.selected)
+                                const pageKeys = new Set(paginatedImportedGroups.map(g => g.key))
+                                setImportedGroups(prev => prev.map(g =>
+                                  pageKeys.has(g.key) ? { ...g, selected: !allSelected } : g
+                                ))
+                              }}
+                              className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chauffeur</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ritten</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Factuur Uren</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">KM (chauffeur)</th>
+                          <th className="px-4 py-3 w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {paginatedImportedGroups.map((group) => {
+                          const totalFactuurUren = group.entries.reduce((sum, e) => sum + Number(e.uren_factuur || 0), 0)
+                          const totalKm = group.entries.reduce((sum, e) => sum + findChauffeurKm(group.userId, e.datum), 0)
+                          const isExpanded = expandedImportedGroup === group.key
+                          return (
+                            <Fragment key={group.key}>
+                              <tr
+                                className={`hover:bg-gray-50 cursor-pointer ${group.selected ? 'bg-primary-50' : ''}`}
+                                onClick={() => toggleImportedSelection(group.key)}
+                              >
+                                <td className="px-4 py-3">
+                                  <input type="checkbox" checked={group.selected} onChange={() => toggleImportedSelection(group.key)} onClick={(e) => e.stopPropagation()} className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className="font-medium">Week {group.weeknummer}</span>
+                                  <span className="text-gray-400 ml-1">{group.jaar}</span>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">{group.chauffeurNaam}</td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{group.entries.length}</span>
+                                </td>
+                                <td className="px-4 py-3 text-right whitespace-nowrap font-medium">{totalFactuurUren.toFixed(1)} uur</td>
+                                <td className="px-4 py-3 text-right whitespace-nowrap text-gray-600">{totalKm} km</td>
+                                <td className="px-4 py-3">
+                                  <button onClick={(e) => { e.stopPropagation(); toggleImportedExpand(group.key) }} className="p-1 hover:bg-gray-200 rounded">
+                                    {isExpanded ? <ChevronDownIcon className="h-4 w-4 text-gray-400" /> : <ChevronRightIcon className="h-4 w-4 text-gray-400" />}
+                                  </button>
+                                </td>
+                              </tr>
+                              {isExpanded && (
+                                <tr>
+                                  <td colSpan={7} className="px-4 py-0">
+                                    <div className="bg-gray-50 rounded-lg my-2 overflow-hidden">
+                                      <table className="w-full text-sm">
+                                        <thead className="bg-gray-100">
+                                          <tr>
+                                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Datum</th>
+                                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Ritlijst</th>
+                                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Kenteken</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Factuur Uren</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">KM (chauffeur)</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-200">
+                                          {group.entries.map((entry) => (
+                                            <tr key={entry.id}>
+                                              <td className="px-4 py-2">{new Date(entry.datum).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' })}</td>
+                                              <td className="px-4 py-2 font-medium">{entry.ritlijst}</td>
+                                              <td className="px-4 py-2 font-mono text-xs">{entry.kenteken_import || entry.voertuig_kenteken}</td>
+                                              <td className="px-4 py-2 text-right">{Number(entry.uren_factuur || 0).toFixed(2)}</td>
+                                              <td className="px-4 py-2 text-right">{findChauffeurKm(group.userId, entry.datum)}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                    {totalImportedPages > 1 && (
+                      <div className="px-4 py-3 border-t bg-gray-50 flex items-center justify-between">
+                        <div className="text-sm text-gray-500">Pagina {importedPage} van {totalImportedPages} ({filteredImportedGroups.length} groepen)</div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setImportedPage(p => Math.max(1, p - 1))} disabled={importedPage === 1} className="px-3 py-1 text-sm border rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">Vorige</button>
+                          <button onClick={() => setImportedPage(p => Math.min(totalImportedPages, p + 1))} disabled={importedPage === totalImportedPages} className="px-3 py-1 text-sm border rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">Volgende</button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="px-6 py-4 border-t bg-gray-50 flex items-center justify-between">
+                <span className="text-sm text-gray-600">
+                  {selectedImportedCount > 0 ? <>{selectedImportedCount} groepen geselecteerd ({totalImportedEntries} ritten)</> : 'Selecteer chauffeur/week combinaties om te importeren'}
+                </span>
+                <div className="flex gap-3">
+                  <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Annuleren</button>
+                  <button onClick={handleImportImported} disabled={totalImportedEntries === 0} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Importeren ({totalImportedEntries} ritten)
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -1249,6 +1482,111 @@ export default function InvoiceCreatePage() {
     setLines(prev => [...prev, ...entryLines, ...summaryLines])
   }
 
+  // Import imported (Excel) entries with ritnummers from import, km from chauffeur, uren from import
+  const handleImportImportedEntries = (entries: ImportedTimeEntry[], chauffeurEntries: TimeEntry[]) => {
+    // Sort entries by date ascending
+    const sortedEntries = [...entries].sort((a, b) =>
+      new Date(a.datum).getTime() - new Date(b.datum).getTime()
+    )
+
+    // Set week/chauffeur from first entry
+    if (sortedEntries.length > 0) {
+      const first = sortedEntries[0]
+      setWeekNumber(first.weeknummer)
+      setWeekYear(new Date(first.datum).getFullYear())
+      if (first.user) setChauffeur(first.user)
+    }
+
+    // Build lookup for chauffeur km by user+datum
+    const chauffeurKmMap: Record<string, number> = {}
+    chauffeurEntries.forEach(e => {
+      chauffeurKmMap[`${e.user}|${e.datum}`] = e.totaal_km || 0
+    })
+
+    let totalKm = 0
+    let totalUren = 0
+
+    // Create lines for each imported entry
+    const entryLines: InvoiceLineData[] = sortedEntries.map(entry => {
+      const values: Record<string, number | string> = {}
+
+      const uren = entry.uren_factuur || 0
+      const km = entry.user ? (chauffeurKmMap[`${entry.user}|${entry.datum}`] || 0) : 0
+
+      totalUren += uren
+      totalKm += km
+
+      columns.forEach(col => {
+        if (col.type === 'text' || col.id === 'omschrijving') {
+          values[col.id] = `Rit ${entry.ritlijst} - ${new Date(entry.datum).toLocaleDateString('nl-NL')} (${km} km)`
+        } else if (col.type === 'aantal' || col.id === 'aantal') {
+          values[col.id] = uren
+        } else if (col.type === 'prijs' || col.id === 'prijs') {
+          values[col.id] = defaults.uurtarief
+        } else if (col.type === 'uren' || col.id.includes('uur')) {
+          values[col.id] = uren
+        } else if (col.type === 'km' || col.id.includes('km')) {
+          values[col.id] = km
+        } else {
+          values[col.id] = 0
+        }
+      })
+
+      // Calculate computed columns
+      columns.forEach(col => {
+        if (col.type === 'berekend' && col.formule) {
+          values[col.id] = evaluateFormula(col.formule, values, defaults)
+        }
+      })
+
+      return { id: generateId(), values }
+    })
+
+    // Calculate subtotal for percentage DOT
+    const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
+    const entriesSubtotaal = entryLines.reduce((sum, line) => {
+      const val = totaalColumn ? (line.values[totaalColumn.id] as number || 0) : 0
+      return sum + val
+    }, 0)
+
+    const createSummaryLine = (omschrijving: string, aantal: number, prijs: number): InvoiceLineData => {
+      const values: Record<string, number | string> = {}
+      columns.forEach(col => {
+        if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
+          values[col.id] = omschrijving
+        } else if (col.type === 'aantal' || col.id === 'aantal' || col.id.includes('aantal')) {
+          values[col.id] = aantal
+        } else if (col.type === 'prijs' || col.id === 'prijs' || col.id.includes('prijs') || col.id.includes('tarief')) {
+          values[col.id] = prijs
+        } else {
+          values[col.id] = 0
+        }
+      })
+      columns.forEach(col => {
+        if (col.type === 'berekend' && col.formule) {
+          values[col.id] = evaluateFormula(col.formule, values, defaults)
+        }
+      })
+      return { id: generateId(), values }
+    }
+
+    const summaryLines: InvoiceLineData[] = []
+
+    if (defaults.dotIsPercentage) {
+      const dotBedrag = entriesSubtotaal * (defaults.dotPrijs / 100)
+      summaryLines.push(createSummaryLine(`Totaal DOT (${defaults.dotPrijs}%)`, 1, dotBedrag))
+    } else {
+      if (totalKm > 0 && defaults.kmTarief > 0) {
+        summaryLines.push(createSummaryLine('Totaal KM', totalKm, defaults.kmTarief))
+      }
+      if (totalKm > 0 && defaults.dotPrijs > 0) {
+        summaryLines.push(createSummaryLine('Totaal DOT', totalKm, defaults.dotPrijs))
+      }
+    }
+
+    setLines(prev => [...prev, ...entryLines, ...summaryLines])
+  }
+
   // Import spreadsheet ritregistratie entries
   const handleImportSpreadsheet = (spreadsheet: Spreadsheet) => {
     // Set week/chauffeur tracking from spreadsheet
@@ -1789,6 +2127,7 @@ export default function InvoiceCreatePage() {
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         onImport={handleImportEntries}
+        onImportImported={handleImportImportedEntries}
       />
 
       {/* Spreadsheet Import Modal */}

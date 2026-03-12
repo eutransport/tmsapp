@@ -84,6 +84,9 @@ import SpreadsheetEditorPage from '@/pages/spreadsheets/SpreadsheetEditorPage'
 import SpreadsheetTemplateListPage from '@/pages/spreadsheets/SpreadsheetTemplateListPage'
 import SpreadsheetTemplateEditorPage from '@/pages/spreadsheets/SpreadsheetTemplateEditorPage'
 
+// Uren Import
+import UrenImportPage from '@/pages/uren-import/UrenImportPage'
+
 // Maintenance
 import MaintenanceOverviewPage from '@/pages/maintenance/MaintenanceOverviewPage'
 import APKPage from '@/pages/maintenance/APKPage'
@@ -255,6 +258,7 @@ function App() {
         <Route path="/time-entries" element={<TimeEntriesPage />} />
         <Route path="/my-hours" element={<MyHoursPage />} />
         <Route path="/submitted-hours" element={<SubmittedHoursPage />} />
+        <Route path="/uren-import" element={<AdminRoute><UrenImportPage /></AdminRoute>} />
         
         {/* Planning */}
         <Route path="/planning" element={<PlanningPage />} />

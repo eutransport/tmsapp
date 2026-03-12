@@ -1258,3 +1258,236 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
 
+
+class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for import batches and imported time entries."""
+    from .serializers import ImportBatchSerializer
+    serializer_class = ImportBatchSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        from .models import ImportBatch
+        user = self.request.user
+        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Geen toegang.')
+        return ImportBatch.objects.select_related('geimporteerd_door').all()
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete an import batch and all its entries."""
+        from .models import ImportBatch
+        user = request.user
+        if not (user.is_superuser or user.rol == 'admin'):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Alleen admins kunnen imports verwijderen.')
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['post'], url_path='upload')
+    def upload(self, request):
+        """Upload and import an Excel file."""
+        from .import_service import import_excel
+
+        user = request.user
+        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+            return Response({'error': 'Geen toegang.'}, status=status.HTTP_403_FORBIDDEN)
+
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'error': 'Geen bestand geüpload.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not file_obj.name.endswith(('.xlsx', '.xls')):
+            return Response(
+                {'error': 'Alleen Excel bestanden (.xlsx, .xls) zijn toegestaan.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            batch = import_excel(file_obj, file_obj.name, user)
+        except Exception as e:
+            logger.error(f"Import failed: {e}", exc_info=True)
+            return Response(
+                {'error': f'Import mislukt: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from .serializers import ImportBatchSerializer
+        return Response(ImportBatchSerializer(batch).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get'], url_path='entries')
+    def entries(self, request, pk=None):
+        """Get all imported entries for a batch."""
+        from .models import ImportedTimeEntry
+        from .serializers import ImportedTimeEntrySerializer
+
+        batch = self.get_object()
+        entries = ImportedTimeEntry.objects.filter(
+            batch=batch
+        ).select_related('user', 'gekoppeld_voertuig')
+
+        # Optional filters
+        weeknummer = request.query_params.get('weeknummer')
+        user_id = request.query_params.get('user')
+        kenteken = request.query_params.get('kenteken')
+
+        if weeknummer:
+            entries = entries.filter(weeknummer=int(weeknummer))
+        if user_id:
+            entries = entries.filter(user_id=user_id)
+        if kenteken:
+            entries = entries.filter(kenteken_import__icontains=kenteken)
+
+        serializer = ImportedTimeEntrySerializer(entries, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='imported-entries')
+    def imported_entries(self, request):
+        """Get all imported entries across all batches, with filters.
+        Chauffeurs can only see their own entries."""
+        from .models import ImportedTimeEntry
+        from .serializers import ImportedTimeEntrySerializer
+
+        user = request.user
+        entries = ImportedTimeEntry.objects.select_related(
+            'user', 'gekoppeld_voertuig', 'batch'
+        ).all()
+
+        # Chauffeurs can only see their own imported entries
+        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+            entries = entries.filter(user=user)
+
+        weeknummer = request.query_params.get('weeknummer')
+        jaar = request.query_params.get('jaar')
+        user_id = request.query_params.get('user')
+        kenteken = request.query_params.get('kenteken')
+
+        if weeknummer:
+            entries = entries.filter(weeknummer=int(weeknummer))
+        if jaar:
+            entries = entries.filter(datum__year=int(jaar))
+        if user_id:
+            entries = entries.filter(user_id=user_id)
+        if kenteken:
+            entries = entries.filter(kenteken_import__icontains=kenteken)
+
+        serializer = ImportedTimeEntrySerializer(entries, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='week-comparison')
+    def week_comparison(self, request):
+        """
+        Compare imported hours with chauffeur-submitted hours per week.
+        Returns per-user weekly totals: imported uren_factuur vs chauffeur totaal_uren.
+        Chauffeurs can only see their own comparison.
+        """
+        from .models import ImportedTimeEntry
+        from django.db.models import Sum, F
+        from django.db.models.functions import ExtractYear
+
+        user = request.user
+        jaar = request.query_params.get('jaar')
+        weeknummer = request.query_params.get('weeknummer')
+        user_id = request.query_params.get('user')
+
+        # Imported hours: sum uren_factuur grouped by user, year, week
+        imp_qs = ImportedTimeEntry.objects.filter(user__isnull=False)
+        te_qs = TimeEntry.objects.filter(status=TimeEntryStatus.INGEDIEND)
+
+        # Chauffeurs can only see their own data
+        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+            imp_qs = imp_qs.filter(user=user)
+            te_qs = te_qs.filter(user=user)
+
+        if jaar:
+            imp_qs = imp_qs.filter(datum__year=int(jaar))
+            te_qs = te_qs.filter(datum__year=int(jaar))
+        if weeknummer:
+            imp_qs = imp_qs.filter(weeknummer=int(weeknummer))
+            te_qs = te_qs.filter(weeknummer=int(weeknummer))
+        if user_id:
+            imp_qs = imp_qs.filter(user_id=user_id)
+            te_qs = te_qs.filter(user_id=user_id)
+
+        imported_data = imp_qs.values(
+            'user_id', 'user__voornaam', 'user__achternaam', 'weeknummer'
+        ).annotate(
+            jaar=ExtractYear('datum'),
+            import_uren=Sum('uren_factuur'),
+            import_km=Sum('km'),
+        ).order_by('-jaar', '-weeknummer', 'user__achternaam')
+
+        chauffeur_data = te_qs.values(
+            'user_id', 'weeknummer'
+        ).annotate(
+            jaar=ExtractYear('datum'),
+            chauffeur_seconds=Sum('totaal_uren'),
+            chauffeur_km=Sum('totaal_km'),
+        )
+
+        # Build lookup for chauffeur data
+        ch_lookup = {}
+        for row in chauffeur_data:
+            key = f"{row['user_id']}-{row['jaar']}-{row['weeknummer']}"
+            dur = row['chauffeur_seconds']
+            if dur and isinstance(dur, timedelta):
+                hours = round(dur.total_seconds() / 3600, 2)
+            else:
+                hours = 0
+            ch_lookup[key] = {
+                'chauffeur_uren': hours,
+                'chauffeur_km': row['chauffeur_km'] or 0,
+            }
+
+        results = []
+        for row in imported_data:
+            key = f"{row['user_id']}-{row['jaar']}-{row['weeknummer']}"
+            ch = ch_lookup.get(key, {'chauffeur_uren': 0, 'chauffeur_km': 0})
+            import_uren = float(row['import_uren'] or 0)
+            chauffeur_uren = ch['chauffeur_uren']
+            verschil = round(import_uren - chauffeur_uren, 2)
+
+            results.append({
+                'user_id': str(row['user_id']),
+                'user_naam': f"{row['user__voornaam']} {row['user__achternaam']}",
+                'jaar': row['jaar'],
+                'weeknummer': row['weeknummer'],
+                'import_uren': import_uren,
+                'chauffeur_uren': chauffeur_uren,
+                'verschil': verschil,
+                'import_km': float(row['import_km'] or 0),
+                'chauffeur_km': ch['chauffeur_km'],
+            })
+
+        # Also include weeks where chauffeur has data but no imports
+        seen_keys = {f"{r['user_id']}-{r['jaar']}-{r['weeknummer']}" for r in results}
+        for row in chauffeur_data:
+            key = f"{row['user_id']}-{row['jaar']}-{row['weeknummer']}"
+            if key not in seen_keys:
+                dur = row['chauffeur_seconds']
+                if dur and isinstance(dur, timedelta):
+                    ch_uren = round(dur.total_seconds() / 3600, 2)
+                else:
+                    ch_uren = 0
+                # Need user name
+                from apps.accounts.models import User as UserModel
+                try:
+                    u = UserModel.objects.get(id=row['user_id'])
+                    naam = u.full_name
+                except UserModel.DoesNotExist:
+                    naam = ''
+                results.append({
+                    'user_id': str(row['user_id']),
+                    'user_naam': naam,
+                    'jaar': row['jaar'],
+                    'weeknummer': row['weeknummer'],
+                    'import_uren': 0,
+                    'chauffeur_uren': ch_uren,
+                    'verschil': round(-ch_uren, 2),
+                    'import_km': 0,
+                    'chauffeur_km': row['chauffeur_km'] or 0,
+                })
+
+        results.sort(key=lambda x: (-x['jaar'], -x['weeknummer'], x['user_naam']))
+        return Response(results)
+

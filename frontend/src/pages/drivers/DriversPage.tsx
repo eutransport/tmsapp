@@ -13,7 +13,7 @@ import {
   UserGroupIcon,
   ShieldCheckIcon,
 } from '@heroicons/react/24/outline'
-import { Driver, Company, User } from '@/types'
+import { Driver, Company, User, Vehicle } from '@/types'
 import { 
   getDrivers, 
   createDriver, 
@@ -25,6 +25,7 @@ import {
 } from '@/api/drivers'
 import { getAllCompanies } from '@/api/companies'
 import { getUsers } from '@/api/users'
+import { getAllVehicles } from '@/api/fleet'
 import Pagination, { PageSize } from '@/components/common/Pagination'
 
 // Modal component
@@ -122,6 +123,7 @@ function DriverForm({
   driver,
   companies,
   users,
+  vehicles,
   onSave,
   onCancel,
   isLoading,
@@ -130,6 +132,7 @@ function DriverForm({
   driver?: Driver
   companies: Company[]
   users: User[]
+  vehicles: Vehicle[]
   onSave: (data: DriverCreate | DriverUpdate) => void
   onCancel: () => void
   isLoading: boolean
@@ -140,6 +143,7 @@ function DriverForm({
     telefoon: driver?.telefoon || '',
     bedrijf: driver?.bedrijf?.toString() || '',
     gekoppelde_gebruiker: driver?.gekoppelde_gebruiker?.toString() || '',
+    voertuig: driver?.voertuig?.toString() || '',
     adr: driver?.adr || false,
     minimum_uren_per_week: driver?.minimum_uren_per_week?.toString() || '',
   })
@@ -171,6 +175,7 @@ function DriverForm({
       telefoon: formData.telefoon || undefined,
       bedrijf: formData.bedrijf || undefined,
       gekoppelde_gebruiker: formData.gekoppelde_gebruiker || undefined,
+      voertuig: formData.voertuig || null,
       adr: formData.adr,
       minimum_uren_per_week: formData.minimum_uren_per_week ? parseFloat(formData.minimum_uren_per_week) : null,
     }
@@ -249,6 +254,27 @@ function DriverForm({
         </p>
       </div>
 
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {t('drivers.vehicle')}
+        </label>
+        <select
+          name="voertuig"
+          value={formData.voertuig}
+          onChange={handleChange}
+          className="input"
+        >
+          <option value="">{t('drivers.noVehicle')}</option>
+          {vehicles
+            .filter(v => !formData.bedrijf || v.bedrijf === formData.bedrijf)
+            .map(vehicle => (
+              <option key={vehicle.id} value={vehicle.id}>
+                {vehicle.ritnummer} - {vehicle.kenteken} ({vehicle.type_wagen})
+              </option>
+            ))}
+        </select>
+      </div>
+
       <div className="flex items-center">
         <input
           type="checkbox"
@@ -312,6 +338,7 @@ export default function DriversPage() {
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [users, setUsers] = useState<User[]>([])
+  const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isActionLoading, setIsActionLoading] = useState(false)
@@ -352,12 +379,14 @@ export default function DriversPage() {
   useEffect(() => {
     const fetchLookups = async () => {
       try {
-        const [companiesData, usersData] = await Promise.all([
+        const [companiesData, usersData, vehiclesData] = await Promise.all([
           getAllCompanies(),
           getUsers({ page_size: 1000 }),
+          getAllVehicles(),
         ])
         setCompanies(companiesData)
         setUsers(usersData.results || [])
+        setVehicles(vehiclesData)
       } catch (err) {
         console.error('Error fetching lookups:', err)
       }
@@ -606,6 +635,9 @@ export default function DriversPage() {
                   {t('companies.title')}
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                  {t('drivers.vehicle')}
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
                   {t('drivers.linkedUser')}
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
@@ -619,7 +651,7 @@ export default function DriversPage() {
             <tbody className="divide-y">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                       <span className="ml-3">{t('common.loading')}</span>
@@ -628,7 +660,7 @@ export default function DriversPage() {
                 </tr>
               ) : drivers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
                     <UserGroupIcon className="w-12 h-12 mx-auto text-gray-300 mb-3" />
                     <p>{t('drivers.noDrivers')}</p>
                     <button
@@ -647,6 +679,11 @@ export default function DriversPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-600">{driver.telefoon || '-'}</td>
                     <td className="px-4 py-3 text-gray-600">{getCompanyName(driver)}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {driver.voertuig_ritnummer 
+                        ? `${driver.voertuig_ritnummer} (${driver.voertuig_kenteken})`
+                        : '-'}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">
                       {driver.gekoppelde_gebruiker_naam || '-'}
                     </td>
@@ -746,6 +783,12 @@ export default function DriversPage() {
                     <span className="text-gray-500">{t('companies.title')}: </span>
                     <span className="text-gray-700">{getCompanyName(driver)}</span>
                   </div>
+                  {driver.voertuig_ritnummer && (
+                    <div>
+                      <span className="text-gray-500">{t('drivers.vehicle')}: </span>
+                      <span className="text-gray-700">{driver.voertuig_ritnummer} ({driver.voertuig_kenteken})</span>
+                    </div>
+                  )}
                   {driver.gekoppelde_gebruiker_naam && (
                     <div>
                       <span className="text-gray-500">{t('drivers.linkedUser')}: </span>
@@ -779,6 +822,7 @@ export default function DriversPage() {
         <DriverForm
           companies={companies}
           users={users}
+          vehicles={vehicles}
           onSave={handleCreate}
           onCancel={() => setShowCreateModal(false)}
           isLoading={isActionLoading}
@@ -798,6 +842,7 @@ export default function DriversPage() {
             driver={selectedDriver}
             companies={companies}
             users={users}
+            vehicles={vehicles}
             onSave={handleUpdate}
             onCancel={() => { setShowEditModal(false); setSelectedDriver(null) }}
             isLoading={isActionLoading}

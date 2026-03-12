@@ -133,6 +133,9 @@ export interface Driver {
   bedrijf_naam: string | null
   gekoppelde_gebruiker: string | null
   gekoppelde_gebruiker_naam: string | null
+  voertuig: string | null
+  voertuig_ritnummer: string | null
+  voertuig_kenteken: string | null
   adr: boolean
   minimum_uren_per_week: number | null
   created_at: string

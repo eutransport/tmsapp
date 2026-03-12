@@ -29,6 +29,22 @@ class IsAdminOrManager(BasePermission):
         return False
 
 
+class IsAdminOrManagerStrict(BasePermission):
+    """
+    Permission that only allows admin or gebruiker (manager) roles.
+    Chauffeurs are fully blocked (no read access).
+    """
+    
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        
+        if request.user.is_superuser:
+            return True
+        
+        return request.user.rol in ['admin', 'gebruiker']
+
+
 class IsAdminOnly(BasePermission):
     """
     Permission that only allows admin role.

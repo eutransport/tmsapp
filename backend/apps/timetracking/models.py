@@ -100,3 +100,89 @@ class WeeklyMinimumHours(models.Model):
     
     def __str__(self):
         return f"{self.user} - {self.jaar} W{self.weeknummer}: {self.minimum_uren}u"
+
+
+class ImportBatch(models.Model):
+    """Batch van geïmporteerde uren uit een Excel bestand."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    bestandsnaam = models.CharField(max_length=255, verbose_name='Bestandsnaam')
+    bestand = models.FileField(upload_to='imports/uren/', null=True, blank=True, verbose_name='Bestand')
+    geimporteerd_door = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='import_batches',
+        verbose_name='Geïmporteerd door'
+    )
+    totaal_rijen = models.PositiveIntegerField(default=0, verbose_name='Totaal rijen')
+    gekoppeld = models.PositiveIntegerField(default=0, verbose_name='Gekoppeld aan chauffeur')
+    niet_gekoppeld = models.PositiveIntegerField(default=0, verbose_name='Niet gekoppeld')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Import Batch'
+        verbose_name_plural = 'Import Batches'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.bestandsnaam} ({self.created_at:%Y-%m-%d %H:%M})"
+
+
+class ImportedTimeEntry(models.Model):
+    """Geïmporteerde urenregel uit een Excel bestand (planbureau)."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    batch = models.ForeignKey(
+        ImportBatch,
+        on_delete=models.CASCADE,
+        related_name='entries',
+        verbose_name='Import Batch'
+    )
+    # Koppeling aan chauffeur via kenteken/ritnummer → voertuig → driver → user
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='imported_time_entries',
+        verbose_name='Gekoppelde gebruiker'
+    )
+
+    # Originele Excel data
+    weeknummer = models.PositiveIntegerField(verbose_name='Weeknummer')
+    periode = models.CharField(max_length=50, blank=True, default='', verbose_name='Periode')
+    datum = models.DateField(verbose_name='Datum')
+    ritlijst = models.CharField(max_length=100, blank=True, default='', verbose_name='Ritlijst')
+    kenteken_import = models.CharField(max_length=50, verbose_name='Kenteken (import)')
+    km = models.DecimalField(max_digits=10, decimal_places=1, default=0, verbose_name='KM')
+    uurtarief = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name='Uurtarief')
+    dot = models.CharField(max_length=50, blank=True, default='', verbose_name='DOT')
+
+    geplande_vertrektijd = models.TimeField(null=True, blank=True, verbose_name='Geplande vertrektijd')
+    ingelogd_bc = models.TimeField(null=True, blank=True, verbose_name='Ingelogd BC')
+    begintijd_rit = models.TimeField(null=True, blank=True, verbose_name='Begintijd rit')
+    eindtijd_rit = models.TimeField(null=True, blank=True, verbose_name='Eindtijd rit')
+
+    uren = models.DecimalField(max_digits=6, decimal_places=2, default=0, verbose_name='Uren')
+    pauze = models.DurationField(default=timedelta(minutes=0), verbose_name='Pauze')
+    netto_uren = models.DecimalField(max_digits=6, decimal_places=2, default=0, verbose_name='Netto uren')
+    uren_factuur = models.DecimalField(max_digits=6, decimal_places=2, default=0, verbose_name='Uren factuur')
+    factuur_bedrag = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name='Factuur bedrag')
+
+    # Gekoppelde voertuig info (voor referentie)
+    gekoppeld_voertuig = models.ForeignKey(
+        'fleet.Vehicle',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='imported_entries',
+        verbose_name='Gekoppeld voertuig'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Geïmporteerde urenregel'
+        verbose_name_plural = 'Geïmporteerde urenregels'
+        ordering = ['-datum', 'kenteken_import']
+
+    def __str__(self):
+        return f"{self.kenteken_import} - {self.datum} - {self.uren_factuur}u"

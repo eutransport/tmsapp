@@ -4,12 +4,15 @@ from .models import Driver
 class DriverSerializer(serializers.ModelSerializer):
     bedrijf_naam = serializers.CharField(source='bedrijf.naam', read_only=True, allow_null=True)
     gekoppelde_gebruiker_naam = serializers.SerializerMethodField()
+    voertuig_ritnummer = serializers.CharField(source='voertuig.ritnummer', read_only=True, allow_null=True)
+    voertuig_kenteken = serializers.CharField(source='voertuig.kenteken', read_only=True, allow_null=True)
     
     class Meta:
         model = Driver
         fields = [
             'id', 'naam', 'telefoon', 'bedrijf', 'bedrijf_naam',
             'gekoppelde_gebruiker', 'gekoppelde_gebruiker_naam',
+            'voertuig', 'voertuig_ritnummer', 'voertuig_kenteken',
             'adr', 'minimum_uren_per_week', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
