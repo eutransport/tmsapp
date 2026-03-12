@@ -104,17 +104,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isConfigured } = useServerConfigStore()
   const { isLicensed, isLoading: licenseLoading } = useLicenseStore()
   
+  // Check server config FIRST — if not configured, redirect immediately
+  // (license check never runs when !isConfigured, so licenseLoading stays true)
+  if (!isConfigured) {
+    return <Navigate to="/setup" replace />
+  }
+  
   if (isLoading || licenseLoading) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
       </div>
     )
-  }
-  
-  // Redirect to server setup if not configured
-  if (!isConfigured) {
-    return <Navigate to="/setup" replace />
   }
   
   // Redirect to license activation if not licensed
@@ -178,8 +179,32 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   const { isAuthenticated } = useAuthStore()
-  const { isConfigured } = useServerConfigStore()
+  const { isConfigured, setServerUrl } = useServerConfigStore()
   const { checkLicense } = useLicenseStore()
+  
+  // Auto-detect server when not configured (incognito / new browser)
+  // In production, the API is on the same origin behind nginx
+  React.useEffect(() => {
+    if (isConfigured) return
+    
+    const autoDetect = async () => {
+      try {
+        const response = await fetch('/api/core/settings/', {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+        })
+        if (response.ok) {
+          const data = await response.json()
+          // Server is reachable on the same origin — auto-configure
+          setServerUrl('', data.app_name || 'TMS Server')
+        }
+      } catch {
+        // Server not reachable on same origin — user must configure manually
+      }
+    }
+    
+    autoDetect()
+  }, [isConfigured, setServerUrl])
   
   // Check license status on app load when server is configured
   React.useEffect(() => {
