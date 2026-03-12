@@ -13,7 +13,10 @@ import {
   EyeIcon,
   XMarkIcon,
   ClockIcon,
+  DocumentArrowDownIcon,
 } from '@heroicons/react/24/outline'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import { useAuthStore } from '@/stores/authStore'
 import {
   getImportedEntries,
@@ -158,6 +161,113 @@ export default function ImportedHoursTab() {
   const chauffeurUrenDecimal = submittedTotalSeconds / 3600
   const verschilUren = importedTotalUren - chauffeurUrenDecimal
   const verschilKm = importedTotalKm - submittedTotalKm
+
+  const handleExportPDF = () => {
+    if (!selectedGroup) return
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+
+    doc.setFontSize(16)
+    doc.text(`Weekoverzicht Uren - Week ${selectedGroup.weeknummer} / ${selectedGroup.jaar}`, 14, 15)
+    doc.setFontSize(9)
+    doc.setTextColor(100)
+    doc.text(`Ingediende uren: ${submittedTotalHours}u ${submittedTotalMins}m | ${submittedTotalKm} km | ${weekEntries.length} ritten`, 14, 22)
+    doc.setTextColor(0)
+
+    // Chauffeur entries table
+    if (weekEntries.length > 0) {
+      doc.setFontSize(10)
+      doc.text('Ingediende Uren (Chauffeur)', 14, 29)
+      autoTable(doc, {
+        head: [['Datum', 'Ritnr', 'Kenteken', 'Begin', 'Eind', 'Uren', 'KM']],
+        body: weekEntries.map(e => [
+          formatDate(e.datum),
+          String(e.ritnummer),
+          e.kenteken || '-',
+          e.aanvang || '-',
+          e.eind || '-',
+          formatDuration(e.totaal_uren),
+          `${e.totaal_km}`,
+        ]),
+        foot: [['Totaal', '', '', '', '', `${submittedTotalHours}u ${submittedTotalMins}m`, `${submittedTotalKm}`]],
+        startY: 32,
+        styles: { fontSize: 9, cellPadding: 2.5 },
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+        footStyles: { fillColor: [243, 244, 246], textColor: [0, 0, 0], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [249, 250, 251] },
+      })
+    }
+
+    // Imported entries table
+    if (modalImportedEntries.length > 0) {
+      const lastY = (doc as any).lastAutoTable?.finalY || 38
+      doc.setFontSize(10)
+      doc.text('Ge\u00efmporteerde Uren (Excel)', 14, lastY + 10)
+      autoTable(doc, {
+        head: [['Datum', 'Ritlijst', 'Kenteken', 'Begin', 'Eind', 'Factuur Uren', 'KM']],
+        body: modalImportedEntries.map(e => [
+          formatDate(e.datum),
+          e.ritlijst,
+          e.kenteken_import,
+          e.begintijd_rit || '-',
+          e.eindtijd_rit || '-',
+          Number(e.uren_factuur || 0).toFixed(2),
+          `${Number(e.km || 0)}`,
+        ]),
+        foot: [['Totaal', '', '', '', '', importedTotalUren.toFixed(2), `${importedTotalKm}`]],
+        startY: lastY + 13,
+        styles: { fontSize: 9, cellPadding: 2.5 },
+        headStyles: { fillColor: [234, 138, 46], textColor: 255, fontStyle: 'bold' },
+        footStyles: { fillColor: [255, 243, 224], textColor: [0, 0, 0], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [255, 251, 245] },
+      })
+    }
+
+    // Difference summary
+    if (weekEntries.length > 0 && modalImportedEntries.length > 0) {
+      const lastY2 = (doc as any).lastAutoTable?.finalY || 38
+      doc.setFontSize(10)
+      doc.text('Verschil (Ge\u00efmporteerd - Chauffeur)', 14, lastY2 + 10)
+      autoTable(doc, {
+        head: [['', 'Chauffeur Uren', 'Ge\u00efmporteerd Uren', 'Verschil Uren', 'Verschil KM']],
+        body: [[
+          '',
+          chauffeurUrenDecimal.toFixed(2),
+          importedTotalUren.toFixed(2),
+          `${verschilUren > 0 ? '+' : ''}${verschilUren.toFixed(2)}`,
+          `${verschilKm > 0 ? '+' : ''}${verschilKm}`,
+        ]],
+        startY: lastY2 + 13,
+        styles: { fontSize: 10, cellPadding: 3 },
+        headStyles: { fillColor: [107, 114, 128], textColor: 255, fontStyle: 'bold' },
+        bodyStyles: { fontStyle: 'bold' },
+        didParseCell: (data: any) => {
+          if (data.section === 'body') {
+            if (data.column.index === 3) {
+              data.cell.styles.textColor = verschilUren > 0.01 ? [22, 163, 74] : verschilUren < -0.01 ? [220, 38, 38] : [75, 85, 99]
+            }
+            if (data.column.index === 4) {
+              data.cell.styles.textColor = verschilKm > 0 ? [22, 163, 74] : verschilKm < 0 ? [220, 38, 38] : [75, 85, 99]
+            }
+          }
+        },
+      })
+    }
+
+    // Footer
+    const pageCount = doc.getNumberOfPages()
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i)
+      doc.setFontSize(8)
+      doc.setTextColor(128)
+      doc.text(
+        `Gegenereerd op ${new Date().toLocaleDateString('nl-NL')} om ${new Date().toLocaleTimeString('nl-NL')}`,
+        14, doc.internal.pageSize.height - 10
+      )
+    }
+
+    doc.save(`Weekoverzicht_W${selectedGroup.weeknummer}_${selectedGroup.jaar}.pdf`)
+    toast.success('PDF ge\u00ebxporteerd')
+  }
 
   if (loading) {
     return (
@@ -677,7 +787,15 @@ export default function ImportedHoursTab() {
                       </div>
 
                       {/* Footer */}
-                      <div className="flex justify-end p-4 sm:p-6 border-t">
+                      <div className="flex justify-between items-center p-4 sm:p-6 border-t">
+                        <button
+                          onClick={handleExportPDF}
+                          className="btn-secondary flex items-center gap-2"
+                          disabled={weekEntries.length === 0 && modalImportedEntries.length === 0}
+                        >
+                          <DocumentArrowDownIcon className="h-4 w-4" />
+                          PDF
+                        </button>
                         <button onClick={() => setShowWeekModal(false)} className="btn-secondary">
                           {t('common.close')}
                         </button>
