@@ -162,7 +162,8 @@ export default function SubmittedHoursPage() {
         user: week.user_id,
         jaar: week.jaar,
       })
-      setWeekImportedEntries(data)
+      const sorted = [...data].sort((a, b) => (a.datum || '').localeCompare(b.datum || ''))
+      setWeekImportedEntries(sorted)
     } catch (err) {
       console.error('Failed to load imported entries:', err)
     } finally {
