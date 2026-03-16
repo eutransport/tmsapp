@@ -112,7 +112,7 @@ class AdminSettingsViewSet(ViewSet):
     permission_classes = [IsAdminOnly]
     
     def list(self, request):
-        """Get all settings.""""
+        """Get all settings."""
         settings = AppSettings.get_settings()
         serializer = AppSettingsAdminSerializer(settings, context={'request': request})
         return Response(serializer.data)
