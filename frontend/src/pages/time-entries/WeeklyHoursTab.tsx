@@ -291,6 +291,9 @@ export default function WeeklyHoursTab() {
                       {t('weeklyHours.workedHours')}
                     </th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {t('weeklyHours.averageHours')}
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('weeklyHours.missedHours')}
                     </th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -334,6 +337,14 @@ export default function WeeklyHoursTab() {
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
                           <span className={`font-semibold ${belowMinimum ? 'text-red-600' : 'text-gray-900'}`}>
                             {row.gewerkte_uren}u
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
+                          <span className="font-medium text-gray-700">
+                            {row.weken_met_uren > 0 ? `${(row.gewerkte_uren / row.weken_met_uren).toFixed(1)}u` : '-'}
+                          </span>
+                          <span className="text-[10px] text-gray-400 block">
+                            ({row.weken_met_uren} {row.weken_met_uren === 1 ? 'week' : 'weken'})
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
@@ -404,7 +415,7 @@ export default function WeeklyHoursTab() {
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-2 text-xs ml-13 mb-2">
+                    <div className="grid grid-cols-4 gap-2 text-xs ml-13 mb-2">
                       <div>
                         <span className="text-gray-500 block">{t('weeklyHours.minimumShort')}</span>
                         <span className="font-medium">
@@ -415,6 +426,12 @@ export default function WeeklyHoursTab() {
                         <span className="text-gray-500 block">{t('weeklyHours.workedShort')}</span>
                         <span className={`font-semibold ${belowMinimum ? 'text-red-600' : ''}`}>
                           {row.gewerkte_uren}u
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block">{t('weeklyHours.avgShort')}</span>
+                        <span className="font-medium">
+                          {row.weken_met_uren > 0 ? `${(row.gewerkte_uren / row.weken_met_uren).toFixed(1)}u` : '-'}
                         </span>
                       </div>
                       <div>
