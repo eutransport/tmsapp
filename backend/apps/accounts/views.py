@@ -13,12 +13,13 @@ from django.db import models
 from django.core.cache import cache
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from apps.core.throttling import RegistrationRateThrottle
+from apps.core.permissions import IsAdminOnly
 
 from .serializers import (
     UserSerializer,
@@ -431,7 +432,7 @@ class UserViewSet(viewsets.ModelViewSet):
     Full CRUD operations for admins only.
     """
     queryset = User.objects.all()
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOnly]
     
     def get_serializer_class(self):
         if self.action == 'create':

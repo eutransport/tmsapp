@@ -79,7 +79,7 @@ class InvoiceImportViewSet(viewsets.ModelViewSet):
             'uploaded_by', 'matched_pattern'
         ).prefetch_related('lines')
         
-        if not self.request.user.is_staff:
+        if not (self.request.user.is_superuser or self.request.user.rol == 'admin'):
             queryset = queryset.filter(uploaded_by=self.request.user)
         
         # Filter by status

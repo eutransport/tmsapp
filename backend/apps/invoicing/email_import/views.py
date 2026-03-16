@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q
 from django.utils import timezone
-from apps.core.permissions import IsAdminOrManager
+from apps.core.permissions import IsAdminOnly, IsAdminOrManager
 
 from .models import MailboxConfig, EmailImport, EmailAttachment
 from .serializers import (
@@ -44,7 +44,7 @@ class MailboxConfigViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         """Set permissions based on action."""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            permission_classes = [permissions.IsAdminUser]
+            permission_classes = [permissions.IsAuthenticated, IsAdminOnly]
         elif self.action in ['test_connection', 'fetch_emails', 'list_folders']:
             permission_classes = [permissions.IsAuthenticated, IsAdminOrManager]
         else:
@@ -56,7 +56,7 @@ class MailboxConfigViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         # Admins see all
-        if user.is_staff or user.is_superuser:
+        if user.is_superuser or user.rol == 'admin':
             return MailboxConfig.objects.all()
         
         # Regular users see only active configs they created
@@ -202,7 +202,7 @@ class EmailImportViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(email_date__lte=date_to)
         
         # Admins see all
-        if user.is_staff or user.is_superuser:
+        if user.is_superuser or user.rol == 'admin':
             return queryset
         
         # Regular users see imports from their configs

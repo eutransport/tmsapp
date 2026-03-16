@@ -4,9 +4,11 @@ Views for push notifications.
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+
+from apps.core.permissions import IsAdminOnly
 
 from .models import (
     PushSettings, PushSubscription, PushNotification,
@@ -40,7 +42,7 @@ class PushSettingsView(APIView):
     API view for managing push notification settings.
     Admin only.
     """
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOnly]
     
     def get(self, request):
         """Get current push settings."""
@@ -66,7 +68,7 @@ class GenerateVapidKeysView(APIView):
     Generate new VAPID key pair.
     Admin only.
     """
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOnly]
     
     def post(self, request):
         """Generate new VAPID keys."""
@@ -152,7 +154,7 @@ class PushSubscriptionViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Return subscriptions - all for admin, own for users."""
-        if self.request.user.is_staff:
+        if self.request.user.is_superuser or self.request.user.rol == 'admin':
             return PushSubscription.objects.all()
         return PushSubscription.objects.filter(user=self.request.user)
     
@@ -174,7 +176,7 @@ class PushSubscriptionViewSet(viewsets.ModelViewSet):
     
     def destroy(self, request, *args, **kwargs):
         """Only admins can delete subscriptions."""
-        if not request.user.is_staff:
+        if not (request.user.is_superuser or request.user.rol == 'admin'):
             return Response(
                 {'error': 'Alleen beheerders kunnen abonnementen verwijderen'},
                 status=status.HTTP_403_FORBIDDEN
@@ -199,7 +201,7 @@ class SendPushNotificationView(APIView):
     Send push notifications.
     Admin only.
     """
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOnly]
     
     def post(self, request):
         """Send a push notification."""
@@ -254,7 +256,7 @@ class PushNotificationLogViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = PushNotification.objects.all()
     serializer_class = PushNotificationSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOnly]
     
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -280,7 +282,7 @@ class NotificationGroupViewSet(viewsets.ModelViewSet):
     Admin only.
     """
     queryset = NotificationGroup.objects.all()
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOnly]
     pagination_class = None
     
     def get_serializer_class(self):
@@ -366,7 +368,7 @@ class NotificationScheduleViewSet(viewsets.ModelViewSet):
     Admin only.
     """
     queryset = NotificationSchedule.objects.all()
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOnly]
     pagination_class = None
     
     def get_serializer_class(self):
@@ -430,7 +432,7 @@ class AvailableUsersView(APIView):
     Get list of users available for notification groups.
     Admin only.
     """
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOnly]
     
     def get(self, request):
         """Get all active users."""
@@ -538,7 +540,7 @@ class SentNotificationsViewSet(viewsets.ModelViewSet):
     ViewSet for admins to view and manage sent notification history with read receipts.
     """
     queryset = PushNotification.objects.all().order_by('-sent_at')
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOnly]
     pagination_class = None
     http_method_names = ['get', 'delete']  # Only allow GET and DELETE
     

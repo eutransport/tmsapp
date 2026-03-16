@@ -9,10 +9,10 @@ from django.db.models.functions import TruncWeek, TruncMonth, TruncQuarter, Trun
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.core.permissions import IsAdminOrManager
+from apps.core.permissions import IsAdminOnly, IsAdminOrManager
 from apps.core.security import sanitize_filename
 from .models import InvoiceTemplate, Invoice, InvoiceLine, InvoiceStatus, InvoiceType, Expense, ExpenseCategory
 from .serializers import (
@@ -50,7 +50,7 @@ class InvoiceTemplateViewSet(viewsets.ModelViewSet):
     """
     queryset = InvoiceTemplate.objects.all()
     serializer_class = InvoiceTemplateSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOnly]
     filterset_fields = ['is_active']
     search_fields = ['naam', 'beschrijving']
     

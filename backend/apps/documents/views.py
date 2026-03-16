@@ -45,7 +45,7 @@ class SignedDocumentViewSet(viewsets.ModelViewSet):
         """Filter to only show documents the user has access to."""
         user = self.request.user
         # Admin users can see all documents
-        if user.is_staff or user.is_superuser:
+        if user.is_superuser or user.rol == 'admin':
             return SignedDocument.objects.select_related(
                 'uploaded_by', 'signed_by'
             ).all()

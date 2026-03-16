@@ -7,7 +7,7 @@ from email.mime.multipart import MIMEMultipart
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
@@ -18,6 +18,8 @@ from django.db import connection
 from django.core.cache import cache
 from django.utils import timezone
 from datetime import timedelta
+
+from apps.core.permissions import IsAdminOnly
 
 
 def safe_str(value):
@@ -107,10 +109,10 @@ class AdminSettingsViewSet(ViewSet):
     Admin endpoint for managing all app settings.
     Requires admin authentication.
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOnly]
     
     def list(self, request):
-        """Get all settings."""
+        """Get all settings.""""
         settings = AppSettings.get_settings()
         serializer = AppSettingsAdminSerializer(settings, context={'request': request})
         return Response(serializer.data)
@@ -763,12 +765,12 @@ class CustomFontViewSet(viewsets.ModelViewSet):
         """
         if self.action in ['list', 'retrieve', 'families', 'css']:
             return [IsAuthenticated()]
-        return [IsAdminUser()]
+        return [IsAdminOnly()]
     
     def get_queryset(self):
         """Filter by active fonts for non-admins."""
         qs = super().get_queryset()
-        if not self.request.user.is_staff:
+        if not (self.request.user.is_superuser or self.request.user.rol == 'admin'):
             qs = qs.filter(is_active=True)
         return qs.order_by('family', 'weight', 'style')
     
@@ -831,7 +833,7 @@ class ServerStatsView(APIView):
     Get current server stats: CPU, RAM, disk, uptime, load average.
     Admin only.
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOnly]
     
     def get(self, request):
         from .monitoring import get_current_stats
@@ -845,7 +847,7 @@ class ServerHistoryView(APIView):
     Query param: period = 1h | 12h | 1d | 1w | 1m
     Admin only.
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOnly]
     
     def get(self, request):
         from .monitoring import get_metrics_history
@@ -866,7 +868,7 @@ class ServerContainersView(APIView):
     List Docker containers with status and optional per-container stats.
     Admin only.
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOnly]
     
     def get(self, request):
         from .monitoring import docker_client
@@ -923,7 +925,7 @@ class ServerContainerLogsView(APIView):
     Query param: tail (default 100, max 500)
     Admin only.
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOnly]
     
     def get(self, request, container_id):
         from .monitoring import docker_client

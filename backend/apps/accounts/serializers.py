@@ -64,6 +64,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
         user = User(**validated_data)
+        # Sync is_staff with admin role so Django permissions work correctly
+        user.is_staff = (user.rol == 'admin')
         user.set_password(password)
         user.save()
         return user
@@ -78,6 +80,12 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             'email', 'username', 'voornaam', 'achternaam',
             'telefoon', 'bedrijf', 'rol', 'is_active', 'mfa_required'
         ]
+
+    def update(self, instance, validated_data):
+        # Sync is_staff with admin role so Django permissions work correctly
+        if 'rol' in validated_data:
+            validated_data['is_staff'] = (validated_data['rol'] == 'admin')
+        return super().update(instance, validated_data)
 
 
 class PasswordChangeSerializer(serializers.Serializer):
