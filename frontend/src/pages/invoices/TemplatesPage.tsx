@@ -119,16 +119,16 @@ export default function TemplatesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('templates.title')}</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{t('templates.title')}</h1>
+          <p className="mt-0.5 text-sm text-gray-500">
             {t('templates.description')}
           </p>
         </div>
         <div className="flex gap-2">
-          <label className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">
-            <ArrowUpTrayIcon className="-ml-1 mr-2 h-5 w-5" />
+          <label className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">
+            <ArrowUpTrayIcon className="-ml-0.5 mr-1.5 h-4 w-4" />
             {t('common.import')}
             <input
               type="file"
@@ -139,9 +139,9 @@ export default function TemplatesPage() {
           </label>
           <button
             onClick={() => navigate('/invoices/templates/new')}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700"
+            className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700"
           >
-            <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
+            <PlusIcon className="-ml-0.5 mr-1.5 h-4 w-4" />
             {t('templates.newTemplate')}
           </button>
         </div>
@@ -198,16 +198,16 @@ export default function TemplatesPage() {
           <table className="hidden md:table min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {t('common.template')}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {t('common.status')}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {t('common.updated')}
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {t('common.actions')}
                 </th>
               </tr>
@@ -215,22 +215,22 @@ export default function TemplatesPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {templates.map((template) => (
                 <tr key={template.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center">
-                      <DocumentDuplicateIcon className="h-5 w-5 text-gray-400 mr-3" />
+                      <DocumentDuplicateIcon className="h-4 w-4 text-gray-400 mr-2" />
                       <div>
                         <div className="text-sm font-medium text-gray-900">
                           {template.naam}
                         </div>
                         {template.beschrijving && (
-                          <div className="text-sm text-gray-500 truncate max-w-xs">
+                          <div className="text-xs text-gray-500 truncate max-w-xs">
                             {template.beschrijving}
                           </div>
                         )}
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     {template.is_active ? (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                         <CheckCircleIcon className="h-3 w-3 mr-1" />
@@ -242,43 +242,43 @@ export default function TemplatesPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                     {new Date(template.updated_at).toLocaleDateString('nl-NL', {
                       day: 'numeric',
                       month: 'short',
                       year: 'numeric'
                     })}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex justify-end space-x-2">
+                  <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex justify-end space-x-1">
                       <button
                         onClick={() => handleExport(template)}
-                        className="p-2 text-gray-400 hover:text-green-600 transition-colors"
+                        className="p-1.5 text-gray-400 hover:text-green-600 transition-colors"
                         title={t('templates.export')}
                       >
-                        <ArrowDownTrayIcon className="h-5 w-5" />
+                        <ArrowDownTrayIcon className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleCopy(template)}
                         disabled={isCopying}
-                        className="p-2 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50"
+                        className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50"
                         title={t('templates.copy')}
                       >
-                        <DocumentDuplicateIcon className="h-5 w-5" />
+                        <DocumentDuplicateIcon className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => navigate(`/invoices/templates/${template.id}/edit`)}
-                        className="p-2 text-gray-400 hover:text-primary-600 transition-colors"
+                        className="p-1.5 text-gray-400 hover:text-primary-600 transition-colors"
                         title={t('templates.editVisual')}
                       >
-                        <PencilIcon className="h-5 w-5" />
+                        <PencilIcon className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => setDeleteConfirmId(template.id)}
-                        className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                        className="p-1.5 text-gray-400 hover:text-red-600 transition-colors"
                         title={t('common.delete')}
                       >
-                        <TrashIcon className="h-5 w-5" />
+                        <TrashIcon className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
@@ -290,10 +290,10 @@ export default function TemplatesPage() {
           {/* Mobile Card Layout */}
           <div className="md:hidden divide-y divide-gray-200">
             {templates.map((template) => (
-              <div key={template.id} className="p-4 space-y-3">
+              <div key={template.id} className="p-3 space-y-2">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2 min-w-0">
-                    <DocumentDuplicateIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                    <DocumentDuplicateIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-gray-900 truncate">{template.naam}</div>
                       {template.beschrijving && (

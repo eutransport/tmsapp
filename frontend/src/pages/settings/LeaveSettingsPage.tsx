@@ -165,10 +165,10 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
 
       {/* Global Settings */}
       <div className="card">
-        <div className="px-6 py-4 border-b flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="px-4 py-3 sm:px-6 sm:py-4 border-b flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Cog6ToothIcon className="w-5 h-5 text-gray-400" />
-            <h2 className="text-lg font-semibold text-gray-900">{t('settings.general')}</h2>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">{t('settings.general')}</h2>
           </div>
           {!editingGlobal && (
             <button
@@ -179,7 +179,7 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
             </button>
           )}
         </div>
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {editingGlobal ? (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -267,28 +267,28 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm text-gray-500">Standaard vakantie-uren</p>
-                <p className="text-2xl font-semibold text-gray-900">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs sm:text-sm text-gray-500">Standaard vakantie-uren</p>
+                <p className="text-lg sm:text-2xl font-semibold text-gray-900">
                   {globalSettings?.default_vacation_hours || 216}
                 </p>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm text-gray-500">Werkweek uren</p>
-                <p className="text-2xl font-semibold text-gray-900">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs sm:text-sm text-gray-500">Werkweek uren</p>
+                <p className="text-lg sm:text-2xl font-semibold text-gray-900">
                   {globalSettings?.work_week_hours || 40}
                 </p>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm text-gray-500">Overwerk % voor verlof</p>
-                <p className="text-2xl font-semibold text-gray-900">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs sm:text-sm text-gray-500">Overwerk % verlof</p>
+                <p className="text-lg sm:text-2xl font-semibold text-gray-900">
                   {globalSettings?.overtime_leave_percentage || 50}%
                 </p>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm text-gray-500">Gratis bijzonder verlof</p>
-                <p className="text-2xl font-semibold text-gray-900">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs sm:text-sm text-gray-500">Gratis bijz. verlof</p>
+                <p className="text-lg sm:text-2xl font-semibold text-gray-900">
                   {globalSettings?.free_special_leave_hours || 1} uur
                 </p>
               </div>
@@ -299,27 +299,29 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
 
       {/* User Balances */}
       <div className="card">
-        <div className="px-6 py-4 border-b flex items-center gap-3">
+        <div className="px-4 py-3 sm:px-6 sm:py-4 border-b flex items-center gap-2 sm:gap-3">
           <UserGroupIcon className="w-5 h-5 text-gray-400" />
-          <h2 className="text-lg font-semibold text-gray-900">{t('leave.balance')}</h2>
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900">{t('leave.balance')}</h2>
         </div>
-        <div className="overflow-x-auto">
+
+        {/* Desktop Table */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">
                   {t('leave.employee')}
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">
                   {t('leave.vacationHours')}
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">
                   {t('leave.overtimeHours')}
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">
                   {t('leave.overtimeAvailable')}
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">
                   {t('common.actions')}
                 </th>
               </tr>
@@ -331,13 +333,13 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
                 
                 return (
                   <tr key={balance.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-2.5 whitespace-nowrap">
                       <div>
-                        <p className="font-medium text-gray-900">{balance.user_naam}</p>
-                        <p className="text-sm text-gray-500">{balance.user_email}</p>
+                        <p className="text-sm font-medium text-gray-900">{balance.user_naam}</p>
+                        <p className="text-xs text-gray-500">{balance.user_email}</p>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <td className="px-4 py-2.5 whitespace-nowrap text-right">
                       {isEditing ? (
                         <input
                           type="number"
@@ -348,10 +350,10 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
                           step="0.5"
                         />
                       ) : (
-                        <span className="font-medium">{balance.vacation_hours} uur</span>
+                        <span className="text-sm font-medium">{balance.vacation_hours} uur</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <td className="px-4 py-2.5 whitespace-nowrap text-right">
                       {isEditing ? (
                         <input
                           type="number"
@@ -361,17 +363,17 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
                           step="0.5"
                         />
                       ) : (
-                        <span className={balance.overtime_hours >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        <span className={`text-sm ${balance.overtime_hours >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {balance.overtime_hours >= 0 ? '+' : ''}{balance.overtime_hours} uur
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span className="text-gray-600">
+                    <td className="px-4 py-2.5 whitespace-nowrap text-right">
+                      <span className="text-sm text-gray-600">
                         {usableOvertime.toFixed(1)} uur
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <td className="px-4 py-2.5 whitespace-nowrap text-right">
                       {isEditing ? (
                         <div className="flex justify-end gap-2">
                           <button
@@ -403,13 +405,105 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
               })}
               {balances.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                     {t('common.noResults')}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="sm:hidden divide-y divide-gray-200">
+          {balances.length === 0 ? (
+            <div className="px-4 py-8 text-center text-gray-500">
+              {t('common.noResults')}
+            </div>
+          ) : (
+            balances.map((balance) => {
+              const isEditing = editingBalance === balance.id
+              const usableOvertime = balance.overtime_hours * (globalSettings?.overtime_leave_percentage || 50) / 100
+
+              return (
+                <div key={balance.id} className="p-3">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{balance.user_naam}</p>
+                      <p className="text-xs text-gray-500 truncate">{balance.user_email}</p>
+                    </div>
+                    {isEditing ? (
+                      <div className="flex gap-1 shrink-0">
+                        <button
+                          onClick={cancelEditBalance}
+                          className="p-1.5 text-gray-400 hover:text-gray-600 rounded"
+                          disabled={isSaving}
+                        >
+                          <XMarkIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleSaveBalance(balance.id)}
+                          className="p-1.5 text-green-600 hover:text-green-700 rounded"
+                          disabled={isSaving}
+                        >
+                          <CheckIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startEditBalance(balance)}
+                        className="p-1.5 text-gray-400 hover:text-gray-600 shrink-0"
+                      >
+                        <PencilIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  {isEditing ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">{t('leave.vacationHours')}</label>
+                        <input
+                          type="number"
+                          value={balanceForm.vacation_hours}
+                          onChange={(e) => setBalanceForm({ ...balanceForm, vacation_hours: Number(e.target.value) })}
+                          className="input text-sm w-full"
+                          min="0"
+                          step="0.5"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">{t('leave.overtimeHours')}</label>
+                        <input
+                          type="number"
+                          value={balanceForm.overtime_hours}
+                          onChange={(e) => setBalanceForm({ ...balanceForm, overtime_hours: Number(e.target.value) })}
+                          className="input text-sm w-full"
+                          step="0.5"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <span className="text-gray-500 block">Vakantie</span>
+                        <span className="font-medium">{balance.vacation_hours} uur</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block">Overwerk</span>
+                        <span className={`font-medium ${balance.overtime_hours >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {balance.overtime_hours >= 0 ? '+' : ''}{balance.overtime_hours} uur
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block">Beschikbaar</span>
+                        <span className="font-medium text-gray-600">{usableOvertime.toFixed(1)} uur</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
         </div>
       </div>
     </div>
