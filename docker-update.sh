@@ -14,7 +14,7 @@ TMS_DIR="/var/www/tmsapp"
 SECRETS_DIR="/opt/tms/secrets"
 ENV_FILE="$SECRETS_DIR/.env"
 BACKUP_DIR="/opt/tms/backups"
-KEEP_BACKUPS=10  # Bewaar laatste N backups
+KEEP_BACKUPS=5  # Bewaar laatste N backups
 
 # Kleuren
 RED='\033[0;31m'
