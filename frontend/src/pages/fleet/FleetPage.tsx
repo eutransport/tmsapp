@@ -480,9 +480,9 @@ export default function FleetPage() {
       )}
 
       {/* Filters */}
-      <div className="card mb-6">
-        <div className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
+      <div className="card mb-4">
+        <div className="p-3">
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
             {/* Search */}
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -563,24 +563,24 @@ export default function FleetPage() {
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th 
-                  className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
+                  className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('kenteken')}
                 >
                   {t('fleet.licensePlate')} <SortIcon field="kenteken" />
                 </th>
                 <th 
-                  className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
+                  className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('type_wagen')}
                 >
                   {t('fleet.vehicleType')} <SortIcon field="type_wagen" />
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
                   {t('fleet.routeNumber')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
                   {t('companies.title')}
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600 uppercase">
                   {t('common.actions')}
                 </th>
               </tr>
@@ -611,27 +611,27 @@ export default function FleetPage() {
               ) : (
                 vehicles.map(vehicle => (
                   <tr key={vehicle.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <LicensePlate kenteken={vehicle.kenteken} size="sm" />
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{vehicle.type_wagen || '-'}</td>
-                    <td className="px-4 py-3 text-gray-600">{vehicle.ritnummer || '-'}</td>
-                    <td className="px-4 py-3 text-gray-600">{getCompanyName(vehicle)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
+                    <td className="px-3 py-2 text-sm text-gray-600">{vehicle.type_wagen || '-'}</td>
+                    <td className="px-3 py-2 text-sm text-gray-600">{vehicle.ritnummer || '-'}</td>
+                    <td className="px-3 py-2 text-sm text-gray-600">{getCompanyName(vehicle)}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-end gap-0.5">
                         <button
                           onClick={() => { setSelectedVehicle(vehicle); setShowEditModal(true) }}
-                          className="p-2 min-w-[40px] min-h-[40px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
+                          className="p-1.5 min-w-[36px] min-h-[36px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
                           title={t('common.edit')}
                         >
-                          <PencilSquareIcon className="w-5 h-5" />
+                          <PencilSquareIcon className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => { setSelectedVehicle(vehicle); setShowDeleteModal(true) }}
-                          className="p-2 min-w-[40px] min-h-[40px] text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded"
+                          className="p-1.5 min-w-[36px] min-h-[36px] text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded"
                           title={t('common.delete')}
                         >
-                          <TrashIcon className="w-5 h-5" />
+                          <TrashIcon className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
@@ -664,44 +664,35 @@ export default function FleetPage() {
             </div>
           ) : (
             vehicles.map(vehicle => (
-              <div key={vehicle.id} className="p-4 hover:bg-gray-50">
-                {/* Card Header */}
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex-1 min-w-0">
+              <div key={vehicle.id} className="px-3 py-2.5 hover:bg-gray-50">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
                     <LicensePlate kenteken={vehicle.kenteken} size="sm" />
-                    {vehicle.type_wagen && (
-                      <p className="text-sm text-gray-500">{vehicle.type_wagen}</p>
-                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        {vehicle.type_wagen && <span>{vehicle.type_wagen}</span>}
+                        {vehicle.type_wagen && vehicle.ritnummer && <span className="text-gray-300">&middot;</span>}
+                        {vehicle.ritnummer && <span>Rit {vehicle.ritnummer}</span>}
+                        <span className="text-gray-300">&middot;</span>
+                        <span>{getCompanyName(vehicle)}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-0.5 shrink-0">
                     <button
                       onClick={() => { setSelectedVehicle(vehicle); setShowEditModal(true) }}
                       className="p-2 min-w-[44px] min-h-[44px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-lg"
                       title={t('common.edit')}
                     >
-                      <PencilSquareIcon className="w-5 h-5" />
+                      <PencilSquareIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => { setSelectedVehicle(vehicle); setShowDeleteModal(true) }}
                       className="p-2 min-w-[44px] min-h-[44px] text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded-lg"
                       title={t('common.delete')}
                     >
-                      <TrashIcon className="w-5 h-5" />
+                      <TrashIcon className="w-4 h-4" />
                     </button>
-                  </div>
-                </div>
-
-                {/* Card Details */}
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  {vehicle.ritnummer && (
-                    <div>
-                      <span className="text-gray-500">{t('fleet.routeNumber')}: </span>
-                      <span className="text-gray-700">{vehicle.ritnummer}</span>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-gray-500">{t('companies.title')}: </span>
-                    <span className="text-gray-700">{getCompanyName(vehicle)}</span>
                   </div>
                 </div>
               </div>

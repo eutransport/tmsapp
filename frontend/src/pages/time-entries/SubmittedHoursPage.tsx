@@ -739,89 +739,82 @@ export default function SubmittedHoursPage() {
         ) : (
           <>
             {/* Desktop Table */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('common.week')}
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('common.year')}
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('drivers.title')}
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('timeEntries.trips')}
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('timeEntries.totalKm')}
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('common.actions')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {paginatedGroups.map((group) => {
-                    const groupKey = `${group.jaar}-${group.weeknummer}`
-                    const isExpanded = expandedWeeks.has(groupKey)
-                    const grpTrips = group.rows.reduce((s, r) => s + r.entries_count, 0)
-                    const grpKm = group.rows.reduce((s, r) => s + r.totaal_km, 0)
-                    return (
-                      <Fragment key={groupKey}>
-                        <tr className="bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleWeekGroup(groupKey)}>
-                          <td colSpan={6} className="px-6 py-3">
-                            <div className="flex items-center gap-3">
-                              {isExpanded ? <ChevronDownIcon className="h-4 w-4 text-gray-500" /> : <ChevronRightIcon className="h-4 w-4 text-gray-500" />}
-                              <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-primary-100 text-primary-700 font-bold text-sm">{group.weeknummer}</span>
-                              <span className="text-sm font-medium text-gray-700">Week {group.weeknummer}</span>
-                              <span className="text-xs text-gray-400">{group.jaar}</span>
-                              <div className="ml-auto flex items-center gap-4 text-xs text-gray-500">
-                                <span>{group.rows.length} chauffeurs</span>
-                                <span>{grpTrips} ritten</span>
-                                <span className="font-medium text-gray-700">{grpKm} km</span>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                        {isExpanded && group.rows.map((week) => (
-                    <tr key={`${week.user_id}-${week.jaar}-${week.weeknummer}`} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-primary-100 text-primary-700 font-bold">
-                          {week.weeknummer}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {week.jaar}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {week.user__voornaam} {week.user__achternaam}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                        {week.entries_count}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
-                        {week.totaal_km} km
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button
-                          onClick={() => handleViewWeek(week)}
-                          className="btn-secondary text-sm"
-                        >
-                          {t('timeEntries.viewEdit')}
-                        </button>
-                      </td>
-                    </tr>
-                        ))}
-                      </Fragment>
-                    )
-                  })}
-                </tbody>
-              </table>
+            <div className="hidden md:block space-y-3">
+              {paginatedGroups.map((group) => {
+                const groupKey = `${group.jaar}-${group.weeknummer}`
+                const isExpanded = expandedWeeks.has(groupKey)
+                const grpTrips = group.rows.reduce((s, r) => s + r.entries_count, 0)
+                const grpKm = group.rows.reduce((s, r) => s + r.totaal_km, 0)
+                return (
+                  <div key={groupKey} className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                    <button
+                      onClick={() => toggleWeekGroup(groupKey)}
+                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        {isExpanded ? <ChevronDownIcon className="h-4 w-4 text-gray-500" /> : <ChevronRightIcon className="h-4 w-4 text-gray-500" />}
+                        <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-primary-100 text-primary-700 font-bold text-sm">{group.weeknummer}</span>
+                        <span className="text-sm font-medium text-gray-700">Week {group.weeknummer}</span>
+                        <span className="text-xs text-gray-400">{group.jaar}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <span>{group.rows.length} chauffeurs</span>
+                        <span>{grpTrips} ritten</span>
+                        <span className="font-medium text-gray-700">{grpKm} km</span>
+                      </div>
+                    </button>
+                    {isExpanded && (
+                      <div className="border-t overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('common.week')}</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('common.year')}</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('drivers.title')}</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('timeEntries.trips')}</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('timeEntries.totalKm')}</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {group.rows.map((week) => (
+                              <tr key={`${week.user_id}-${week.jaar}-${week.weeknummer}`} className="hover:bg-gray-50">
+                                <td className="px-4 py-2 whitespace-nowrap">
+                                  <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-primary-100 text-primary-700 font-bold text-xs">
+                                    {week.weeknummer}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                                  {week.jaar}
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {week.user__voornaam} {week.user__achternaam}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+                                  {week.entries_count}
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">
+                                  {week.totaal_km} km
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-right">
+                                  <button
+                                    onClick={() => handleViewWeek(week)}
+                                    className="btn-secondary text-sm"
+                                  >
+                                    {t('timeEntries.viewEdit')}
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
             {/* Mobile Card View */}

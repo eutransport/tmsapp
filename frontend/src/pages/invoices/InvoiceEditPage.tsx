@@ -75,7 +75,11 @@ export default function InvoiceEditPage() {
 
   // Calculate totals
   const calculateTotals = () => {
-    const subtotaal = lines.reduce((sum, line) => sum + (line.totaal || 0), 0)
+    let subtotaal = lines.reduce((sum, line) => sum + (line.totaal || 0), 0)
+    // Creditfacturen: bedragen negatief tonen
+    if (invoice?.type === 'credit') {
+      subtotaal = -Math.abs(subtotaal)
+    }
     const btw = subtotaal * (btwPercentage / 100)
     const totaal = subtotaal + btw
     return { subtotaal, btw, totaal }

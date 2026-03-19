@@ -1704,16 +1704,21 @@ export default function InvoiceCreatePage() {
     // Find the totaal/berekend column
     const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
     
-    const subtotaal = lines.reduce((sum, line) => {
+    let subtotaal = lines.reduce((sum, line) => {
       const val = totaalColumn ? (line.values[totaalColumn.id] as number || 0) : 0
       return sum + val
     }, 0)
+    
+    // Creditfacturen: bedragen negatief tonen
+    if (invoiceType === 'credit') {
+      subtotaal = -Math.abs(subtotaal)
+    }
     
     const btw = subtotaal * (totalsConfig.btwPercentage / 100)
     const totaal = subtotaal + btw
     
     return { subtotaal, btw, totaal }
-  }, [lines, columns, totalsConfig])
+  }, [lines, columns, totalsConfig, invoiceType])
 
   // Save invoice
   const handleSave = async () => {

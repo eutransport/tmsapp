@@ -89,6 +89,16 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'pdf_file', 'created_by', 'sent_at', 'created_at', 'updated_at'
         ]
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Creditfacturen: bedragen altijd negatief tonen
+        if instance.type == 'credit':
+            for field in ('subtotaal', 'btw_bedrag', 'totaal'):
+                val = data.get(field)
+                if val is not None and float(val) > 0:
+                    data[field] = str(-abs(float(val)))
+        return data
+
 
 class InvoiceCreateSerializer(serializers.ModelSerializer):
     class Meta:

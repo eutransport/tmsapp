@@ -291,146 +291,132 @@ export default function WeeklyHoursTab() {
         ) : (
           <>
             {/* Desktop Table */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('weeklyHours.period')}
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('drivers.title')}
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('weeklyHours.minimumHours')}
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('weeklyHours.workedHours')}
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('weeklyHours.averageHours')}
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('weeklyHours.missedHours')}
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('timeEntries.totalKm')}
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Overzicht
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('common.actions')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {groupedData.map((group) => {
-                    const isExpanded = expandedPeriods.has(group.periode)
-                    const grpWorked = group.rows.reduce((s, r) => s + r.gewerkte_uren, 0)
-                    const grpMissed = group.rows.reduce((s, r) => s + (r.gemiste_uren || 0), 0)
-                    const grpKm = group.rows.reduce((s, r) => s + r.totaal_km, 0)
-                    return (
-                      <Fragment key={`period-${group.periode}`}>
-                        <tr className="bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => togglePeriod(group.periode)}>
-                          <td colSpan={9} className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              {isExpanded ? <ChevronDownIcon className="h-4 w-4 text-gray-500" /> : <ChevronRightIcon className="h-4 w-4 text-gray-500" />}
-                              <span className="inline-flex items-center justify-center h-7 min-w-[2rem] px-2 rounded-full bg-primary-100 text-primary-700 font-bold text-sm">P{group.periode}</span>
-                              <span className="text-sm text-gray-500">wk {group.week_start}-{group.week_eind}</span>
-                              <div className="ml-auto flex items-center gap-4 text-xs text-gray-500">
-                                <span>{group.rows.length} chauffeurs</span>
-                                <span className="font-medium text-gray-700">{grpWorked}u</span>
-                                {grpMissed > 0 && <span className="font-medium text-red-600">{grpMissed}u gemist</span>}
-                                <span>{grpKm} km</span>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                        {isExpanded && group.rows.map((row) => {
-                    const key = `${row.user_id}-${row.jaar}-${row.periode}`
-                    const hasMissed = row.gemiste_uren !== null && row.gemiste_uren > 0
-                    const belowMinimum = row.minimum_uren !== null && row.gewerkte_uren < row.minimum_uren
-                    
-                    return (
-                      <tr key={key} className={`hover:bg-gray-50 ${hasMissed ? 'bg-red-50/30' : ''}`}>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="flex flex-col items-center">
-                            <span className="inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-full bg-primary-100 text-primary-700 font-bold text-sm">
-                              P{row.periode}
-                            </span>
-                            <span className="text-xs text-gray-400 mt-0.5">
-                              {t('weeklyHours.weekRange', { start: row.week_start, end: row.week_eind })}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{row.user_naam}</div>
-                          <div className="text-xs text-gray-500">{row.user_bedrijf}</div>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-right">
-                          <span className={`text-sm font-medium ${row.minimum_uren !== null ? '' : 'text-gray-400 italic'}`}>
-                            {row.minimum_uren !== null ? `${row.minimum_uren}u` : t('weeklyHours.notSet')}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
-                          <span className={`font-semibold ${belowMinimum ? 'text-red-600' : 'text-gray-900'}`}>
-                            {row.gewerkte_uren}u
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
-                          <span className="font-medium text-gray-700">
-                            {row.weken_met_uren > 0 ? `${(row.gewerkte_uren / row.weken_met_uren).toFixed(1)}u` : '-'}
-                          </span>
-                          <span className="text-[10px] text-gray-400 block">
-                            ({row.weken_met_uren} {row.weken_met_uren === 1 ? 'week' : 'weken'})
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
-                          {hasMissed ? (
-                            <span className="inline-flex items-center gap-1 text-red-600 font-semibold">
-                              <ExclamationTriangleIcon className="h-4 w-4" />
-                              {row.gemiste_uren}u
-                            </span>
-                          ) : row.minimum_uren !== null ? (
-                            <span className="text-green-600 font-medium">0u</span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-700">
-                          {row.totaal_km} km
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center">
-                          <button
-                            onClick={() => { setDetailRow(row); setShowDetailModal(true) }}
-                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors font-medium"
-                            title="Overzicht Uren"
-                          >
-                            <EyeIcon className="h-3.5 w-3.5" />
-                            Overzicht Uren
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center">
-                          {hasMissed && (
-                            <button
-                              onClick={() => openInvoiceModal(row)}
-                              className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors font-medium"
-                              title={t('weeklyHours.addToInvoice')}
-                            >
-                              <DocumentPlusIcon className="h-3.5 w-3.5" />
-                              {t('weeklyHours.addToInvoice')}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                        })}
-                      </Fragment>
-                    )
-                  })}
-                </tbody>
-              </table>
+            <div className="hidden md:block space-y-3">
+              {groupedData.map((group) => {
+                const isExpanded = expandedPeriods.has(group.periode)
+                const grpWorked = group.rows.reduce((s, r) => s + r.gewerkte_uren, 0)
+                const grpMissed = group.rows.reduce((s, r) => s + (r.gemiste_uren || 0), 0)
+                const grpKm = group.rows.reduce((s, r) => s + r.totaal_km, 0)
+                return (
+                  <div key={`period-${group.periode}`} className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                    <button
+                      onClick={() => togglePeriod(group.periode)}
+                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        {isExpanded ? <ChevronDownIcon className="h-4 w-4 text-gray-500" /> : <ChevronRightIcon className="h-4 w-4 text-gray-500" />}
+                        <span className="inline-flex items-center justify-center h-7 min-w-[2rem] px-2 rounded-full bg-primary-100 text-primary-700 font-bold text-sm">P{group.periode}</span>
+                        <span className="text-sm text-gray-500">wk {group.week_start}-{group.week_eind}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <span>{group.rows.length} chauffeurs</span>
+                        <span className="font-medium text-gray-700">{grpWorked}u</span>
+                        {grpMissed > 0 && <span className="font-medium text-red-600">{grpMissed}u gemist</span>}
+                        <span>{grpKm} km</span>
+                      </div>
+                    </button>
+                    {isExpanded && (
+                      <div className="border-t overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('weeklyHours.period')}</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('drivers.title')}</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('weeklyHours.minimumHours')}</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('weeklyHours.workedHours')}</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('weeklyHours.averageHours')}</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('weeklyHours.missedHours')}</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('timeEntries.totalKm')}</th>
+                              <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Overzicht</th>
+                              <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {group.rows.map((row) => {
+                              const key = `${row.user_id}-${row.jaar}-${row.periode}`
+                              const hasMissed = row.gemiste_uren !== null && row.gemiste_uren > 0
+                              const belowMinimum = row.minimum_uren !== null && row.gewerkte_uren < row.minimum_uren
+                              return (
+                                <tr key={key} className={`hover:bg-gray-50 ${hasMissed ? 'bg-red-50/30' : ''}`}>
+                                  <td className="px-4 py-2 whitespace-nowrap">
+                                    <div className="flex flex-col items-center">
+                                      <span className="inline-flex items-center justify-center h-7 min-w-[2rem] px-2 rounded-full bg-primary-100 text-primary-700 font-bold text-xs">
+                                        P{row.periode}
+                                      </span>
+                                      <span className="text-[10px] text-gray-400 mt-0.5">
+                                        {t('weeklyHours.weekRange', { start: row.week_start, end: row.week_eind })}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-gray-900">{row.user_naam}</div>
+                                    <div className="text-xs text-gray-500">{row.user_bedrijf}</div>
+                                  </td>
+                                  <td className="px-4 py-2 whitespace-nowrap text-right">
+                                    <span className={`text-sm font-medium ${row.minimum_uren !== null ? '' : 'text-gray-400 italic'}`}>
+                                      {row.minimum_uren !== null ? `${row.minimum_uren}u` : t('weeklyHours.notSet')}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+                                    <span className={`font-semibold ${belowMinimum ? 'text-red-600' : 'text-gray-900'}`}>
+                                      {row.gewerkte_uren}u
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+                                    <span className="font-medium text-gray-700">
+                                      {row.weken_met_uren > 0 ? `${(row.gewerkte_uren / row.weken_met_uren).toFixed(1)}u` : '-'}
+                                    </span>
+                                    <span className="text-[10px] text-gray-400 block">
+                                      ({row.weken_met_uren} {row.weken_met_uren === 1 ? 'week' : 'weken'})
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+                                    {hasMissed ? (
+                                      <span className="inline-flex items-center gap-1 text-red-600 font-semibold">
+                                        <ExclamationTriangleIcon className="h-4 w-4" />
+                                        {row.gemiste_uren}u
+                                      </span>
+                                    ) : row.minimum_uren !== null ? (
+                                      <span className="text-green-600 font-medium">0u</span>
+                                    ) : (
+                                      <span className="text-gray-400">-</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2 whitespace-nowrap text-sm text-right font-medium text-gray-700">
+                                    {row.totaal_km} km
+                                  </td>
+                                  <td className="px-4 py-2 whitespace-nowrap text-center">
+                                    <button
+                                      onClick={() => { setDetailRow(row); setShowDetailModal(true) }}
+                                      className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors font-medium"
+                                      title="Overzicht Uren"
+                                    >
+                                      <EyeIcon className="h-3.5 w-3.5" />
+                                      Overzicht Uren
+                                    </button>
+                                  </td>
+                                  <td className="px-4 py-2 whitespace-nowrap text-center">
+                                    {hasMissed && (
+                                      <button
+                                        onClick={() => openInvoiceModal(row)}
+                                        className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors font-medium"
+                                        title={t('weeklyHours.addToInvoice')}
+                                      >
+                                        <DocumentPlusIcon className="h-3.5 w-3.5" />
+                                        {t('weeklyHours.addToInvoice')}
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
             {/* Mobile Card View */}
