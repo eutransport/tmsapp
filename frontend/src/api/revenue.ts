@@ -84,6 +84,33 @@ export interface RevenueResponse {
   }
 }
 
+export interface ForecastPeriod {
+  income: number
+  expenses: number
+  profit: number
+}
+
+export interface ForecastResponse {
+  lookback_months: number
+  data_months: number
+  avg_monthly_income: number
+  avg_monthly_expenses: number
+  avg_monthly_profit: number
+  trend: 'up' | 'down' | 'stable'
+  forecast: {
+    month: ForecastPeriod
+    quarter: ForecastPeriod
+    half_year: ForecastPeriod
+    year: ForecastPeriod
+  }
+  monthly_trend: {
+    month: string
+    income: number
+    expenses: number
+    profit: number
+  }[]
+}
+
 // Expenses API
 export const expensesApi = {
   getAll: async (params?: { 
@@ -160,5 +187,10 @@ export const revenueApi = {
   getYears: async (): Promise<number[]> => {
     const response = await api.get('/invoicing/revenue/years/')
     return response.data.years
+  },
+
+  getForecast: async (): Promise<ForecastResponse> => {
+    const response = await api.get('/invoicing/revenue/forecast/')
+    return response.data
   },
 }

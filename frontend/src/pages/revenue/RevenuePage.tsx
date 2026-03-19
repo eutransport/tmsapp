@@ -14,6 +14,7 @@ import {
   CheckCircleIcon,
   ClockIcon,
   ReceiptRefundIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline'
 import {
   BarChart,
@@ -28,7 +29,7 @@ import {
   Area,
   Line,
 } from 'recharts'
-import { revenueApi, RevenueResponse } from '@/api/revenue'
+import { revenueApi, RevenueResponse, ForecastResponse } from '@/api/revenue'
 import toast from 'react-hot-toast'
 
 type PeriodType = 'week' | 'month' | 'quarter' | 'year'
@@ -125,6 +126,7 @@ export default function RevenuePage() {
   const [year, setYear] = useState<number>(new Date().getFullYear())
   const [years, setYears] = useState<number[]>([])
   const [data, setData] = useState<RevenueResponse | null>(null)
+  const [forecast, setForecast] = useState<ForecastResponse | null>(null)
 
   // Load available years
   useEffect(() => {
@@ -138,6 +140,19 @@ export default function RevenuePage() {
       }
     }
     loadYears()
+  }, [])
+
+  // Load forecast data
+  useEffect(() => {
+    const loadForecast = async () => {
+      try {
+        const forecastData = await revenueApi.getForecast()
+        setForecast(forecastData)
+      } catch (error) {
+        console.error('Failed to load forecast:', error)
+      }
+    }
+    loadForecast()
   }, [])
 
   // Load revenue data
@@ -267,6 +282,123 @@ export default function RevenuePage() {
               subtitle={t('revenue.outstandingSubtitle', 'Facturen nog niet betaald')}
             />
           </div>
+
+          {/* Forecast Section */}
+          {forecast && forecast.data_months > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <ChartBarIcon className="h-5 w-5 text-indigo-500" />
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">
+                    {t('revenue.forecast', 'Forecast')}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                    forecast.trend === 'up' ? 'bg-green-100 text-green-700' :
+                    forecast.trend === 'down' ? 'bg-red-100 text-red-700' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {forecast.trend === 'up' ? '↑' : forecast.trend === 'down' ? '↓' : '→'}
+                    {' '}
+                    {forecast.trend === 'up' ? t('revenue.trendUp', 'Stijgend') :
+                     forecast.trend === 'down' ? t('revenue.trendDown', 'Dalend') :
+                     t('revenue.trendStable', 'Stabiel')}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {t('revenue.basedOn', 'o.b.v.')} {forecast.data_months} {t('revenue.months', 'maanden')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Forecast Table - Desktop */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('revenue.period', 'Periode')}</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('revenue.forecastIncome', 'Verwachte Omzet')}</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('revenue.forecastExpenses', 'Verwachte Uitgaven')}</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('revenue.forecastProfit', 'Verwachte Winst')}</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('revenue.margin', 'Marge')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {([
+                      { key: 'month' as const, label: t('revenue.nextMonth', 'Komende maand') },
+                      { key: 'quarter' as const, label: t('revenue.nextQuarter', 'Komend kwartaal') },
+                      { key: 'half_year' as const, label: t('revenue.nextHalfYear', 'Komend half jaar') },
+                      { key: 'year' as const, label: t('revenue.nextYear', 'Komend jaar') },
+                    ]).map(({ key, label }) => {
+                      const f = forecast.forecast[key]
+                      const margin = f.income > 0 ? ((f.profit / f.income) * 100).toFixed(1) : '0.0'
+                      return (
+                        <tr key={key} className="hover:bg-gray-50">
+                          <td className="px-3 py-2.5 text-sm font-medium text-gray-900">{label}</td>
+                          <td className="px-3 py-2.5 text-sm text-right text-green-600 font-medium">{formatCurrency(f.income)}</td>
+                          <td className="px-3 py-2.5 text-sm text-right text-red-600 font-medium">{formatCurrency(f.expenses)}</td>
+                          <td className={`px-3 py-2.5 text-sm text-right font-bold ${f.profit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                            {formatCurrency(f.profit)}
+                          </td>
+                          <td className="px-3 py-2.5 text-sm text-right text-gray-500">{margin}%</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Forecast Cards - Mobile */}
+              <div className="md:hidden space-y-3">
+                {([
+                  { key: 'month' as const, label: t('revenue.nextMonth', 'Komende maand') },
+                  { key: 'quarter' as const, label: t('revenue.nextQuarter', 'Komend kwartaal') },
+                  { key: 'half_year' as const, label: t('revenue.nextHalfYear', 'Komend half jaar') },
+                  { key: 'year' as const, label: t('revenue.nextYear', 'Komend jaar') },
+                ]).map(({ key, label }) => {
+                  const f = forecast.forecast[key]
+                  const margin = f.income > 0 ? ((f.profit / f.income) * 100).toFixed(1) : '0.0'
+                  return (
+                    <div key={key} className="rounded-lg border border-indigo-100 bg-indigo-50/30 p-3">
+                      <div className="text-sm font-semibold text-gray-900 mb-2">{label}</div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                        <span className="text-gray-500">{t('revenue.income', 'Omzet')}</span>
+                        <span className="text-right text-green-600 font-medium">{formatCurrency(f.income)}</span>
+                        <span className="text-gray-500">{t('revenue.expenses', 'Uitgaven')}</span>
+                        <span className="text-right text-red-600 font-medium">{formatCurrency(f.expenses)}</span>
+                        <span className="text-gray-500">{t('revenue.profit', 'Winst')}</span>
+                        <span className={`text-right font-bold ${f.profit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{formatCurrency(f.profit)}</span>
+                        <span className="text-gray-500">{t('revenue.margin', 'Marge')}</span>
+                        <span className="text-right text-gray-500">{margin}%</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Monthly trend mini-chart */}
+              {forecast.monthly_trend.length >= 2 && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <p className="text-xs text-gray-400 mb-2">
+                    {t('revenue.trendBasis', 'Trend basis - maandelijkse gegevens')}
+                  </p>
+                  <div className="h-32">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={forecast.monthly_trend}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Area type="monotone" dataKey="profit" fill="#818cf8" fillOpacity={0.15} stroke="#818cf8" strokeWidth={1.5} name={t('revenue.profit', 'Winst')} />
+                        <Line type="monotone" dataKey="income" stroke="#22c55e" strokeWidth={1.5} dot={false} name={t('revenue.income', 'Inkomsten')} />
+                        <Line type="monotone" dataKey="expenses" stroke="#ef4444" strokeWidth={1.5} dot={false} name={t('revenue.expenses', 'Uitgaven')} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Charts Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

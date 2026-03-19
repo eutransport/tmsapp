@@ -1043,6 +1043,181 @@ class RevenueView(APIView):
         })
 
 
+class RevenueForecastView(APIView):
+    """
+    Forecast revenue, expenses and profit for upcoming periods.
+    Uses weighted moving average of recent months (last 6 months)
+    to project forward for month, quarter, half year and year.
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+
+    def get(self, request):
+        today = date.today()
+        months_back = 6
+        # Start from 6 months ago, first day of that month
+        start_month = today.month - months_back
+        start_year = today.year
+        while start_month <= 0:
+            start_month += 12
+            start_year -= 1
+        start_date = date(start_year, start_month, 1)
+
+        income_statuses = [InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN, InvoiceStatus.BETAALD]
+
+        # Monthly income (verkoop)
+        monthly_income = Invoice.objects.filter(
+            type=InvoiceType.VERKOOP,
+            status__in=income_statuses,
+            factuurdatum__gte=start_date,
+            factuurdatum__lte=today,
+        ).annotate(
+            month=TruncMonth('factuurdatum')
+        ).values('month').annotate(
+            totaal=Sum('totaal')
+        ).order_by('month')
+
+        # Monthly inkoop expenses
+        monthly_inkoop = Invoice.objects.filter(
+            type=InvoiceType.INKOOP,
+            status__in=income_statuses,
+            factuurdatum__gte=start_date,
+            factuurdatum__lte=today,
+        ).annotate(
+            month=TruncMonth('factuurdatum')
+        ).values('month').annotate(
+            totaal=Sum('totaal')
+        ).order_by('month')
+
+        # Monthly credit expenses
+        monthly_credit = Invoice.objects.filter(
+            type=InvoiceType.CREDIT,
+            status__in=income_statuses,
+            factuurdatum__gte=start_date,
+            factuurdatum__lte=today,
+        ).annotate(
+            month=TruncMonth('factuurdatum')
+        ).values('month').annotate(
+            totaal=Sum('totaal')
+        ).order_by('month')
+
+        # Monthly direct expenses
+        monthly_direct = Expense.objects.filter(
+            datum__gte=start_date,
+            datum__lte=today,
+        ).annotate(
+            month=TruncMonth('datum')
+        ).values('month').annotate(
+            totaal=Sum('totaal')
+        ).order_by('month')
+
+        # Build dicts
+        income_dict = {item['month']: float(item['totaal'] or 0) for item in monthly_income}
+        inkoop_dict = {item['month']: float(item['totaal'] or 0) for item in monthly_inkoop}
+        credit_dict = {item['month']: float(item['totaal'] or 0) for item in monthly_credit}
+        direct_dict = {item['month']: float(item['totaal'] or 0) for item in monthly_direct}
+
+        all_months = sorted(set(
+            list(income_dict.keys()) +
+            list(inkoop_dict.keys()) +
+            list(credit_dict.keys()) +
+            list(direct_dict.keys())
+        ))
+
+        empty_forecast = {
+            'lookback_months': months_back,
+            'data_months': 0,
+            'avg_monthly_income': 0,
+            'avg_monthly_expenses': 0,
+            'avg_monthly_profit': 0,
+            'trend': 'stable',
+            'forecast': {
+                'month': {'income': 0, 'expenses': 0, 'profit': 0},
+                'quarter': {'income': 0, 'expenses': 0, 'profit': 0},
+                'half_year': {'income': 0, 'expenses': 0, 'profit': 0},
+                'year': {'income': 0, 'expenses': 0, 'profit': 0},
+            },
+            'monthly_trend': [],
+        }
+
+        if not all_months:
+            return Response(empty_forecast)
+
+        monthly_data = []
+        for month in all_months:
+            income = income_dict.get(month, 0)
+            expenses = (inkoop_dict.get(month, 0) +
+                        credit_dict.get(month, 0) +
+                        direct_dict.get(month, 0))
+            monthly_data.append({
+                'month': month,
+                'income': income,
+                'expenses': expenses,
+                'profit': income - expenses,
+            })
+
+        n = len(monthly_data)
+        avg_income = sum(d['income'] for d in monthly_data) / n
+        avg_expenses = sum(d['expenses'] for d in monthly_data) / n
+        avg_profit = avg_income - avg_expenses
+
+        # Weighted average (recent months count more)
+        if n >= 3:
+            weights = list(range(1, n + 1))
+            total_weight = sum(weights)
+            w_income = sum(d['income'] * w for d, w in zip(monthly_data, weights)) / total_weight
+            w_expenses = sum(d['expenses'] * w for d, w in zip(monthly_data, weights)) / total_weight
+            w_profit = w_income - w_expenses
+        else:
+            w_income = avg_income
+            w_expenses = avg_expenses
+            w_profit = avg_profit
+
+        # Determine trend direction
+        if n >= 2:
+            first_half = monthly_data[:n//2]
+            second_half = monthly_data[n//2:]
+            avg_first = sum(d['profit'] for d in first_half) / len(first_half)
+            avg_second = sum(d['profit'] for d in second_half) / len(second_half)
+            if avg_second > avg_first * 1.1:
+                trend = 'up'
+            elif avg_second < avg_first * 0.9:
+                trend = 'down'
+            else:
+                trend = 'stable'
+        else:
+            trend = 'stable'
+
+        forecast = {}
+        multipliers = {'month': 1, 'quarter': 3, 'half_year': 6, 'year': 12}
+        for period_key, mult in multipliers.items():
+            forecast[period_key] = {
+                'income': round(w_income * mult, 2),
+                'expenses': round(w_expenses * mult, 2),
+                'profit': round(w_profit * mult, 2),
+            }
+
+        monthly_trend = [
+            {
+                'month': d['month'].strftime('%B %Y'),
+                'income': round(d['income'], 2),
+                'expenses': round(d['expenses'], 2),
+                'profit': round(d['profit'], 2),
+            }
+            for d in monthly_data
+        ]
+
+        return Response({
+            'lookback_months': months_back,
+            'data_months': n,
+            'avg_monthly_income': round(avg_income, 2),
+            'avg_monthly_expenses': round(avg_expenses, 2),
+            'avg_monthly_profit': round(avg_profit, 2),
+            'trend': trend,
+            'forecast': forecast,
+            'monthly_trend': monthly_trend,
+        })
+
+
 class RevenueYearsView(APIView):
     """
     Get available years for revenue data.

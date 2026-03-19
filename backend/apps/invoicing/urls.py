@@ -6,6 +6,7 @@ from .views import (
     InvoiceLineViewSet,
     ExpenseViewSet,
     RevenueView,
+    RevenueForecastView,
     RevenueYearsView,
 )
 
@@ -19,6 +20,7 @@ urlpatterns = [
     path('', include(router.urls)),
     # Revenue endpoints
     path('revenue/', RevenueView.as_view(), name='revenue'),
+    path('revenue/forecast/', RevenueForecastView.as_view(), name='revenue-forecast'),
     path('revenue/years/', RevenueYearsView.as_view(), name='revenue-years'),
     # OCR Import endpoints
     path('ocr/', include('apps.invoicing.ocr.urls')),
