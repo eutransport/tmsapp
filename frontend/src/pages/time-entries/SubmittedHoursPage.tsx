@@ -575,7 +575,7 @@ export default function SubmittedHoursPage() {
   )
 
   // Available years
-  const years = Array.from({ length: 5 }, (_, i) => getCurrentYear() - i)
+  const years = Array.from({ length: 5 }, (_, i) => getCurrentYear() - i).filter(y => y >= 2026)
 
   const toggleWeekGroup = (key: string) => {
     setExpandedWeeks(prev => {
@@ -703,24 +703,28 @@ export default function SubmittedHoursPage() {
                 className="form-input pl-10 w-full"
               />
             </div>
-            <select
-              value={selectedYear}
-              onChange={(e) => { setSelectedYear(parseInt(e.target.value)); setCurrentPage(1) }}
-              className="form-select sm:w-32"
-            >
+            <div className="flex flex-wrap items-center gap-1.5">
               {years.map(y => (
-                <option key={y} value={y}>{y}</option>
+                <button
+                  key={y}
+                  onClick={() => { setSelectedYear(y); setCurrentPage(1) }}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${selectedYear === y ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                >
+                  {y}
+                </button>
               ))}
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'concept' | 'ingediend' | '')}
-              className="form-select sm:w-48"
-            >
-              <option value="">{t('timeEntries.allStatuses')}</option>
-              <option value="concept">{t('timeEntries.concept')}</option>
-              <option value="ingediend">{t('timeEntries.submitted')}</option>
-            </select>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([{ value: '', label: t('timeEntries.allStatuses') }, { value: 'concept', label: t('timeEntries.concept') }, { value: 'ingediend', label: t('timeEntries.submitted') }] as const).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setStatusFilter(opt.value as 'concept' | 'ingediend' | '')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${statusFilter === opt.value ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

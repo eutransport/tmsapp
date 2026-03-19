@@ -642,6 +642,7 @@ export default function TimeEntriesPage() {
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [debouncedSearch, setDebouncedSearch] = useState<string>('')
   const [searchWeek, setSearchWeek] = useState<number | null>(null)
+  const [showMoreWeeks, setShowMoreWeeks] = useState(false)
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -940,15 +941,17 @@ export default function TimeEntriesPage() {
             </button>
             
             {/* Status filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value as any); setPage(1) }}
-              className="input w-40"
-            >
-              <option value="all">{t('timeEntries.allStatuses')}</option>
-              <option value="concept">{t('timeEntries.concept')}</option>
-              <option value="ingediend">{t('timeEntries.submitted')}</option>
-            </select>
+            <div className="flex items-center gap-1.5">
+              {([{ value: 'all', label: t('timeEntries.allStatuses') }, { value: 'concept', label: t('timeEntries.concept') }, { value: 'ingediend', label: t('timeEntries.submitted') }] as const).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setStatusFilter(opt.value as any); setPage(1) }}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${statusFilter === opt.value ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
 
             {/* Refresh button */}
             <button
@@ -994,15 +997,17 @@ export default function TimeEntriesPage() {
               {t('common.today')}
             </button>
             
-            <select
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value as any); setPage(1) }}
-              className="input flex-1 text-sm"
-            >
-              <option value="all">{t('common.all')}</option>
-              <option value="concept">{t('timeEntries.concept')}</option>
-              <option value="ingediend">{t('timeEntries.submitted')}</option>
-            </select>
+            <div className="flex items-center gap-1.5 flex-1">
+              {([{ value: 'all', label: t('common.all') }, { value: 'concept', label: t('timeEntries.concept') }, { value: 'ingediend', label: t('timeEntries.submitted') }] as const).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setStatusFilter(opt.value as any); setPage(1) }}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === opt.value ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
 
             <button
               onClick={() => fetchEntries()}
@@ -1046,22 +1051,29 @@ export default function TimeEntriesPage() {
             </div>
 
             {/* Week number search */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <CalendarDaysIcon className="w-4 h-4 text-gray-500" />
-              <select
-                value={searchWeek !== null ? searchWeek : ''}
-                onChange={(e) => { 
-                  const val = e.target.value
-                  setSearchWeek(val === '' ? null : parseInt(val))
-                  setPage(1)
-                }}
-                className="input w-32"
+              <button
+                onClick={() => { setSearchWeek(null); setPage(1) }}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${searchWeek === null ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
               >
-                <option value="">{t('timeEntries.currentWeek')}</option>
-                {Array.from({ length: 52 }, (_, i) => i + 1).map(week => (
-                  <option key={week} value={week}>{t('common.week')} {week}</option>
-                ))}
-              </select>
+                {t('timeEntries.currentWeek')}
+              </button>
+              {(showMoreWeeks ? Array.from({ length: 52 }, (_, i) => i + 1) : Array.from({ length: 52 }, (_, i) => i + 1).slice(0, 4)).map(week => (
+                <button
+                  key={week}
+                  onClick={() => { setSearchWeek(week); setPage(1) }}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${searchWeek === week ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                >
+                  W{week}
+                </button>
+              ))}
+              <button
+                onClick={() => setShowMoreWeeks(!showMoreWeeks)}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-primary-600 hover:bg-primary-50 transition-colors"
+              >
+                {showMoreWeeks ? t('common.showLess', 'Toon minder') : t('common.showMore', 'Toon meer')}
+              </button>
             </div>
 
             {/* Clear filters */}
@@ -1109,20 +1121,29 @@ export default function TimeEntriesPage() {
                 </button>
               )}
             </div>
-            <select
-              value={searchWeek !== null ? searchWeek : ''}
-              onChange={(e) => { 
-                const val = e.target.value
-                setSearchWeek(val === '' ? null : parseInt(val))
-                setPage(1)
-              }}
-              className="input w-full text-sm"
-            >
-              <option value="">{t('timeEntries.currentWeek')}</option>
-              {Array.from({ length: 52 }, (_, i) => i + 1).map(week => (
-                <option key={week} value={week}>{t('common.week')} {week}</option>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                onClick={() => { setSearchWeek(null); setPage(1) }}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${searchWeek === null ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+              >
+                {t('timeEntries.currentWeek')}
+              </button>
+              {(showMoreWeeks ? Array.from({ length: 52 }, (_, i) => i + 1) : Array.from({ length: 52 }, (_, i) => i + 1).slice(0, 4)).map(week => (
+                <button
+                  key={week}
+                  onClick={() => { setSearchWeek(week); setPage(1) }}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${searchWeek === week ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                >
+                  W{week}
+                </button>
               ))}
-            </select>
+              <button
+                onClick={() => setShowMoreWeeks(!showMoreWeeks)}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-primary-600 hover:bg-primary-50 transition-colors"
+              >
+                {showMoreWeeks ? t('common.showLess', 'Toon minder') : t('common.showMore', 'Toon meer')}
+              </button>
+            </div>
             {(searchQuery || searchWeek !== null) && (
               <button
                 onClick={() => { 

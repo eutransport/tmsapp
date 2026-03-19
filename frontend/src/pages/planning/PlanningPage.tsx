@@ -286,6 +286,7 @@ function AdminPlanningView() {
   const [selectedCompany, setSelectedCompany] = useState<string>('')
   const [currentWeek, setCurrentWeek] = useState<number>(1)
   const [currentYear, setCurrentYear] = useState<number>(2026)
+  const [showMoreCompanies, setShowMoreCompanies] = useState(false)
   
   // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -682,19 +683,28 @@ function AdminPlanningView() {
       <div className="card">
         <div className="p-4 flex flex-wrap items-center gap-4">
           {/* Company selector */}
-          <div className="w-64">
-            <select
-              value={selectedCompany}
-              onChange={(e) => setSelectedCompany(e.target.value)}
-              className="input-field w-full"
-            >
-              <option value="">{t('common.selectOption')}</option>
-              {companies.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.naam}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(showMoreCompanies ? companies : companies.slice(0, 4)).map((company) => (
+              <button
+                key={company.id}
+                onClick={() => setSelectedCompany(company.id.toString())}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  selectedCompany === company.id.toString()
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {company.naam}
+              </button>
+            ))}
+            {companies.length > 4 && (
+              <button
+                onClick={() => setShowMoreCompanies(!showMoreCompanies)}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium text-primary-600 hover:bg-primary-50 transition-colors"
+              >
+                {showMoreCompanies ? t('common.showLess', 'Toon minder') : t('common.showMore', 'Toon meer')}
+              </button>
+            )}
           </div>
 
           {/* Week navigation */}

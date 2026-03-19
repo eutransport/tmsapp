@@ -65,7 +65,7 @@ export default function MonthlyHoursTab() {
   const [invoicesLoading, setInvoicesLoading] = useState(false)
 
   // Years
-  const years = Array.from({ length: 5 }, (_, i) => getCurrentYear() - i)
+  const years = Array.from({ length: 5 }, (_, i) => getCurrentYear() - i).filter(y => y >= 2026)
 
   useEffect(() => {
     loadData()
@@ -245,15 +245,17 @@ export default function MonthlyHoursTab() {
                 className="form-input pl-10 w-full"
               />
             </div>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="form-select sm:w-32"
-            >
+            <div className="flex flex-wrap items-center gap-1.5">
               {years.map(y => (
-                <option key={y} value={y}>{y}</option>
+                <button
+                  key={y}
+                  onClick={() => setSelectedYear(y)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${selectedYear === y ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                >
+                  {y}
+                </button>
               ))}
-            </select>
+            </div>
             <label className="flex items-center gap-2 text-sm text-gray-600 whitespace-nowrap cursor-pointer">
               <input
                 type="checkbox"
