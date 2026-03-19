@@ -683,9 +683,6 @@ function AdminPlanningView() {
         <div className="p-4 flex flex-wrap items-center gap-4">
           {/* Company selector */}
           <div className="w-64">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('fleet.company')}
-            </label>
             <select
               value={selectedCompany}
               onChange={(e) => setSelectedCompany(e.target.value)}
