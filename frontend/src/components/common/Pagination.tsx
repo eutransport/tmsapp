@@ -31,7 +31,7 @@ export default function Pagination({
   const endItem = Math.min(currentPage * pageSize, totalCount)
 
   return (
-    <div className="px-4 sm:px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
       {/* Left: Count info */}
       <div className="text-sm text-gray-500 flex flex-col xs:flex-row items-center gap-2 xs:gap-4 w-full sm:w-auto justify-center sm:justify-start">
         <span className="whitespace-nowrap">
@@ -46,7 +46,7 @@ export default function Pagination({
               id="pageSize"
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value) as PageSize)}
-              className="text-sm border-gray-300 rounded-md shadow-sm focus:border-primary-500 focus:ring-primary-500 py-2 pl-3 pr-8 min-h-[44px]"
+              className="text-xs sm:text-sm border-gray-300 rounded-md shadow-sm focus:border-primary-500 focus:ring-primary-500 py-1.5 sm:py-2 pl-2 sm:pl-3 pr-6 sm:pr-8 min-h-[32px] sm:min-h-[44px]"
             >
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>
@@ -59,11 +59,11 @@ export default function Pagination({
       </div>
 
       {/* Right: Pagination controls */}
-      <div className="flex items-center gap-1 sm:gap-2">
+      <div className="flex items-center gap-0.5 sm:gap-2">
         <button
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
-          className="p-2 min-w-[44px] min-h-[44px] text-sm text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
+          className="p-1.5 sm:p-2 min-w-[32px] min-h-[32px] sm:min-w-[44px] sm:min-h-[44px] text-xs sm:text-sm text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
           title={t('common.firstPage')}
         >
           ««
@@ -71,27 +71,27 @@ export default function Pagination({
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="p-2 min-w-[44px] min-h-[44px] text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
+          className="p-1.5 sm:p-2 min-w-[32px] min-h-[32px] sm:min-w-[44px] sm:min-h-[44px] text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
           title={t('common.previousPage')}
         >
-          <ChevronLeftIcon className="h-5 w-5" />
+          <ChevronLeftIcon className="h-4 w-4 sm:h-5 sm:w-5" />
         </button>
         
         {/* Mobile: Simple page indicator */}
-        <span className="xs:hidden px-3 py-2 text-sm text-gray-600">
-          {currentPage} / {totalPages}
+        <span className="xs:hidden px-2 py-1.5 text-xs text-gray-600">
+          {currentPage}/{totalPages}
         </span>
         
         {/* Desktop: Page numbers */}
-        <div className="hidden xs:flex items-center gap-1">
+        <div className="hidden xs:flex items-center gap-0.5 sm:gap-1">
           {generatePageNumbers(currentPage, totalPages).map((pageNum, idx) => (
             pageNum === '...' ? (
-              <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
+              <span key={`ellipsis-${idx}`} className="px-1 sm:px-2 text-gray-400">...</span>
             ) : (
               <button
                 key={pageNum}
                 onClick={() => onPageChange(pageNum as number)}
-                className={`min-w-[44px] min-h-[44px] px-3 py-2 text-sm rounded ${
+                className={`min-w-[32px] min-h-[32px] sm:min-w-[44px] sm:min-h-[44px] px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded ${
                   pageNum === currentPage
                     ? 'bg-primary-600 text-white'
                     : 'text-gray-600 hover:bg-gray-100'
@@ -106,15 +106,15 @@ export default function Pagination({
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="p-2 min-w-[44px] min-h-[44px] text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
+          className="p-1.5 sm:p-2 min-w-[32px] min-h-[32px] sm:min-w-[44px] sm:min-h-[44px] text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
           title={t('common.nextPage')}
         >
-          <ChevronRightIcon className="h-5 w-5" />
+          <ChevronRightIcon className="h-4 w-4 sm:h-5 sm:w-5" />
         </button>
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
-          className="p-2 min-w-[44px] min-h-[44px] text-sm text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
+          className="p-1.5 sm:p-2 min-w-[32px] min-h-[32px] sm:min-w-[44px] sm:min-h-[44px] text-xs sm:text-sm text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed rounded hover:bg-gray-100"
           title={t('common.lastPage')}
         >
           »»

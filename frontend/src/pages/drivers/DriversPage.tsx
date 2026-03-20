@@ -514,7 +514,7 @@ export default function DriversPage() {
   }
 
   return (
-    <div>
+    <div className="overflow-x-hidden">
       {/* Header */}
       <div className="page-header">
         <h1 className="page-title">{t('drivers.title')}</h1>
@@ -587,9 +587,10 @@ export default function DriversPage() {
                 <button
                   key={company.id}
                   onClick={() => { setCompanyFilter(company.id.toString()); setPage(1) }}
-                  className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                  className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors max-w-[140px] sm:max-w-none truncate ${
                     companyFilter === company.id.toString() ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                   }`}
+                  title={company.naam}
                 >
                   {company.naam}
                 </button>
