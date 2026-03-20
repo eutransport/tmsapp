@@ -1866,63 +1866,17 @@
   },
   "tracking": {
     "title": "Track & Trace",
-    "myTracking": "My Tracking",
+    "monitorVehicle": "Monitor Vehicle",
     "selectVehicle": "Select vehicle",
-    "autoDetect": "Auto-detect",
-    "startTracking": "Start Tracking",
-    "stopTracking": "Stop Tracking",
-    "active": "Tracking active",
-    "sent": "Sent",
-    "buffered": "Buffered",
-    "accuracy": "Accuracy",
+    "chooseVehicle": "Choose a vehicle...",
+    "vehicleOnline": "Vehicle online",
+    "vehicleOffline": "No active tracking",
     "liveVehicles": "Live vehicles",
     "activeVehicles": "active vehicles",
     "routeHistory": "Route History",
     "noHistory": "No routes found",
     "route": "Route",
     "points": "points",
-    "minutes": "minutes",
-    "locationPermissionDenied": "Location permission denied",
-    "locationUnavailable": "Location unavailable",
-    "gpsNotSupported": "GPS not supported on this device",
-    "permission": {
-      "title": "Location Access Required",
-      "description": "To track your vehicle in real-time, the app needs access to your location. Your location is only shared when you actively enable tracking.",
-      "privacy1": "Your location is only shared during active tracking",
-      "privacy2": "Location data is sent encrypted via HTTPS",
-      "privacy3": "You can stop tracking at any time",
-      "allow": "Allow Location",
-      "deny": "Not Now",
-      "changeLater": "You can always change this later in your device settings."
-    },
-    "denied": {
-      "title": "GPS location is blocked",
-      "description": "Tracking cannot start because location access was denied. Change this in your device settings to use tracking.",
-      "howToEnable": "How do I re-enable location?"
-    },
-    "help": {
-      "android": {
-        "step1": "Open the Settings app on your phone",
-        "step2": "Go to Apps or App Management",
-        "step3": "Find and tap your browser (Chrome/Samsung Internet)",
-        "step4": "Tap Permissions → Location",
-        "step5": "Choose 'Allow' or 'Only while using the app'",
-        "chrome": "In Chrome: tap the lock icon 🔒 next to the URL → Site settings → Location → Allow"
-      },
-      "ios": {
-        "step1": "Open the Settings app on your iPhone/iPad",
-        "step2": "Scroll down and tap Safari (or your browser)",
-        "step3": "Tap Location",
-        "step4": "Choose 'Ask' or 'Allow'",
-        "step5": "Go back to the app and try again",
-        "safari": "Alternative: go to Settings → Privacy & Security → Location Services → Safari → 'While Using the App'"
-      },
-      "desktop": {
-        "title": "Desktop Browser",
-        "step1": "Click the lock icon 🔒 to the left of the address bar",
-        "step2": "Find 'Location' and change to 'Allow'",
-        "step3": "Reload the page"
-      }
-    }
+    "minutes": "minutes"
   }
 }

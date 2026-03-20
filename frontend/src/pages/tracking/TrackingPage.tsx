@@ -3,34 +3,26 @@
  * 
  * Features:
  * - Live map with vehicle positions
- * - Start/stop tracking (driver mode)
+ * - Select a vehicle to follow on the map
  * - Route history viewer
- * - Vehicle assignment
  * 
  * Security:
  * - All data via authenticated API only
- * - GPS permission requested only when driver starts tracking
  * - No location data stored locally
  */
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   MapPinIcon,
-  PlayIcon,
-  StopIcon,
   ArrowPathIcon,
   TruckIcon,
   ClockIcon,
-  SignalIcon,
-  ExclamationTriangleIcon,
   ChevronRightIcon,
   XMarkIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
 import { useAuthStore } from '@/stores/authStore'
 import { trackingApi, type LiveVehicle, type TrackingSession, type TrackingVehicle, type RouteHistory } from '@/api/tracking'
-import { useGPSTracking } from '@/hooks/useGPSTracking'
-import { useLocationPermission } from '@/hooks/useLocationPermission'
-import { LocationPermissionDialog, LocationDeniedBanner } from '@/components/tracking/LocationPermission'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -73,11 +65,11 @@ function createTruckIcon(color: string = '#1e3a5f') {
 function TrackingMap({
   vehicles,
   selectedRoute,
-  onVehicleClick,
+  focusVehicleId,
 }: {
   vehicles: LiveVehicle[]
   selectedRoute: RouteHistory | null
-  onVehicleClick?: (v: LiveVehicle) => void
+  focusVehicleId?: string | null
 }) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -130,15 +122,16 @@ function TrackingMap({
       if (existing) {
         existing.setLatLng(latlng)
         existing.setPopupContent(createPopupContent(v))
+        // Update icon color based on focus
+        const isFocused = focusVehicleId && v.vehicle_id === focusVehicleId
+        existing.setIcon(createTruckIcon(isFocused ? '#2563eb' : v.is_active ? '#1e3a5f' : '#9ca3af'))
       } else {
+        const isFocused = focusVehicleId && v.vehicle_id === focusVehicleId
         const marker = L.marker(latlng, {
-          icon: createTruckIcon(v.is_active ? '#1e3a5f' : '#9ca3af'),
+          icon: createTruckIcon(isFocused ? '#2563eb' : v.is_active ? '#1e3a5f' : '#9ca3af'),
         }).addTo(map)
 
         marker.bindPopup(createPopupContent(v))
-        if (onVehicleClick) {
-          marker.on('click', () => onVehicleClick(v))
-        }
         markersRef.current.set(v.session_id, marker)
       }
     })
@@ -148,7 +141,21 @@ function TrackingMap({
       const bounds = L.latLngBounds(vehicles.map(v => [v.latitude, v.longitude] as L.LatLngExpression))
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 })
     }
-  }, [vehicles, onVehicleClick, selectedRoute])
+  }, [vehicles, selectedRoute, focusVehicleId])
+
+  // Zoom to focused vehicle
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !focusVehicleId) return
+
+    const vehicle = vehicles.find(v => v.vehicle_id === focusVehicleId)
+    if (vehicle) {
+      map.setView([vehicle.latitude, vehicle.longitude], 15, { animate: true })
+      // Open popup
+      const marker = markersRef.current.get(vehicle.session_id)
+      if (marker) marker.openPopup()
+    }
+  }, [focusVehicleId, vehicles])
 
   // Draw route when selected
   useEffect(() => {
@@ -212,201 +219,95 @@ function createPopupContent(v: LiveVehicle): string {
   `
 }
 
-// ====== Driver Tracking Controls ======
-function DriverTrackingPanel({
+// ====== Vehicle Monitor Panel ======
+function VehicleMonitorPanel({
   vehicles,
-  locationPermission,
+  liveVehicles,
+  onSelectVehicle,
 }: {
   vehicles: TrackingVehicle[]
-  locationPermission: ReturnType<typeof useLocationPermission>
+  liveVehicles: LiveVehicle[]
+  onSelectVehicle: (vehicleId: string | null) => void
+  selectedVehicleId?: string | null
 }) {
   const { t } = useTranslation()
   const [selectedVehicle, setSelectedVehicle] = useState<string>('')
-  const [session, setSession] = useState<TrackingSession | null>(null)
-  const [starting, setStarting] = useState(false)
-  const [stopping, setStopping] = useState(false)
-  const [showPermissionDialog, setShowPermissionDialog] = useState(false)
-  const [permissionLoading, setPermissionLoading] = useState(false)
 
-  const gps = useGPSTracking({ minInterval: 10000, maxAccuracy: 100 })
+  // Find live data for selected vehicle
+  const liveData = liveVehicles.find(v => v.vehicle_id === selectedVehicle)
 
-  // Check for existing session on mount
-  useEffect(() => {
-    const check = async () => {
-      try {
-        const result = await trackingApi.getActiveSession()
-        if ('id' in result) {
-          setSession(result)
-          if (!gps.isTracking) {
-            gps.startTracking()
-          }
-        }
-      } catch {}
-    }
-    check()
-  }, [])
-
-  const handleStart = async () => {
-    // Check if we need to ask for permission first
-    if (locationPermission.status === 'denied') {
-      // Already denied — banner will show help
-      return
-    }
-    if (locationPermission.status !== 'granted') {
-      // Show our custom dialog first
-      setShowPermissionDialog(true)
-      return
-    }
-    // Permission already granted — start directly
-    await doStartTracking()
-  }
-
-  const handlePermissionAllow = async () => {
-    setPermissionLoading(true)
-    const result = await locationPermission.requestPermission()
-    setPermissionLoading(false)
-    setShowPermissionDialog(false)
-    if (result === 'granted') {
-      await doStartTracking()
-    }
-  }
-
-  const handlePermissionDeny = () => {
-    locationPermission.markAsAsked()
-    setShowPermissionDialog(false)
-  }
-
-  const doStartTracking = async () => {
-    setStarting(true)
-    try {
-      const newSession = await trackingApi.startSession(selectedVehicle || undefined)
-      setSession(newSession)
-      gps.startTracking()
-    } catch (err: any) {
-      console.error('Failed to start tracking:', err)
-    } finally {
-      setStarting(false)
-    }
-  }
-
-  const handleStop = async () => {
-    setStopping(true)
-    try {
-      gps.stopTracking()
-      await trackingApi.stopSession()
-      setSession(null)
-    } catch (err: any) {
-      console.error('Failed to stop tracking:', err)
-    } finally {
-      setStopping(false)
+  const handleSelect = (vehicleId: string) => {
+    setSelectedVehicle(vehicleId)
+    if (vehicleId) {
+      onSelectVehicle(vehicleId)
+    } else {
+      onSelectVehicle(null)
     }
   }
 
   return (
     <div className="bg-white rounded-lg shadow-sm border p-3 sm:p-4 space-y-3">
       <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-        <SignalIcon className="h-4 w-4 text-primary-600" />
-        {t('tracking.myTracking')}
+        <MagnifyingGlassIcon className="h-4 w-4 text-primary-600" />
+        {t('tracking.monitorVehicle')}
       </h3>
 
-      {/* GPS Denied Banner */}
-      {locationPermission.status === 'denied' && (
-        <LocationDeniedBanner platform={locationPermission.platform} />
-      )}
+      {/* Vehicle selector */}
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">
+          {t('tracking.selectVehicle')}
+        </label>
+        <select
+          value={selectedVehicle}
+          onChange={(e) => handleSelect(e.target.value)}
+          className="input-field text-sm"
+        >
+          <option value="">{t('tracking.chooseVehicle')}</option>
+          {vehicles.map(v => (
+            <option key={v.id} value={v.id}>
+              {v.kenteken} — {v.ritnummer}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      {/* Permission Dialog */}
-      <LocationPermissionDialog
-        isOpen={showPermissionDialog}
-        onAllow={handlePermissionAllow}
-        onDeny={handlePermissionDeny}
-        platform={locationPermission.platform}
-        loading={permissionLoading}
-      />
-
-      {!session ? (
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              {t('tracking.selectVehicle')}
-            </label>
-            <select
-              value={selectedVehicle}
-              onChange={(e) => setSelectedVehicle(e.target.value)}
-              className="input-field text-sm"
-            >
-              <option value="">{t('tracking.autoDetect')}</option>
-              {vehicles.map(v => (
-                <option key={v.id} value={v.id}>
-                  {v.kenteken} — {v.ritnummer}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            onClick={handleStart}
-            disabled={starting}
-            className="btn-primary w-full text-sm flex items-center justify-center gap-2"
-          >
-            {starting ? (
-              <ArrowPathIcon className="h-4 w-4 animate-spin" />
-            ) : (
-              <PlayIcon className="h-4 w-4" />
-            )}
-            {t('tracking.startTracking')}
-          </button>
-        </div>
-      ) : (
+      {/* Vehicle info when selected */}
+      {selectedVehicle && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-sm font-medium text-green-700">{t('tracking.active')}</span>
-          </div>
-          
-          {session.vehicle_kenteken && (
-            <div className="text-xs text-gray-600">
-              <TruckIcon className="h-3.5 w-3.5 inline mr-1" />
-              {session.vehicle_kenteken} — {session.vehicle_ritnummer}
+          {liveData ? (
+            <>
+              <div className="flex items-center gap-2">
+                <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-sm font-medium text-green-700">{t('tracking.vehicleOnline')}</span>
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-2.5 space-y-1.5">
+                <div className="flex items-center gap-2 text-xs text-gray-700">
+                  <TruckIcon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-medium">{liveData.vehicle_kenteken}</span>
+                  {liveData.vehicle_ritnummer && (
+                    <span className="text-gray-500">— {liveData.vehicle_ritnummer}</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 text-xs text-gray-500">
+                  <div>👤 {liveData.user_name}</div>
+                  {liveData.speed != null && (
+                    <div>🚀 {Math.round(liveData.speed)} km/h</div>
+                  )}
+                  <div className="col-span-2">
+                    🕐 {new Date(liveData.recorded_at).toLocaleTimeString('nl-NL', {
+                      hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    })}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <div className="h-2.5 w-2.5 rounded-full bg-gray-300" />
+              <span>{t('tracking.vehicleOffline')}</span>
             </div>
           )}
-
-          <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-            <div>
-              📡 {t('tracking.sent')}: {gps.pointsSent}
-            </div>
-            <div>
-              📦 {t('tracking.buffered')}: {gps.pointsBuffered}
-            </div>
-            {gps.accuracy != null && (
-              <div>
-                🎯 {t('tracking.accuracy')}: {Math.round(gps.accuracy)}m
-              </div>
-            )}
-            {gps.lastPosition?.coords.speed != null && (
-              <div>
-                🚀 {Math.round(gps.lastPosition.coords.speed * 3.6)} km/h
-              </div>
-            )}
-          </div>
-
-          {gps.error && (
-            <div className="text-xs text-amber-600 flex items-center gap-1">
-              <ExclamationTriangleIcon className="h-3.5 w-3.5" />
-              {gps.error}
-            </div>
-          )}
-
-          <button
-            onClick={handleStop}
-            disabled={stopping}
-            className="w-full px-3 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-          >
-            {stopping ? (
-              <ArrowPathIcon className="h-4 w-4 animate-spin" />
-            ) : (
-              <StopIcon className="h-4 w-4" />
-            )}
-            {t('tracking.stopTracking')}
-          </button>
         </div>
       )}
     </div>
@@ -535,11 +436,11 @@ export default function TrackingPage() {
   const [liveVehicles, setLiveVehicles] = useState<LiveVehicle[]>([])
   const [trackingVehicles, setTrackingVehicles] = useState<TrackingVehicle[]>([])
   const [selectedRoute, setSelectedRoute] = useState<RouteHistory | null>(null)
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const isAdmin = user?.rol === 'admin' || user?.rol === 'gebruiker'
-  const locationPermission = useLocationPermission()
 
   // Load initial data
   useEffect(() => {
@@ -579,6 +480,13 @@ export default function TrackingPage() {
   const handleClearRoute = () => {
     setSelectedRoute(null)
   }
+
+  // Handle vehicle selection — zoom to vehicle on map
+  const handleSelectVehicle = useCallback((vehicleId: string | null) => {
+    setSelectedVehicleId(vehicleId)
+    if (!vehicleId) return
+    // Map will zoom to this vehicle via the focusVehicleId prop
+  }, [])
 
   if (loading) {
     return (
@@ -625,21 +533,24 @@ export default function TrackingPage() {
 
       {/* Main layout: Map + Sidebar */}
       <div className="flex flex-col lg:flex-row gap-4">
-        {/* Map */}
-        <div className="flex-1 bg-white rounded-lg shadow-sm border overflow-hidden min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+        {/* Map — z-index isolated so Leaflet controls don't overlap modals */}
+        <div className="flex-1 bg-white rounded-lg shadow-sm border overflow-hidden min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] relative z-0">
           <TrackingMap
             vehicles={liveVehicles}
             selectedRoute={selectedRoute}
-            onVehicleClick={(_v) => {
-              // Could open a detail panel
-            }}
+            focusVehicleId={selectedVehicleId}
           />
         </div>
 
         {/* Sidebar */}
         <div className="w-full lg:w-80 space-y-4">
-          {/* Driver tracking controls */}
-          <DriverTrackingPanel vehicles={trackingVehicles} locationPermission={locationPermission} />
+          {/* Vehicle monitor */}
+          <VehicleMonitorPanel
+            vehicles={trackingVehicles}
+            liveVehicles={liveVehicles}
+            onSelectVehicle={handleSelectVehicle}
+            selectedVehicleId={selectedVehicleId}
+          />
 
           {/* Active vehicles list (admin only) */}
           {isAdmin && liveVehicles.length > 0 && (
