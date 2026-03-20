@@ -19,20 +19,19 @@ import {
   DevicePhoneMobileIcon,
   Cog6ToothIcon,
 } from '@heroicons/react/24/outline'
-import type { Platform, PermissionStatus } from '@/hooks/useLocationPermission'
+import type { Platform } from '@/hooks/useLocationPermission'
 
 // ====== First-time Permission Dialog ======
 export function LocationPermissionDialog({
   isOpen,
   onAllow,
   onDeny,
-  platform,
   loading,
 }: {
   isOpen: boolean
   onAllow: () => void
   onDeny: () => void
-  platform: Platform
+  platform?: Platform
   loading?: boolean
 }) {
   const { t } = useTranslation()

@@ -630,7 +630,7 @@ export default function TrackingPage() {
           <TrackingMap
             vehicles={liveVehicles}
             selectedRoute={selectedRoute}
-            onVehicleClick={(v) => {
+            onVehicleClick={(_v) => {
               // Could open a detail panel
             }}
           />
