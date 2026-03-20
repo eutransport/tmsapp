@@ -18,4 +18,7 @@ urlpatterns = [
     
     # Available vehicles
     path('vehicles/', views.TrackingVehiclesView.as_view(), name='tracking-vehicles'),
+    
+    # Assigned vehicle for current user
+    path('my-vehicle/', views.AssignedVehicleView.as_view(), name='tracking-my-vehicle'),
 ]

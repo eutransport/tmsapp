@@ -1869,6 +1869,7 @@
     "monitorVehicle": "Monitor Vehicle",
     "selectVehicle": "Select vehicle",
     "chooseVehicle": "Choose a vehicle...",
+    "assignedVehicle": "Assigned vehicle",
     "vehicleOnline": "Vehicle online",
     "vehicleOffline": "No active tracking",
     "liveVehicles": "Live vehicles",

@@ -355,3 +355,38 @@ class TrackingVehiclesView(APIView):
         except Exception as e:
             logger.error(f"Failed to load tracking vehicles: {e}")
             return Response([], status=status.HTTP_200_OK)
+
+
+class AssignedVehicleView(APIView):
+    """
+    Get the vehicle assigned to the current logged-in driver.
+    Returns the vehicle linked via Driver.voertuig → Driver.gekoppelde_gebruiker.
+    """
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [TrackingReadThrottle]
+
+    def get(self, request):
+        """Get the assigned vehicle for the current user."""
+        try:
+            from apps.drivers.models import Driver
+            driver = Driver.objects.select_related('voertuig').filter(
+                gekoppelde_gebruiker=request.user
+            ).first()
+
+            if not driver or not driver.voertuig:
+                return Response({'assigned': False}, status=status.HTTP_200_OK)
+
+            vehicle = driver.voertuig
+            return Response({
+                'assigned': True,
+                'vehicle': {
+                    'id': str(vehicle.id),
+                    'kenteken': vehicle.kenteken,
+                    'type_wagen': vehicle.type_wagen,
+                    'ritnummer': vehicle.ritnummer,
+                },
+                'driver_naam': driver.naam,
+            })
+        except Exception as e:
+            logger.error(f"Failed to load assigned vehicle: {e}")
+            return Response({'assigned': False}, status=status.HTTP_200_OK)

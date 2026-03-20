@@ -224,14 +224,23 @@ function VehicleMonitorPanel({
   vehicles,
   liveVehicles,
   onSelectVehicle,
+  assignedVehicle,
 }: {
   vehicles: TrackingVehicle[]
   liveVehicles: LiveVehicle[]
   onSelectVehicle: (vehicleId: string | null) => void
-  selectedVehicleId?: string | null
+  assignedVehicle?: { vehicle: TrackingVehicle; driver_naam: string } | null
 }) {
   const { t } = useTranslation()
   const [selectedVehicle, setSelectedVehicle] = useState<string>('')
+
+  // Auto-select assigned vehicle on mount
+  useEffect(() => {
+    if (assignedVehicle && !selectedVehicle) {
+      setSelectedVehicle(assignedVehicle.vehicle.id)
+      onSelectVehicle(assignedVehicle.vehicle.id)
+    }
+  }, [assignedVehicle])
 
   // Find live data for selected vehicle
   const liveData = liveVehicles.find(v => v.vehicle_id === selectedVehicle)
@@ -251,6 +260,23 @@ function VehicleMonitorPanel({
         <MagnifyingGlassIcon className="h-4 w-4 text-primary-600" />
         {t('tracking.monitorVehicle')}
       </h3>
+
+      {/* Assigned vehicle badge */}
+      {assignedVehicle && (
+        <div className="bg-primary-50 border border-primary-200 rounded-lg px-3 py-2">
+          <div className="flex items-center gap-2">
+            <TruckIcon className="h-4 w-4 text-primary-600 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-primary-900 truncate">
+                {t('tracking.assignedVehicle')}: {assignedVehicle.vehicle.kenteken}
+              </p>
+              <p className="text-[10px] text-primary-700 truncate">
+                {assignedVehicle.vehicle.ritnummer} — {assignedVehicle.driver_naam}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Vehicle selector */}
       <div>
@@ -435,6 +461,7 @@ export default function TrackingPage() {
   const { user } = useAuthStore()
   const [liveVehicles, setLiveVehicles] = useState<LiveVehicle[]>([])
   const [trackingVehicles, setTrackingVehicles] = useState<TrackingVehicle[]>([])
+  const [assignedVehicle, setAssignedVehicle] = useState<{ vehicle: TrackingVehicle; driver_naam: string } | null>(null)
   const [selectedRoute, setSelectedRoute] = useState<RouteHistory | null>(null)
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -460,6 +487,19 @@ export default function TrackingPage() {
         setLiveVehicles(live)
       } catch (err) {
         console.error('Failed to load live positions:', err)
+      }
+
+      // Load assigned vehicle for current user
+      try {
+        const myVehicle = await trackingApi.getMyVehicle()
+        if (myVehicle.assigned && myVehicle.vehicle) {
+          setAssignedVehicle({
+            vehicle: myVehicle.vehicle,
+            driver_naam: myVehicle.driver_naam || '',
+          })
+        }
+      } catch (err) {
+        console.error('Failed to load assigned vehicle:', err)
       }
 
       setLoading(false)
@@ -554,7 +594,7 @@ export default function TrackingPage() {
             vehicles={trackingVehicles}
             liveVehicles={liveVehicles}
             onSelectVehicle={handleSelectVehicle}
-            selectedVehicleId={selectedVehicleId}
+            assignedVehicle={assignedVehicle}
           />
 
           {/* Active vehicles list (admin only) */}

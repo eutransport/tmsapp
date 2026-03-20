@@ -133,4 +133,14 @@ export const trackingApi = {
     const response = await api.get('/tracking/vehicles/')
     return response.data
   },
+
+  // Get vehicle assigned to the current logged-in driver
+  getMyVehicle: async (): Promise<{
+    assigned: boolean
+    vehicle?: TrackingVehicle
+    driver_naam?: string
+  }> => {
+    const response = await api.get('/tracking/my-vehicle/')
+    return response.data
+  },
 }
