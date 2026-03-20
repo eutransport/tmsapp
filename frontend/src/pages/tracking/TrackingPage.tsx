@@ -20,9 +20,15 @@ import {
   ChevronRightIcon,
   XMarkIcon,
   MagnifyingGlassIcon,
+  PlayIcon,
+  StopIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { useAuthStore } from '@/stores/authStore'
 import { trackingApi, type LiveVehicle, type TrackingSession, type TrackingVehicle, type RouteHistory } from '@/api/tracking'
+import { useGPSTracking } from '@/hooks/useGPSTracking'
+import { useLocationPermission } from '@/hooks/useLocationPermission'
+import { LocationPermissionDialog, LocationDeniedBanner } from '@/components/tracking/LocationPermission'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -225,14 +231,23 @@ function VehicleMonitorPanel({
   liveVehicles,
   onSelectVehicle,
   assignedVehicle,
+  locationPermission,
 }: {
   vehicles: TrackingVehicle[]
   liveVehicles: LiveVehicle[]
   onSelectVehicle: (vehicleId: string | null) => void
   assignedVehicle?: { vehicle: TrackingVehicle; driver_naam: string } | null
+  locationPermission: ReturnType<typeof useLocationPermission>
 }) {
   const { t } = useTranslation()
   const [selectedVehicle, setSelectedVehicle] = useState<string>('')
+  const [session, setSession] = useState<TrackingSession | null>(null)
+  const [starting, setStarting] = useState(false)
+  const [stopping, setStopping] = useState(false)
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false)
+  const [permissionLoading, setPermissionLoading] = useState(false)
+
+  const gps = useGPSTracking({ minInterval: 10000, maxAccuracy: 100 })
 
   // Auto-select assigned vehicle on mount
   useEffect(() => {
@@ -242,15 +257,78 @@ function VehicleMonitorPanel({
     }
   }, [assignedVehicle])
 
+  // Check for existing active session on mount
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const result = await trackingApi.getActiveSession()
+        if ('id' in result) {
+          setSession(result)
+          if (!gps.isTracking) {
+            gps.startTracking()
+          }
+        }
+      } catch {}
+    }
+    check()
+  }, [])
+
   // Find live data for selected vehicle
   const liveData = liveVehicles.find(v => v.vehicle_id === selectedVehicle)
 
   const handleSelect = (vehicleId: string) => {
     setSelectedVehicle(vehicleId)
-    if (vehicleId) {
-      onSelectVehicle(vehicleId)
-    } else {
-      onSelectVehicle(null)
+    onSelectVehicle(vehicleId || null)
+  }
+
+  // ---- Start Tracking Flow ----
+  const handleStartTracking = async () => {
+    if (locationPermission.status === 'denied') return
+    if (locationPermission.status !== 'granted') {
+      setShowPermissionDialog(true)
+      return
+    }
+    await doStartTracking()
+  }
+
+  const handlePermissionAllow = async () => {
+    setPermissionLoading(true)
+    const result = await locationPermission.requestPermission()
+    setPermissionLoading(false)
+    setShowPermissionDialog(false)
+    if (result === 'granted') {
+      await doStartTracking()
+    }
+  }
+
+  const handlePermissionDeny = () => {
+    locationPermission.markAsAsked()
+    setShowPermissionDialog(false)
+  }
+
+  const doStartTracking = async () => {
+    setStarting(true)
+    try {
+      const newSession = await trackingApi.startSession(selectedVehicle || undefined)
+      setSession(newSession)
+      gps.startTracking()
+    } catch (err: any) {
+      console.error('Failed to start tracking:', err)
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  const handleStopTracking = async () => {
+    setStopping(true)
+    try {
+      gps.stopTracking()
+      await trackingApi.stopSession()
+      setSession(null)
+    } catch (err: any) {
+      console.error('Failed to stop tracking:', err)
+    } finally {
+      setStopping(false)
     }
   }
 
@@ -260,6 +338,20 @@ function VehicleMonitorPanel({
         <MagnifyingGlassIcon className="h-4 w-4 text-primary-600" />
         {t('tracking.monitorVehicle')}
       </h3>
+
+      {/* GPS Denied Banner */}
+      {locationPermission.status === 'denied' && (
+        <LocationDeniedBanner platform={locationPermission.platform} />
+      )}
+
+      {/* Permission Dialog */}
+      <LocationPermissionDialog
+        isOpen={showPermissionDialog}
+        onAllow={handlePermissionAllow}
+        onDeny={handlePermissionDeny}
+        platform={locationPermission.platform}
+        loading={permissionLoading}
+      />
 
       {/* Assigned vehicle badge */}
       {assignedVehicle && (
@@ -287,6 +379,7 @@ function VehicleMonitorPanel({
           value={selectedVehicle}
           onChange={(e) => handleSelect(e.target.value)}
           className="input-field text-sm"
+          disabled={!!session}
         >
           <option value="">{t('tracking.chooseVehicle')}</option>
           {vehicles.map(v => (
@@ -297,44 +390,91 @@ function VehicleMonitorPanel({
         </select>
       </div>
 
-      {/* Vehicle info when selected */}
-      {selectedVehicle && (
+      {/* Active tracking session */}
+      {session ? (
         <div className="space-y-2">
-          {liveData ? (
-            <>
-              <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-sm font-medium text-green-700">{t('tracking.active')}</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
+            <div>📡 {t('tracking.sent')}: {gps.pointsSent}</div>
+            <div>📦 {t('tracking.buffered')}: {gps.pointsBuffered}</div>
+            {gps.accuracy != null && (
+              <div>🎯 {t('tracking.accuracy')}: {Math.round(gps.accuracy)}m</div>
+            )}
+            {gps.lastPosition?.coords.speed != null && (
+              <div>🚀 {Math.round(gps.lastPosition.coords.speed * 3.6)} km/h</div>
+            )}
+          </div>
+
+          {gps.error && (
+            <div className="text-xs text-amber-600 flex items-center gap-1">
+              <ExclamationTriangleIcon className="h-3.5 w-3.5" />
+              {gps.error}
+            </div>
+          )}
+
+          <button
+            onClick={handleStopTracking}
+            disabled={stopping}
+            className="w-full px-3 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+          >
+            {stopping ? (
+              <ArrowPathIcon className="h-4 w-4 animate-spin" />
+            ) : (
+              <StopIcon className="h-4 w-4" />
+            )}
+            {t('tracking.stopTracking')}
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Start tracking button */}
+          {selectedVehicle && locationPermission.status !== 'denied' && (
+            <button
+              onClick={handleStartTracking}
+              disabled={starting}
+              className="btn-primary w-full text-sm flex items-center justify-center gap-2"
+            >
+              {starting ? (
+                <ArrowPathIcon className="h-4 w-4 animate-spin" />
+              ) : (
+                <PlayIcon className="h-4 w-4" />
+              )}
+              {t('tracking.startTracking')}
+            </button>
+          )}
+
+          {/* Vehicle info when selected */}
+          {selectedVehicle && liveData && (
+            <div className="bg-gray-50 rounded-lg p-2.5 space-y-1.5">
+              <div className="flex items-center gap-2 text-xs text-gray-700">
                 <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-sm font-medium text-green-700">{t('tracking.vehicleOnline')}</span>
+                <span className="font-medium">{t('tracking.vehicleOnline')}</span>
               </div>
-              
-              <div className="bg-gray-50 rounded-lg p-2.5 space-y-1.5">
-                <div className="flex items-center gap-2 text-xs text-gray-700">
-                  <TruckIcon className="h-3.5 w-3.5 shrink-0" />
-                  <span className="font-medium">{liveData.vehicle_kenteken}</span>
-                  {liveData.vehicle_ritnummer && (
-                    <span className="text-gray-500">— {liveData.vehicle_ritnummer}</span>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-1.5 text-xs text-gray-500">
-                  <div>👤 {liveData.user_name}</div>
-                  {liveData.speed != null && (
-                    <div>🚀 {Math.round(liveData.speed)} km/h</div>
-                  )}
-                  <div className="col-span-2">
-                    🕐 {new Date(liveData.recorded_at).toLocaleTimeString('nl-NL', {
-                      hour: '2-digit', minute: '2-digit', second: '2-digit',
-                    })}
-                  </div>
+              <div className="grid grid-cols-2 gap-1.5 text-xs text-gray-500">
+                <div>👤 {liveData.user_name}</div>
+                {liveData.speed != null && (
+                  <div>🚀 {Math.round(liveData.speed)} km/h</div>
+                )}
+                <div className="col-span-2">
+                  🕐 {new Date(liveData.recorded_at).toLocaleTimeString('nl-NL', {
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                  })}
                 </div>
               </div>
-            </>
-          ) : (
+            </div>
+          )}
+
+          {selectedVehicle && !liveData && !session && (
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <div className="h-2.5 w-2.5 rounded-full bg-gray-300" />
               <span>{t('tracking.vehicleOffline')}</span>
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   )
@@ -468,6 +608,7 @@ export default function TrackingPage() {
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const isAdmin = user?.rol === 'admin' || user?.rol === 'gebruiker'
+  const locationPermission = useLocationPermission()
 
   // Load initial data
   useEffect(() => {
@@ -595,6 +736,7 @@ export default function TrackingPage() {
             liveVehicles={liveVehicles}
             onSelectVehicle={handleSelectVehicle}
             assignedVehicle={assignedVehicle}
+            locationPermission={locationPermission}
           />
 
           {/* Active vehicles list (admin only) */}

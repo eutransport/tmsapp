@@ -1895,6 +1895,12 @@
     "selectVehicle": "Selecteer voertuig",
     "chooseVehicle": "Kies een voertuig...",
     "assignedVehicle": "Gekoppeld voertuig",
+    "startTracking": "Start Tracking",
+    "stopTracking": "Stop Tracking",
+    "active": "Tracking actief",
+    "sent": "Verzonden",
+    "buffered": "Gebufferd",
+    "accuracy": "Nauwkeurigheid",
     "vehicleOnline": "Voertuig online",
     "vehicleOffline": "Geen actieve tracking",
     "liveVehicles": "Live voertuigen",
@@ -1903,6 +1909,45 @@
     "noHistory": "Geen routes gevonden",
     "route": "Route",
     "points": "punten",
-    "minutes": "minuten"
+    "minutes": "minuten",
+    "permission": {
+      "title": "Locatietoegang vereist",
+      "description": "Om je voertuig live te kunnen volgen, heeft de app toegang nodig tot je locatie. Je locatie wordt alleen gedeeld wanneer je tracking actief inschakelt.",
+      "privacy1": "Je locatie wordt alleen gedeeld tijdens actieve tracking",
+      "privacy2": "Locatiegegevens worden versleuteld via HTTPS verstuurd",
+      "privacy3": "Je kunt tracking op elk moment stoppen",
+      "allow": "Locatie toestaan",
+      "deny": "Niet nu",
+      "changeLater": "Je kunt dit later altijd wijzigen via je apparaatinstellingen."
+    },
+    "denied": {
+      "title": "GPS locatie is geblokkeerd",
+      "description": "Tracking kan niet starten omdat locatietoegang is geweigerd. Wijzig dit via je apparaatinstellingen.",
+      "howToEnable": "Hoe schakel ik locatie weer in?"
+    },
+    "help": {
+      "android": {
+        "step1": "Open de Instellingen-app op je telefoon",
+        "step2": "Ga naar Apps of App-beheer",
+        "step3": "Zoek en tik op je browser (Chrome/Samsung Internet)",
+        "step4": "Tik op Machtigingen → Locatie",
+        "step5": "Kies 'Toestaan' of 'Alleen tijdens gebruik'",
+        "chrome": "In Chrome: tik op het slotje naast de URL → Site-instellingen → Locatie → Toestaan"
+      },
+      "ios": {
+        "step1": "Open de Instellingen-app op je iPhone/iPad",
+        "step2": "Scroll naar beneden en tik op Safari (of je browser)",
+        "step3": "Tik op Locatie",
+        "step4": "Kies 'Vraag' of 'Sta toe'",
+        "step5": "Ga terug naar de app en probeer opnieuw",
+        "safari": "Alternatief: ga naar Instellingen → Privacy en beveiliging → Locatievoorzieningen → Safari → 'Bij gebruik van de app'"
+      },
+      "desktop": {
+        "title": "Desktop Browser",
+        "step1": "Klik op het slotje links van de adresbalk",
+        "step2": "Zoek 'Locatie' en wijzig naar 'Toestaan'",
+        "step3": "Herlaad de pagina"
+      }
+    }
   }
 }
