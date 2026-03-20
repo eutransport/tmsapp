@@ -243,8 +243,8 @@ export default function DashboardLayout() {
         <LicenseExpiryBanner />
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto">
-          <div className="px-4 py-6 sm:px-6 lg:px-8">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto">
+          <div className="px-3 py-4 sm:px-6 lg:px-8">
             <Outlet />
           </div>
         </main>

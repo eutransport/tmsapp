@@ -509,11 +509,11 @@ const InvoiceImportDetailPage: React.FC = () => {
   const totalPages = importData.extracted_data?.ocr_pages?.length || 1;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-6">
       {/* Header */}
-      <div className="max-w-7xl mx-auto mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="max-w-7xl mx-auto mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/imports')}
               className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
@@ -533,12 +533,12 @@ const InvoiceImportDetailPage: React.FC = () => {
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
             {Object.keys(corrections).length > 0 && (
               <button
                 onClick={handleSaveCorrections}
                 disabled={correctionMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+                className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
               >
                 {correctionMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -566,9 +566,9 @@ const InvoiceImportDetailPage: React.FC = () => {
       </div>
 
       {/* Main Content - Grid Layout */}
-      <div className="max-w-[1600px] mx-auto grid grid-cols-12 gap-6">
+      <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
         {/* Document Preview - Left Column */}
-        <div className="col-span-7 bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col">
+        <div className="lg:col-span-7 bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col">
           {/* Preview Toolbar */}
           <div className="bg-gray-800 px-4 py-2 flex items-center justify-between text-white text-sm">
             <div className="flex items-center gap-2">
@@ -666,7 +666,7 @@ const InvoiceImportDetailPage: React.FC = () => {
         </div>
 
         {/* Right Column - Form & Data */}
-        <div className="col-span-5 space-y-4">
+        <div className="lg:col-span-5 space-y-4">
           {/* Invoice Type Selection */}
           <div className="bg-white rounded-xl shadow-sm border p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">{t('imports.documentType', 'Type Document')}</h3>

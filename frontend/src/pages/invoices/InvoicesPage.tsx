@@ -355,7 +355,7 @@ export default function InvoicesPage() {
   const totalPages = Math.ceil(totalCount / pageSize)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="page-header">
         <h1 className="page-title">{t('invoices.title')}</h1>
@@ -428,9 +428,9 @@ export default function InvoicesPage() {
 
       {/* Filters */}
       <div className="card">
-        <div className="p-4 space-y-4">
+        <div className="p-3 space-y-3">
           {/* Search row */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-2">
             <div className="flex-1">
               <div className="relative">
                 <input
@@ -439,12 +439,12 @@ export default function InvoicesPage() {
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                  className="input-field pl-10 w-full min-h-[44px]"
+                  className="input-field pl-9 w-full text-sm h-9"
                 />
-                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <MagnifyingGlassIcon className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               </div>
             </div>
-            <button onClick={handleSearch} className="btn-primary min-h-[44px] w-full sm:w-auto">
+            <button onClick={handleSearch} className="btn-primary h-9 text-sm w-full sm:w-auto">
               {t('common.search')}
             </button>
           </div>

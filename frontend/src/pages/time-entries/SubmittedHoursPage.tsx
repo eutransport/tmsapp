@@ -851,7 +851,7 @@ export default function SubmittedHoursPage() {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-x-4 text-xs mb-2 ml-13">
+                  <div className="grid grid-cols-2 gap-x-3 text-xs mb-2 ml-0 sm:ml-13">
                     <div>
                       <span className="text-gray-500">{t('timeEntries.trips')}: </span>
                       <span className="font-medium">{week.entries_count}</span>

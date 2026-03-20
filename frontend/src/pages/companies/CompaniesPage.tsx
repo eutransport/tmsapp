@@ -476,24 +476,24 @@ function MailingListPanel({
                 <div className="flex items-center gap-1 shrink-0">
                   <button
                     onClick={() => handleToggleActive(contact)}
-                    className={`p-1.5 rounded text-xs font-medium min-w-[44px] min-h-[44px] flex items-center justify-center ${
+                    className={`p-1.5 rounded text-xs font-medium min-w-[36px] min-h-[36px] flex items-center justify-center ${
                       contact.is_active
                         ? 'text-green-600 hover:bg-green-50'
                         : 'text-gray-400 hover:bg-gray-100'
                     }`}
                     title={contact.is_active ? 'Deactiveren' : 'Activeren'}
                   >
-                    <CheckCircleIcon className="w-5 h-5" />
+                    <CheckCircleIcon className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => startEdit(contact)}
-                    className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
+                    className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded min-w-[36px] min-h-[36px] flex items-center justify-center"
                   >
                     <PencilSquareIcon className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setDeleteTarget(contact)}
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded min-w-[36px] min-h-[36px] flex items-center justify-center"
                   >
                     <TrashIcon className="w-4 h-4" />
                   </button>

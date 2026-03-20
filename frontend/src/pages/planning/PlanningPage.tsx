@@ -624,7 +624,7 @@ function AdminPlanningView() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="page-header">
         <h1 className="page-title">{t('planning.weekPlanning')}</h1>
@@ -681,9 +681,9 @@ function AdminPlanningView() {
 
       {/* Filters */}
       <div className="card">
-        <div className="p-4 flex flex-wrap items-center gap-4">
+        <div className="p-3 flex flex-wrap items-center gap-2 sm:gap-4">
           {/* Company selector */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1">
             {(showMoreCompanies ? companies : companies.slice(0, 4)).map((company) => (
               <button
                 key={company.id}
@@ -715,7 +715,7 @@ function AdminPlanningView() {
             >
               <ChevronLeftIcon className="h-5 w-5" />
             </button>
-            <div className="px-4 py-2 bg-primary-50 rounded-lg font-medium text-primary-700 min-w-[140px] text-center">
+            <div className="px-3 py-2 bg-primary-50 rounded-lg font-medium text-primary-700 min-w-[120px] text-center text-sm">
               {t('common.week')} {currentWeek} / {currentYear}
             </div>
             <button

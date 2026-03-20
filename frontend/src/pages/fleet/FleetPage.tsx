@@ -485,32 +485,26 @@ export default function FleetPage() {
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
             {/* Search */}
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('common.search')}
-              </label>
               <div className="relative">
-                <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1) }}
                   placeholder={t('fleet.searchVehicles')}
-                  className="input pl-10 min-h-[44px]"
+                  className="input pl-9 text-sm h-9"
                 />
               </div>
             </div>
 
             {/* Filter row */}
-            <div className="flex flex-col xs:flex-row gap-3 w-full sm:w-auto">
+            <div className="flex flex-col xs:flex-row gap-2 w-full sm:w-auto">
               {/* Company filter */}
-              <div className="flex-1 xs:w-40">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('companies.title')}
-                </label>
+              <div className="flex-1 xs:w-36">
                 <select
                   value={companyFilter}
                   onChange={(e) => { setCompanyFilter(e.target.value); setPage(1) }}
-                  className="input min-h-[44px]"
+                  className="input text-sm h-9"
                 >
                   <option value="">{t('companies.allCompanies')}</option>
                   {companies.map(company => (
@@ -523,14 +517,11 @@ export default function FleetPage() {
 
               {/* Type filter */}
               {vehicleTypes.length > 0 && (
-                <div className="flex-1 xs:w-40">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('fleet.vehicleType')}
-                  </label>
+                <div className="flex-1 xs:w-36">
                   <select
                     value={typeFilter}
                     onChange={(e) => { setTypeFilter(e.target.value); setPage(1) }}
-                    className="input min-h-[44px]"
+                    className="input text-sm h-9"
                   >
                     <option value="">{t('common.allTypes')}</option>
                     {vehicleTypes.map(type => (
@@ -546,10 +537,10 @@ export default function FleetPage() {
             {/* Refresh button */}
             <button
               onClick={() => fetchVehicles()}
-              className="p-2 min-w-[44px] min-h-[44px] text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg self-end"
+              className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg self-end"
               title={t('common.refresh')}
             >
-              <ArrowPathIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+              <ArrowPathIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
@@ -681,14 +672,14 @@ export default function FleetPage() {
                   <div className="flex items-center gap-0.5 shrink-0">
                     <button
                       onClick={() => { setSelectedVehicle(vehicle); setShowEditModal(true) }}
-                      className="p-2 min-w-[44px] min-h-[44px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-lg"
+                      className="p-1.5 min-w-[36px] min-h-[36px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
                       title={t('common.edit')}
                     >
                       <PencilSquareIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => { setSelectedVehicle(vehicle); setShowDeleteModal(true) }}
-                      className="p-2 min-w-[44px] min-h-[44px] text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded-lg"
+                      className="p-1.5 min-w-[36px] min-h-[36px] text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded"
                       title={t('common.delete')}
                     >
                       <TrashIcon className="w-4 h-4" />
