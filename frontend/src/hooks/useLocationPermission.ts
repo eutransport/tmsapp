@@ -40,65 +40,36 @@ export function useLocationPermission() {
   })
 
   // Check current permission status
-  // Strategy: first try Permissions API, then fall back to a real GPS probe
+  // Strategy: Use Permissions API if available, otherwise assume 'prompt'
+  // NEVER block the UI based on an unreliable GPS probe at page load
   const checkPermission = useCallback(async () => {
     if (!navigator.geolocation) {
       setState(prev => ({ ...prev, status: 'unavailable' }))
       return
     }
 
-    let permApiStatus: string | null = null
-
-    // Step 1: Try Permissions API (fast, but unreliable on some mobile browsers/PWAs)
+    // Try Permissions API (fast, no popup, supported in Chrome/Edge/Firefox)
     if ('permissions' in navigator) {
       try {
         const result = await navigator.permissions.query({ name: 'geolocation' })
-        permApiStatus = result.state
+        
+        // Map browser state
+        const mappedStatus = result.state as PermissionStatus
+        setState(prev => ({ ...prev, status: mappedStatus }))
 
-        // Listen for future changes
+        // Listen for future changes (user changes in browser/OS settings)
         result.addEventListener('change', () => {
           setState(prev => ({ ...prev, status: result.state as PermissionStatus }))
         })
-
-        // If Permissions API says granted, trust it immediately
-        if (result.state === 'granted') {
-          setState(prev => ({ ...prev, status: 'granted' }))
-          return
-        }
-
-        // If Permissions API says prompt, trust it (user hasn't decided yet)
-        if (result.state === 'prompt') {
-          setState(prev => ({ ...prev, status: 'prompt' }))
-          return
-        }
+        return
       } catch {
-        // Permissions API not supported for geolocation
+        // Permissions API doesn't support geolocation query in this browser
       }
     }
 
-    // Step 2: If Permissions API says 'denied' or is unavailable,
-    // do a real GPS probe — some browsers/PWAs report 'denied' incorrectly
-    // when the user actually allowed it in site settings
-    try {
-      await new Promise<void>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          () => resolve(),
-          (err) => reject(err),
-          { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 },
-        )
-      })
-      // If we got here, GPS actually works regardless of what Permissions API said
-      setState(prev => ({ ...prev, status: 'granted' }))
-    } catch (err: any) {
-      if (err?.code === 1) {
-        // PERMISSION_DENIED — truly denied
-        setState(prev => ({ ...prev, status: 'denied' }))
-      } else {
-        // POSITION_UNAVAILABLE or TIMEOUT — permission might be granted but GPS is just unavailable
-        // Don't mark as denied
-        setState(prev => ({ ...prev, status: permApiStatus === 'denied' ? 'denied' : 'unknown' }))
-      }
-    }
+    // Fallback: Permissions API not available (Samsung Internet, older Safari)
+    // Default to 'prompt' — we'll find out the real status when user clicks Start
+    setState(prev => ({ ...prev, status: 'prompt' }))
   }, [])
 
   useEffect(() => {

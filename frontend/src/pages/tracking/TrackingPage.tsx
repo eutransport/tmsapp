@@ -285,18 +285,14 @@ function VehicleMonitorPanel({
 
   // ---- Start Tracking Flow ----
   const handleStartTracking = async () => {
-    // If status is denied, re-check first — user might have changed it in settings
-    if (locationPermission.status === 'denied') {
-      await locationPermission.checkPermission()
-      // If still denied after re-check, show the dialog anyway to let them try
-      setShowPermissionDialog(true)
+    if (locationPermission.status === 'granted') {
+      // Permission already granted — start directly
+      await doStartTracking()
       return
     }
-    if (locationPermission.status !== 'granted') {
-      setShowPermissionDialog(true)
-      return
-    }
-    await doStartTracking()
+    // Any other status (prompt, denied, unknown) — show our dialog
+    // The dialog's "Allow" button will trigger the real browser permission prompt
+    setShowPermissionDialog(true)
   }
 
   const handlePermissionAllow = async () => {
@@ -304,9 +300,11 @@ function VehicleMonitorPanel({
     const result = await locationPermission.requestPermission()
     setPermissionLoading(false)
     setShowPermissionDialog(false)
-    // Start tracking if permission granted (or if GPS actually works)
     if (result === 'granted') {
       await doStartTracking()
+    } else {
+      // Permission was denied — re-check so banner shows
+      await locationPermission.checkPermission()
     }
   }
 
@@ -445,8 +443,8 @@ function VehicleMonitorPanel({
         </div>
       ) : (
         <>
-          {/* Start tracking button */}
-          {selectedVehicle && locationPermission.status !== 'denied' && (
+          {/* Start tracking button — always show when vehicle selected */}
+          {selectedVehicle && (
             <button
               onClick={handleStartTracking}
               disabled={starting}
