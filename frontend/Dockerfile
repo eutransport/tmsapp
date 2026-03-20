@@ -11,8 +11,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production=false
+# Install dependencies (npm install zodat lock file automatisch wordt bijgewerkt)
+RUN npm install
 
 # Copy source code
 COPY . .

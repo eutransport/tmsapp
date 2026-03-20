@@ -191,8 +191,7 @@ function TrackingMap({
   return (
     <div
       ref={mapContainerRef}
-      className="w-full h-full rounded-lg"
-      style={{ minHeight: '400px' }}
+      className="w-full h-full rounded-lg min-h-[300px] sm:min-h-[400px]"
     />
   )
 }
@@ -483,7 +482,7 @@ function HistoryPanel({
         </button>
       </div>
 
-      <div className="divide-y max-h-[300px] overflow-y-auto">
+      <div className="divide-y max-h-[200px] sm:max-h-[300px] overflow-y-auto">
         {loading ? (
           <div className="p-4 text-center text-sm text-gray-500">
             <ArrowPathIcon className="h-5 w-5 animate-spin mx-auto mb-1" />
@@ -606,18 +605,18 @@ export default function TrackingPage() {
 
       {/* Route info bar */}
       {selectedRoute && (
-        <div className="bg-primary-50 border border-primary-200 rounded-lg px-3 py-2 flex items-center justify-between text-sm">
-          <div>
-            <span className="font-medium text-primary-900">
+        <div className="bg-primary-50 border border-primary-200 rounded-lg px-3 py-2 flex items-start sm:items-center justify-between gap-2 text-sm">
+          <div className="min-w-0 flex-1">
+            <span className="font-medium text-primary-900 block sm:inline truncate">
               {t('tracking.route')}: {selectedRoute.session.vehicle_kenteken || selectedRoute.session.user_name}
             </span>
-            <span className="text-primary-700 ml-2">
+            <span className="text-primary-700 block sm:inline sm:ml-2 text-xs sm:text-sm">
               {selectedRoute.total_points} {t('tracking.points')} · {selectedRoute.distance_km} km
             </span>
           </div>
           <button
             onClick={handleClearRoute}
-            className="p-1 text-primary-600 hover:text-primary-800 rounded"
+            className="p-1 text-primary-600 hover:text-primary-800 rounded shrink-0"
           >
             <XMarkIcon className="h-4 w-4" />
           </button>
@@ -627,7 +626,7 @@ export default function TrackingPage() {
       {/* Main layout: Map + Sidebar */}
       <div className="flex flex-col lg:flex-row gap-4">
         {/* Map */}
-        <div className="flex-1 bg-white rounded-lg shadow-sm border overflow-hidden" style={{ minHeight: '500px' }}>
+        <div className="flex-1 bg-white rounded-lg shadow-sm border overflow-hidden min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
           <TrackingMap
             vehicles={liveVehicles}
             selectedRoute={selectedRoute}
@@ -638,7 +637,7 @@ export default function TrackingPage() {
         </div>
 
         {/* Sidebar */}
-        <div className="lg:w-80 space-y-4">
+        <div className="w-full lg:w-80 space-y-4">
           {/* Driver tracking controls */}
           <DriverTrackingPanel vehicles={trackingVehicles} locationPermission={locationPermission} />
 
@@ -646,12 +645,12 @@ export default function TrackingPage() {
           {isAdmin && liveVehicles.length > 0 && (
             <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
               <div className="px-3 py-2 border-b bg-gray-50">
-                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                  <TruckIcon className="h-4 w-4 text-gray-500" />
-                  {t('tracking.liveVehicles')} ({liveVehicles.length})
+                <h3 className="text-xs sm:text-sm font-semibold text-gray-900 flex items-center gap-2">
+                  <TruckIcon className="h-4 w-4 text-gray-500 shrink-0" />
+                  <span className="truncate">{t('tracking.liveVehicles')} ({liveVehicles.length})</span>
                 </h3>
               </div>
-              <div className="divide-y max-h-[250px] overflow-y-auto">
+              <div className="divide-y max-h-[200px] sm:max-h-[250px] overflow-y-auto">
                 {liveVehicles.map(v => (
                   <div key={v.session_id} className="px-3 py-2 hover:bg-gray-50">
                     <div className="flex items-center gap-2">
