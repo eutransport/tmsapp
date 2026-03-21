@@ -1013,40 +1013,40 @@ export default function UsersPage() {
                 <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
                   <button
                     onClick={() => { setSelectedUser(user); setShowEditModal(true) }}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg min-h-[44px]"
+                    className="p-2 min-h-[44px] min-w-[44px] text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                    title={t('common.edit')}
                   >
                     <PencilSquareIcon className="w-4 h-4" />
-                    <span>{t('common.edit')}</span>
                   </button>
                   <button
                     onClick={() => { setSelectedUser(user); setShowPasswordModal(true) }}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-yellow-600 bg-yellow-50 hover:bg-yellow-100 rounded-lg min-h-[44px]"
+                    className="p-2 min-h-[44px] min-w-[44px] text-yellow-600 bg-yellow-50 hover:bg-yellow-100 rounded-lg"
+                    title={t('auth.password')}
                   >
                     <KeyIcon className="w-4 h-4" />
-                    <span>{t('auth.password')}</span>
                   </button>
                   <button
                     onClick={() => { setSelectedUser(user); setShowBlockModal(true) }}
-                    className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg min-h-[44px] ${user.is_active ? 'text-orange-600 bg-orange-50 hover:bg-orange-100' : 'text-green-600 bg-green-50 hover:bg-green-100'}`}
+                    className={`p-2 min-h-[44px] min-w-[44px] rounded-lg ${user.is_active ? 'text-orange-600 bg-orange-50 hover:bg-orange-100' : 'text-green-600 bg-green-50 hover:bg-green-100'}`}
+                    title={user.is_active ? t('common.inactive') : t('common.active')}
                   >
                     {user.is_active ? <NoSymbolIcon className="w-4 h-4" /> : <CheckCircleIcon className="w-4 h-4" />}
-                    <span>{user.is_active ? t('common.inactive') : t('common.active')}</span>
                   </button>
                   {user.mfa_enabled && (
                     <button
                       onClick={() => { setSelectedUser(user); setShowMfaModal(true) }}
-                      className="flex items-center gap-1.5 px-3 py-2 text-sm text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg min-h-[44px]"
+                      className="p-2 min-h-[44px] min-w-[44px] text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg"
+                      title={t('users.twoFactorDisabled')}
                     >
                       <ShieldCheckIcon className="w-4 h-4" />
-                      <span>2FA uit</span>
                     </button>
                   )}
                   <button
                     onClick={() => { setSelectedUser(user); setShowDeleteModal(true) }}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg min-h-[44px]"
+                    className="p-2 min-h-[44px] min-w-[44px] text-red-600 bg-red-50 hover:bg-red-100 rounded-lg"
+                    title={t('common.delete')}
                   >
                     <TrashIcon className="w-4 h-4" />
-                    <span>{t('common.delete')}</span>
                   </button>
                 </div>
               </div>

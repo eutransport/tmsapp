@@ -767,12 +767,6 @@ export default function DriversPage() {
                     </div>
                     <div className="flex items-center gap-1 text-xs text-gray-500 truncate mt-0.5">
                       <span className="truncate">{getCompanyName(driver)}</span>
-                      {driver.telefoon && (
-                        <>
-                          <span className="text-gray-300">·</span>
-                          <a href={`tel:${driver.telefoon}`} className="text-primary-600 shrink-0">{driver.telefoon}</a>
-                        </>
-                      )}
                       {driver.voertuig_ritnummer && (
                         <>
                           <span className="text-gray-300">·</span>
@@ -780,6 +774,11 @@ export default function DriversPage() {
                         </>
                       )}
                     </div>
+                    {driver.telefoon && (
+                      <div className="mt-0.5">
+                        <a href={`tel:${driver.telefoon}`} className="text-xs text-primary-600">{driver.telefoon}</a>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
                     <button
