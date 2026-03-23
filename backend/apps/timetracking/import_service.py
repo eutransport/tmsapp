@@ -335,9 +335,12 @@ def import_excel(file_obj, filename, uploaded_by, overwrite=False, skip_duplicat
     # Bulk create in a transaction
     with transaction.atomic():
         ImportedTimeEntry.objects.bulk_create(final_entries, batch_size=500)
-        batch.totaal_rijen = total - skipped
-        batch.gekoppeld = matched - skipped if skip_duplicates else matched
-        batch.niet_gekoppeld = unmatched
+        actual_created = len(final_entries)
+        actual_matched = sum(1 for e in final_entries if e.user is not None)
+        actual_unmatched = actual_created - actual_matched
+        batch.totaal_rijen = actual_created
+        batch.gekoppeld = actual_matched
+        batch.niet_gekoppeld = actual_unmatched
         batch.save()
 
     logger.info(
