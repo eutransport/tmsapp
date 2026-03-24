@@ -479,31 +479,33 @@ class DashboardStatsView(APIView):
             factuurdatum__gte=start_of_year,
             factuurdatum__lte=today,
         ).aggregate(total=Sum('totaal'))
-        total_income = float(income_agg['total'] or 0)
-        
-        # Total expenses (inkoop + credit + direct expenses)
+
+        # Credit invoices (subtract from income, not add to expenses)
+        credit_agg = Invoice.objects.filter(
+            type=InvoiceType.CREDIT,
+            status__in=active_statuses,
+            factuurdatum__gte=start_of_year,
+            factuurdatum__lte=today,
+        ).aggregate(total=Sum('totaal'))
+
+        total_credit = float(credit_agg['total'] or 0)
+        total_income = float(income_agg['total'] or 0) - total_credit
+
+        # Total expenses (inkoop + direct expenses)
         invoice_expenses_agg = Invoice.objects.filter(
             type=InvoiceType.INKOOP,
             status__in=active_statuses,
             factuurdatum__gte=start_of_year,
             factuurdatum__lte=today,
         ).aggregate(total=Sum('totaal'))
-        
-        credit_expenses_agg = Invoice.objects.filter(
-            type=InvoiceType.CREDIT,
-            status__in=active_statuses,
-            factuurdatum__gte=start_of_year,
-            factuurdatum__lte=today,
-        ).aggregate(total=Sum('totaal'))
-        
+
         direct_expenses_agg = Expense.objects.filter(
             datum__gte=start_of_year,
             datum__lte=today,
         ).aggregate(total=Sum('totaal'))
-        
+
         total_expenses = (
             float(invoice_expenses_agg['total'] or 0) +
-            float(credit_expenses_agg['total'] or 0) +
             float(direct_expenses_agg['total'] or 0)
         )
         
