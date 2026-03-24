@@ -879,7 +879,7 @@ class RevenueView(APIView):
     """
     API endpoint voor omzet/winst statistieken.
     Ondersteunt week/maand/kwartaal/jaar aggregatie.
-    Bevat: inkomsten (verkoop), uitgaven (inkoop + credit + directe kosten),
+    Bevat: inkomsten (verkoop - credit), uitgaven (inkoop + directe kosten),
     totaal gevorderd (betaald) en totaal nog te vorderen (niet betaald).
     """
     permission_classes = [IsAuthenticated, IsAdminOrManager]
