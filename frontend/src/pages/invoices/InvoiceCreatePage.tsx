@@ -177,12 +177,13 @@ function TemplateCard({
   onSelect: () => void 
 }) {
   return (
-    <div
+    <button
+      type="button"
       onClick={onSelect}
       className={`
-        w-full box-border overflow-hidden border-2 rounded-lg p-4 cursor-pointer min-h-[80px]
+        w-full box-border overflow-hidden border-2 rounded-lg p-4 cursor-pointer min-h-[100px] text-left transition-colors
         ${selected
-          ? 'border-gray-300 bg-primary-50 shadow-inner'
+          ? 'border-primary-600 bg-primary-50'
           : 'border-gray-300 hover:bg-gray-50 bg-white'}
       `}
     >
@@ -200,7 +201,7 @@ function TemplateCard({
           {(template.layout as TemplateLayout).columns?.length || 0} kolommen
         </div>
       )}
-    </div>
+    </button>
   )
 }
 
