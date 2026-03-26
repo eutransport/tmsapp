@@ -60,6 +60,9 @@ import TemplateEditorPage from '@/pages/invoices/TemplateEditorPage'
 // Revenue
 import RevenuePage from '@/pages/revenue/RevenuePage'
 
+// Banking
+import BankingPage from '@/pages/banking/BankingPage'
+
 // Invoice Import (OCR)
 import { InvoiceImportPage, InvoiceImportDetailPage, EmailImportPage, MailboxConfigPage } from '@/pages/imports'
 
@@ -310,6 +313,9 @@ function App() {
 
         {/* Revenue */}
         <Route path="/revenue" element={<AdminRoute><RevenuePage /></AdminRoute>} />
+
+        {/* Banking */}
+        <Route path="/banking" element={<AdminRoute><BankingPage /></AdminRoute>} />
 
         {/* Invoice Import (OCR) */}
         <Route path="/imports" element={<AdminRoute><InvoiceImportPage /></AdminRoute>} />

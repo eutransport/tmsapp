@@ -28,6 +28,7 @@ import {
   SwatchIcon,
   WrenchScrewdriverIcon,
   MapPinIcon,
+  BanknotesIcon,
 } from '@heroicons/react/24/outline'
 import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
@@ -66,6 +67,7 @@ const navigation: NavItem[] = [
   { name: 'nav.invoices', href: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'gebruiker'] },
   { name: 'nav.invoiceTemplates', href: '/invoices/templates', icon: DocumentDuplicateIcon, roles: ['admin'] },
   { name: 'nav.invoiceImport', href: '/imports', icon: ArrowUpTrayIcon, roles: ['admin', 'gebruiker'] },
+  { name: 'nav.banking', href: '/banking', icon: BanknotesIcon, roles: ['admin'] },
   { name: 'nav.revenue', href: '/revenue', icon: CurrencyEuroIcon, roles: ['admin', 'gebruiker'] },
   { name: 'nav.spreadsheets', href: '/spreadsheets', icon: TableCellsIcon, roles: ['admin'] },
   { name: 'nav.spreadsheetTemplates', href: '/spreadsheets/templates', icon: SwatchIcon, roles: ['admin'] },
