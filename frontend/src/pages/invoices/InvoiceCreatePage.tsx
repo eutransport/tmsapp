@@ -180,10 +180,10 @@ function TemplateCard({
     <div
       onClick={onSelect}
       className={`
-        box-border border-2 rounded-lg p-4 cursor-pointer transition-colors min-h-[80px]
-        ${selected 
-          ? 'border-primary-500 bg-primary-50' 
-          : 'border-gray-200 hover:border-gray-300 bg-white'}
+        w-full box-border overflow-hidden border-2 rounded-lg p-4 cursor-pointer min-h-[80px]
+        ${selected
+          ? 'border-gray-300 bg-primary-50 shadow-inner'
+          : 'border-gray-300 hover:bg-gray-50 bg-white'}
       `}
     >
       <div className="flex items-start justify-between">
