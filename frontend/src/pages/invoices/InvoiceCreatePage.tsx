@@ -1903,8 +1903,7 @@ export default function InvoiceCreatePage() {
       </div>
 
       {/* Step 2: Invoice Details */}
-      {selectedTemplate && (
-        <div className="bg-white rounded-lg shadow p-6">
+      <div className={`bg-white rounded-lg shadow p-6${!selectedTemplate ? ' hidden' : ''}`}>
           <h2 className="text-lg font-semibold mb-4">2. {t('invoices.invoiceDetails')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="min-w-0">
@@ -2003,11 +2002,9 @@ export default function InvoiceCreatePage() {
             )}
           </div>
         </div>
-      )}
 
       {/* Step 3: Invoice Lines */}
-      {selectedTemplate && columns.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6">
+      <div className={`bg-white rounded-lg shadow p-6${!selectedTemplate || columns.length === 0 ? ' hidden' : ''}`}>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <h2 className="text-lg font-semibold">3. {t('invoices.lines')}</h2>
             <div className="flex gap-2 flex-wrap">
@@ -2160,7 +2157,6 @@ export default function InvoiceCreatePage() {
             </div>
           )}
         </div>
-      )}
 
       {/* Time Entry Import Modal */}
       <TimeEntryImportModal
