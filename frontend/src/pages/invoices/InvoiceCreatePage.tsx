@@ -180,7 +180,7 @@ function TemplateCard({
     <div
       onClick={onSelect}
       className={`
-        border-2 rounded-lg p-4 cursor-pointer transition-all
+        box-border border-2 rounded-lg p-4 cursor-pointer transition-all min-h-[80px]
         ${selected 
           ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200' 
           : 'border-gray-200 hover:border-gray-300 bg-white'}
@@ -193,9 +193,7 @@ function TemplateCard({
             <p className="text-sm text-gray-500 mt-1">{template.beschrijving}</p>
           )}
         </div>
-        {selected && (
-          <CheckCircleIcon className="h-6 w-6 text-primary-500 flex-shrink-0" />
-        )}
+        <CheckCircleIcon className={`h-6 w-6 flex-shrink-0 ${selected ? 'text-primary-500' : 'invisible'}`} />
       </div>
       {template.layout && (
         <div className="mt-3 text-xs text-gray-400">
