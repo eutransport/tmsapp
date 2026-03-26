@@ -317,6 +317,7 @@ export interface Invoice {
   totaal: number
   opmerkingen: string
   pdf_file: string | null
+  bijlage: string | null
   created_by: string
   created_by_naam: string
   sent_at: string | null

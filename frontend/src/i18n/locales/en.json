@@ -767,7 +767,12 @@
     "lineAdded": "Line added",
     "notFound": "Invoice not found",
     "backToOverview": "Back to overview",
-    "noLines": "No invoice lines"
+    "noLines": "No invoice lines",
+    "attachment": "Attachment",
+    "addAttachment": "Add attachment",
+    "removeAttachment": "Remove attachment",
+    "attachmentIncluded": "Attachment will be included",
+    "noAttachment": "No attachment"
   },
   "templates": {
     "title": "Invoice Templates",

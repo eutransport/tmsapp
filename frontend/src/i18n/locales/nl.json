@@ -769,7 +769,12 @@
     "lineAdded": "Regel toegevoegd",
     "notFound": "Factuur niet gevonden",
     "backToOverview": "Terug naar overzicht",
-    "noLines": "Geen factuurregels"
+    "noLines": "Geen factuurregels",
+    "attachment": "Bijlage",
+    "addAttachment": "Bijlage toevoegen",
+    "removeAttachment": "Bijlage verwijderen",
+    "attachmentIncluded": "Bijlage wordt meegestuurd",
+    "noAttachment": "Geen bijlage"
   },
   "templates": {
     "title": "Factuur Templates",

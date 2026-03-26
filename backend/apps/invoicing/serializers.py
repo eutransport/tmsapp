@@ -79,7 +79,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'template', 'template_naam', 'bedrijf', 'bedrijf_naam',
             'factuurdatum', 'vervaldatum',
             'subtotaal', 'btw_percentage', 'btw_bedrag', 'totaal',
-            'opmerkingen', 'pdf_file',
+            'opmerkingen', 'pdf_file', 'bijlage',
             'created_by', 'created_by_naam', 'sent_at',
             'week_number', 'week_year', 'chauffeur', 'chauffeur_naam',
             'lines', 'created_at', 'updated_at'
@@ -133,7 +133,7 @@ class InvoiceUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Invoice
-        fields = ['status', 'btw_percentage', 'opmerkingen', 'vervaldatum']
+        fields = ['status', 'btw_percentage', 'opmerkingen', 'vervaldatum', 'bijlage']
     
     def validate_status(self, value):
         if self.instance:
@@ -155,8 +155,8 @@ class InvoiceUpdateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         # Concept facturen mogen alles wijzigen
         if self.instance and self.instance.status != InvoiceStatus.CONCEPT:
-            # Niet-concept facturen mogen alleen status en opmerkingen wijzigen
-            allowed_fields = {'status', 'opmerkingen'}
+            # Niet-concept facturen mogen alleen status, opmerkingen en bijlage wijzigen
+            allowed_fields = {'status', 'opmerkingen', 'bijlage'}
             for field in data.keys():
                 if field not in allowed_fields:
                     raise serializers.ValidationError(

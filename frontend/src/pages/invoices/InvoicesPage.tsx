@@ -18,6 +18,7 @@ import {
   PencilSquareIcon,
   ChevronUpIcon,
   ChevronDownIcon,
+  PaperClipIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/stores/authStore'
@@ -1127,6 +1128,25 @@ export default function InvoicesPage() {
                           <div className="text-sm">{selectedInvoice.opmerkingen}</div>
                         </div>
                       )}
+
+                      {/* Bijlage */}
+                      <div>
+                        <div className="text-xs sm:text-sm text-gray-500">{t('invoices.attachment')}</div>
+                        {selectedInvoice.bijlage ? (
+                          <a
+                            href={selectedInvoice.bijlage}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
+                          >
+                            <PaperClipIcon className="h-4 w-4" />
+                            {selectedInvoice.bijlage.split('/').pop()}
+                            <ArrowDownTrayIcon className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <div className="text-sm text-gray-400">{t('invoices.noAttachment')}</div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -1380,6 +1400,14 @@ export default function InvoicesPage() {
                       <p className="mt-3 text-xs text-gray-500">
                         {t('invoices.smtpNote')}
                       </p>
+
+                      {/* Bijlage indicator */}
+                      {selectedInvoice?.bijlage && (
+                        <div className="mt-2 flex items-center gap-1 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
+                          <PaperClipIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                          {t('invoices.attachmentIncluded')}
+                        </div>
+                      )}
                     </div>
                   </div>
 

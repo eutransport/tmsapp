@@ -185,6 +185,15 @@ export async function createInvoice(data: InvoiceCreate): Promise<Invoice> {
   return response.data
 }
 
+export async function uploadInvoiceBijlage(id: string, bijlage: File): Promise<Invoice> {
+  const formData = new FormData()
+  formData.append('bijlage', bijlage)
+  const response = await api.patch(`/invoicing/invoices/${id}/`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
+}
+
 export async function updateInvoice(id: string, data: InvoiceUpdate): Promise<Invoice> {
   const response = await api.patch(`/invoicing/invoices/${id}/`, data)
   return response.data

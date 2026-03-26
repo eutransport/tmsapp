@@ -1,5 +1,7 @@
 import json
 import logging
+import mimetypes
+import os
 from datetime import date, timedelta
 from decimal import Decimal
 from django.utils import timezone
@@ -10,6 +12,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 
 from apps.core.permissions import IsAdminOnly, IsAdminOrManager
@@ -188,6 +191,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         'bedrijf', 'template', 'created_by'
     ).prefetch_related('lines').all()
     permission_classes = [IsAuthenticated, IsAdminOrManager]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filterset_fields = ['type', 'status', 'bedrijf', 'week_number', 'week_year', 'chauffeur']
     search_fields = ['factuurnummer', 'bedrijf__naam']
     ordering_fields = ['factuurdatum', 'factuurnummer', 'totaal', 'bedrijf__naam']
@@ -710,6 +714,13 @@ Met vriendelijke groet,
             pdf_content = generate_invoice_pdf(invoice)
             filename = f"factuur_{invoice.factuurnummer.replace('/', '-')}.pdf"
             email.attach(filename, pdf_content, 'application/pdf')
+            
+            # Attach bijlage if present
+            if invoice.bijlage:
+                bijlage_name = os.path.basename(invoice.bijlage.name)
+                bijlage_content = invoice.bijlage.read()
+                bijlage_mime = mimetypes.guess_type(bijlage_name)[0] or 'application/octet-stream'
+                email.attach(bijlage_name, bijlage_content, bijlage_mime)
             
             email.send()
             

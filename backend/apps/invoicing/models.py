@@ -95,6 +95,9 @@ class Invoice(models.Model):
     # PDF storage
     pdf_file = models.FileField(upload_to='invoices/', null=True, blank=True, verbose_name='PDF')
     
+    # Attachment
+    bijlage = models.FileField(upload_to='invoices/bijlagen/', null=True, blank=True, verbose_name='Bijlage')
+    
     # Tracking
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

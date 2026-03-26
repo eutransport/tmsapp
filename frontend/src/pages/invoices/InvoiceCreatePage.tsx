@@ -19,8 +19,10 @@ import {
   XCircleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  PaperClipIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline'
-import { getTemplates, createInvoice, createInvoiceLine, getNextInvoiceNumber } from '@/api/invoices'
+import { getTemplates, createInvoice, createInvoiceLine, getNextInvoiceNumber, uploadInvoiceBijlage } from '@/api/invoices'
 import { getCompanies } from '@/api/companies'
 import { getTimeEntries } from '@/api/timetracking'
 import { getSpreadsheets } from '@/api/spreadsheets'
@@ -1229,6 +1231,7 @@ export default function InvoiceCreatePage() {
     return d.toISOString().split('T')[0]
   })
   const [opmerkingen, setOpmerkingen] = useState('')
+  const [bijlage, setBijlage] = useState<File | null>(null)
   const [lines, setLines] = useState<InvoiceLineData[]>([])
   
   // Week/Chauffeur tracking (from imported time entries)
@@ -1763,6 +1766,11 @@ export default function InvoiceCreatePage() {
       
       const invoice = await createInvoice(invoiceData)
 
+      // Upload bijlage if provided
+      if (bijlage) {
+        await uploadInvoiceBijlage(invoice.id, bijlage)
+      }
+
       // Create invoice lines
       const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
       
@@ -1966,6 +1974,33 @@ export default function InvoiceCreatePage() {
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
               placeholder={t('invoices.optionalNotes')}
             />
+          </div>
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoices.attachment')}</label>
+            {bijlage ? (
+              <div className="flex items-center gap-2 p-2 border rounded-md bg-gray-50">
+                <PaperClipIcon className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                <span className="text-sm text-gray-700 truncate flex-1">{bijlage.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setBijlage(null)}
+                  className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                  title={t('invoices.removeAttachment')}
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <label className="flex items-center gap-2 p-2 border border-dashed rounded-md cursor-pointer hover:bg-gray-50 text-sm text-gray-500">
+                <PaperClipIcon className="h-4 w-4" />
+                {t('invoices.addAttachment')}
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => setBijlage(e.target.files?.[0] ?? null)}
+                />
+              </label>
+            )}
           </div>
         </div>
       )}
