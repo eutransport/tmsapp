@@ -39,7 +39,12 @@
     <!-- Fonts loaded locally via @fontsource/inter (no external requests) -->
   </head>
   <body class="h-full">
-    <div id="root" class="h-full"></div>
+    <div id="root" class="h-full">
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background-color:#f3f4f6;">
+        <div style="width:3rem;height:3rem;border-radius:9999px;border:2px solid transparent;border-bottom-color:#6b7280;animation:spin 0.75s linear infinite;"></div>
+        <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

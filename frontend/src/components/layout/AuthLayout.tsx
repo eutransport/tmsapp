@@ -4,17 +4,17 @@ import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
 
 export default function AuthLayout() {
-  const { isAuthenticated, isLoading } = useAuthStore()
-  const { settings, fetchSettings } = useAppStore()
+  const { isAuthenticated, isLoading: authLoading } = useAuthStore()
+  const { settings, fetchSettings, isLoading: settingsLoading } = useAppStore()
   
   useEffect(() => {
     fetchSettings()
   }, [fetchSettings])
   
-  if (isLoading) {
+  if (authLoading || settingsLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: settings?.login_background_color || '#F9FAFB' }}>
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f3f4f6' }}>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-400"></div>
       </div>
     )
   }

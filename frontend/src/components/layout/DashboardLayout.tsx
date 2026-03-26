@@ -80,7 +80,7 @@ const adminNavigation: NavItem[] = [
 export default function DashboardLayout() {
   const navigate = useNavigate()
   const { user, logout } = useAuthStore()
-  const { settings, sidebarOpen, setSidebarOpen, fetchSettings } = useAppStore()
+  const { settings, sidebarOpen, setSidebarOpen, fetchSettings, isLoading: settingsLoading } = useAppStore()
   const { currentTheme, applyTheme } = useThemeStore()
   const { t } = useTranslation()
   
@@ -144,7 +144,8 @@ export default function DashboardLayout() {
                 
                 <SidebarContent 
                   navigation={allNavigation} 
-                  settings={settings} 
+                  settings={settings}
+                  settingsLoading={settingsLoading}
                   onNavigate={() => setSidebarOpen(false)}
                 />
               </Dialog.Panel>
@@ -155,7 +156,7 @@ export default function DashboardLayout() {
 
       {/* Desktop sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
-        <SidebarContent navigation={allNavigation} settings={settings} />
+        <SidebarContent navigation={allNavigation} settings={settings} settingsLoading={settingsLoading} />
       </div>
 
       {/* Main content */}
@@ -261,10 +262,11 @@ export default function DashboardLayout() {
 interface SidebarContentProps {
   navigation: NavItem[]
   settings: AppSettings | null
+  settingsLoading?: boolean
   onNavigate?: () => void
 }
 
-function SidebarContent({ navigation, settings, onNavigate }: SidebarContentProps) {
+function SidebarContent({ navigation, settings, settingsLoading, onNavigate }: SidebarContentProps) {
   const { t } = useTranslation()
   
   return (
@@ -273,10 +275,16 @@ function SidebarContent({ navigation, settings, onNavigate }: SidebarContentProp
       style={{ backgroundColor: 'var(--color-sidebar)' }}
     >
       <div className="flex h-16 shrink-0 items-center gap-3">
-        {settings?.logo_url && (
-          <img className="h-8 w-auto" src={settings.logo_url} alt={settings.app_name} />
+        {settingsLoading ? (
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white opacity-50" />
+        ) : (
+          <>
+            {settings?.logo_url && (
+              <img className="h-8 w-auto" src={settings.logo_url} alt={settings.app_name} />
+            )}
+            <span className="text-xl font-bold text-white">{settings?.app_name || 'TMS'}</span>
+          </>
         )}
-        <span className="text-xl font-bold text-white">{settings?.app_name || 'TMS'}</span>
       </div>
       
       <nav className="flex flex-1 flex-col">
