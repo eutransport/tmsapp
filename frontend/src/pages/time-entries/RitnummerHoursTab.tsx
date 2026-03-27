@@ -1,18 +1,16 @@
 /**
  * Ritnummer Hours Overview Tab
- * Shows worked hours per ritnummer per user in 4-week periods.
- * Only for drivers with minimum_uren_per_week set.
- * Uses imported time entries (uren_factuur) as data source.
+ * Shows worked hours grouped by Fleet vehicle ritnummer, per week, per year.
+ * Matches: Vehicle.ritnummer → Driver.voertuig → Driver.gekoppelde_gebruiker → ImportedTimeEntry.user
  */
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   MagnifyingGlassIcon,
   ChartBarIcon,
-  ExclamationTriangleIcon,
-  CheckCircleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  TruckIcon,
 } from '@heroicons/react/24/outline'
 import {
   RitnummerHoursOverview,
@@ -21,52 +19,37 @@ import {
 } from '@/api/timetracking'
 import toast from 'react-hot-toast'
 
+interface RitnummerGroup {
+  ritnummer: string
+  kenteken: string
+  type_wagen: string
+  bedrijf_naam: string
+  chauffeurs: string[]
+  weeks: RitnummerHoursOverview[]
+  totalHours: number
+  totalKm: number
+}
+
 export default function RitnummerHoursTab() {
   const { t } = useTranslation()
 
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<RitnummerHoursOverview[]>([])
-  const [filteredData, setFilteredData] = useState<RitnummerHoursOverview[]>([])
-
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedYear, setSelectedYear] = useState(getCurrentYear())
-  const [showOnlyMissed, setShowOnlyMissed] = useState(false)
+  const [expandedRitnummers, setExpandedRitnummers] = useState<Set<string>>(new Set())
 
-  const [expandedPeriods, setExpandedPeriods] = useState<Set<number>>(new Set())
-
-  const years = Array.from({ length: 5 }, (_, i) => getCurrentYear() - i).filter(y => y >= 2026)
+  const years = Array.from({ length: 5 }, (_, i) => getCurrentYear() - i).filter(y => y >= 2024)
 
   useEffect(() => {
     loadData()
   }, [selectedYear])
-
-  useEffect(() => {
-    let filtered = [...data]
-
-    if (searchTerm) {
-      const lower = searchTerm.toLowerCase()
-      filtered = filtered.filter(row =>
-        row.user_naam.toLowerCase().includes(lower) ||
-        row.ritnummer.toLowerCase().includes(lower) ||
-        row.user_email.toLowerCase().includes(lower) ||
-        row.periode.toString().includes(lower) ||
-        `${row.week_start}-${row.week_eind}`.includes(lower)
-      )
-    }
-
-    if (showOnlyMissed) {
-      filtered = filtered.filter(row => row.gemiste_uren !== null && row.gemiste_uren > 0)
-    }
-
-    setFilteredData(filtered)
-  }, [searchTerm, data, showOnlyMissed])
 
   const loadData = async () => {
     try {
       setLoading(true)
       const result = await getRitnummerHoursOverview(selectedYear)
       setData(result)
-      setFilteredData(result)
     } catch (err) {
       console.error('Failed to load ritnummer hours overview:', err)
       toast.error(t('ritnummerHours.loadError'))
@@ -75,25 +58,61 @@ export default function RitnummerHoursTab() {
     }
   }
 
-  // Group data by period
+  // Group data by ritnummer
   const groupedData = useMemo(() => {
-    const groups = new Map<number, { periode: number; week_start: number; week_eind: number; rows: RitnummerHoursOverview[] }>()
-    filteredData.forEach(row => {
-      if (!groups.has(row.periode)) {
-        groups.set(row.periode, { periode: row.periode, week_start: row.week_start, week_eind: row.week_eind, rows: [] })
-      }
-      groups.get(row.periode)!.rows.push(row)
-    })
-    return Array.from(groups.values()).sort((a, b) => b.periode - a.periode)
-  }, [filteredData])
+    const groups = new Map<string, RitnummerGroup>()
 
-  const togglePeriod = (periode: number) => {
-    setExpandedPeriods(prev => {
+    data.forEach(row => {
+      if (!groups.has(row.ritnummer)) {
+        groups.set(row.ritnummer, {
+          ritnummer: row.ritnummer,
+          kenteken: row.kenteken,
+          type_wagen: row.type_wagen,
+          bedrijf_naam: row.bedrijf_naam,
+          chauffeurs: row.chauffeurs,
+          weeks: [],
+          totalHours: 0,
+          totalKm: 0,
+        })
+      }
+      const group = groups.get(row.ritnummer)!
+      group.weeks.push(row)
+      group.totalHours += row.gewerkte_uren
+      group.totalKm += row.totaal_km
+    })
+
+    let result = Array.from(groups.values())
+
+    // Apply search filter
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase()
+      result = result.filter(g =>
+        g.ritnummer.toLowerCase().includes(lower) ||
+        g.kenteken.toLowerCase().includes(lower) ||
+        g.type_wagen.toLowerCase().includes(lower) ||
+        g.bedrijf_naam.toLowerCase().includes(lower) ||
+        g.chauffeurs.some(c => c.toLowerCase().includes(lower))
+      )
+    }
+
+    return result.sort((a, b) => a.ritnummer.localeCompare(b.ritnummer))
+  }, [data, searchTerm])
+
+  const toggleRitnummer = (ritnummer: string) => {
+    setExpandedRitnummers(prev => {
       const next = new Set(prev)
-      if (next.has(periode)) next.delete(periode)
-      else next.add(periode)
+      if (next.has(ritnummer)) next.delete(ritnummer)
+      else next.add(ritnummer)
       return next
     })
+  }
+
+  const expandAll = () => {
+    setExpandedRitnummers(new Set(groupedData.map(g => g.ritnummer)))
+  }
+
+  const collapseAll = () => {
+    setExpandedRitnummers(new Set())
   }
 
   const formatHours = (hours: number) => {
@@ -129,18 +148,45 @@ export default function RitnummerHoursTab() {
                 </button>
               ))}
             </div>
-            <label className="flex items-center gap-2 text-sm text-gray-600 whitespace-nowrap cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showOnlyMissed}
-                onChange={(e) => setShowOnlyMissed(e.target.checked)}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              />
-              {t('ritnummerHours.showOnlyMissed')}
-            </label>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={expandAll}
+                className="px-2.5 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Alles open
+              </button>
+              <button
+                onClick={collapseAll}
+                className="px-2.5 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Alles dicht
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Summary */}
+      {!loading && groupedData.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+          <div className="card p-4 text-center">
+            <div className="text-2xl font-bold text-primary-600">{groupedData.length}</div>
+            <div className="text-xs text-gray-500 mt-1">{t('ritnummerHours.ritnummer')}s</div>
+          </div>
+          <div className="card p-4 text-center">
+            <div className="text-2xl font-bold text-blue-600">
+              {formatHours(groupedData.reduce((s, g) => s + g.totalHours, 0))}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">{t('ritnummerHours.totalHours')}</div>
+          </div>
+          <div className="card p-4 text-center hidden sm:block">
+            <div className="text-2xl font-bold text-green-600">
+              {Math.round(groupedData.reduce((s, g) => s + g.totalKm, 0)).toLocaleString()}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">{t('ritnummerHours.totalKm')}</div>
+          </div>
+        </div>
+      )}
 
       {/* Data */}
       <div className="card overflow-hidden">
@@ -148,7 +194,7 @@ export default function RitnummerHoursTab() {
           <div className="p-8 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
           </div>
-        ) : filteredData.length === 0 ? (
+        ) : groupedData.length === 0 ? (
           <div className="p-8 text-center">
             <ChartBarIcon className="h-12 w-12 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500">{t('ritnummerHours.noData')}</p>
@@ -156,43 +202,47 @@ export default function RitnummerHoursTab() {
         ) : (
           <div className="divide-y divide-gray-200">
             {groupedData.map(group => {
-              const isExpanded = expandedPeriods.has(group.periode)
-              const totalWorked = group.rows.reduce((sum, r) => sum + r.gewerkte_uren, 0)
-              const totalMinimum = group.rows.reduce((sum, r) => sum + (r.minimum_uren || 0), 0)
-              const totalMissed = group.rows.reduce((sum, r) => sum + (r.gemiste_uren || 0), 0)
+              const isExpanded = expandedRitnummers.has(group.ritnummer)
 
               return (
-                <div key={group.periode}>
-                  {/* Period header */}
+                <div key={group.ritnummer}>
+                  {/* Ritnummer header */}
                   <button
-                    onClick={() => togglePeriod(group.periode)}
+                    onClick={() => toggleRitnummer(group.ritnummer)}
                     className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       {isExpanded
-                        ? <ChevronDownIcon className="h-4 w-4 text-gray-500" />
-                        : <ChevronRightIcon className="h-4 w-4 text-gray-500" />
+                        ? <ChevronDownIcon className="h-4 w-4 text-gray-500 shrink-0" />
+                        : <ChevronRightIcon className="h-4 w-4 text-gray-500 shrink-0" />
                       }
-                      <span className="text-sm font-semibold text-gray-900">
-                        {t('weeklyHours.period')} {group.periode}
+                      <TruckIcon className="h-5 w-5 text-primary-500 shrink-0" />
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-blue-50 border border-blue-200 font-mono text-sm font-bold text-blue-800 shrink-0">
+                        {group.ritnummer}
                       </span>
-                      <span className="text-xs text-gray-500">
-                        ({t('weeklyHours.weekRange', { start: group.week_start, end: group.week_eind })})
+                      <span className="text-sm text-gray-600 truncate hidden sm:inline">
+                        {group.kenteken} · {group.type_wagen}
                       </span>
-                      <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
-                        {group.rows.length} {t('ritnummerHours.entries')}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <span>{t('weeklyHours.workedShort')}: <strong className="text-gray-700">{formatHours(totalWorked)}</strong></span>
-                      <span>{t('weeklyHours.minimumShort')}: <strong className="text-gray-700">{formatHours(totalMinimum)}</strong></span>
-                      {totalMissed > 0 && (
-                        <span className="text-red-600">{t('weeklyHours.missedShort')}: <strong>{formatHours(totalMissed)}</strong></span>
+                      {group.chauffeurs.length > 0 && (
+                        <span className="text-xs text-gray-400 truncate hidden md:inline">
+                          ({group.chauffeurs.join(', ')})
+                        </span>
                       )}
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-gray-500 shrink-0">
+                      <span className="hidden sm:inline">
+                        {group.weeks.length} {t('ritnummerHours.totalWeeks')}
+                      </span>
+                      <span>
+                        <strong className="text-gray-700">{formatHours(group.totalHours)}</strong> uur
+                      </span>
+                      <span className="hidden sm:inline">
+                        <strong className="text-gray-700">{Math.round(group.totalKm).toLocaleString()}</strong> km
+                      </span>
                     </div>
                   </button>
 
-                  {/* Period rows */}
+                  {/* Week rows */}
                   {isExpanded && (
                     <>
                       {/* Desktop table */}
@@ -200,112 +250,79 @@ export default function RitnummerHoursTab() {
                         <table className="min-w-full divide-y divide-gray-100">
                           <thead className="bg-white">
                             <tr>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('ritnummerHours.driverName')}</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('ritnummerHours.ritnummer')}</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('weeklyHours.minimumShort')}</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('weeklyHours.workedShort')}</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('weeklyHours.avgShort')}</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('weeklyHours.missedShort')}</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">KM</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('ritnummerHours.trips')}</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('ritnummerHours.week')}</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('ritnummerHours.hours')}</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('ritnummerHours.km')}</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('ritnummerHours.entries')}</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
-                            {group.rows.map((row, idx) => {
-                              const hasMissed = row.gemiste_uren !== null && row.gemiste_uren > 0
-                              const avgPerWeek = row.weken_met_uren > 0 ? row.gewerkte_uren / row.weken_met_uren : 0
-
-                              return (
-                                <tr key={idx} className={`hover:bg-gray-50 ${hasMissed ? 'bg-red-50/30' : ''}`}>
-                                  <td className="px-4 py-2.5">
-                                    <div className="text-sm font-medium text-gray-900">{row.user_naam}</div>
-                                    <div className="text-xs text-gray-500">{row.user_bedrijf}</div>
-                                  </td>
-                                  <td className="px-4 py-2.5">
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-blue-50 border border-blue-200 font-mono text-sm font-bold text-blue-800">
-                                      {row.ritnummer}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-2.5 text-sm text-right text-gray-700">
-                                    {row.minimum_uren !== null ? formatHours(row.minimum_uren) : '-'}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-sm text-right">
-                                    <span className={`font-semibold ${hasMissed ? 'text-red-600' : 'text-green-600'}`}>
-                                      {formatHours(row.gewerkte_uren)}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-2.5 text-sm text-right text-gray-600">
-                                    {formatHours(avgPerWeek)}
-                                    <span className="text-xs text-gray-400 ml-0.5">/wk</span>
-                                  </td>
-                                  <td className="px-4 py-2.5 text-sm text-right">
-                                    {hasMissed ? (
-                                      <span className="inline-flex items-center gap-1 text-red-600 font-semibold">
-                                        <ExclamationTriangleIcon className="h-4 w-4" />
-                                        {formatHours(row.gemiste_uren!)}
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1 text-green-600">
-                                        <CheckCircleIcon className="h-4 w-4" />
-                                        0:00
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-sm text-right text-gray-700">
-                                    {Math.round(row.totaal_km)}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-sm text-right text-gray-600">
-                                    {row.entries_count}
-                                  </td>
-                                </tr>
-                              )
-                            })}
+                            {group.weeks.map((week) => (
+                              <tr key={week.weeknummer} className="hover:bg-gray-50">
+                                <td className="px-4 py-2.5">
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {t('ritnummerHours.week')} {week.weeknummer}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2.5 text-sm text-right">
+                                  <span className="font-semibold text-primary-600">
+                                    {formatHours(week.gewerkte_uren)}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2.5 text-sm text-right text-gray-700">
+                                  {Math.round(week.totaal_km).toLocaleString()}
+                                </td>
+                                <td className="px-4 py-2.5 text-sm text-right text-gray-600">
+                                  {week.entries_count}
+                                </td>
+                              </tr>
+                            ))}
+                            {/* Totals row */}
+                            <tr className="bg-gray-50 font-semibold">
+                              <td className="px-4 py-2.5 text-sm text-gray-700">Totaal</td>
+                              <td className="px-4 py-2.5 text-sm text-right text-primary-700">
+                                {formatHours(group.totalHours)}
+                              </td>
+                              <td className="px-4 py-2.5 text-sm text-right text-gray-700">
+                                {Math.round(group.totalKm).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-2.5 text-sm text-right text-gray-600">
+                                {group.weeks.reduce((s, w) => s + w.entries_count, 0)}
+                              </td>
+                            </tr>
                           </tbody>
                         </table>
                       </div>
 
-                      {/* Mobile card view */}
+                      {/* Mobile card list */}
                       <div className="md:hidden divide-y divide-gray-100">
-                        {group.rows.map((row, idx) => {
-                          const hasMissed = row.gemiste_uren !== null && row.gemiste_uren > 0
-                          const avgPerWeek = row.weken_met_uren > 0 ? row.gewerkte_uren / row.weken_met_uren : 0
-
-                          return (
-                            <div key={idx} className={`p-3 ${hasMissed ? 'bg-red-50/30' : ''}`}>
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="min-w-0">
-                                  <div className="text-sm font-medium text-gray-900 truncate">{row.user_naam}</div>
-                                  <div className="text-xs text-gray-500">{row.user_bedrijf}</div>
-                                </div>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 font-mono text-xs font-bold text-blue-800 shrink-0 ml-2">
-                                  {row.ritnummer}
-                                </span>
-                              </div>
-                              <div className="grid grid-cols-4 gap-2 text-xs">
-                                <div>
-                                  <span className="text-gray-500 block">{t('weeklyHours.minimumShort')}</span>
-                                  <span className="font-medium">{row.minimum_uren !== null ? formatHours(row.minimum_uren) : '-'}</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500 block">{t('weeklyHours.workedShort')}</span>
-                                  <span className={`font-semibold ${hasMissed ? 'text-red-600' : 'text-green-600'}`}>
-                                    {formatHours(row.gewerkte_uren)}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500 block">{t('weeklyHours.avgShort')}</span>
-                                  <span className="font-medium">{formatHours(avgPerWeek)}</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500 block">{t('weeklyHours.missedShort')}</span>
-                                  <span className={hasMissed ? 'text-red-600 font-semibold' : 'text-gray-400'}>
-                                    {hasMissed ? formatHours(row.gemiste_uren!) : '0:00'}
-                                  </span>
-                                </div>
-                              </div>
+                        {group.weeks.map((week) => (
+                          <div key={week.weeknummer} className="p-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium text-gray-900">
+                                {t('ritnummerHours.week')} {week.weeknummer}
+                              </span>
+                              <span className="text-sm font-semibold text-primary-600">
+                                {formatHours(week.gewerkte_uren)}
+                              </span>
                             </div>
-                          )
-                        })}
+                            <div className="flex items-center gap-4 text-xs text-gray-500">
+                              <span>{Math.round(week.totaal_km).toLocaleString()} km</span>
+                              <span>{week.entries_count} {t('ritnummerHours.entries')}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {/* Mobile totals */}
+                        <div className="p-3 bg-gray-50">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-gray-700">Totaal</span>
+                            <span className="text-sm font-bold text-primary-700">{formatHours(group.totalHours)}</span>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
+                            <span>{Math.round(group.totalKm).toLocaleString()} km</span>
+                            <span>{group.weeks.reduce((s, w) => s + w.entries_count, 0)} {t('ritnummerHours.entries')}</span>
+                          </div>
+                        </div>
                       </div>
                     </>
                   )}

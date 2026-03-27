@@ -462,123 +462,134 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='ritnummer_hours_overview')
     def ritnummer_hours_overview(self, request):
         """
-        Get 4-week period hours overview grouped by ritnummer.
-        Only for drivers with minimum_uren_per_week set.
-        Uses imported time entries (uren_factuur) as worked hours.
-        Groups into 4-week periods (1-4, 5-8, 9-12, ...).
+        Weekly hours overview grouped by fleet ritnummer.
+        
+        Logic:
+        1. Get all vehicles with a ritnummer from Fleet
+        2. Match drivers to vehicles via Driver.voertuig
+        3. Get ImportedTimeEntry for matched users
+        4. Sum uren_factuur per ritnummer per week
+        
+        Returns one row per ritnummer per week.
         """
-        import math
         user = request.user
         if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
             return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
         
-        jaar = request.query_params.get('jaar')
-        user_filter = request.query_params.get('user')
+        jaar = int(request.query_params.get('jaar', date.today().year))
         
-        # Build driver default minimum hours lookup (via gekoppelde_gebruiker)
+        from apps.fleet.models import Vehicle
         from apps.drivers.models import Driver
-        driver_defaults = {}
-        driver_qs = Driver.objects.filter(
-            minimum_uren_per_week__isnull=False,
-            gekoppelde_gebruiker__isnull=False,
-        ).values_list('gekoppelde_gebruiker_id', 'minimum_uren_per_week')
-        for uid, min_uren in driver_qs:
-            driver_defaults[str(uid)] = float(min_uren)
+        from django.db.models.functions import ExtractYear
         
-        if not driver_defaults:
+        # Step 1: Get all vehicles with a ritnummer
+        vehicles = Vehicle.objects.filter(
+            ritnummer__gt='',
+        ).select_related('bedrijf')
+        
+        if not vehicles.exists():
             return Response([])
         
-        # Use imported time entries for worked hours
-        from django.db.models.functions import ExtractYear
+        # Step 2: Build ritnummer → [user_ids] mapping via Driver.voertuig
+        # Also collect vehicle info per ritnummer
+        ritnummer_map = {}  # ritnummer -> { vehicle_info, user_ids }
+        for vehicle in vehicles:
+            rit = vehicle.ritnummer.strip()
+            if not rit:
+                continue
+            
+            if rit not in ritnummer_map:
+                ritnummer_map[rit] = {
+                    'ritnummer': rit,
+                    'vehicle_id': str(vehicle.id),
+                    'kenteken': vehicle.kenteken,
+                    'type_wagen': vehicle.type_wagen,
+                    'bedrijf_naam': vehicle.bedrijf.naam if vehicle.bedrijf else '',
+                    'user_ids': set(),
+                    'chauffeur_namen': [],
+                }
+            
+            # Find drivers linked to this vehicle
+            drivers = Driver.objects.filter(
+                voertuig=vehicle,
+                gekoppelde_gebruiker__isnull=False,
+            ).select_related('gekoppelde_gebruiker')
+            
+            for driver in drivers:
+                uid = str(driver.gekoppelde_gebruiker_id)
+                if uid not in ritnummer_map[rit]['user_ids']:
+                    ritnummer_map[rit]['user_ids'].add(uid)
+                    ritnummer_map[rit]['chauffeur_namen'].append(driver.naam)
+        
+        # Filter: only ritnummers with at least one linked driver
+        active_ritnummers = {k: v for k, v in ritnummer_map.items() if v['user_ids']}
+        
+        if not active_ritnummers:
+            return Response([])
+        
+        # Step 3: Collect all user_ids across all ritnummers
+        all_user_ids = set()
+        for info in active_ritnummers.values():
+            all_user_ids.update(info['user_ids'])
+        
+        # Step 4: Query ImportedTimeEntry grouped by user + week
         queryset = ImportedTimeEntry.objects.filter(
             user__isnull=False,
-            user_id__in=[uid for uid in driver_defaults.keys()],
-            ritlijst__gt='',  # Only entries with a ritnummer
-        )
-        
-        if jaar:
-            queryset = queryset.filter(datum__year=int(jaar))
-        if user_filter:
-            queryset = queryset.filter(user_id=user_filter)
-        
-        # Group by user, ritnummer, year, week
-        weekly_data = queryset.annotate(
-            jaar=ExtractYear('datum')
+            user_id__in=list(all_user_ids),
+            datum__year=jaar,
         ).values(
-            'user_id', 'user__voornaam', 'user__achternaam', 'user__email',
-            'user__bedrijf', 'ritlijst', 'weeknummer', 'jaar'
+            'user_id', 'weeknummer',
         ).annotate(
             totaal_uren_factuur=Sum('uren_factuur'),
             totaal_km=Sum('km'),
             entries_count=Count('id'),
-        ).order_by('-jaar', '-weeknummer', 'user__achternaam', 'ritlijst')
+        )
         
-        # Aggregate into 4-week periods per user+ritnummer
-        period_data = {}  # key: "user_id-ritnummer-jaar-periode"
-        for row in weekly_data:
-            periode = math.ceil(row['weeknummer'] / 4)
-            week_start = (periode - 1) * 4 + 1
-            week_eind = periode * 4
-            
-            pkey = f"{row['user_id']}-{row['ritlijst']}-{row['jaar']}-{periode}"
-            
-            if pkey not in period_data:
-                period_data[pkey] = {
-                    'user_id': str(row['user_id']),
-                    'user_naam': f"{row['user__voornaam']} {row['user__achternaam']}",
-                    'user_email': row['user__email'],
-                    'user_bedrijf': row['user__bedrijf'] or '',
-                    'ritnummer': row['ritlijst'],
-                    'jaar': row['jaar'],
-                    'periode': periode,
-                    'week_start': week_start,
-                    'week_eind': week_eind,
-                    'worked_hours': 0,
-                    'totaal_km': 0,
-                    'entries_count': 0,
-                    'weken_in_periode': set(),
-                }
-            
-            period_data[pkey]['worked_hours'] += float(row['totaal_uren_factuur'] or 0)
-            period_data[pkey]['totaal_km'] += float(row['totaal_km'] or 0)
-            period_data[pkey]['entries_count'] += row['entries_count']
-            period_data[pkey]['weken_in_periode'].add(row['weeknummer'])
+        # Build a lookup: user_id -> { weeknummer -> { uren, km, count } }
+        user_week_data = {}
+        for row in queryset:
+            uid = str(row['user_id'])
+            wk = row['weeknummer']
+            if uid not in user_week_data:
+                user_week_data[uid] = {}
+            user_week_data[uid][wk] = {
+                'uren': float(row['totaal_uren_factuur'] or 0),
+                'km': float(row['totaal_km'] or 0),
+                'count': row['entries_count'],
+            }
         
+        # Step 5: Build results — per ritnummer per week
         results = []
-        for pkey, pd in period_data.items():
-            worked_hours = round(pd['worked_hours'], 2)
-            weekly_min = driver_defaults.get(pd['user_id'], None)
+        for rit, info in active_ritnummers.items():
+            # Aggregate all linked users' hours per week for this ritnummer
+            week_totals = {}  # weeknummer -> { uren, km, count }
+            for uid in info['user_ids']:
+                if uid in user_week_data:
+                    for wk, data in user_week_data[uid].items():
+                        if wk not in week_totals:
+                            week_totals[wk] = {'uren': 0, 'km': 0, 'count': 0}
+                        week_totals[wk]['uren'] += data['uren']
+                        week_totals[wk]['km'] += data['km']
+                        week_totals[wk]['count'] += data['count']
             
-            if weekly_min is not None:
-                minimum_hours = round(weekly_min * 4, 2)
-            else:
-                minimum_hours = None
-            
-            missed_hours = None
-            if minimum_hours is not None:
-                missed = minimum_hours - worked_hours
-                missed_hours = round(max(0, missed), 2)
-            
-            results.append({
-                'user_id': pd['user_id'],
-                'user_naam': pd['user_naam'],
-                'user_email': pd['user_email'],
-                'user_bedrijf': pd['user_bedrijf'],
-                'ritnummer': pd['ritnummer'],
-                'jaar': pd['jaar'],
-                'periode': pd['periode'],
-                'week_start': pd['week_start'],
-                'week_eind': pd['week_eind'],
-                'gewerkte_uren': worked_hours,
-                'minimum_uren': minimum_hours,
-                'gemiste_uren': missed_hours,
-                'totaal_km': pd['totaal_km'],
-                'entries_count': pd['entries_count'],
-                'minimum_uren_per_week': weekly_min,
-                'weken_met_uren': len(pd['weken_in_periode']),
-            })
+            for wk in sorted(week_totals.keys()):
+                wt = week_totals[wk]
+                results.append({
+                    'ritnummer': rit,
+                    'vehicle_id': info['vehicle_id'],
+                    'kenteken': info['kenteken'],
+                    'type_wagen': info['type_wagen'],
+                    'bedrijf_naam': info['bedrijf_naam'],
+                    'chauffeurs': info['chauffeur_namen'],
+                    'jaar': jaar,
+                    'weeknummer': wk,
+                    'gewerkte_uren': round(wt['uren'], 2),
+                    'totaal_km': round(wt['km'], 1),
+                    'entries_count': wt['count'],
+                })
         
-        results.sort(key=lambda x: (-x['jaar'], -x['periode'], x['user_naam'], x['ritnummer']))
+        # Sort by ritnummer, then week
+        results.sort(key=lambda x: (x['ritnummer'], x['weeknummer']))
         
         return Response(results)
 
