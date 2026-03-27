@@ -24,7 +24,6 @@ interface RitnummerGroup {
   kenteken: string
   type_wagen: string
   bedrijf_naam: string
-  chauffeurs: string[]
   weeks: RitnummerHoursOverview[]
   totalHours: number
   totalKm: number
@@ -69,7 +68,6 @@ export default function RitnummerHoursTab() {
           kenteken: row.kenteken,
           type_wagen: row.type_wagen,
           bedrijf_naam: row.bedrijf_naam,
-          chauffeurs: row.chauffeurs,
           weeks: [],
           totalHours: 0,
           totalKm: 0,
@@ -90,8 +88,7 @@ export default function RitnummerHoursTab() {
         g.ritnummer.toLowerCase().includes(lower) ||
         g.kenteken.toLowerCase().includes(lower) ||
         g.type_wagen.toLowerCase().includes(lower) ||
-        g.bedrijf_naam.toLowerCase().includes(lower) ||
-        g.chauffeurs.some(c => c.toLowerCase().includes(lower))
+        g.bedrijf_naam.toLowerCase().includes(lower)
       )
     }
 
@@ -223,11 +220,6 @@ export default function RitnummerHoursTab() {
                       <span className="text-sm text-gray-600 truncate hidden sm:inline">
                         {group.kenteken} · {group.type_wagen}
                       </span>
-                      {group.chauffeurs.length > 0 && (
-                        <span className="text-xs text-gray-400 truncate hidden md:inline">
-                          ({group.chauffeurs.join(', ')})
-                        </span>
-                      )}
                     </div>
                     <div className="flex items-center gap-4 text-xs text-gray-500 shrink-0">
                       <span className="hidden sm:inline">

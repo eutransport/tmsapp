@@ -138,6 +138,7 @@ export interface Driver {
   voertuig_kenteken: string | null
   adr: boolean
   minimum_uren_per_week: number | null
+  actief: boolean
   created_at: string
   updated_at: string
 }
@@ -151,6 +152,7 @@ export interface Vehicle {
   bedrijf: string
   bedrijf_naam: string
   minimum_weken_per_jaar: number | null
+  actief: boolean
   created_at: string
   updated_at: string
 }

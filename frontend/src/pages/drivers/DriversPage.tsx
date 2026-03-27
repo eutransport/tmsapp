@@ -146,6 +146,7 @@ function DriverForm({
     voertuig: driver?.voertuig?.toString() || '',
     adr: driver?.adr || false,
     minimum_uren_per_week: driver?.minimum_uren_per_week?.toString() || '',
+    actief: driver?.actief ?? true,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -178,6 +179,7 @@ function DriverForm({
       voertuig: formData.voertuig || null,
       adr: formData.adr,
       minimum_uren_per_week: formData.minimum_uren_per_week ? parseFloat(formData.minimum_uren_per_week) : null,
+      actief: formData.actief,
     }
     onSave(saveData)
   }
@@ -266,7 +268,7 @@ function DriverForm({
         >
           <option value="">{t('drivers.noVehicle')}</option>
           {vehicles
-            .filter(v => !formData.bedrijf || v.bedrijf === formData.bedrijf)
+            .filter(v => v.actief && (!formData.bedrijf || v.bedrijf === formData.bedrijf))
             .map(vehicle => (
               <option key={vehicle.id} value={vehicle.id}>
                 {vehicle.ritnummer} - {vehicle.kenteken} ({vehicle.type_wagen})
@@ -309,6 +311,23 @@ function DriverForm({
         <p className="text-xs text-gray-500 mt-1">
           {t('drivers.minimumHoursHelp')}
         </p>
+      </div>
+
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="actief"
+          name="actief"
+          checked={formData.actief}
+          onChange={handleChange}
+          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+        />
+        <label htmlFor="actief" className="ml-2 text-sm text-gray-700">
+          {t('common.active')}
+        </label>
+        <span className="ml-2 text-xs text-gray-500">
+          ({t('drivers.activeHelp')})
+        </span>
       </div>
 
       <div className="flex justify-end gap-3 pt-4 border-t">
@@ -656,6 +675,9 @@ export default function DriversPage() {
                 <th className="px-2 py-1.5 text-center text-xs font-semibold text-gray-600 uppercase">
                   ADR
                 </th>
+                <th className="px-2 py-1.5 text-center text-xs font-semibold text-gray-600 uppercase">
+                  {t('common.status')}
+                </th>
                 <th className="px-2 py-1.5 text-right text-xs font-semibold text-gray-600 uppercase">
                   {t('common.actions')}
                 </th>
@@ -664,7 +686,7 @@ export default function DriversPage() {
             <tbody className="divide-y">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                       <span className="ml-3">{t('common.loading')}</span>
@@ -673,7 +695,7 @@ export default function DriversPage() {
                 </tr>
               ) : drivers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                     <UserGroupIcon className="w-12 h-12 mx-auto text-gray-300 mb-3" />
                     <p>{t('drivers.noDrivers')}</p>
                     <button
@@ -686,7 +708,7 @@ export default function DriversPage() {
                 </tr>
               ) : (
                 drivers.map(driver => (
-                  <tr key={driver.id} className="hover:bg-gray-50">
+                  <tr key={driver.id} className={`hover:bg-gray-50 ${!driver.actief ? 'opacity-50' : ''}`}>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">{driver.naam}</div>
                     </td>
@@ -707,6 +729,17 @@ export default function DriversPage() {
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {driver.actief ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {t('common.active')}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                          {t('common.inactive')}
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -756,13 +789,18 @@ export default function DriversPage() {
             </div>
           ) : (
             drivers.map(driver => (
-              <div key={driver.id} className="px-3 py-2 hover:bg-gray-50">
+              <div key={driver.id} className={`px-3 py-2 hover:bg-gray-50 ${!driver.actief ? 'opacity-50' : ''}`}>
                 <div className="flex items-center justify-between gap-1.5">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1 text-sm">
                       <span className="font-semibold text-gray-900 truncate">{driver.naam}</span>
                       {driver.adr && (
                         <ShieldCheckIcon className="w-3.5 h-3.5 text-green-600 shrink-0" title="ADR" />
+                      )}
+                      {!driver.actief && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 shrink-0">
+                          {t('common.inactive')}
+                        </span>
                       )}
                     </div>
                     <div className="flex items-center gap-1 text-xs text-gray-500 truncate mt-0.5">

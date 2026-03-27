@@ -11,6 +11,7 @@ export interface VehicleCreate {
   ritnummer?: string
   bedrijf: string
   minimum_weken_per_jaar?: number | null
+  actief?: boolean
 }
 
 export interface VehicleUpdate extends Partial<VehicleCreate> {}

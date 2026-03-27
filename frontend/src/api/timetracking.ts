@@ -361,7 +361,6 @@ export interface RitnummerHoursOverview {
   kenteken: string
   type_wagen: string
   bedrijf_naam: string
-  chauffeurs: string[]
   jaar: number
   weeknummer: number
   gewerkte_uren: number

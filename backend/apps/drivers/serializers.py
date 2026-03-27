@@ -13,7 +13,8 @@ class DriverSerializer(serializers.ModelSerializer):
             'id', 'naam', 'telefoon', 'bedrijf', 'bedrijf_naam',
             'gekoppelde_gebruiker', 'gekoppelde_gebruiker_naam',
             'voertuig', 'voertuig_ritnummer', 'voertuig_kenteken',
-            'adr', 'minimum_uren_per_week', 'created_at', 'updated_at'
+            'adr', 'minimum_uren_per_week', 'actief',
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     

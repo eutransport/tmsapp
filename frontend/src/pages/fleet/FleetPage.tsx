@@ -138,6 +138,7 @@ function VehicleForm({
     ritnummer: vehicle?.ritnummer || '',
     bedrijf: vehicle?.bedrijf?.toString() || '',
     minimum_weken_per_jaar: vehicle?.minimum_weken_per_jaar?.toString() || '',
+    actief: vehicle?.actief ?? true,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -165,6 +166,7 @@ function VehicleForm({
       ritnummer: formData.ritnummer || undefined,
       bedrijf: formData.bedrijf,
       minimum_weken_per_jaar: formData.minimum_weken_per_jaar ? parseInt(formData.minimum_weken_per_jaar) : null,
+      actief: formData.actief,
     }
     onSave(saveData)
   }
@@ -249,6 +251,23 @@ function VehicleForm({
           max="52"
         />
         <p className="text-xs text-gray-500 mt-1">{t('fleet.minimumWeeksHelp')}</p>
+      </div>
+
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="actief"
+          name="actief"
+          checked={formData.actief}
+          onChange={handleChange}
+          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+        />
+        <label htmlFor="actief" className="ml-2 text-sm text-gray-700">
+          {t('common.active')}
+        </label>
+        <span className="ml-2 text-xs text-gray-500">
+          ({t('fleet.activeHelp')})
+        </span>
       </div>
 
       <div className="flex justify-end gap-3 pt-4 border-t">
@@ -571,6 +590,9 @@ export default function FleetPage() {
                 <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
                   {t('companies.title')}
                 </th>
+                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 uppercase">
+                  {t('common.status')}
+                </th>
                 <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600 uppercase">
                   {t('common.actions')}
                 </th>
@@ -579,7 +601,7 @@ export default function FleetPage() {
             <tbody className="divide-y">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                       <span className="ml-3">{t('common.loading')}</span>
@@ -588,7 +610,7 @@ export default function FleetPage() {
                 </tr>
               ) : vehicles.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
                     <TruckIcon className="w-12 h-12 mx-auto text-gray-300 mb-3" />
                     <p>{t('fleet.noVehicles')}</p>
                     <button
@@ -601,13 +623,24 @@ export default function FleetPage() {
                 </tr>
               ) : (
                 vehicles.map(vehicle => (
-                  <tr key={vehicle.id} className="hover:bg-gray-50">
+                  <tr key={vehicle.id} className={`hover:bg-gray-50 ${!vehicle.actief ? 'opacity-50' : ''}`}>
                     <td className="px-3 py-2">
                       <LicensePlate kenteken={vehicle.kenteken} size="sm" />
                     </td>
                     <td className="px-3 py-2 text-sm text-gray-600">{vehicle.type_wagen || '-'}</td>
                     <td className="px-3 py-2 text-sm text-gray-600">{vehicle.ritnummer || '-'}</td>
                     <td className="px-3 py-2 text-sm text-gray-600">{getCompanyName(vehicle)}</td>
+                    <td className="px-3 py-2 text-center">
+                      {vehicle.actief ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {t('common.active')}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                          {t('common.inactive')}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-0.5">
                         <button
@@ -655,13 +688,18 @@ export default function FleetPage() {
             </div>
           ) : (
             vehicles.map(vehicle => (
-              <div key={vehicle.id} className="px-3 py-2 hover:bg-gray-50">
+              <div key={vehicle.id} className={`px-3 py-2 hover:bg-gray-50 ${!vehicle.actief ? 'opacity-50' : ''}`}>
                 <div className="flex items-center justify-between gap-1.5">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <LicensePlate kenteken={vehicle.kenteken} size="sm" />
                       {vehicle.type_wagen && (
                         <span className="text-xs text-gray-500 truncate">{vehicle.type_wagen}</span>
+                      )}
+                      {!vehicle.actief && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 shrink-0">
+                          {t('common.inactive')}
+                        </span>
                       )}
                     </div>
                     <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5 truncate">

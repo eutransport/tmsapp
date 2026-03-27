@@ -21,6 +21,11 @@ class Vehicle(models.Model):
         verbose_name='Minimum weken per jaar',
         help_text='Minimaal aantal weken dat dit voertuig per jaar moet draaien. Laat leeg om niet bij te houden.'
     )
+    actief = models.BooleanField(
+        default=True,
+        verbose_name='Actief',
+        help_text='Inactieve voertuigen worden niet getoond in selectielijsten maar hun historische data blijft beschikbaar.'
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -309,7 +309,8 @@
     "adrDescription": "for transport of hazardous materials",
     "minimumHoursPerWeek": "Minimum hours per week",
     "minimumHoursHelp": "Default minimum hours per week. Automatically used in the weekly overview when no specific value is set.",
-    "minimumHoursPlaceholder": "E.g. 40"
+    "minimumHoursPlaceholder": "E.g. 40",
+    "activeHelp": "Inactive drivers won't be counted in hour overviews"
   },
   "fleet": {
     "title": "Fleet",
@@ -335,7 +336,8 @@
     "vehicle": "Vehicle",
     "minimumWeeksPerYear": "Minimum weeks per year",
     "minimumWeeksPlaceholder": "E.g. 40",
-    "minimumWeeksHelp": "Number of weeks this vehicle must operate per year minimum. Leave empty to not track."
+    "minimumWeeksHelp": "Number of weeks this vehicle must operate per year minimum. Leave empty to not track.",
+    "activeHelp": "Inactive vehicles won't appear in selection lists but their hours remain visible"
   },
   "timeEntries": {
     "title": "Time Entries",

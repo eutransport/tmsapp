@@ -309,7 +309,8 @@
     "adrDescription": "voor transport van gevaarlijke stoffen",
     "minimumHoursPerWeek": "Minimum uren per week",
     "minimumHoursHelp": "Standaard minimum uren per week. Wordt automatisch gebruikt in het weekoverzicht als er geen specifieke waarde is ingesteld.",
-    "minimumHoursPlaceholder": "Bijv. 40"
+    "minimumHoursPlaceholder": "Bijv. 40",
+    "activeHelp": "Inactieve chauffeurs worden niet meegeteld in urenoverzichten"
   },
   "fleet": {
     "title": "Vloot",
@@ -335,7 +336,8 @@
     "vehicle": "Voertuig",
     "minimumWeeksPerYear": "Minimum weken per jaar",
     "minimumWeeksPlaceholder": "Bijv. 40",
-    "minimumWeeksHelp": "Aantal weken dat dit voertuig minimaal per jaar moet rijden. Laat leeg om niet te tracken."
+    "minimumWeeksHelp": "Aantal weken dat dit voertuig minimaal per jaar moet rijden. Laat leeg om niet te tracken.",
+    "activeHelp": "Inactieve voertuigen verschijnen niet in selectielijsten maar hun uren blijven zichtbaar"
   },
   "timeEntries": {
     "title": "Urenregistratie",

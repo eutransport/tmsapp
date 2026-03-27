@@ -40,6 +40,11 @@ class Driver(models.Model):
         verbose_name='Minimum uren per week',
         help_text='Standaard minimum uren per week voor deze chauffeur. Wordt gebruikt als er geen specifieke weekinstelling is.'
     )
+    actief = models.BooleanField(
+        default=True,
+        verbose_name='Actief',
+        help_text='Inactieve chauffeurs worden niet meegeteld in urenoverzichten.'
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

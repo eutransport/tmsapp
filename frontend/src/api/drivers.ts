@@ -13,6 +13,7 @@ export interface DriverCreate {
   voertuig?: string | null
   adr?: boolean
   minimum_uren_per_week?: number | null
+  actief?: boolean
 }
 
 export interface DriverUpdate extends Partial<DriverCreate> {}
