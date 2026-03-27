@@ -469,8 +469,11 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         1. Get ALL vehicles with a ritnummer (active + inactive)
         2. Match via ImportedTimeEntry.gekoppeld_voertuig FK
         3. ALSO match orphaned entries (gekoppeld_voertuig=NULL) via kenteken_import
-        4. Only count entries from users with an active driver_profile
-        5. Sum uren_factuur per vehicle ritnummer per week
+        4. Include ALL entries for matching vehicles (regardless of driver)
+        5. Sum uren_factuur AND km per vehicle ritnummer per week
+        
+        This overview is vehicle-based, not driver-based.
+        All trips for a ritnummer are counted regardless of which driver made them.
         
         Returns one row per ritnummer per week.
         """
@@ -480,7 +483,6 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         
         from datetime import date
         from apps.fleet.models import Vehicle
-        from apps.drivers.models import Driver
         from apps.timetracking.import_service import _normalize_kenteken
         
         jaar = int(request.query_params.get('jaar', date.today().year))
@@ -528,27 +530,14 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         if not ritnummer_info:
             return Response([])
         
-        # Step 2: Get user IDs of active drivers only
-        active_driver_user_ids = set(
-            Driver.objects.filter(
-                actief=True,
-                gekoppelde_gebruiker__isnull=False,
-            ).values_list('gekoppelde_gebruiker_id', flat=True)
-        )
-        
-        # Step 3a: Query entries WITH gekoppeld_voertuig FK (normal case)
+        # Step 2: Query entries WITH gekoppeld_voertuig FK (normal case)
+        # No driver filter — this is a vehicle-based overview
         vehicle_ids = list(vehicle_to_ritnummer.keys())
         
-        fk_queryset = ImportedTimeEntry.objects.filter(
+        fk_rows = ImportedTimeEntry.objects.filter(
             gekoppeld_voertuig_id__in=vehicle_ids,
             datum__year=jaar,
-        )
-        if active_driver_user_ids:
-            fk_queryset = fk_queryset.filter(
-                Q(user__isnull=True) | Q(user_id__in=list(active_driver_user_ids))
-            )
-        
-        fk_rows = fk_queryset.values(
+        ).values(
             'gekoppeld_voertuig_id', 'weeknummer',
         ).annotate(
             totaal_uren_factuur=Sum('uren_factuur'),
@@ -556,17 +545,11 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             entries_count=Count('id'),
         )
         
-        # Step 3b: Query ORPHANED entries (gekoppeld_voertuig=NULL) by kenteken_import
-        orphan_queryset = ImportedTimeEntry.objects.filter(
+        # Step 3: Query ORPHANED entries (gekoppeld_voertuig=NULL) by kenteken_import
+        orphan_rows = ImportedTimeEntry.objects.filter(
             gekoppeld_voertuig__isnull=True,
             datum__year=jaar,
-        )
-        if active_driver_user_ids:
-            orphan_queryset = orphan_queryset.filter(
-                Q(user__isnull=True) | Q(user_id__in=list(active_driver_user_ids))
-            )
-        
-        orphan_rows = orphan_queryset.values(
+        ).values(
             'kenteken_import', 'weeknummer',
         ).annotate(
             totaal_uren_factuur=Sum('uren_factuur'),
