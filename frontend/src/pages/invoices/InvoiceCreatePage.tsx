@@ -1773,14 +1773,14 @@ export default function InvoiceCreatePage() {
       // Create invoice lines
       const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
       
-      for (const line of lines) {
-        // Find omschrijving column
-        const omschrijvingCol = columns.find(c => c.type === 'text' || c.id === 'omschrijving')
-        const aantalCol = columns.find(c => c.type === 'aantal' || c.id === 'aantal')
-        const prijsCol = columns.find(c => c.type === 'prijs' || c.id.includes('prijs') || c.id.includes('tarief'))
-        
-        // Round values to 2 decimals to prevent backend validation errors
-        const roundTo2 = (n: number) => Math.round(n * 100) / 100
+      // Find columns once outside the loop for efficiency
+      const omschrijvingCol = columns.find(c => c.type === 'text' || c.id === 'omschrijving')
+      const aantalCol = columns.find(c => c.type === 'aantal' || c.id === 'aantal')
+      const prijsCol = columns.find(c => c.type === 'prijs' || c.id.includes('prijs') || c.id.includes('tarief'))
+      const roundTo2 = (n: number) => Math.round(n * 100) / 100
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
         
         const lineData: any = {
           invoice: invoice.id,
@@ -1791,6 +1791,7 @@ export default function InvoiceCreatePage() {
             : totaalColumn 
               ? Number(line.values[totaalColumn.id]) || 0 
               : 0),
+          volgorde: i,
         }
         
         // Only add time_entry if it exists
