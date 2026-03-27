@@ -470,7 +470,9 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         2. Match via ImportedTimeEntry.gekoppeld_voertuig FK
         3. ALSO match orphaned entries (gekoppeld_voertuig=NULL) via kenteken_import
         4. Include ALL entries for matching vehicles (regardless of driver)
-        5. Sum uren_factuur AND km per vehicle ritnummer per week
+        5. Sum uren_factuur per vehicle ritnummer per week (from ImportedTimeEntry)
+        6. Sum totaal_km per ritnummer per week from chauffeur-submitted TimeEntry records
+           (status=ingediend), matched on ritnummer + weeknummer + datum__year
         
         This overview is vehicle-based, not driver-based.
         All trips for a ritnummer are counted regardless of which driver made them.
@@ -530,7 +532,21 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         if not ritnummer_info:
             return Response([])
         
-        # Step 2: Query entries WITH gekoppeld_voertuig FK (normal case)
+        # Step 2: Query km from chauffeur-submitted TimeEntries, grouped by ritnummer + weeknummer
+        all_ritnummers = list(ritnummer_info.keys())
+        chauffeur_km_rows = TimeEntry.objects.filter(
+            ritnummer__in=all_ritnummers,
+            datum__year=jaar,
+            status=TimeEntryStatus.INGEDIEND,
+        ).values('ritnummer', 'weeknummer').annotate(
+            totaal_km=Sum('totaal_km'),
+        )
+        chauffeur_km_lookup = {}
+        for row in chauffeur_km_rows:
+            key = (row['ritnummer'], row['weeknummer'])
+            chauffeur_km_lookup[key] = float(row['totaal_km'] or 0)
+
+        # Step 3: Query entries WITH gekoppeld_voertuig FK (normal case)
         # No driver filter — this is a vehicle-based overview
         vehicle_ids = list(vehicle_to_ritnummer.keys())
         
@@ -545,7 +561,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             entries_count=Count('id'),
         )
         
-        # Step 3: Query ORPHANED entries (gekoppeld_voertuig=NULL) individually
+        # Step 4: Query ORPHANED entries (gekoppeld_voertuig=NULL) individually
         # We must NOT group by kenteken_import before normalizing, because different
         # raw kenteken strings (e.g. "BX-123-D", "BX123D", "bx 123 d") normalize to
         # the same key. Grouping first would cause only one variant to match,
@@ -555,7 +571,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             datum__year=jaar,
         ).values('kenteken_import', 'weeknummer', 'uren_factuur', 'km')
 
-        # Step 4: Build results — per ritnummer per week
+        # Step 5: Build results — per ritnummer per week
         week_totals = {}  # (ritnummer, weeknummer) -> { uren, km, count }
         
         # Process FK-matched entries
@@ -591,6 +607,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         results = []
         for (rit, wk), wt in week_totals.items():
             info = ritnummer_info[rit]
+            km_from_chauffeur = chauffeur_km_lookup.get((rit, wk), 0)
             results.append({
                 'ritnummer': rit,
                 'vehicle_id': info['vehicle_id'],
@@ -600,7 +617,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
                 'jaar': jaar,
                 'weeknummer': wk,
                 'gewerkte_uren': round(wt['uren'], 2),
-                'totaal_km': round(wt['km'], 1),
+                'totaal_km': round(km_from_chauffeur, 1),
                 'entries_count': wt['count'],
             })
         
