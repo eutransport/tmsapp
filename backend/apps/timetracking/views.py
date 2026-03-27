@@ -349,8 +349,26 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         jaar = request.query_params.get('jaar')
         user_filter = request.query_params.get('user')
         
+        # Build driver default minimum hours lookup (via gekoppelde_gebruiker)
+        # Only drivers with minimum_uren_per_week set should appear in this overview
+        from apps.drivers.models import Driver
+        driver_defaults = {}
+        driver_qs = Driver.objects.filter(
+            minimum_uren_per_week__isnull=False,
+            gekoppelde_gebruiker__isnull=False,
+        ).values_list('gekoppelde_gebruiker_id', 'minimum_uren_per_week')
+        for user_id, min_uren in driver_qs:
+            driver_defaults[str(user_id)] = float(min_uren)
+        
         # Get all submitted time entries grouped by user, year, week
+        # Only include users that have minimum_uren_per_week set
         queryset = TimeEntry.objects.filter(status=TimeEntryStatus.INGEDIEND)
+        
+        if driver_defaults:
+            queryset = queryset.filter(user_id__in=[uid for uid in driver_defaults.keys()])
+        else:
+            # No drivers with minimum hours configured — return empty
+            return Response([])
         
         if jaar:
             queryset = queryset.filter(datum__year=int(jaar))
@@ -368,16 +386,6 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             totaal_km=Sum('totaal_km'),
             entries_count=Count('id'),
         ).order_by('-jaar', '-weeknummer', 'user__achternaam')
-        
-        # Build driver default minimum hours lookup (via gekoppelde_gebruiker)
-        from apps.drivers.models import Driver
-        driver_defaults = {}
-        driver_qs = Driver.objects.filter(
-            minimum_uren_per_week__isnull=False,
-            gekoppelde_gebruiker__isnull=False,
-        ).values_list('gekoppelde_gebruiker_id', 'minimum_uren_per_week')
-        for user_id, min_uren in driver_qs:
-            driver_defaults[str(user_id)] = float(min_uren)
         
         # Aggregate into 4-week periods
         # Period 1 = weeks 1-4, Period 2 = weeks 5-8, etc.
@@ -476,7 +484,24 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         jaar = request.query_params.get('jaar')
         user_filter = request.query_params.get('user')
         
+        # Build driver default minimum hours lookup
+        # Only drivers with minimum_uren_per_week set should appear in this overview
+        from apps.drivers.models import Driver
+        driver_defaults = {}
+        driver_qs = Driver.objects.filter(
+            minimum_uren_per_week__isnull=False,
+            gekoppelde_gebruiker__isnull=False,
+        ).values_list('gekoppelde_gebruiker_id', 'minimum_uren_per_week')
+        for uid, min_uren in driver_qs:
+            driver_defaults[str(uid)] = float(min_uren)
+        
         queryset = TimeEntry.objects.filter(status=TimeEntryStatus.INGEDIEND)
+        
+        if driver_defaults:
+            queryset = queryset.filter(user_id__in=[uid for uid in driver_defaults.keys()])
+        else:
+            # No drivers with minimum hours configured — return empty
+            return Response([])
         
         if jaar:
             queryset = queryset.filter(datum__year=int(jaar))
@@ -495,16 +520,6 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             totaal_km=Sum('totaal_km'),
             entries_count=Count('id'),
         ).order_by('-jaar', '-maand', 'user__achternaam')
-        
-        # Build driver default minimum hours lookup
-        from apps.drivers.models import Driver
-        driver_defaults = {}
-        driver_qs = Driver.objects.filter(
-            minimum_uren_per_week__isnull=False,
-            gekoppelde_gebruiker__isnull=False,
-        ).values_list('gekoppelde_gebruiker_id', 'minimum_uren_per_week')
-        for uid, min_uren in driver_qs:
-            driver_defaults[str(uid)] = float(min_uren)
         
         # Calculate weeks per month: count Mondays in a given month
         def weeks_in_month(year, month):
