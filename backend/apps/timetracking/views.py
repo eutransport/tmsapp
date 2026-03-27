@@ -545,18 +545,16 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             entries_count=Count('id'),
         )
         
-        # Step 3: Query ORPHANED entries (gekoppeld_voertuig=NULL) by kenteken_import
+        # Step 3: Query ORPHANED entries (gekoppeld_voertuig=NULL) individually
+        # We must NOT group by kenteken_import before normalizing, because different
+        # raw kenteken strings (e.g. "BX-123-D", "BX123D", "bx 123 d") normalize to
+        # the same key. Grouping first would cause only one variant to match,
+        # leaving km/uren for other variants as 0.
         orphan_rows = ImportedTimeEntry.objects.filter(
             gekoppeld_voertuig__isnull=True,
             datum__year=jaar,
-        ).values(
-            'kenteken_import', 'weeknummer',
-        ).annotate(
-            totaal_uren_factuur=Sum('uren_factuur'),
-            totaal_km=Sum('km'),
-            entries_count=Count('id'),
-        )
-        
+        ).values('kenteken_import', 'weeknummer', 'uren_factuur', 'km')
+
         # Step 4: Build results — per ritnummer per week
         week_totals = {}  # (ritnummer, weeknummer) -> { uren, km, count }
         
@@ -575,20 +573,20 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             week_totals[key]['km'] += float(row['totaal_km'] or 0)
             week_totals[key]['count'] += row['entries_count']
         
-        # Process orphaned entries (match kenteken_import to known vehicles)
+        # Process orphaned entries row by row so each kenteken is normalized individually
         for row in orphan_rows:
             norm_key = _normalize_kenteken(row['kenteken_import'])
             rit = norm_to_ritnummer.get(norm_key)
             if not rit:
                 continue
-            
+
             wk = row['weeknummer']
             key = (rit, wk)
             if key not in week_totals:
                 week_totals[key] = {'uren': 0, 'km': 0, 'count': 0}
-            week_totals[key]['uren'] += float(row['totaal_uren_factuur'] or 0)
-            week_totals[key]['km'] += float(row['totaal_km'] or 0)
-            week_totals[key]['count'] += row['entries_count']
+            week_totals[key]['uren'] += float(row['uren_factuur'] or 0)
+            week_totals[key]['km'] += float(row['km'] or 0)
+            week_totals[key]['count'] += 1
         
         results = []
         for (rit, wk), wt in week_totals.items():
