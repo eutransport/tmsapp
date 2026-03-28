@@ -537,36 +537,38 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         if not ritnummer_info:
             return Response([])
         
-        # Step 2: Query km from chauffeur-submitted TimeEntries, grouped by ritnummer + weeknummer
-        all_ritnummers = list(ritnummer_info.keys())
+        # Step 2: Query km from chauffeur-submitted TimeEntries, matched by KENTEKEN
+        # Build kenteken -> ritnummer mapping from vehicles
+        kenteken_to_ritnummer = {}
+        for vehicle in vehicles:
+            rit = vehicle.ritnummer.strip()
+            if rit and vehicle.kenteken:
+                # Store lowercase kenteken for case-insensitive matching
+                kenteken_to_ritnummer[vehicle.kenteken.lower()] = rit
 
-        # Build case-insensitive lookup: lowercase ritnummer -> canonical ritnummer
-        ritnummer_lower_to_canonical = {r.lower(): r for r in all_ritnummers}
+        all_kentekens = list(kenteken_to_ritnummer.keys())
 
-        # Use Q filter for case-insensitive ritnummer matching
-        if all_ritnummers:
-            q = functools.reduce(operator.or_, [Q(ritnummer__iexact=r) for r in all_ritnummers])
+        if all_kentekens:
+            q = functools.reduce(operator.or_, [Q(kenteken__iexact=k) for k in all_kentekens])
             chauffeur_km_rows = TimeEntry.objects.filter(
                 q,
                 datum__year=jaar,
                 status=TimeEntryStatus.INGEDIEND,
             ).annotate(
                 iso_week=ExtractWeek('datum'),
-            ).values('ritnummer', 'iso_week').annotate(
+            ).values('kenteken', 'iso_week').annotate(
                 totaal_km=Sum('totaal_km'),
             )
         else:
             chauffeur_km_rows = []
 
-        logger.debug(f"[ritnummer_hours_overview] jaar={jaar}, all_ritnummers count={len(all_ritnummers)}, sample={all_ritnummers[:5] if all_ritnummers else []}")
+        logger.debug(f"[ritnummer_hours_overview] jaar={jaar}, all_kentekens count={len(all_kentekens)}, sample={all_kentekens[:5] if all_kentekens else []}")
 
         chauffeur_km_lookup = {}
         for row in chauffeur_km_rows:
-            canonical = ritnummer_lower_to_canonical.get(row['ritnummer'].lower())
-            if canonical:
-                key = (canonical, row['iso_week'])
-                # Accumulate in case multiple case variants of the same ritnummer exist
-                # (e.g. "r12" and "R12" both map to canonical "R12" for the same week)
+            rit = kenteken_to_ritnummer.get(row['kenteken'].lower())
+            if rit:
+                key = (rit, row['iso_week'])
                 chauffeur_km_lookup[key] = chauffeur_km_lookup.get(key, 0) + float(row['totaal_km'] or 0)
 
         logger.debug(f"[ritnummer_hours_overview] chauffeur_km_lookup count={len(chauffeur_km_lookup)}, sample keys={list(chauffeur_km_lookup.keys())[:5]}")
