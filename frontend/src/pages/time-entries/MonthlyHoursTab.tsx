@@ -343,9 +343,9 @@ export default function MonthlyHoursTab() {
                                     <span className={`text-sm font-medium ${row.minimum_uren !== null ? '' : 'text-gray-400 italic'}`}>
                                       {row.minimum_uren !== null ? (
                                         <>
-                                          {row.minimum_uren}u
+                                          {row.minimum_uren?.toFixed(2)}u
                                           <span className="text-xs text-gray-400 ml-1">
-                                            ({row.minimum_uren_per_week}u/wk)
+                                            ({row.minimum_uren_per_week?.toFixed(2)}u/wk)
                                           </span>
                                         </>
                                       ) : t('monthlyHours.notSet')}
@@ -353,14 +353,14 @@ export default function MonthlyHoursTab() {
                                   </td>
                                   <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
                                     <span className={`font-semibold ${belowMinimum ? 'text-red-600' : 'text-gray-900'}`}>
-                                      {row.gewerkte_uren}u
+                                      {row.gewerkte_uren.toFixed(2)}u
                                     </span>
                                   </td>
                                   <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
                                     {hasMissed ? (
                                       <span className="inline-flex items-center gap-1 text-red-600 font-semibold">
                                         <ExclamationTriangleIcon className="h-4 w-4" />
-                                        {row.gemiste_uren}u
+                                        {row.gemiste_uren?.toFixed(2)}u
                                       </span>
                                     ) : row.minimum_uren !== null ? (
                                       <span className="text-green-600 font-medium">0u</span>
@@ -441,19 +441,19 @@ export default function MonthlyHoursTab() {
                       <div>
                         <span className="text-gray-500 block">{t('monthlyHours.minimumShort')}</span>
                         <span className="font-medium">
-                          {row.minimum_uren !== null ? `${row.minimum_uren}u` : '-'}
+                          {row.minimum_uren !== null ? `${row.minimum_uren?.toFixed(2)}u` : '-'}
                         </span>
                       </div>
                       <div>
                         <span className="text-gray-500 block">{t('monthlyHours.workedShort')}</span>
                         <span className={`font-semibold ${belowMinimum ? 'text-red-600' : ''}`}>
-                          {row.gewerkte_uren}u
+                          {row.gewerkte_uren.toFixed(2)}u
                         </span>
                       </div>
                       <div>
                         <span className="text-gray-500 block">{t('monthlyHours.missedShort')}</span>
                         {hasMissed ? (
-                          <span className="text-red-600 font-semibold">{row.gemiste_uren}u</span>
+                          <span className="text-red-600 font-semibold">{row.gemiste_uren?.toFixed(2)}u</span>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
@@ -515,11 +515,11 @@ export default function MonthlyHoursTab() {
                         <div className="grid grid-cols-2 gap-2 text-orange-700">
                           <div>{t('drivers.title')}: <span className="font-medium">{invoiceRow.user_naam}</span></div>
                           <div>{t('monthlyHours.month')}: <span className="font-medium">{invoiceRow.maand_naam} {invoiceRow.jaar}</span></div>
-                          <div>{t('monthlyHours.minimumHours')}: <span className="font-medium">{invoiceRow.minimum_uren}u ({invoiceRow.weken_in_maand} {t('monthlyHours.weeks')})</span></div>
-                          <div>{t('monthlyHours.workedHours')}: <span className="font-medium">{invoiceRow.gewerkte_uren}u</span></div>
+                          <div>{t('monthlyHours.minimumHours')}: <span className="font-medium">{invoiceRow.minimum_uren?.toFixed(2)}u ({invoiceRow.weken_in_maand} {t('monthlyHours.weeks')})</span></div>
+                          <div>{t('monthlyHours.workedHours')}: <span className="font-medium">{invoiceRow.gewerkte_uren.toFixed(2)}u</span></div>
                         </div>
                         <div className="mt-2 text-orange-800 font-semibold">
-                          {t('monthlyHours.missedHours')}: {invoiceRow.gemiste_uren}u
+                          {t('monthlyHours.missedHours')}: {invoiceRow.gemiste_uren?.toFixed(2)}u
                         </div>
                       </div>
                     )}
@@ -748,7 +748,7 @@ export default function MonthlyHoursTab() {
                           Gemiste werkuren {invoiceRow.maand_naam.toLowerCase()} {invoiceRow.jaar} - {invoiceRow.user_naam}
                         </div>
                         <div className="text-gray-600 mt-1">
-                          {invoiceRow.gemiste_uren}u × €{parseFloat(pricePerHour || '0').toFixed(2)} =
+                          {invoiceRow.gemiste_uren?.toFixed(2)}u × €{parseFloat(pricePerHour || '0').toFixed(2)} =
                           <span className="font-semibold text-gray-900 ml-1">
                             €{((invoiceRow.gemiste_uren || 0) * parseFloat(pricePerHour || '0')).toFixed(2)}
                           </span>
