@@ -172,7 +172,7 @@ export default function RitnummerHoursTab() {
 
       {/* Summary */}
       {!loading && groupedData.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="card p-4 text-center">
             <div className="text-2xl font-bold text-primary-600">{groupedData.length}</div>
             <div className="text-xs text-gray-500 mt-1">{t('ritnummerHours.ritnummer')}s</div>
@@ -183,7 +183,7 @@ export default function RitnummerHoursTab() {
             </div>
             <div className="text-xs text-gray-500 mt-1">{t('ritnummerHours.totalHours')}</div>
           </div>
-          <div className="card p-4 text-center hidden sm:block">
+          <div className="card p-4 text-center">
             <div className="text-2xl font-bold text-green-600">
               {Math.round(groupedData.reduce((s, g) => s + g.totalKm, 0)).toLocaleString()}
             </div>
