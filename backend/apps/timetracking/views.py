@@ -1,6 +1,4 @@
-import functools
 import logging
-import operator
 from datetime import timedelta
 from decimal import Decimal
 from rest_framework import viewsets, status
@@ -12,6 +10,7 @@ from django.db.models.functions import ExtractWeek
 
 from .models import TimeEntry, TimeEntryStatus, WeeklyMinimumHours, ImportedTimeEntry
 from .serializers import TimeEntrySerializer, WeeklyMinimumHoursSerializer
+from .import_service import _normalize_kenteken
 
 logger = logging.getLogger('accounts.security')
 
@@ -537,36 +536,31 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         if not ritnummer_info:
             return Response([])
         
-        # Step 2: Query km from chauffeur-submitted TimeEntries, matched by KENTEKEN
-        # Build kenteken -> ritnummer mapping from vehicles
-        kenteken_to_ritnummer = {}
+        # Step 2: Query km from chauffeur-submitted TimeEntries, matched by KENTEKEN (normalized)
+        # Build normalized kenteken -> ritnummer mapping from vehicles
+        norm_kenteken_to_ritnummer = {}
         for vehicle in vehicles:
             rit = vehicle.ritnummer.strip()
             if rit and vehicle.kenteken:
-                # Store lowercase kenteken for case-insensitive matching
-                kenteken_to_ritnummer[vehicle.kenteken.lower()] = rit
+                norm_k = _normalize_kenteken(vehicle.kenteken)
+                if norm_k:
+                    norm_kenteken_to_ritnummer[norm_k] = rit
 
-        all_kentekens = list(kenteken_to_ritnummer.keys())
-
-        if all_kentekens:
-            q = functools.reduce(operator.or_, [Q(kenteken__iexact=k) for k in all_kentekens])
-            chauffeur_km_rows = TimeEntry.objects.filter(
-                q,
-                datum__year=jaar,
-                status=TimeEntryStatus.INGEDIEND,
-            ).annotate(
-                iso_week=ExtractWeek('datum'),
-            ).values('kenteken', 'iso_week').annotate(
-                totaal_km=Sum('totaal_km'),
-            )
-        else:
-            chauffeur_km_rows = []
-
-        logger.debug(f"[ritnummer_hours_overview] jaar={jaar}, all_kentekens count={len(all_kentekens)}, sample={all_kentekens[:5] if all_kentekens else []}")
+        # Get ALL submitted chauffeur TimeEntries for this year
+        chauffeur_entries = TimeEntry.objects.filter(
+            datum__year=jaar,
+            status=TimeEntryStatus.INGEDIEND,
+            kenteken__isnull=False,
+        ).exclude(kenteken='').annotate(
+            iso_week=ExtractWeek('datum'),
+        ).values('kenteken', 'iso_week').annotate(
+            totaal_km=Sum('totaal_km'),
+        )
 
         chauffeur_km_lookup = {}
-        for row in chauffeur_km_rows:
-            rit = kenteken_to_ritnummer.get(row['kenteken'].lower())
+        for row in chauffeur_entries:
+            norm_k = _normalize_kenteken(row['kenteken'])
+            rit = norm_kenteken_to_ritnummer.get(norm_k)
             if rit:
                 key = (rit, row['iso_week'])
                 chauffeur_km_lookup[key] = chauffeur_km_lookup.get(key, 0) + float(row['totaal_km'] or 0)
