@@ -27,6 +27,8 @@ interface RitnummerGroup {
   weeks: RitnummerHoursOverview[]
   totalHours: number
   totalKm: number
+  minimum_weken_per_jaar: number | null
+  weken_met_uren: number
 }
 
 export default function RitnummerHoursTab() {
@@ -71,12 +73,17 @@ export default function RitnummerHoursTab() {
           weeks: [],
           totalHours: 0,
           totalKm: 0,
+          minimum_weken_per_jaar: row.minimum_weken_per_jaar,
+          weken_met_uren: 0,
         })
       }
       const group = groups.get(row.ritnummer)!
       group.weeks.push(row)
       group.totalHours += row.gewerkte_uren
       group.totalKm += row.totaal_km
+      if (row.gewerkte_uren > 0) {
+        group.weken_met_uren += 1
+      }
     })
 
     let result = Array.from(groups.values())
@@ -223,7 +230,7 @@ export default function RitnummerHoursTab() {
                     </div>
                     <div className="flex items-center gap-4 text-xs text-gray-500 shrink-0">
                       <span className="hidden sm:inline">
-                        {group.weeks.length} {t('ritnummerHours.totalWeeks')}
+                        {group.weken_met_uren} / {group.minimum_weken_per_jaar ?? '—'} {t('ritnummerHours.totalWeeks')}
                       </span>
                       <span>
                         <strong className="text-gray-700">{formatHours(group.totalHours)}</strong> uur

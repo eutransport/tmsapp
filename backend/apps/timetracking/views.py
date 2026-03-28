@@ -492,9 +492,10 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         
         jaar = int(request.query_params.get('jaar', date.today().year))
         
-        # Step 1: Get ALL vehicles with a ritnummer (including inactive)
+        # Step 1: Get vehicles with a ritnummer AND minimum_weken_per_jaar set (incl. inactive for historical data)
         vehicles = Vehicle.objects.filter(
             ritnummer__gt='',
+            minimum_weken_per_jaar__isnull=False,
         ).select_related('bedrijf')
         
         if not vehicles.exists():
@@ -529,6 +530,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
                     'kenteken': vehicle.kenteken,
                     'type_wagen': vehicle.type_wagen,
                     'bedrijf_naam': vehicle.bedrijf.naam if vehicle.bedrijf else '',
+                    'minimum_weken_per_jaar': vehicle.minimum_weken_per_jaar,
                     '_created': vehicle.created_at,
                 }
         
@@ -650,6 +652,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
                 'gewerkte_uren': round(wt['uren'], 2),
                 'totaal_km': round(km_from_chauffeur, 1),
                 'entries_count': wt['count'],
+                'minimum_weken_per_jaar': info.get('minimum_weken_per_jaar'),
             })
         
         # Sort by ritnummer, then week

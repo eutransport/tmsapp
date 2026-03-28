@@ -366,6 +366,7 @@ export interface RitnummerHoursOverview {
   gewerkte_uren: number
   totaal_km: number
   entries_count: number
+  minimum_weken_per_jaar: number | null
 }
 
 /**

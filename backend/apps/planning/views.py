@@ -75,8 +75,8 @@ class WeekPlanningViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         planning = serializer.save()
         
-        # Auto-generate entries for all vehicles of the company
-        vehicles = Vehicle.objects.filter(bedrijf=planning.bedrijf)
+        # Auto-generate entries for all active vehicles of the company
+        vehicles = Vehicle.objects.filter(bedrijf=planning.bedrijf, actief=True)
         days = [Weekday.MAANDAG, Weekday.DINSDAG, Weekday.WOENSDAG, Weekday.DONDERDAG, Weekday.VRIJDAG]
         
         entries = []
@@ -228,8 +228,10 @@ class WeekPlanningViewSet(viewsets.ModelViewSet):
             jaar=year
         )
         
-        # Copy entries
-        for entry in source.entries.all():
+        # Copy entries (skip inactive vehicles)
+        for entry in source.entries.select_related('vehicle').all():
+            if not entry.vehicle.actief:
+                continue  # Skip inactieve voertuigen
             PlanningEntry.objects.create(
                 planning=new_planning,
                 vehicle=entry.vehicle,
