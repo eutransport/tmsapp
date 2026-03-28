@@ -312,8 +312,8 @@ export default function WeeklyHoursTab() {
                       </div>
                       <div className="flex items-center gap-4 text-xs text-gray-500">
                         <span>{group.rows.length} chauffeurs</span>
-                        <span className="font-medium text-gray-700">{grpWorked}u</span>
-                        {grpMissed > 0 && <span className="font-medium text-red-600">{grpMissed}u gemist</span>}
+                        <span className="font-medium text-gray-700">{grpWorked.toFixed(2)}u</span>
+                        {grpMissed > 0 && <span className="font-medium text-red-600">{grpMissed.toFixed(2)}u gemist</span>}
                         <span>{grpKm} km</span>
                       </div>
                     </button>
@@ -433,7 +433,7 @@ export default function WeeklyHoursTab() {
                       {isExpanded ? <ChevronDownIcon className="h-4 w-4 text-gray-500" /> : <ChevronRightIcon className="h-4 w-4 text-gray-500" />}
                       <span className="inline-flex items-center justify-center h-6 px-2 rounded-full bg-primary-100 text-primary-700 font-bold text-xs">P{group.periode}</span>
                       <span className="text-xs text-gray-500">wk {group.week_start}-{group.week_eind}</span>
-                      <span className="ml-auto text-xs text-gray-400">{group.rows.length} • {grpWorked}u{grpMissed > 0 ? ` • ${grpMissed}u gemist` : ''}</span>
+                      <span className="ml-auto text-xs text-gray-400">{group.rows.length} • {grpWorked.toFixed(2)}u{grpMissed > 0 ? ` • ${grpMissed.toFixed(2)}u gemist` : ''}</span>
                     </div>
                     {isExpanded && group.rows.map((row) => {
                 const key = `${row.user_id}-${row.jaar}-${row.periode}`
