@@ -14,12 +14,33 @@ class VehicleSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate_kenteken(self, value):
-        value = value.upper()
-        qs = Vehicle.objects.filter(kenteken__iexact=value, actief=True)
+        """Normalize kenteken to uppercase."""
+        return value.upper()
+
+    def validate(self, attrs):
+        """Check kenteken uniqueness only when the vehicle will be active."""
+        kenteken = attrs.get('kenteken')
+        actief = attrs.get('actief')
+
+        # If editing an existing vehicle, fall back to its current values
         if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise serializers.ValidationError(
-                "Er bestaat al een actief voertuig met dit kenteken."
-            )
-        return value
+            if kenteken is None:
+                kenteken = self.instance.kenteken
+            if actief is None:
+                actief = self.instance.actief
+        else:
+            # New vehicle: fall back to the model field's default
+            if actief is None:
+                actief = Vehicle._meta.get_field('actief').get_default()
+
+        # Only check uniqueness if this vehicle will be active
+        if actief and kenteken:
+            qs = Vehicle.objects.filter(kenteken__iexact=kenteken, actief=True)
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError({
+                    'kenteken': "Er bestaat al een actief voertuig met dit kenteken."
+                })
+
+        return attrs
