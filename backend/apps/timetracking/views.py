@@ -1,4 +1,6 @@
+import functools
 import logging
+import operator
 from datetime import timedelta
 from decimal import Decimal
 from rest_framework import viewsets, status
@@ -534,17 +536,31 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         
         # Step 2: Query km from chauffeur-submitted TimeEntries, grouped by ritnummer + weeknummer
         all_ritnummers = list(ritnummer_info.keys())
-        chauffeur_km_rows = TimeEntry.objects.filter(
-            ritnummer__in=all_ritnummers,
-            datum__year=jaar,
-            status=TimeEntryStatus.INGEDIEND,
-        ).values('ritnummer', 'weeknummer').annotate(
-            totaal_km=Sum('totaal_km'),
-        )
+
+        # Build case-insensitive lookup: lowercase ritnummer -> canonical ritnummer
+        ritnummer_lower_to_canonical = {r.lower(): r for r in all_ritnummers}
+
+        # Use Q filter for case-insensitive ritnummer matching
+        if all_ritnummers:
+            q = functools.reduce(operator.or_, [Q(ritnummer__iexact=r) for r in all_ritnummers])
+            chauffeur_km_rows = TimeEntry.objects.filter(
+                q,
+                datum__year=jaar,
+                status=TimeEntryStatus.INGEDIEND,
+            ).values('ritnummer', 'weeknummer').annotate(
+                totaal_km=Sum('totaal_km'),
+            )
+        else:
+            chauffeur_km_rows = []
+
         chauffeur_km_lookup = {}
         for row in chauffeur_km_rows:
-            key = (row['ritnummer'], row['weeknummer'])
-            chauffeur_km_lookup[key] = float(row['totaal_km'] or 0)
+            canonical = ritnummer_lower_to_canonical.get(row['ritnummer'].lower())
+            if canonical:
+                key = (canonical, row['weeknummer'])
+                # Accumulate in case multiple case variants of the same ritnummer exist
+                # (e.g. "r12" and "R12" both map to canonical "R12" for the same week)
+                chauffeur_km_lookup[key] = chauffeur_km_lookup.get(key, 0) + float(row['totaal_km'] or 0)
 
         # Step 3: Query entries WITH gekoppeld_voertuig FK (normal case)
         # No driver filter — this is a vehicle-based overview
@@ -604,6 +620,12 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             week_totals[key]['km'] += float(row['km'] or 0)
             week_totals[key]['count'] += 1
         
+        # Also include weeks that have chauffeur km but no import entries
+        for (rit, wk) in chauffeur_km_lookup:
+            key = (rit, wk)
+            if key not in week_totals:
+                week_totals[key] = {'uren': 0, 'km': 0, 'count': 0}
+
         results = []
         for (rit, wk), wt in week_totals.items():
             info = ritnummer_info[rit]
