@@ -15,6 +15,7 @@ import {
 import {
   RitnummerHoursOverview,
   getRitnummerHoursOverview,
+  getAvailableYears,
   getCurrentYear,
 } from '@/api/timetracking'
 import toast from 'react-hot-toast'
@@ -39,8 +40,19 @@ export default function RitnummerHoursTab() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedYear, setSelectedYear] = useState(getCurrentYear())
   const [expandedRitnummers, setExpandedRitnummers] = useState<Set<string>>(new Set())
+  const [availableYears, setAvailableYears] = useState<number[]>([getCurrentYear()])
 
-  const years = Array.from({ length: 5 }, (_, i) => getCurrentYear() - i).filter(y => y >= 2024)
+  useEffect(() => {
+    getAvailableYears().then(years => {
+      if (years.length > 0) {
+        setAvailableYears(years)
+        setSelectedYear(prev => years.includes(prev) ? prev : years[0])
+      }
+    }).catch(err => {
+      console.error('Failed to load available years:', err)
+      toast.error(t('ritnummerHours.loadError'))
+    })
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -142,7 +154,7 @@ export default function RitnummerHoursTab() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              {years.map(y => (
+              {availableYears.map(y => (
                 <button
                   key={y}
                   onClick={() => setSelectedYear(y)}

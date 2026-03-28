@@ -656,6 +656,31 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         
         return Response(results)
 
+    @action(detail=False, methods=['get'], url_path='available_years')
+    def available_years(self, request):
+        """Return list of years that have TimeEntry or ImportedTimeEntry data."""
+        from django.db.models.functions import ExtractYear
+
+        user = request.user
+        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+            return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
+
+        years_te = set(
+            TimeEntry.objects.filter(datum__isnull=False)
+            .annotate(jaar=ExtractYear('datum'))
+            .values_list('jaar', flat=True)
+            .distinct()
+        )
+        years_ite = set(
+            ImportedTimeEntry.objects.filter(datum__isnull=False)
+            .annotate(jaar=ExtractYear('datum'))
+            .values_list('jaar', flat=True)
+            .distinct()
+        )
+
+        all_years = sorted(years_te | years_ite, reverse=True)
+        return Response(all_years)
+
     @action(detail=False, methods=['get'], url_path='monthly_hours_overview')
     def monthly_hours_overview(self, request):
         """

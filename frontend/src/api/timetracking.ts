@@ -370,6 +370,14 @@ export interface RitnummerHoursOverview {
 }
 
 /**
+ * Get available years that have TimeEntry or ImportedTimeEntry data (admin only)
+ */
+export async function getAvailableYears(): Promise<number[]> {
+  const response = await api.get('/time-entries/available_years/')
+  return response.data
+}
+
+/**
  * Get ritnummer hours overview grouped by fleet ritnummer (admin only)
  */
 export async function getRitnummerHoursOverview(jaar?: number): Promise<RitnummerHoursOverview[]> {
