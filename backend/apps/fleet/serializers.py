@@ -12,6 +12,11 @@ class VehicleSerializer(serializers.ModelSerializer):
             'actief', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'kenteken': {
+                'validators': [],  # Remove DRF's auto UniqueValidator; we handle uniqueness in validate()
+            }
+        }
 
     def validate_kenteken(self, value):
         """Normalize kenteken to uppercase."""
