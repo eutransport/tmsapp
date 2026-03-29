@@ -63,11 +63,10 @@ def generate_excel(title: str, columns: list, rows: list) -> bytes:
     # ---- Auto-fit column widths ----
     for col_idx, col_name in enumerate(columns, start=1):
         col_letter = get_column_letter(col_idx)
-        max_length = max(
-            len(str(col_name)),
-            *(len(str(row[col_idx - 1])) for row in rows if col_idx - 1 < len(row)),
-            default=10,
-        )
+        col_lengths = [len(str(col_name))] + [
+            len(str(row[col_idx - 1])) for row in rows if col_idx - 1 < len(row)
+        ]
+        max_length = max(col_lengths, default=10)
         ws.column_dimensions[col_letter].width = min(max_length + 4, 50)
 
     # ---- Freeze header ----
