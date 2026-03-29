@@ -184,24 +184,22 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 // Route accessible to admins OR users with a specific module permission
-// Also accepts an optional list of roles that have inherent access (backwards compat)
 function PermissionRoute({ 
   children, 
   permission,
-  allowedRoles,
+  redirectTo = '/time-entries',
 }: { 
   children: React.ReactNode
   permission: string
-  allowedRoles?: ('admin' | 'gebruiker' | 'chauffeur')[]
+  redirectTo?: string
 }) {
   const { user } = useAuthStore()
   
   if (!user) return <Navigate to="/" replace />
   if (user.rol === 'admin') return <>{children}</>
-  if (allowedRoles && allowedRoles.includes(user.rol)) return <>{children}</>
   if ((user.module_permissions || []).includes(permission)) return <>{children}</>
   
-  return <Navigate to="/" replace />
+  return <Navigate to={redirectTo} replace />
 }
 
 function App() {
@@ -286,7 +284,7 @@ function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<DashboardPage />} />
+        <Route path="/" element={<PermissionRoute permission="view_dashboard"><DashboardPage /></PermissionRoute>} />
         <Route path="/activities" element={<ActivityPage />} />
         
         {/* Admin routes */}
@@ -295,21 +293,21 @@ function App() {
         <Route path="/settings/fonts" element={<AdminRoute><FontManagementPage /></AdminRoute>} />
         
         {/* Master data */}
-        <Route path="/companies" element={<CompaniesPage />} />
-        <Route path="/drivers" element={<DriversPage />} />
-        <Route path="/fleet" element={<FleetPage />} />
+        <Route path="/companies" element={<PermissionRoute permission="view_companies"><CompaniesPage /></PermissionRoute>} />
+        <Route path="/drivers" element={<PermissionRoute permission="view_drivers"><DriversPage /></PermissionRoute>} />
+        <Route path="/fleet" element={<PermissionRoute permission="view_fleet"><FleetPage /></PermissionRoute>} />
         
         {/* Maintenance */}
-        <Route path="/maintenance" element={<PermissionRoute permission="view_maintenance" allowedRoles={['gebruiker']}><MaintenanceOverviewPage /></PermissionRoute>} />
-        <Route path="/maintenance/apk" element={<PermissionRoute permission="view_maintenance" allowedRoles={['gebruiker']}><APKPage /></PermissionRoute>} />
-        <Route path="/maintenance/tasks" element={<PermissionRoute permission="view_maintenance" allowedRoles={['gebruiker']}><MaintenanceTasksPage /></PermissionRoute>} />
-        <Route path="/maintenance/tires" element={<PermissionRoute permission="view_maintenance" allowedRoles={['gebruiker']}><TiresPage /></PermissionRoute>} />
+        <Route path="/maintenance" element={<PermissionRoute permission="view_maintenance"><MaintenanceOverviewPage /></PermissionRoute>} />
+        <Route path="/maintenance/apk" element={<PermissionRoute permission="view_maintenance"><APKPage /></PermissionRoute>} />
+        <Route path="/maintenance/tasks" element={<PermissionRoute permission="view_maintenance"><MaintenanceTasksPage /></PermissionRoute>} />
+        <Route path="/maintenance/tires" element={<PermissionRoute permission="view_maintenance"><TiresPage /></PermissionRoute>} />
         <Route path="/maintenance/settings" element={<AdminRoute><MaintenanceSettingsPage /></AdminRoute>} />
         
         {/* Time tracking */}
         <Route path="/time-entries" element={<TimeEntriesPage />} />
         <Route path="/my-hours" element={<MyHoursPage />} />
-        <Route path="/submitted-hours" element={<PermissionRoute permission="view_submitted_hours" allowedRoles={['gebruiker']}><SubmittedHoursPage /></PermissionRoute>} />
+        <Route path="/submitted-hours" element={<PermissionRoute permission="view_submitted_hours"><SubmittedHoursPage /></PermissionRoute>} />
         <Route path="/uren-import" element={<PermissionRoute permission="view_uren_import"><UrenImportPage /></PermissionRoute>} />
         
         {/* Planning */}
@@ -325,29 +323,29 @@ function App() {
         <Route path="/notifications" element={<PermissionRoute permission="view_notifications"><NotificationsPage /></PermissionRoute>} />
 
         {/* Invoicing */}
-        <Route path="/invoices" element={<PermissionRoute permission="view_invoices" allowedRoles={['gebruiker']}><InvoicesPage /></PermissionRoute>} />
-        <Route path="/invoices/new" element={<PermissionRoute permission="view_invoices" allowedRoles={['gebruiker']}><InvoiceCreatePage /></PermissionRoute>} />
-        <Route path="/invoices/:id/edit" element={<PermissionRoute permission="view_invoices" allowedRoles={['gebruiker']}><InvoiceEditPage /></PermissionRoute>} />
+        <Route path="/invoices" element={<PermissionRoute permission="view_invoices"><InvoicesPage /></PermissionRoute>} />
+        <Route path="/invoices/new" element={<PermissionRoute permission="view_invoices"><InvoiceCreatePage /></PermissionRoute>} />
+        <Route path="/invoices/:id/edit" element={<PermissionRoute permission="view_invoices"><InvoiceEditPage /></PermissionRoute>} />
         <Route path="/invoices/templates" element={<PermissionRoute permission="view_invoice_templates"><TemplatesPage /></PermissionRoute>} />
         <Route path="/invoices/templates/new" element={<PermissionRoute permission="view_invoice_templates"><TemplateEditorPage /></PermissionRoute>} />
         <Route path="/invoices/templates/:id/edit" element={<PermissionRoute permission="view_invoice_templates"><TemplateEditorPage /></PermissionRoute>} />
 
         {/* Revenue */}
-        <Route path="/revenue" element={<PermissionRoute permission="view_revenue" allowedRoles={['gebruiker']}><RevenuePage /></PermissionRoute>} />
+        <Route path="/revenue" element={<PermissionRoute permission="view_revenue"><RevenuePage /></PermissionRoute>} />
 
         {/* Banking */}
         <Route path="/banking" element={<PermissionRoute permission="view_banking"><BankingPage /></PermissionRoute>} />
 
         {/* Invoice Import (OCR) */}
-        <Route path="/imports" element={<PermissionRoute permission="view_invoice_import" allowedRoles={['gebruiker']}><InvoiceImportPage /></PermissionRoute>} />
+        <Route path="/imports" element={<PermissionRoute permission="view_invoice_import"><InvoiceImportPage /></PermissionRoute>} />
         
         {/* Email Invoice Import - must be before /imports/:id */}
-        <Route path="/imports/email" element={<PermissionRoute permission="view_invoice_import" allowedRoles={['gebruiker']}><EmailImportPage /></PermissionRoute>} />
-        <Route path="/imports/email/mailbox/new" element={<PermissionRoute permission="view_invoice_import" allowedRoles={['gebruiker']}><MailboxConfigPage /></PermissionRoute>} />
-        <Route path="/imports/email/mailbox/:id" element={<PermissionRoute permission="view_invoice_import" allowedRoles={['gebruiker']}><MailboxConfigPage /></PermissionRoute>} />
+        <Route path="/imports/email" element={<PermissionRoute permission="view_invoice_import"><EmailImportPage /></PermissionRoute>} />
+        <Route path="/imports/email/mailbox/new" element={<PermissionRoute permission="view_invoice_import"><MailboxConfigPage /></PermissionRoute>} />
+        <Route path="/imports/email/mailbox/:id" element={<PermissionRoute permission="view_invoice_import"><MailboxConfigPage /></PermissionRoute>} />
         
         {/* Invoice Import Detail - after more specific routes */}
-        <Route path="/imports/:id" element={<PermissionRoute permission="view_invoice_import" allowedRoles={['gebruiker']}><InvoiceImportDetailPage /></PermissionRoute>} />
+        <Route path="/imports/:id" element={<PermissionRoute permission="view_invoice_import"><InvoiceImportDetailPage /></PermissionRoute>} />
 
         {/* Leave management */}
         <Route path="/leave" element={<LeaveOverviewPage />} />
