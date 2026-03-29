@@ -19,7 +19,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from apps.core.throttling import RegistrationRateThrottle
-from apps.core.permissions import IsAdminOnly
+from apps.core.permissions import IsAdminOnly, IsAdminOrLeaveManagerReadOnly
 
 from .serializers import (
     UserSerializer,
@@ -433,7 +433,13 @@ class UserViewSet(viewsets.ModelViewSet):
     """
     queryset = User.objects.all()
     permission_classes = [IsAdminOnly]
-    
+
+    def get_permissions(self):
+        """List/retrieve: allow leave managers read-only. All writes: admin only."""
+        if self.action in ['list', 'retrieve', 'available_permissions']:
+            return [IsAdminOrLeaveManagerReadOnly()]
+        return [IsAdminOnly()]
+
     def get_serializer_class(self):
         if self.action == 'create':
             return UserCreateSerializer

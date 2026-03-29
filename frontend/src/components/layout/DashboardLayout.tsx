@@ -55,15 +55,15 @@ const navigation: NavItem[] = [
   { name: 'nav.companies', href: '/companies', icon: BuildingOfficeIcon, roles: ['admin'], permission: 'view_companies' },
   { name: 'nav.drivers', href: '/drivers', icon: UsersIcon, roles: ['admin'], permission: 'view_drivers' },
   { name: 'nav.fleet', href: '/fleet', icon: TruckIcon, roles: ['admin'], permission: 'view_fleet' },
-  { name: 'nav.tracking', href: '/tracking', icon: MapPinIcon },  // All roles - Track & Trace
+  { name: 'nav.tracking', href: '/tracking', icon: MapPinIcon, roles: ['admin', 'chauffeur'] },
   { name: 'nav.timeEntries', href: '/time-entries', icon: ClockIcon },  // All roles
   { name: 'nav.myHours', href: '/my-hours', icon: ClipboardDocumentListIcon, roles: ['chauffeur', 'gebruiker'] },
   { name: 'nav.submittedHours', href: '/submitted-hours', icon: ClipboardDocumentListIcon, roles: ['admin'], permission: 'view_submitted_hours' },
   { name: 'nav.urenImport', href: '/uren-import', icon: ArrowUpTrayIcon, roles: ['admin'], permission: 'view_uren_import' },
-  { name: 'nav.planning', href: '/planning', icon: CalendarIcon },  // All roles (filtered by backend)
+  { name: 'nav.planning', href: '/planning', icon: CalendarIcon, roles: ['admin', 'chauffeur'] },
   { name: 'nav.leave', href: '/leave', icon: CalendarDaysIcon },  // All roles
   { name: 'nav.leaveRequests', href: '/leave/admin', icon: ClipboardDocumentCheckIcon, roles: ['admin'], permission: 'can_manage_leave_for_all' },
-  { name: 'nav.documents', href: '/documents', icon: PencilSquareIcon },  // All roles - PDF signing
+  { name: 'nav.documents', href: '/documents', icon: PencilSquareIcon, roles: ['admin'] },
   { name: 'nav.notifications', href: '/notifications', icon: BellIcon, roles: ['admin'], permission: 'view_notifications' },
   { name: 'nav.invoices', href: '/invoices', icon: DocumentTextIcon, roles: ['admin'], permission: 'view_invoices' },
   { name: 'nav.invoiceTemplates', href: '/invoices/templates', icon: DocumentDuplicateIcon, roles: ['admin'], permission: 'view_invoice_templates' },
