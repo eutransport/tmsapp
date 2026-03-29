@@ -93,6 +93,9 @@ import SpreadsheetTemplateEditorPage from '@/pages/spreadsheets/SpreadsheetTempl
 // Uren Import
 import UrenImportPage from '@/pages/uren-import/UrenImportPage'
 
+// Reports Agent
+import { ReportsPage } from '@/pages/reports'
+
 // Maintenance
 import MaintenanceOverviewPage from '@/pages/maintenance/MaintenanceOverviewPage'
 import APKPage from '@/pages/maintenance/APKPage'
@@ -367,6 +370,9 @@ function App() {
         <Route path="/documents/upload" element={<DocumentUploadPage />} />
         <Route path="/documents/:id" element={<DocumentDetailPage />} />
         <Route path="/documents/:id/sign" element={<DocumentSignPage />} />
+
+        {/* Reports Agent */}
+        <Route path="/reports" element={<ReportsPage />} />
       </Route>
       
       {/* Catch all - redirect to home */}

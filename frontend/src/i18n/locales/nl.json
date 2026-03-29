@@ -172,7 +172,8 @@
     "users": "Gebruikers",
     "settings": "Instellingen",
     "profile": "Profiel",
-    "banking": "Bankkoppeling"
+    "banking": "Bankkoppeling",
+    "reports": "Rapport Agent"
   },
   "dashboard": {
     "title": "Dashboard",
