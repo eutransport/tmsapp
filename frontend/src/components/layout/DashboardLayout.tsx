@@ -46,32 +46,33 @@ interface NavItem {
   href: string
   icon: React.ComponentType<{ className?: string }>
   roles?: ('admin' | 'gebruiker' | 'chauffeur')[]  // If undefined, all roles can see it
+  permission?: string  // Optional module permission key that also grants access
 }
 
 // Navigation items with role-based access - keys for translation
 const navigation: NavItem[] = [
-  { name: 'nav.dashboard', href: '/', icon: HomeIcon, roles: ['admin', 'gebruiker'] },
-  { name: 'nav.companies', href: '/companies', icon: BuildingOfficeIcon, roles: ['admin', 'gebruiker'] },
-  { name: 'nav.drivers', href: '/drivers', icon: UsersIcon, roles: ['admin', 'gebruiker'] },
-  { name: 'nav.fleet', href: '/fleet', icon: TruckIcon, roles: ['admin', 'gebruiker'] },
+  { name: 'nav.dashboard', href: '/', icon: HomeIcon, roles: ['admin', 'gebruiker'], permission: 'view_dashboard' },
+  { name: 'nav.companies', href: '/companies', icon: BuildingOfficeIcon, roles: ['admin', 'gebruiker'], permission: 'view_companies' },
+  { name: 'nav.drivers', href: '/drivers', icon: UsersIcon, roles: ['admin', 'gebruiker'], permission: 'view_drivers' },
+  { name: 'nav.fleet', href: '/fleet', icon: TruckIcon, roles: ['admin', 'gebruiker'], permission: 'view_fleet' },
   { name: 'nav.tracking', href: '/tracking', icon: MapPinIcon },  // All roles - Track & Trace
   { name: 'nav.timeEntries', href: '/time-entries', icon: ClockIcon },  // All roles
   { name: 'nav.myHours', href: '/my-hours', icon: ClipboardDocumentListIcon, roles: ['chauffeur'] },
-  { name: 'nav.submittedHours', href: '/submitted-hours', icon: ClipboardDocumentListIcon, roles: ['admin', 'gebruiker'] },
-  { name: 'nav.urenImport', href: '/uren-import', icon: ArrowUpTrayIcon, roles: ['admin'] },
+  { name: 'nav.submittedHours', href: '/submitted-hours', icon: ClipboardDocumentListIcon, roles: ['admin', 'gebruiker'], permission: 'view_submitted_hours' },
+  { name: 'nav.urenImport', href: '/uren-import', icon: ArrowUpTrayIcon, roles: ['admin'], permission: 'view_uren_import' },
   { name: 'nav.planning', href: '/planning', icon: CalendarIcon },  // All roles (filtered by backend)
   { name: 'nav.leave', href: '/leave', icon: CalendarDaysIcon },  // All roles
-  { name: 'nav.leaveRequests', href: '/leave/admin', icon: ClipboardDocumentCheckIcon, roles: ['admin'] },
+  { name: 'nav.leaveRequests', href: '/leave/admin', icon: ClipboardDocumentCheckIcon, roles: ['admin'], permission: 'can_manage_leave_for_all' },
   { name: 'nav.documents', href: '/documents', icon: PencilSquareIcon },  // All roles - PDF signing
-  { name: 'nav.notifications', href: '/notifications', icon: BellIcon, roles: ['admin'] },  // Admin only
-  { name: 'nav.invoices', href: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'gebruiker'] },
-  { name: 'nav.invoiceTemplates', href: '/invoices/templates', icon: DocumentDuplicateIcon, roles: ['admin'] },
-  { name: 'nav.invoiceImport', href: '/imports', icon: ArrowUpTrayIcon, roles: ['admin', 'gebruiker'] },
-  { name: 'nav.banking', href: '/banking', icon: BanknotesIcon, roles: ['admin'] },
-  { name: 'nav.revenue', href: '/revenue', icon: CurrencyEuroIcon, roles: ['admin', 'gebruiker'] },
-  { name: 'nav.spreadsheets', href: '/spreadsheets', icon: TableCellsIcon, roles: ['admin'] },
-  { name: 'nav.spreadsheetTemplates', href: '/spreadsheets/templates', icon: SwatchIcon, roles: ['admin'] },
-  { name: 'nav.maintenance', href: '/maintenance', icon: WrenchScrewdriverIcon, roles: ['admin', 'gebruiker'] },
+  { name: 'nav.notifications', href: '/notifications', icon: BellIcon, roles: ['admin'], permission: 'view_notifications' },
+  { name: 'nav.invoices', href: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'gebruiker'], permission: 'view_invoices' },
+  { name: 'nav.invoiceTemplates', href: '/invoices/templates', icon: DocumentDuplicateIcon, roles: ['admin'], permission: 'view_invoice_templates' },
+  { name: 'nav.invoiceImport', href: '/imports', icon: ArrowUpTrayIcon, roles: ['admin', 'gebruiker'], permission: 'view_invoice_import' },
+  { name: 'nav.banking', href: '/banking', icon: BanknotesIcon, roles: ['admin'], permission: 'view_banking' },
+  { name: 'nav.revenue', href: '/revenue', icon: CurrencyEuroIcon, roles: ['admin', 'gebruiker'], permission: 'view_revenue' },
+  { name: 'nav.spreadsheets', href: '/spreadsheets', icon: TableCellsIcon, roles: ['admin'], permission: 'view_spreadsheets' },
+  { name: 'nav.spreadsheetTemplates', href: '/spreadsheets/templates', icon: SwatchIcon, roles: ['admin'], permission: 'view_spreadsheet_templates' },
+  { name: 'nav.maintenance', href: '/maintenance', icon: WrenchScrewdriverIcon, roles: ['admin', 'gebruiker'], permission: 'view_maintenance' },
 ]
 
 const adminNavigation: NavItem[] = [
@@ -101,10 +102,19 @@ export default function DashboardLayout() {
   }
   
   const userRole = user?.rol || 'chauffeur'
+  const userPermissions = user?.module_permissions || []
   
-  // Filter navigation items based on user role
+  // Filter navigation items based on user role OR explicit module permission
   const filterByRole = (items: NavItem[]) => 
-    items.filter(item => !item.roles || item.roles.includes(userRole))
+    items.filter(item => {
+      // No role restriction - visible to all
+      if (!item.roles) return true
+      // Role matches
+      if (item.roles.includes(userRole)) return true
+      // User has explicit module permission for this item
+      if (item.permission && userPermissions.includes(item.permission)) return true
+      return false
+    })
   
   const filteredNavigation = filterByRole(navigation)
   const filteredAdminNavigation = filterByRole(adminNavigation)

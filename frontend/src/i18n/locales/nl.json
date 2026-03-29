@@ -944,11 +944,15 @@
     "resetPassword": "Wachtwoord resetten",
     "passwordReset": "Wachtwoord is gereset",
     "accountInfo": "Accountinformatie",
-    "permissions": "Rechten",
+    "permissions": "Module rechten",
     "lastLogin": "Laatste login",
     "createdAt": "Aangemaakt op",
     "twoFactorEnabled": "2FA ingeschakeld",
-    "twoFactorDisabled": "2FA uitgeschakeld"
+    "twoFactorDisabled": "2FA uitgeschakeld",
+    "permissionsHint": "Extra toegangsrechten bovenop de basisrol. Beheerders hebben altijd alle rechten.",
+    "adminAllPermissions": "Beheerders hebben automatisch toegang tot alle modules.",
+    "requires": "Vereist ook",
+    "autoGranted": "Automatisch toegekend"
   },
   "settings": {
     "title": "Instellingen",

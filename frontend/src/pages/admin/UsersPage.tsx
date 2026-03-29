@@ -29,6 +29,44 @@ import {
 import { getAllCompanies } from '@/api/companies'
 import Pagination, { PageSize } from '@/components/common/Pagination'
 
+// Module permissions configuration (mirrors backend AVAILABLE_MODULE_PERMISSIONS)
+const AVAILABLE_PERMISSIONS = [
+  { code: 'can_manage_leave_for_all', label: 'Verlof beheren voor alle medewerkers' },
+  { code: 'view_dashboard', label: 'Dashboard' },
+  { code: 'view_companies', label: 'Bedrijven' },
+  { code: 'view_drivers', label: 'Chauffeurs' },
+  { code: 'view_fleet', label: 'Vloot' },
+  { code: 'view_submitted_hours', label: 'Ingediende uren' },
+  { code: 'view_uren_import', label: 'Uren import' },
+  { code: 'view_invoices', label: 'Facturen' },
+  { code: 'view_invoice_templates', label: 'Factuur templates' },
+  { code: 'view_invoice_import', label: 'Factuur import' },
+  { code: 'view_banking', label: 'Bankkoppeling' },
+  { code: 'view_revenue', label: 'Omzet' },
+  { code: 'view_spreadsheets', label: 'Ritregistratie' },
+  { code: 'view_spreadsheet_templates', label: 'Spreadsheet templates' },
+  { code: 'view_maintenance', label: 'Onderhoud' },
+  { code: 'view_notifications', label: 'Notificaties' },
+] as const
+
+// Which permissions are automatically included when another is enabled
+const PERMISSION_DEPENDENCIES: Record<string, string[]> = {
+  view_invoices: ['view_submitted_hours'],
+  view_invoice_templates: ['view_invoices', 'view_submitted_hours'],
+  view_invoice_import: ['view_invoices', 'view_submitted_hours'],
+  view_spreadsheet_templates: ['view_spreadsheets'],
+}
+
+function resolvePermissionsWithDeps(permissions: string[]): string[] {
+  const resolved = new Set(permissions)
+  for (const perm of [...resolved]) {
+    for (const dep of PERMISSION_DEPENDENCIES[perm] ?? []) {
+      resolved.add(dep)
+    }
+  }
+  return [...resolved]
+}
+
 // Role labels and colors
 const roleConfig: Record<string, { key: string; color: string }> = {
   admin: { key: 'users.admin', color: 'bg-purple-100 text-purple-800' },
@@ -159,6 +197,9 @@ function UserForm({
     password: '',
     password_confirm: '',
   })
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>(
+    user?.module_permissions || []
+  )
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -170,6 +211,16 @@ function UserForm({
     const newValue = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
     setFormData(prev => ({ ...prev, [name]: newValue }))
     setErrors(prev => ({ ...prev, [name]: '' }))
+  }
+
+  const handlePermissionChange = (code: string, checked: boolean) => {
+    let updated: string[]
+    if (checked) {
+      updated = resolvePermissionsWithDeps([...selectedPermissions, code])
+    } else {
+      updated = selectedPermissions.filter(p => p !== code)
+    }
+    setSelectedPermissions(updated)
   }
 
   const validate = () => {
@@ -203,10 +254,10 @@ function UserForm({
     if (user) {
       // Update - don't send password
       const { password, password_confirm, ...updateData } = formData
-      onSave(updateData)
+      onSave({ ...updateData, module_permissions: selectedPermissions })
     } else {
       // Create - send all data
-      onSave(formData as UserCreate)
+      onSave({ ...(formData as UserCreate), module_permissions: selectedPermissions })
     }
   }
 
@@ -372,6 +423,56 @@ function UserForm({
           </label>
         </div>
       </div>
+
+      {/* Module permissions - only shown for non-admin roles */}
+      {formData.rol !== 'admin' && (
+        <div className="border border-gray-200 rounded-lg p-4">
+          <div className="mb-3">
+            <h4 className="text-sm font-semibold text-gray-800">{t('users.permissions')}</h4>
+            <p className="text-xs text-gray-500 mt-0.5">{t('users.permissionsHint')}</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {AVAILABLE_PERMISSIONS.map(perm => {
+              const deps = PERMISSION_DEPENDENCIES[perm.code] ?? []
+              const isDependency = AVAILABLE_PERMISSIONS.some(
+                p => selectedPermissions.includes(p.code) &&
+                  (PERMISSION_DEPENDENCIES[p.code] ?? []).includes(perm.code)
+              )
+              const checked = selectedPermissions.includes(perm.code)
+              return (
+                <label
+                  key={perm.code}
+                  className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer hover:bg-gray-50 ${isDependency ? 'opacity-75' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={e => handlePermissionChange(perm.code, e.target.checked)}
+                    disabled={isDependency}
+                    className="mt-0.5 w-4 h-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500 flex-shrink-0"
+                  />
+                  <span className="text-sm text-gray-700 leading-tight">
+                    {perm.label}
+                    {deps.length > 0 && (
+                      <span className="block text-xs text-gray-400">
+                        {t('users.requires')}: {deps.map(d => AVAILABLE_PERMISSIONS.find(p => p.code === d)?.label ?? d).join(', ')}
+                      </span>
+                    )}
+                    {isDependency && (
+                      <span className="block text-xs text-blue-500">{t('users.autoGranted')}</span>
+                    )}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      {formData.rol === 'admin' && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm text-purple-700">
+          {t('users.adminAllPermissions')}
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <button

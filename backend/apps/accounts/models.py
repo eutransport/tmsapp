@@ -12,6 +12,37 @@ class UserRole(models.TextChoices):
     CHAUFFEUR = 'chauffeur', 'Chauffeur'
 
 
+# Available module permissions that can be granted to individual users
+AVAILABLE_MODULE_PERMISSIONS = [
+    ('can_manage_leave_for_all', 'Verlof beheren voor alle medewerkers'),
+    ('view_dashboard', 'Dashboard'),
+    ('view_companies', 'Bedrijven'),
+    ('view_drivers', 'Chauffeurs'),
+    ('view_fleet', 'Vloot'),
+    ('view_submitted_hours', 'Ingediende uren'),
+    ('view_uren_import', 'Uren import'),
+    ('view_invoices', 'Facturen'),
+    ('view_invoice_templates', 'Factuur templates'),
+    ('view_invoice_import', 'Factuur import'),
+    ('view_banking', 'Bankkoppeling'),
+    ('view_revenue', 'Omzet'),
+    ('view_spreadsheets', 'Ritregistratie'),
+    ('view_spreadsheet_templates', 'Spreadsheet templates'),
+    ('view_maintenance', 'Onderhoud'),
+    ('view_notifications', 'Notificaties'),
+]
+
+# Dependencies: enabling a permission also requires these permissions
+MODULE_PERMISSION_DEPENDENCIES = {
+    'view_invoices': ['view_submitted_hours'],
+    'view_invoice_templates': ['view_invoices', 'view_submitted_hours'],
+    'view_invoice_import': ['view_invoices', 'view_submitted_hours'],
+    'view_spreadsheet_templates': ['view_spreadsheets'],
+}
+
+VALID_MODULE_PERMISSIONS = {code for code, _ in AVAILABLE_MODULE_PERMISSIONS}
+
+
 class UserManager(BaseUserManager):
     """Custom user manager."""
     
@@ -68,6 +99,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     mfa_required = models.BooleanField(default=False, verbose_name='2FA Verplicht')
     mfa_secret = models.CharField(max_length=32, blank=True, verbose_name='2FA Secret')
     
+    # Module permissions (granular per-user access on top of the base role)
+    module_permissions = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Module rechten',
+        help_text='Lijst van specifieke rechten voor deze gebruiker, bovenop de basisrol.'
+    )
+
     # Status
     is_active = models.BooleanField(default=True, verbose_name='Actief')
     is_staff = models.BooleanField(default=False, verbose_name='Staff')
@@ -101,3 +140,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def is_chauffeur(self):
         return self.rol == UserRole.CHAUFFEUR
+
+    def has_module_permission(self, permission: str) -> bool:
+        """Check if this user has a specific module permission."""
+        # Admins have all permissions implicitly
+        if self.is_admin:
+            return True
+        return permission in (self.module_permissions or [])

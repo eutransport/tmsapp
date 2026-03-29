@@ -942,11 +942,15 @@
     "resetPassword": "Reset password",
     "passwordReset": "Password has been reset",
     "accountInfo": "Account information",
-    "permissions": "Permissions",
+    "permissions": "Module permissions",
     "lastLogin": "Last login",
     "createdAt": "Created at",
     "twoFactorEnabled": "2FA enabled",
-    "twoFactorDisabled": "2FA disabled"
+    "twoFactorDisabled": "2FA disabled",
+    "permissionsHint": "Additional access rights on top of the base role. Administrators always have all rights.",
+    "adminAllPermissions": "Administrators automatically have access to all modules.",
+    "requires": "Also requires",
+    "autoGranted": "Automatically granted"
   },
   "settings": {
     "title": "Settings",

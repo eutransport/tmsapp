@@ -29,6 +29,13 @@ from .serializers import (
 )
 
 
+def _is_admin_or_leave_manager(user) -> bool:
+    """Return True if the user is an admin or has the can_manage_leave_for_all permission."""
+    if user.is_superuser or user.rol == 'admin':
+        return True
+    return 'can_manage_leave_for_all' in (user.module_permissions or [])
+
+
 class GlobalLeaveSettingsViewSet(viewsets.ModelViewSet):
     """
     ViewSet for global leave settings.
@@ -259,8 +266,8 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = LeaveRequest.objects.select_related('user', 'reviewed_by')
         
-        if user.is_superuser or user.rol == 'admin':
-            # Admins see all requests
+        if _is_admin_or_leave_manager(user):
+            # Admins and leave managers see all requests
             pass
         else:
             # Users see only their own
@@ -271,9 +278,9 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
         
-        # Filter by user if provided (admin only)
+        # Filter by user if provided (admin/leave-manager only)
         user_filter = self.request.query_params.get('user')
-        if user_filter and (user.is_superuser or user.rol == 'admin'):
+        if user_filter and _is_admin_or_leave_manager(user):
             queryset = queryset.filter(user_id=user_filter)
         
         return queryset
@@ -300,7 +307,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         
         # Security: Check ownership
         if leave_request.user != request.user:
-            if not (request.user.is_superuser or request.user.rol == 'admin'):
+            if not _is_admin_or_leave_manager(request.user):
                 return Response(
                     {'error': 'Je kunt alleen je eigen verlofaanvragen wijzigen.'},
                     status=status.HTTP_403_FORBIDDEN
@@ -355,7 +362,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         
         # Security: Check if user has permission to view
         if leave_request.user != request.user:
-            if not (request.user.is_superuser or request.user.rol == 'admin'):
+            if not _is_admin_or_leave_manager(request.user):
                 return Response(
                     {'error': 'Je hebt geen toegang tot deze verlofaanvraag.'},
                     status=status.HTTP_403_FORBIDDEN
@@ -373,10 +380,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def pending(self, request):
-        """Get all pending requests (admin only)."""
-        if not (request.user.is_superuser or request.user.rol == 'admin'):
+        """Get all pending requests (admin or leave manager only)."""
+        if not _is_admin_or_leave_manager(request.user):
             return Response(
-                {'error': 'Alleen admins kunnen alle aanvragen zien.'},
+                {'error': 'Je hebt geen toegang om alle aanvragen te zien.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
@@ -389,10 +396,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def admin_create(self, request):
-        """Admin creates a leave request on behalf of a user."""
-        if not (request.user.is_superuser or request.user.rol == 'admin'):
+        """Admin or leave manager creates a leave request on behalf of a user."""
+        if not _is_admin_or_leave_manager(request.user):
             return Response(
-                {'error': 'Alleen admins kunnen verlofaanvragen aanmaken voor gebruikers.'},
+                {'error': 'Je hebt geen rechten om verlofaanvragen voor anderen aan te maken.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -499,10 +506,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def admin_action(self, request, pk=None):
-        """Admin action to approve/reject/delete a request."""
-        if not (request.user.is_superuser or request.user.rol == 'admin'):
+        """Admin or leave manager action to approve/reject/delete a request."""
+        if not _is_admin_or_leave_manager(request.user):
             return Response(
-                {'error': 'Alleen admins kunnen aanvragen beheren.'},
+                {'error': 'Je hebt geen rechten om verlofaanvragen te beheren.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
@@ -673,10 +680,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['patch'])
     def admin_update(self, request, pk=None):
-        """Admin action to update a leave request (edit dates, hours, type)."""
-        if not (request.user.is_superuser or request.user.rol == 'admin'):
+        """Admin or leave manager action to update a leave request (edit dates, hours, type)."""
+        if not _is_admin_or_leave_manager(request.user):
             return Response(
-                {'error': 'Alleen admins kunnen aanvragen bewerken.'},
+                {'error': 'Je hebt geen rechten om verlofaanvragen te bewerken.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         

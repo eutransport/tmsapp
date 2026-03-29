@@ -12,7 +12,18 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from .models import VALID_MODULE_PERMISSIONS, MODULE_PERMISSION_DEPENDENCIES
+
 User = get_user_model()
+
+
+def _resolve_permissions_with_dependencies(permissions: list) -> list:
+    """Add any required dependency permissions and return the resolved list."""
+    resolved = set(permissions)
+    for perm in list(resolved):
+        for dep in MODULE_PERMISSION_DEPENDENCIES.get(perm, []):
+            resolved.add(dep)
+    return sorted(resolved)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -23,7 +34,8 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'username', 'voornaam', 'achternaam',
-            'full_name', 'telefoon', 'bedrijf', 'rol', 
+            'full_name', 'telefoon', 'bedrijf', 'rol',
+            'module_permissions',
             'mfa_enabled', 'mfa_required', 'is_active', 'date_joined', 'last_login'
         ]
         read_only_fields = ['id', 'date_joined', 'last_login']
@@ -38,6 +50,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'username', 'voornaam', 'achternaam',
             'full_name', 'telefoon', 'bedrijf', 'rol',
+            'module_permissions',
             'mfa_enabled', 'mfa_required', 'is_active', 'date_joined', 'last_login'
         ]
         read_only_fields = ['id', 'email', 'rol', 'is_active', 'date_joined', 'last_login']
@@ -52,9 +65,20 @@ class UserCreateSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'email', 'username', 'password', 'password_confirm',
-            'voornaam', 'achternaam', 'telefoon', 'bedrijf', 'rol', 'is_active'
+            'voornaam', 'achternaam', 'telefoon', 'bedrijf', 'rol', 'is_active',
+            'module_permissions',
         ]
     
+    def validate_module_permissions(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Module rechten moeten een lijst zijn.')
+        invalid = set(value) - VALID_MODULE_PERMISSIONS
+        if invalid:
+            raise serializers.ValidationError(
+                f'Ongeldige rechten: {", ".join(invalid)}'
+            )
+        return _resolve_permissions_with_dependencies(value)
+
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError({'password_confirm': 'Wachtwoorden komen niet overeen.'})
@@ -78,8 +102,19 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'email', 'username', 'voornaam', 'achternaam',
-            'telefoon', 'bedrijf', 'rol', 'is_active', 'mfa_required'
+            'telefoon', 'bedrijf', 'rol', 'is_active', 'mfa_required',
+            'module_permissions',
         ]
+
+    def validate_module_permissions(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Module rechten moeten een lijst zijn.')
+        invalid = set(value) - VALID_MODULE_PERMISSIONS
+        if invalid:
+            raise serializers.ValidationError(
+                f'Ongeldige rechten: {", ".join(invalid)}'
+            )
+        return _resolve_permissions_with_dependencies(value)
 
     def update(self, instance, validated_data):
         # Sync is_staff with admin role so Django permissions work correctly

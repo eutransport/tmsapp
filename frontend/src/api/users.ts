@@ -14,6 +14,17 @@ export interface UserUpdate {
   bedrijf?: string
   rol?: 'admin' | 'gebruiker' | 'chauffeur'
   is_active?: boolean
+  module_permissions?: string[]
+}
+
+export interface AvailablePermission {
+  code: string
+  label: string
+}
+
+export interface AvailablePermissionsResponse {
+  permissions: AvailablePermission[]
+  dependencies: Record<string, string[]>
 }
 
 export interface UsersResponse {
@@ -87,5 +98,17 @@ export async function toggleUserActive(id: string): Promise<{ message: string; i
 // Disable 2FA for user (admin)
 export async function disableUserMFA(id: string): Promise<{ message: string }> {
   const response = await api.post(`/auth/users/${id}/disable_mfa/`)
+  return response.data
+}
+
+// Get available module permissions
+export async function getAvailablePermissions(): Promise<AvailablePermissionsResponse> {
+  const response = await api.get('/auth/users/available_permissions/')
+  return response.data
+}
+
+// Update user module permissions
+export async function updateUserPermissions(id: string, permissions: string[]): Promise<User> {
+  const response = await api.patch(`/auth/users/${id}/`, { module_permissions: permissions })
   return response.data
 }

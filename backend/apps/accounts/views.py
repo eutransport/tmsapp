@@ -593,3 +593,15 @@ class UserViewSet(viewsets.ModelViewSet):
         )
         
         return Response({'message': f'2FA voor {user.full_name} is uitgeschakeld.'})
+
+    @action(detail=False, methods=['get'])
+    def available_permissions(self, request):
+        """Return the list of available module permissions with their labels."""
+        from .models import AVAILABLE_MODULE_PERMISSIONS, MODULE_PERMISSION_DEPENDENCIES
+        return Response({
+            'permissions': [
+                {'code': code, 'label': label}
+                for code, label in AVAILABLE_MODULE_PERMISSIONS
+            ],
+            'dependencies': MODULE_PERMISSION_DEPENDENCIES,
+        })

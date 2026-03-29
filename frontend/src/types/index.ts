@@ -9,6 +9,7 @@ export interface User {
   telefoon: string
   bedrijf: string
   rol: 'admin' | 'gebruiker' | 'chauffeur'
+  module_permissions: string[]
   mfa_enabled: boolean
   mfa_required: boolean
   is_active: boolean
@@ -27,6 +28,7 @@ export interface UserCreate {
   bedrijf?: string
   rol: 'admin' | 'gebruiker' | 'chauffeur'
   is_active?: boolean
+  module_permissions?: string[]
 }
 
 // Auth types
