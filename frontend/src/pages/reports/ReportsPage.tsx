@@ -72,6 +72,66 @@ function StatusBadge({ status, display }: { status: string; display: string }) {
   }
 }
 
+// ---- Action buttons (shared between table and card view) ----
+
+interface ReportActionsProps {
+  req: ReportRequest
+  executingId: string | null
+  onView: () => void
+  onExecute: (id: string) => void
+  onRetry: (id: string) => void
+  onDelete: (id: string) => void
+  onDownload: (id: string, format: 'excel' | 'pdf', filename: string) => void
+}
+
+function ReportActions({ req, executingId, onView, onExecute, onRetry, onDelete, onDownload }: ReportActionsProps) {
+  return (
+    <>
+      {req.status === 'completed' && req.result_data && (
+        <button onClick={onView} title="Bekijk op scherm" className="p-1.5 text-blue-600 hover:bg-blue-50 rounded">
+          <EyeIcon className="w-4 h-4" />
+        </button>
+      )}
+      {req.status === 'completed' && req.excel_file && (
+        <button
+          onClick={() => onDownload(req.id, 'excel', `${req.title}.xlsx`)}
+          title="Download Excel"
+          className="p-1.5 text-green-600 hover:bg-green-50 rounded"
+        >
+          <ArrowDownTrayIcon className="w-4 h-4" />
+        </button>
+      )}
+      {req.status === 'completed' && req.pdf_file && (
+        <button
+          onClick={() => onDownload(req.id, 'pdf', `${req.title}.pdf`)}
+          title="Download PDF"
+          className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+        >
+          <ArrowDownTrayIcon className="w-4 h-4" />
+        </button>
+      )}
+      {req.status === 'pending' && (
+        <button
+          onClick={() => onExecute(req.id)}
+          disabled={executingId === req.id}
+          title="Uitvoeren"
+          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
+        >
+          <ArrowPathIcon className={`w-4 h-4 ${executingId === req.id ? 'animate-spin' : ''}`} />
+        </button>
+      )}
+      {req.status === 'failed' && (
+        <button onClick={() => onRetry(req.id)} title="Opnieuw proberen" className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded">
+          <ArrowPathIcon className="w-4 h-4" />
+        </button>
+      )}
+      <button onClick={() => onDelete(req.id)} title="Verwijderen" className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded">
+        <TrashIcon className="w-4 h-4" />
+      </button>
+    </>
+  )
+}
+
 // ---- Main page ----
 
 export default function ReportsPage() {
@@ -198,24 +258,25 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <SparklesIcon className="w-8 h-8 text-blue-600" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Rapport Agent</h1>
-            <p className="text-sm text-gray-500">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <SparklesIcon className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600 flex-shrink-0" />
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Rapport Agent</h1>
+            <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">
               Genereer rapporten en exports op basis van uw vragen
             </p>
           </div>
         </div>
         <button
           onClick={() => setIsFormOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-1.5 sm:gap-2 px-3 py-2 sm:px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base flex-shrink-0"
         >
           <PlusIcon className="w-4 h-4" />
-          Nieuw rapport
+          <span className="hidden xs:inline">Nieuw rapport</span>
+          <span className="xs:hidden">Nieuw</span>
         </button>
       </div>
 
@@ -225,15 +286,15 @@ export default function ReportsPage() {
           <h2 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
             Snel starten
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
             {reportTypes.slice(0, 8).map((rt) => (
               <button
                 key={rt.value}
                 onClick={() => setIsFormOpen(true)}
-                className="text-left p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors group"
+                className="text-left p-2.5 sm:p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors group"
               >
-                <DocumentChartBarIcon className="w-5 h-5 text-blue-500 mb-1 group-hover:text-blue-700" />
-                <p className="text-sm font-medium text-gray-800 group-hover:text-blue-800">
+                <DocumentChartBarIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500 mb-1 group-hover:text-blue-700" />
+                <p className="text-xs sm:text-sm font-medium text-gray-800 group-hover:text-blue-800 line-clamp-2">
                   {rt.label}
                 </p>
               </button>
@@ -253,14 +314,14 @@ export default function ReportsPage() {
             className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
           >
             <ArrowPathIcon className="w-4 h-4" />
-            Vernieuwen
+            <span className="hidden sm:inline">Vernieuwen</span>
           </button>
         </div>
 
         {requests.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-lg border border-dashed border-gray-300">
-            <DocumentChartBarIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">Nog geen rapporten aangevraagd.</p>
+          <div className="text-center py-12 sm:py-16 bg-white rounded-lg border border-dashed border-gray-300">
+            <DocumentChartBarIcon className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 text-sm">Nog geen rapporten aangevraagd.</p>
             <button
               onClick={() => setIsFormOpen(true)}
               className="mt-3 text-blue-600 hover:underline text-sm"
@@ -269,119 +330,99 @@ export default function ReportsPage() {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700">Titel</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700">Type</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700">Status</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700">Rijen</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700">Aangevraagd</th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-700">Acties</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {requests.map((req) => (
-                  <tr key={req.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-gray-900">{req.title}</span>
-                      {req.error_message && (
-                        <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1">
-                          <ExclamationCircleIcon className="w-3 h-3" />
-                          {req.error_message}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{req.report_type_display}</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={req.status} display={req.status_display} />
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {req.row_count !== null ? req.row_count : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
-                      {new Date(req.created_at).toLocaleString('nl-NL')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        {/* View on screen */}
-                        {req.status === 'completed' && req.result_data && (
-                          <button
-                            onClick={() => setViewingReport(req)}
-                            title="Bekijk op scherm"
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-                          >
-                            <EyeIcon className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        {/* Download Excel */}
-                        {req.status === 'completed' && req.excel_file && (
-                          <button
-                            onClick={() =>
-                              handleDownload(req.id, 'excel', `${req.title}.xlsx`)
-                            }
-                            title="Download Excel"
-                            className="p-1.5 text-green-600 hover:bg-green-50 rounded"
-                          >
-                            <ArrowDownTrayIcon className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        {/* Download PDF */}
-                        {req.status === 'completed' && req.pdf_file && (
-                          <button
-                            onClick={() =>
-                              handleDownload(req.id, 'pdf', `${req.title}.pdf`)
-                            }
-                            title="Download PDF"
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                          >
-                            <ArrowDownTrayIcon className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        {/* Execute (for pending) */}
-                        {req.status === 'pending' && (
-                          <button
-                            onClick={() => handleExecute(req.id)}
-                            disabled={executingId === req.id}
-                            title="Uitvoeren"
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
-                          >
-                            <ArrowPathIcon
-                              className={`w-4 h-4 ${executingId === req.id ? 'animate-spin' : ''}`}
-                            />
-                          </button>
-                        )}
-
-                        {/* Retry failed */}
-                        {req.status === 'failed' && (
-                          <button
-                            onClick={() => handleRetry(req.id)}
-                            title="Opnieuw proberen"
-                            className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded"
-                          >
-                            <ArrowPathIcon className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        {/* Delete */}
-                        <button
-                          onClick={() => handleDelete(req.id)}
-                          title="Verwijderen"
-                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
+          <>
+            {/* Desktop table */}
+            <div className="hidden sm:block bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Titel</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Type</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Status</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Rijen</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Aangevraagd</th>
+                    <th className="text-right px-4 py-3 font-semibold text-gray-700">Acties</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {requests.map((req) => (
+                    <tr key={req.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-gray-900">{req.title}</span>
+                        {req.error_message && (
+                          <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1">
+                            <ExclamationCircleIcon className="w-3 h-3" />
+                            {req.error_message}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{req.report_type_display}</td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={req.status} display={req.status_display} />
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {req.row_count !== null ? req.row_count : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">
+                        {new Date(req.created_at).toLocaleString('nl-NL')}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <ReportActions
+                            req={req}
+                            executingId={executingId}
+                            onView={() => setViewingReport(req)}
+                            onExecute={handleExecute}
+                            onRetry={handleRetry}
+                            onDelete={handleDelete}
+                            onDownload={handleDownload}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile card list */}
+            <div className="sm:hidden space-y-3">
+              {requests.map((req) => (
+                <div key={req.id} className="bg-white rounded-lg border border-gray-200 p-4">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{req.title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{req.report_type_display}</p>
+                    </div>
+                    <StatusBadge status={req.status} display={req.status_display} />
+                  </div>
+                  {req.error_message && (
+                    <p className="text-xs text-red-500 mb-2 flex items-center gap-1">
+                      <ExclamationCircleIcon className="w-3 h-3 flex-shrink-0" />
+                      {req.error_message}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>
+                      {new Date(req.created_at).toLocaleString('nl-NL')}
+                      {req.row_count !== null && ` · ${req.row_count} rijen`}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <ReportActions
+                        req={req}
+                        executingId={executingId}
+                        onView={() => setViewingReport(req)}
+                        onExecute={handleExecute}
+                        onRetry={handleRetry}
+                        onDelete={handleDelete}
+                        onDownload={handleDownload}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

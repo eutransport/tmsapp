@@ -13,6 +13,8 @@ import {
   TableCellsIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  Bars3Icon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import {
@@ -91,16 +93,16 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isUser = msg.role === 'user'
 
   return (
-    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div className={`flex gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
       <div
-        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold
+        className={`flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white text-sm font-bold
           ${isUser ? 'bg-indigo-500' : 'bg-emerald-500'}`}
       >
         {isUser ? 'J' : <SparklesIcon className="w-4 h-4" />}
       </div>
-      <div className={`max-w-[80%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+      <div className={`max-w-[85%] sm:max-w-[80%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
         <div
-          className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed
+          className={`rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 text-sm leading-relaxed
             ${isUser
               ? 'bg-indigo-600 text-white rounded-tr-sm'
               : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm'
@@ -123,8 +125,8 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 // ---- Typing indicator ----
 function TypingIndicator() {
   return (
-    <div className="flex gap-3">
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center">
+    <div className="flex gap-2 sm:gap-3">
+      <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-500 flex items-center justify-center">
         <SparklesIcon className="w-4 h-4 text-white" />
       </div>
       <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
@@ -152,6 +154,80 @@ const SUGGESTIONS = [
   'Welke APK keuringen verlopen binnenkort?',
 ]
 
+// ---- Sidebar content ----
+function SidebarContent({
+  sessions,
+  activeSession,
+  onSelect,
+  onNew,
+  onDelete,
+  onClose,
+}: {
+  sessions: ChatSession[]
+  activeSession: ChatSession | null
+  onSelect: (s: ChatSession) => void
+  onNew: () => void
+  onDelete: (id: string, e: React.MouseEvent) => void
+  onClose?: () => void
+}) {
+  return (
+    <>
+      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+        <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+          <ChatBubbleLeftRightIcon className="w-5 h-5 text-indigo-500" />
+          Gesprekken
+        </h2>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onNew}
+            className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
+            title="Nieuw gesprek"
+          >
+            <PlusIcon className="w-5 h-5" />
+          </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 sm:hidden"
+              title="Sluiten"
+            >
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {sessions.length === 0 && (
+          <p className="text-xs text-gray-400 px-2 py-4 text-center">
+            Nog geen gesprekken
+          </p>
+        )}
+        {sessions.map(session => (
+          <div
+            key={session.id}
+            onClick={() => onSelect(session)}
+            className={`group flex items-start justify-between gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors
+              ${activeSession?.id === session.id
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-gray-700 hover:bg-gray-100'
+              }`}
+          >
+            <span className="flex-1 truncate">
+              {session.title || 'Nieuw gesprek'}
+            </span>
+            <button
+              onClick={e => onDelete(session.id, e)}
+              className="flex-shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500"
+            >
+              <TrashIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
 // ---- Main page ----
 export default function ChatPage() {
   const [sessions, setSessions] = useState<ChatSession[]>([])
@@ -159,9 +235,18 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Open sidebar by default on larger screens
+  useEffect(() => {
+    const checkWidth = () => setSidebarOpen(window.innerWidth >= 768)
+    checkWidth()
+    window.addEventListener('resize', checkWidth)
+    return () => window.removeEventListener('resize', checkWidth)
+  }, [])
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -183,6 +268,7 @@ export default function ChatPage() {
       const full = await getChatSession(session.id)
       setActiveSession(full)
       setMessages(full.messages || [])
+      setMobileSidebarOpen(false)
     } catch {
       toast.error('Sessie laden mislukt')
     }
@@ -192,6 +278,7 @@ export default function ChatPage() {
     setActiveSession(null)
     setMessages([])
     setInput('')
+    setMobileSidebarOpen(false)
   }, [])
 
   const handleDelete = useCallback(async (id: string, e: React.MouseEvent) => {
@@ -270,99 +357,96 @@ export default function ChatPage() {
     }
   }
 
-  return (
-    <div className="flex h-[calc(100vh-4rem)] bg-gray-50">
-      {/* Sidebar */}
-      {sidebarOpen && (
-        <aside className="w-64 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-800 flex items-center gap-2">
-              <ChatBubbleLeftRightIcon className="w-5 h-5 text-indigo-500" />
-              Gesprekken
-            </h2>
-            <button
-              onClick={startNewChat}
-              className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
-              title="Nieuw gesprek"
-            >
-              <PlusIcon className="w-5 h-5" />
-            </button>
-          </div>
+  const sidebarProps = {
+    sessions,
+    activeSession,
+    onSelect: loadSession,
+    onNew: startNewChat,
+    onDelete: handleDelete,
+  }
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {sessions.length === 0 && (
-              <p className="text-xs text-gray-400 px-2 py-4 text-center">
-                Nog geen gesprekken
-              </p>
-            )}
-            {sessions.map(session => (
-              <div
-                key={session.id}
-                onClick={() => loadSession(session)}
-                className={`group flex items-start justify-between gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors
-                  ${activeSession?.id === session.id
-                    ? 'bg-indigo-50 text-indigo-700'
-                    : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-              >
-                <span className="flex-1 truncate">
-                  {session.title || 'Nieuw gesprek'}
-                </span>
-                <button
-                  onClick={e => handleDelete(session.id, e)}
-                  className="flex-shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500"
-                >
-                  <TrashIcon className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
+  return (
+    <div className="flex h-[calc(100vh-4rem)] bg-gray-50 relative">
+      {/* Mobile sidebar overlay */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* Desktop sidebar */}
+      {sidebarOpen && (
+        <aside className="hidden sm:flex w-64 flex-shrink-0 bg-white border-r border-gray-200 flex-col">
+          <SidebarContent {...sidebarProps} />
         </aside>
       )}
+
+      {/* Mobile sidebar drawer */}
+      <aside
+        className={`fixed top-16 left-0 bottom-0 z-50 w-72 bg-white border-r border-gray-200 flex flex-col
+          transition-transform duration-300 sm:hidden
+          ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        <SidebarContent
+          {...sidebarProps}
+          onClose={() => setMobileSidebarOpen(false)}
+        />
+      </aside>
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
+        <div className="bg-white border-b border-gray-200 px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
+          {/* Mobile: hamburger opens drawer */}
+          <button
+            onClick={() => setMobileSidebarOpen(v => !v)}
+            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 sm:hidden"
+            aria-label="Gesprekken"
+          >
+            <Bars3Icon className="w-5 h-5" />
+          </button>
+          {/* Desktop: toggle sidebar */}
           <button
             onClick={() => setSidebarOpen(v => !v)}
-            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+            className="hidden sm:flex p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+            aria-label="Gesprekken zijbalk"
           >
             <ChatBubbleLeftRightIcon className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2">
-            <SparklesIcon className="w-5 h-5 text-emerald-500" />
-            <h1 className="font-semibold text-gray-800">
+          <div className="flex items-center gap-2 min-w-0">
+            <SparklesIcon className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+            <h1 className="font-semibold text-gray-800 truncate text-sm sm:text-base">
               {activeSession?.title || 'TMS AI Assistent'}
             </h1>
           </div>
-          <span className="text-xs text-gray-400 ml-auto">
+          <span className="hidden sm:block text-xs text-gray-400 ml-auto whitespace-nowrap">
             Stel me een vraag over uw TMS data
           </span>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
           {messages.length === 0 && !loading && (
-            <div className="max-w-2xl mx-auto text-center space-y-6">
+            <div className="max-w-2xl mx-auto text-center space-y-4 sm:space-y-6 px-2">
               <div className="flex justify-center">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-400 to-emerald-400 flex items-center justify-center">
-                  <SparklesIcon className="w-8 h-8 text-white" />
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-indigo-400 to-emerald-400 flex items-center justify-center">
+                  <SparklesIcon className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
                 </div>
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-800 mb-2">TMS AI Assistent</h2>
+                <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-2">TMS AI Assistent</h2>
                 <p className="text-gray-500 text-sm">
                   Ik kan uw TMS data opvragen, analyseren en overzichten tonen.
                   Stel me een vraag of kies een van de suggesties hieronder.
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                 {SUGGESTIONS.map(s => (
                   <button
                     key={s}
                     onClick={() => handleSend(s)}
-                    className="text-left px-4 py-3 rounded-xl border border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50 text-sm text-gray-700 transition-colors shadow-sm"
+                    className="text-left px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl border border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50 text-sm text-gray-700 transition-colors shadow-sm"
                   >
                     {s}
                   </button>
@@ -380,18 +464,18 @@ export default function ChatPage() {
         </div>
 
         {/* Input area */}
-        <div className="bg-white border-t border-gray-200 px-4 py-3">
-          <div className="max-w-4xl mx-auto flex gap-3 items-end">
+        <div className="bg-white border-t border-gray-200 px-3 sm:px-4 py-2.5 sm:py-3">
+          <div className="max-w-4xl mx-auto flex gap-2 sm:gap-3 items-end">
             <textarea
               ref={inputRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Stel een vraag... (Enter om te sturen, Shift+Enter voor nieuwe regel)"
+              placeholder="Stel een vraag..."
               rows={1}
               disabled={loading}
-              className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-60 max-h-40 overflow-y-auto"
-              style={{ minHeight: '42px' }}
+              className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 sm:px-4 sm:py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-60 max-h-40 overflow-y-auto"
+              style={{ minHeight: '40px' }}
               onInput={e => {
                 const el = e.currentTarget
                 el.style.height = 'auto'
@@ -401,12 +485,12 @@ export default function ChatPage() {
             <button
               onClick={() => handleSend()}
               disabled={!input.trim() || loading}
-              className="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              <PaperAirplaneIcon className="w-5 h-5" />
+              <PaperAirplaneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
-          <p className="text-center text-xs text-gray-400 mt-2">
+          <p className="text-center text-xs text-gray-400 mt-1.5">
             AI-assistent kan fouten maken. Controleer altijd belangrijke gegevens.
           </p>
         </div>

@@ -217,7 +217,7 @@ def _get_ai_client():
     """Build OpenAI-compatible client from AppSettings."""
     from apps.core.models import AppSettings
     try:
-        settings_obj = AppSettings.objects.first()
+        settings_obj = AppSettings.get_settings()
     except Exception:
         settings_obj = None
 
@@ -268,6 +268,28 @@ def _get_ai_client():
     return None, None, f"Onbekende AI provider: {provider}"
 
 
+def _friendly_api_error(exc: Exception, provider: str) -> str:
+    """Convert API exceptions into user-friendly Dutch error messages."""
+    err_str = str(exc)
+    # 401 / unauthorized – most common with GitHub Models token issues
+    if "401" in err_str or "unauthorized" in err_str.lower():
+        if provider == 'github':
+            return (
+                "GitHub token heeft onvoldoende rechten. "
+                "Zorg dat uw GitHub Personal Access Token de 'models' scope (read-only) heeft. "
+                "Maak een nieuw token aan via github.com/settings/tokens → "
+                "\"Fine-grained tokens\" → voeg de \"Models\" permissie toe."
+            )
+        return f"Authenticatiefout (401): controleer uw API-sleutel. ({err_str})"
+    # 429 rate limit
+    if "429" in err_str or "rate limit" in err_str.lower():
+        return "Limiet bereikt (429): te veel verzoeken. Probeer het later opnieuw."
+    # 404 model not found
+    if "404" in err_str or ("model" in err_str.lower() and "not found" in err_str.lower()):
+        return f"Model niet gevonden. Controleer de model-naam in de AI-instellingen. ({err_str})"
+    return err_str
+
+
 # ---------------------------------------------------------------------------
 # Main chat function
 # ---------------------------------------------------------------------------
@@ -293,6 +315,13 @@ def chat(messages: list, user=None) -> dict:
             "data": None,
             "error": None,
         }
+
+    # Determine provider for error messages
+    try:
+        from apps.core.models import AppSettings
+        provider = AppSettings.get_settings().ai_provider
+    except Exception:
+        provider = 'unknown'
 
     system = SYSTEM_PROMPT.format(today=date.today().isoformat())
     full_messages = [{"role": "system", "content": system}] + messages
@@ -359,8 +388,9 @@ def chat(messages: list, user=None) -> dict:
 
     except Exception as exc:
         logger.exception("Chat AI error")
+        friendly = _friendly_api_error(exc, provider)
         return {
-            "content": f"❌ Er is een fout opgetreden: {exc}",
+            "content": f"❌ Er is een fout opgetreden: {friendly}",
             "data": None,
-            "error": str(exc),
+            "error": friendly,
         }
