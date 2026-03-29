@@ -32,6 +32,7 @@ class ChatSessionViewSet(viewsets.ModelViewSet):
     """
 
     permission_classes = [IsAuthenticated]
+    pagination_class = None  # Chat sessions are always fetched as a complete list
 
     def get_queryset(self):
         return ChatSession.objects.filter(user=self.request.user).order_by('-updated_at')
