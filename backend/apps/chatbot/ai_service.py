@@ -278,7 +278,8 @@ def _friendly_api_error(exc: Exception, provider: str) -> str:
                 "GitHub token heeft onvoldoende rechten. "
                 "Zorg dat uw GitHub Personal Access Token de 'models' scope (read-only) heeft. "
                 "Maak een nieuw token aan via github.com/settings/tokens → "
-                "\"Fine-grained tokens\" → voeg de \"Models\" permissie toe."
+                "\"Fine-grained tokens\" → voeg de \"Models\" permissie toe. "
+                "Voer het nieuwe token daarna in via Instellingen → AI."
             )
         return f"Authenticatiefout (401): controleer uw API-sleutel. ({err_str})"
     # 429 rate limit
