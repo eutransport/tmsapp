@@ -96,7 +96,9 @@ import UrenImportPage from '@/pages/uren-import/UrenImportPage'
 // Reports Agent
 import { ReportsPage } from '@/pages/reports'
 
-// Maintenance
+// Chatbot
+import { ChatPage } from '@/pages/chat'
+
 import MaintenanceOverviewPage from '@/pages/maintenance/MaintenanceOverviewPage'
 import APKPage from '@/pages/maintenance/APKPage'
 import MaintenanceTasksPage from '@/pages/maintenance/MaintenanceTasksPage'
@@ -373,6 +375,9 @@ function App() {
 
         {/* Reports Agent */}
         <Route path="/reports" element={<ReportsPage />} />
+
+        {/* Chatbot */}
+        <Route path="/chat" element={<ChatPage />} />
       </Route>
       
       {/* Catch all - redirect to home */}

@@ -310,18 +310,19 @@ def _execute_vehicle_maintenance(params):
     if kenteken:
         qs = qs.filter(vehicle__kenteken__icontains=kenteken)
 
-    columns = ['Kenteken', 'Type onderhoud', 'Categorie', 'Status', 'Gepland', 'Voltooid', 'KM bij voltooiing', 'Opmerkingen']
+    columns = ['Kenteken', 'Titel', 'Type onderhoud', 'Categorie', 'Status', 'Gepland', 'Voltooid', 'KM bij service', 'Opmerkingen']
     rows = []
-    for task in qs.order_by('vehicle__kenteken', '-planned_date'):
+    for task in qs.order_by('vehicle__kenteken', '-scheduled_date'):
         rows.append([
             task.vehicle.kenteken if task.vehicle else '',
+            task.title,
             task.maintenance_type.name if task.maintenance_type else '',
             task.maintenance_type.category.name if task.maintenance_type and task.maintenance_type.category else '',
             task.get_status_display() if hasattr(task, 'get_status_display') else str(task.status),
-            str(task.planned_date) if task.planned_date else '',
-            str(task.completed_date) if hasattr(task, 'completed_date') and task.completed_date else '',
-            task.completed_km if hasattr(task, 'completed_km') and task.completed_km else '',
-            task.notes if hasattr(task, 'notes') else '',
+            str(task.scheduled_date),
+            str(task.completed_date) if task.completed_date else '',
+            task.mileage_at_service if task.mileage_at_service else '',
+            task.technician_notes or '',
         ])
     return columns, rows, 'Onderhoud per voertuig'
 
@@ -466,15 +467,16 @@ def _execute_maintenance_overview(params):
     if status_filter:
         qs = qs.filter(status=status_filter)
 
-    columns = ['Kenteken', 'Type', 'Categorie', 'Status', 'Gepland']
+    columns = ['Kenteken', 'Titel', 'Type', 'Categorie', 'Status', 'Gepland']
     rows = []
-    for task in qs.order_by('planned_date'):
+    for task in qs.order_by('scheduled_date'):
         rows.append([
             task.vehicle.kenteken if task.vehicle else '',
+            task.title,
             task.maintenance_type.name if task.maintenance_type else '',
             task.maintenance_type.category.name if task.maintenance_type and task.maintenance_type.category else '',
             task.get_status_display() if hasattr(task, 'get_status_display') else str(task.status),
-            str(task.planned_date) if task.planned_date else '',
+            str(task.scheduled_date),
         ])
     return columns, rows, 'Onderhoud overzicht'
 
@@ -489,9 +491,9 @@ def _execute_apk_overview(params):
     for rec in qs.order_by('vehicle__kenteken'):
         rows.append([
             rec.vehicle.kenteken if rec.vehicle else '',
-            str(rec.apk_date) if hasattr(rec, 'apk_date') and rec.apk_date else '',
-            str(rec.expiry_date) if hasattr(rec, 'expiry_date') and rec.expiry_date else '',
-            rec.get_status_display() if hasattr(rec, 'get_status_display') else '',
+            str(rec.inspection_date) if rec.inspection_date else '',
+            str(rec.expiry_date) if rec.expiry_date else '',
+            rec.get_status_display() if hasattr(rec, 'get_status_display') else str(rec.status),
         ])
     return columns, rows, 'APK overzicht'
 
@@ -500,27 +502,33 @@ def _execute_planning_overview(params):
     """Planning overzicht."""
     from apps.planning.models import PlanningEntry
 
-    date_from = params.get('date_from')
-    date_to = params.get('date_to')
     user_id = params.get('user_id')
+    year = params.get('year')
+    week = params.get('week')
 
-    qs = PlanningEntry.objects.select_related('user', 'vehicle').all()
+    qs = PlanningEntry.objects.select_related(
+        'planning', 'planning__bedrijf', 'vehicle', 'chauffeur',
+    ).all()
+
     if user_id:
-        qs = qs.filter(user_id=user_id)
-    if date_from:
-        qs = qs.filter(datum__gte=date_from)
-    if date_to:
-        qs = qs.filter(datum__lte=date_to)
+        qs = qs.filter(chauffeur__gekoppelde_gebruiker_id=user_id)
+    if year:
+        qs = qs.filter(planning__jaar=int(year))
+    if week:
+        qs = qs.filter(planning__weeknummer=int(week))
 
-    columns = ['Datum', 'Medewerker', 'Voertuig', 'Ritnummer', 'Opmerkingen']
+    columns = ['Jaar', 'Week', 'Dag', 'Bedrijf', 'Voertuig', 'Ritnummer', 'Chauffeur', 'ADR']
     rows = []
-    for entry in qs.order_by('datum'):
+    for entry in qs.order_by('planning__jaar', 'planning__weeknummer', 'vehicle__ritnummer', 'dag'):
         rows.append([
-            str(entry.datum),
-            entry.user.get_full_name() if hasattr(entry.user, 'get_full_name') else str(entry.user),
+            entry.planning.jaar,
+            entry.planning.weeknummer,
+            entry.get_dag_display(),
+            entry.planning.bedrijf.naam if entry.planning.bedrijf else '',
             entry.vehicle.kenteken if entry.vehicle else '',
-            entry.ritnummer if hasattr(entry, 'ritnummer') else '',
-            entry.opmerkingen if hasattr(entry, 'opmerkingen') else '',
+            entry.ritnummer or '',
+            entry.chauffeur.naam if entry.chauffeur else '',
+            'Ja' if entry.adr else 'Nee',
         ])
     return columns, rows, 'Planning overzicht'
 

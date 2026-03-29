@@ -173,7 +173,8 @@
     "settings": "Settings",
     "profile": "Profile",
     "banking": "Banking",
-    "reports": "Report Agent"
+    "reports": "Report Agent",
+    "chat": "AI Assistant"
   },
   "dashboard": {
     "title": "Dashboard",

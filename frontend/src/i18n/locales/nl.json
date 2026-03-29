@@ -173,7 +173,8 @@
     "settings": "Instellingen",
     "profile": "Profiel",
     "banking": "Bankkoppeling",
-    "reports": "Rapport Agent"
+    "reports": "Rapport Agent",
+    "chat": "AI Assistent"
   },
   "dashboard": {
     "title": "Dashboard",

@@ -224,11 +224,11 @@ REPORT_TYPE_METADATA = [
     {
         'value': ReportType.PLANNING_OVERVIEW,
         'label': 'Planning overzicht',
-        'description': 'Planning overzicht voor een periode.',
+        'description': 'Planning overzicht per week en jaar.',
         'parameters': [
-            {'name': 'user_id', 'label': 'Medewerker', 'type': 'user', 'required': False},
-            {'name': 'date_from', 'label': 'Datum van', 'type': 'date', 'required': False},
-            {'name': 'date_to', 'label': 'Datum t/m', 'type': 'date', 'required': False},
+            {'name': 'user_id', 'label': 'Chauffeur / Medewerker', 'type': 'user', 'required': False},
+            {'name': 'year', 'label': 'Jaar', 'type': 'year', 'required': False},
+            {'name': 'week', 'label': 'Weeknummer', 'type': 'text', 'required': False},
         ],
     },
     {

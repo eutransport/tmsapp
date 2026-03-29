@@ -30,6 +30,7 @@ import {
   MapPinIcon,
   BanknotesIcon,
   SparklesIcon,
+  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline'
 import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
@@ -75,6 +76,7 @@ const navigation: NavItem[] = [
   { name: 'nav.spreadsheetTemplates', href: '/spreadsheets/templates', icon: SwatchIcon, roles: ['admin'], permission: 'view_spreadsheet_templates' },
   { name: 'nav.maintenance', href: '/maintenance', icon: WrenchScrewdriverIcon, roles: ['admin'], permission: 'view_maintenance' },
   { name: 'nav.reports', href: '/reports', icon: SparklesIcon, roles: ['admin', 'gebruiker', 'chauffeur'] },
+  { name: 'nav.chat', href: '/chat', icon: ChatBubbleLeftRightIcon, roles: ['admin', 'gebruiker', 'chauffeur'] },
 ]
 
 const adminNavigation: NavItem[] = [
