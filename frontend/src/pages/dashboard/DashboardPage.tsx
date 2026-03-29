@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
 import { settingsApi, DashboardStats, OnlineUser, RecentLogin, ActivityItem } from '@/api/settings'
+import { getLeaveCalendar, CalendarLeaveEntry } from '@/api/leave'
 import {
   UsersIcon,
   BuildingOfficeIcon,
@@ -128,6 +129,10 @@ function AdminDashboard({ user }: { user: any }) {
   const [loginsPagination, setLoginsPagination] = useState({ total: 0, total_pages: 1, has_next: false, has_previous: false })
   const [loginsLoading, setLoginsLoading] = useState(true)
 
+  // Leave this month state
+  const [leaveEntries, setLeaveEntries] = useState<CalendarLeaveEntry[]>([])
+  const [leaveLoading, setLeaveLoading] = useState(true)
+
   // Tabs: online | logins | activity
   const [activeTab, setActiveTab] = useState<'online' | 'logins' | 'activity'>('online')
 
@@ -136,6 +141,7 @@ function AdminDashboard({ user }: { user: any }) {
     loadActivities()
     loadOnlineUsers()
     loadRecentLogins(1)
+    loadLeaveEntries()
 
     // Poll online users every 2 minutes
     pollingRef.current = setInterval(() => {
@@ -192,6 +198,21 @@ function AdminDashboard({ user }: { user: any }) {
       console.error('Failed to load recent logins:', err)
     } finally {
       setLoginsLoading(false)
+    }
+  }
+
+  const loadLeaveEntries = async () => {
+    const now = new Date()
+    const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
+    try {
+      const data = await getLeaveCalendar(startDate, endDate)
+      const sorted = [...data].sort((a, b) => a.start_date.localeCompare(b.start_date))
+      setLeaveEntries(sorted)
+    } catch (err) {
+      console.error('Failed to load leave entries:', err)
+    } finally {
+      setLeaveLoading(false)
     }
   }
 
@@ -391,6 +412,58 @@ function AdminDashboard({ user }: { user: any }) {
           <Link to="/companies" className="btn-secondary text-center text-xs sm:text-sm py-2 sm:py-2.5 col-span-2 md:col-span-1">
             + {t('companies.addCompany')}
           </Link>
+        </div>
+      </div>
+
+      {/* Leave this month */}
+      <div>
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+          <CalendarDaysIcon className="h-5 w-5 text-orange-500" />
+          {t('dashboard.leaveThisMonth')}
+        </h2>
+        <div className="card overflow-hidden">
+          {leaveLoading ? (
+            <div className="p-6 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
+            </div>
+          ) : leaveEntries.length === 0 ? (
+            <div className="p-6 text-center text-sm text-gray-500">
+              {t('dashboard.noLeaveThisMonth')}
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {leaveEntries.map((entry) => (
+                <div key={entry.id} className="flex flex-col sm:flex-row sm:items-center justify-between px-4 py-3 gap-1 sm:gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex-shrink-0 p-1.5 rounded-lg bg-orange-50">
+                      <CalendarDaysIcon className="h-4 w-4 text-orange-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{entry.user_naam}</p>
+                      <p className="text-xs text-gray-500 truncate">{entry.leave_type_display}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-gray-600 sm:flex-shrink-0 pl-10 sm:pl-0">
+                    <span>
+                      {new Date(entry.start_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+                      {' – '}
+                      {new Date(entry.end_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+                    </span>
+                    <span className="font-medium text-gray-900">{entry.hours} {t('dashboard.leaveHours')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="px-4 py-3 border-t border-gray-100 bg-gray-50">
+            <Link
+              to="/leave/calendar"
+              className="flex items-center gap-1.5 text-xs sm:text-sm text-primary-600 hover:text-primary-700 font-medium"
+            >
+              <ArrowRightIcon className="h-3.5 w-3.5" />
+              {t('dashboard.viewLeaveCalendar')}
+            </Link>
+          </div>
         </div>
       </div>
       

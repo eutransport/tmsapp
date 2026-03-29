@@ -234,7 +234,11 @@
     "totalOutstanding": "Outstanding",
     "roleAdmin": "Admin",
     "roleGebruiker": "User",
-    "roleChauffeur": "Driver"
+    "roleChauffeur": "Driver",
+    "leaveThisMonth": "Leave this month",
+    "noLeaveThisMonth": "No one is on leave this month",
+    "viewLeaveCalendar": "View leave calendar",
+    "leaveHours": "hours"
   },
   "companies": {
     "title": "Companies",

@@ -234,7 +234,11 @@
     "totalOutstanding": "Te vorderen",
     "roleAdmin": "Admin",
     "roleGebruiker": "Gebruiker",
-    "roleChauffeur": "Chauffeur"
+    "roleChauffeur": "Chauffeur",
+    "leaveThisMonth": "Verlof deze maand",
+    "noLeaveThisMonth": "Niemand heeft verlof deze maand",
+    "viewLeaveCalendar": "Bekijk verlofkalender",
+    "leaveHours": "uren"
   },
   "companies": {
     "title": "Bedrijven",
