@@ -1,7 +1,7 @@
 """
 Custom permission classes for TMS.
 """
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 
 class IsAdminOrManager(BasePermission):
@@ -60,6 +60,25 @@ class IsAdminOnly(BasePermission):
         
         # Only admin role
         return request.user.rol == 'admin'
+
+
+class IsAdminOrLeaveManagerReadOnly(BasePermission):
+    """
+    Permission that allows admins full access and leave managers (users with
+    can_manage_leave_for_all permission) read-only access.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if request.user.is_superuser or request.user.rol == 'admin':
+            return True
+
+        if 'can_manage_leave_for_all' in (request.user.module_permissions or []):
+            return request.method in SAFE_METHODS
+
+        return False
 
 
 class IsOwnerOrAdmin(BasePermission):
