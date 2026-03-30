@@ -145,6 +145,7 @@ export default function ReportsPage() {
   const [companies, setCompanies] = useState<{ id: string; naam: string }[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [quickStartType, setQuickStartType] = useState<ReportTypeInfo | null>(null)
   const [viewingReport, setViewingReport] = useState<ReportRequest | null>(null)
   const [executingId, setExecutingId] = useState<string | null>(null)
 
@@ -204,6 +205,16 @@ export default function ReportsPage() {
     } catch {
       toast.error('Fout bij aanmaken rapport verzoek')
     }
+  }
+
+  const handleQuickStart = (rt: ReportTypeInfo) => {
+    setQuickStartType(rt)
+    setIsFormOpen(true)
+  }
+
+  const handleCloseForm = () => {
+    setIsFormOpen(false)
+    setQuickStartType(null)
   }
 
   const handleExecute = async (id: string) => {
@@ -300,7 +311,7 @@ export default function ReportsPage() {
             {reportTypes.slice(0, 8).map((rt) => (
               <button
                 key={rt.value}
-                onClick={() => setIsFormOpen(true)}
+                onClick={() => handleQuickStart(rt)}
                 className="text-left p-2.5 sm:p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors group"
               >
                 <DocumentChartBarIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500 mb-1 group-hover:text-blue-700" />
@@ -445,7 +456,8 @@ export default function ReportsPage() {
           vehicles={vehicles}
           companies={companies}
           onSubmit={handleCreate}
-          onClose={() => setIsFormOpen(false)}
+          onClose={handleCloseForm}
+          initialType={quickStartType ?? undefined}
         />
       )}
 
