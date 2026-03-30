@@ -18,6 +18,8 @@ from .views import (
     ServerHistoryView,
     ServerContainersView,
     ServerContainerLogsView,
+    ReminderCronView,
+    ReminderJobLogListView,
 )
 
 # Router for viewsets
@@ -72,6 +74,10 @@ urlpatterns = [
     path('admin/settings/test-email/', AdminSettingsViewSet.as_view({
         'post': 'test_email',
     }), name='admin-settings-test-email'),
+    
+    # Reminder cron job management
+    path('admin/reminder-cron/', ReminderCronView.as_view(), name='reminder-cron'),
+    path('admin/reminder-logs/', ReminderJobLogListView.as_view(), name='reminder-logs'),
     
     # Server monitoring (admin only)
     path('server/stats/', ServerStatsView.as_view(), name='server-stats'),

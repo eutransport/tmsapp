@@ -12,8 +12,9 @@ from datetime import date, timedelta
 
 from django.core.mail import EmailMessage, get_connection
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 
-from apps.core.models import AppSettings
+from apps.core.models import AppSettings, ReminderJobLog
 from apps.drivers.models import Driver
 
 logger = logging.getLogger(__name__)
@@ -84,19 +85,27 @@ class Command(BaseCommand):
     help = 'Verstuur herinneringsmails voor verlopen chauffeursdocumenten.'
 
     def handle(self, *args, **options):
+        job_log = ReminderJobLog.objects.create()
+
         settings = AppSettings.get_settings()
 
         # Check if reminders are enabled
         if not getattr(settings, 'reminder_enabled', False):
-            self.stdout.write(self.style.WARNING(
-                'Herinneringen zijn uitgeschakeld. Schakel ze in via Instellingen > Herinneringen.'
-            ))
+            msg = 'Herinneringen zijn uitgeschakeld. Schakel ze in via Instellingen > Herinneringen.'
+            self.stdout.write(self.style.WARNING(msg))
+            job_log.status = 'skipped'
+            job_log.message = msg
+            job_log.finished_at = timezone.now()
+            job_log.save()
             return
 
         if not settings.smtp_host:
-            self.stderr.write(self.style.ERROR(
-                'SMTP is niet geconfigureerd. Vul eerst de e-mail instellingen in.'
-            ))
+            msg = 'SMTP is niet geconfigureerd. Vul eerst de e-mail instellingen in.'
+            self.stderr.write(self.style.ERROR(msg))
+            job_log.status = 'error'
+            job_log.message = msg
+            job_log.finished_at = timezone.now()
+            job_log.save()
             return
 
         # Use configured reminder email, fallback to company email / SMTP from
@@ -107,17 +116,25 @@ class Command(BaseCommand):
             settings.smtp_username
         )
         if not admin_email:
-            self.stderr.write(self.style.ERROR(
+            msg = (
                 'Geen e-mailadres geconfigureerd om herinneringen naar te sturen. '
                 'Vul het ontvanger e-mail in bij Instellingen > Herinneringen.'
-            ))
+            )
+            self.stderr.write(self.style.ERROR(msg))
+            job_log.status = 'error'
+            job_log.message = msg
+            job_log.finished_at = timezone.now()
+            job_log.save()
             return
 
         # Check if we should run today based on frequency
         if not _should_run_today(settings):
-            self.stdout.write(self.style.SUCCESS(
-                'Vandaag geen herinneringen gepland op basis van de frequentie-instelling.'
-            ))
+            msg = 'Vandaag geen herinneringen gepland op basis van de frequentie-instelling.'
+            self.stdout.write(self.style.SUCCESS(msg))
+            job_log.status = 'skipped'
+            job_log.message = msg
+            job_log.finished_at = timezone.now()
+            job_log.save()
             return
 
         today = date.today()
@@ -126,6 +143,7 @@ class Command(BaseCommand):
 
         drivers = Driver.objects.filter(actief=True)
         total_sent = 0
+        errors = []
 
         for driver in drivers:
             for field_name, label in EXPIRY_FIELDS:
@@ -141,11 +159,20 @@ class Command(BaseCommand):
                         )
                         if success:
                             total_sent += 1
+                        else:
+                            errors.append(f'{driver.naam} - {label}')
                         break  # Only send one reminder per field per day
 
-        self.stdout.write(self.style.SUCCESS(
-            f'{total_sent} herinnering(en) verstuurd.'
-        ))
+        msg = f'{total_sent} herinnering(en) verstuurd.'
+        if errors:
+            msg += f' Fouten bij: {", ".join(errors)}'
+        self.stdout.write(self.style.SUCCESS(msg))
+
+        job_log.status = 'success' if not errors else 'warning'
+        job_log.reminders_sent = total_sent
+        job_log.message = msg
+        job_log.finished_at = timezone.now()
+        job_log.save()
 
     def _send_reminder(self, settings, to_email, driver, document_label, expiry_date, days_remaining):
         """Send a single reminder email."""
