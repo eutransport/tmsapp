@@ -415,7 +415,7 @@ export default function ReportsPage() {
                   <div className="flex items-center justify-between text-xs text-gray-500">
                     <span>
                       {new Date(req.created_at).toLocaleString('nl-NL')}
-                      {req.row_count !== null && ` · ${req.row_count} rijen`}
+                      {req.row_count != null && ` · ${req.row_count} rijen`}
                     </span>
                     <div className="flex items-center gap-1">
                       <ReportActions

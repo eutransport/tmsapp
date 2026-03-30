@@ -50,8 +50,9 @@ export default function ReportResultModal({
             <div>
               <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
               <p className="text-xs text-gray-500">
-                {report.title} &middot; {report.row_count} rijen &middot;{' '}
-                {new Date(report.completed_at!).toLocaleString('nl-NL')}
+                {report.title}
+                {report.row_count != null && ` \u00b7 ${report.row_count} rijen`}
+                {report.completed_at && ` \u00b7 ${new Date(report.completed_at).toLocaleString('nl-NL')}`}
               </p>
             </div>
           </div>
