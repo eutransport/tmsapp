@@ -272,7 +272,9 @@ export default function ReportsPage() {
       toast.success('Rapport verwijderd')
       // If deleting the last item on this page, go back one page
       if (requests.length === 1 && currentPage > 1) {
-        setCurrentPage((p) => p - 1)
+        const newPage = currentPage - 1
+        setCurrentPage(newPage)
+        await fetchData(newPage)
       } else {
         await fetchData()
       }
