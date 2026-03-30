@@ -96,6 +96,15 @@ export interface AppSettingsAdmin extends AppSettings {
     provider?: string
     message: string
   }
+  // Reminder Settings
+  reminder_enabled: boolean
+  reminder_time: string
+  reminder_frequency: 'daily' | 'weekdays' | 'weekly' | 'custom'
+  reminder_weekly_day: number
+  reminder_custom_days: number[]
+  reminder_weeks_before: number[]
+  reminder_email: string
+  reminder_signature: string
 }
 
 // Company types

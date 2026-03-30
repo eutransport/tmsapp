@@ -474,6 +474,67 @@ class AppSettings(models.Model):
         help_text='Handtekening die onderaan alle uitgaande e-mails wordt toegevoegd.'
     )
     
+    # Reminder settings for driver document expiry
+    reminder_enabled = models.BooleanField(
+        default=False,
+        verbose_name='Herinneringen Ingeschakeld',
+        help_text='Schakel automatische herinneringen in voor verlopen chauffeursdocumenten.'
+    )
+    reminder_time = models.TimeField(
+        default='08:00',
+        verbose_name='Verzendtijdstip',
+        help_text='Tijdstip waarop herinneringen worden verstuurd.'
+    )
+    reminder_frequency = models.CharField(
+        max_length=20,
+        choices=[
+            ('daily', 'Dagelijks'),
+            ('weekdays', 'Werkdagen (ma-vr)'),
+            ('weekly', 'Wekelijks'),
+            ('custom', 'Aangepast'),
+        ],
+        default='daily',
+        verbose_name='Frequentie',
+        help_text='Hoe vaak herinneringen worden verstuurd.'
+    )
+    reminder_weekly_day = models.IntegerField(
+        choices=[
+            (0, 'Maandag'),
+            (1, 'Dinsdag'),
+            (2, 'Woensdag'),
+            (3, 'Donderdag'),
+            (4, 'Vrijdag'),
+            (5, 'Zaterdag'),
+            (6, 'Zondag'),
+        ],
+        default=0,
+        verbose_name='Dag van de week',
+        help_text='Op welke dag herinneringen worden verstuurd (bij wekelijkse frequentie).'
+    )
+    reminder_custom_days = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Aangepaste dagen',
+        help_text='Op welke dagen herinneringen worden verstuurd (bij aangepaste frequentie).'
+    )
+    reminder_weeks_before = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Weken van tevoren',
+        help_text='Hoeveel weken voor de verloopdatum herinneringen worden verstuurd.'
+    )
+    reminder_email = models.EmailField(
+        blank=True,
+        verbose_name='Ontvanger E-mail',
+        help_text='E-mailadres waarnaar herinneringen worden verstuurd. Laat leeg voor bedrijfs-e-mail.'
+    )
+    reminder_signature = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='Herinnering Handtekening',
+        help_text='Handtekening die onderaan herinneringsmails wordt toegevoegd.'
+    )
+    
     # Typography settings
     primary_font = models.ForeignKey(
         'CustomFont',

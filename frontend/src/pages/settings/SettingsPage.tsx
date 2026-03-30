@@ -33,7 +33,7 @@ import { useAppStore } from '@/stores/appStore'
 import { useServerConfigStore } from '@/stores/serverConfigStore'
 import ThemeSelector from '@/components/settings/ThemeSelector'
 import type { AppSettingsAdmin } from '@/types'
-import { CalendarDaysIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
+import { CalendarDaysIcon, ShieldCheckIcon, BellAlertIcon } from '@heroicons/react/24/outline'
 import LicenseStatusCard from '@/components/licensing/LicenseStatusCard'
 import FontManagementPage from '@/pages/settings/FontManagementPage'
 import LeaveSettingsPage from '@/pages/settings/LeaveSettingsPage'
@@ -52,6 +52,7 @@ export default function SettingsPage() {
     { id: 'company', name: t('settings.companyInfo', 'Bedrijfsgegevens'), icon: BuildingOfficeIcon },
     { id: 'invoice', name: t('settings.invoiceSettings', 'Factuur'), icon: DocumentTextIcon },
     { id: 'email', name: t('settings.emailSettings', 'E-mail'), icon: EnvelopeIcon },
+    { id: 'reminders', name: t('settings.reminders', 'Herinneringen'), icon: BellAlertIcon },
     { id: 'ai', name: t('settings.aiExtraction', 'AI Extractie'), icon: SparklesIcon },
     { id: 'server', name: t('settings.server', 'Server'), icon: ServerIcon },
     { id: 'leave', name: t('settings.leaveSettings', 'Verlof'), icon: CalendarDaysIcon, link: '/settings/leave' },
@@ -1120,6 +1121,217 @@ export default function SettingsPage() {
                   <ServerIcon className="h-5 w-5 mr-2" />
                   {t('settings.serverSetup')}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Reminders Tab */}
+          {activeTab === 'reminders' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                  {t('settings.reminders', 'Herinneringen')}
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {t('settings.remindersDescription', 'Configureer automatische e-mailherinneringen voor verlopen chauffeursdocumenten (bestuurderspas, code 95, ADR, rijbewijs).')}
+                </p>
+              </div>
+
+              {/* Enable/Disable */}
+              <div className="flex items-center gap-3">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.reminder_enabled || false}
+                    onChange={(e) => handleInputChange('reminder_enabled', e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                </label>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {t('settings.reminderEnabled', 'Herinneringen inschakelen')}
+                </span>
+              </div>
+
+              {/* Recipient Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('settings.reminderEmail', 'Ontvanger e-mailadres')}
+                </label>
+                <input
+                  type="email"
+                  value={formData.reminder_email || ''}
+                  onChange={(e) => handleInputChange('reminder_email', e.target.value)}
+                  className="input-field max-w-md"
+                  placeholder={t('settings.reminderEmailPlaceholder', 'bijv. admin@bedrijf.nl (leeg = bedrijfs-e-mail)')}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {t('settings.reminderEmailHelp', 'Laat leeg om het bedrijfs-e-mailadres te gebruiken.')}
+                </p>
+              </div>
+
+              {/* Send Time */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('settings.reminderTime', 'Verzendtijdstip')}
+                </label>
+                <input
+                  type="time"
+                  value={formData.reminder_time || '08:00'}
+                  onChange={(e) => handleInputChange('reminder_time', e.target.value)}
+                  className="input-field max-w-xs"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {t('settings.reminderTimeHelp', 'Het tijdstip waarop de herinneringsmails worden verstuurd.')}
+                </p>
+              </div>
+
+              {/* Frequency */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('settings.reminderFrequency', 'Frequentie')}
+                </label>
+                <select
+                  value={formData.reminder_frequency || 'daily'}
+                  onChange={(e) => handleInputChange('reminder_frequency', e.target.value)}
+                  className="input-field max-w-md"
+                >
+                  <option value="daily">{t('settings.frequencyDaily', 'Dagelijks')}</option>
+                  <option value="weekdays">{t('settings.frequencyWeekdays', 'Werkdagen (ma-vr)')}</option>
+                  <option value="weekly">{t('settings.frequencyWeekly', 'Wekelijks')}</option>
+                  <option value="custom">{t('settings.frequencyCustom', 'Aangepast')}</option>
+                </select>
+              </div>
+
+              {/* Weekly Day Selection */}
+              {formData.reminder_frequency === 'weekly' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('settings.reminderWeeklyDay', 'Dag van de week')}
+                  </label>
+                  <select
+                    value={formData.reminder_weekly_day ?? 0}
+                    onChange={(e) => handleInputChange('reminder_weekly_day', parseInt(e.target.value))}
+                    className="input-field max-w-md"
+                  >
+                    <option value={0}>{t('settings.dayMonday', 'Maandag')}</option>
+                    <option value={1}>{t('settings.dayTuesday', 'Dinsdag')}</option>
+                    <option value={2}>{t('settings.dayWednesday', 'Woensdag')}</option>
+                    <option value={3}>{t('settings.dayThursday', 'Donderdag')}</option>
+                    <option value={4}>{t('settings.dayFriday', 'Vrijdag')}</option>
+                    <option value={5}>{t('settings.daySaturday', 'Zaterdag')}</option>
+                    <option value={6}>{t('settings.daySunday', 'Zondag')}</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Custom Days Selection */}
+              {formData.reminder_frequency === 'custom' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {t('settings.reminderCustomDays', 'Selecteer dagen')}
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: 0, label: t('settings.dayMonday', 'Maandag') },
+                      { value: 1, label: t('settings.dayTuesday', 'Dinsdag') },
+                      { value: 2, label: t('settings.dayWednesday', 'Woensdag') },
+                      { value: 3, label: t('settings.dayThursday', 'Donderdag') },
+                      { value: 4, label: t('settings.dayFriday', 'Vrijdag') },
+                      { value: 5, label: t('settings.daySaturday', 'Zaterdag') },
+                      { value: 6, label: t('settings.daySunday', 'Zondag') },
+                    ].map((day) => {
+                      const customDays = (formData.reminder_custom_days as number[]) || []
+                      const isSelected = customDays.includes(day.value)
+                      return (
+                        <button
+                          key={day.value}
+                          type="button"
+                          onClick={() => {
+                            const current = (formData.reminder_custom_days as number[]) || []
+                            const updated = isSelected
+                              ? current.filter((d) => d !== day.value)
+                              : [...current, day.value].sort()
+                            handleInputChange('reminder_custom_days', updated)
+                          }}
+                          className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                            isSelected
+                              ? 'bg-primary-100 border-primary-300 text-primary-700'
+                              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {day.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Weeks Before */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t('settings.reminderWeeksBefore', 'Weken voor verloopdatum')}
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  {t('settings.reminderWeeksBeforeHelp', 'Selecteer hoeveel weken voor de verloopdatum een herinnering wordt verstuurd.')}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {[1, 2, 3, 4, 5, 6, 8, 10, 12].map((week) => {
+                    const weeksBefore = (formData.reminder_weeks_before as number[]) || []
+                    const isSelected = weeksBefore.includes(week)
+                    return (
+                      <button
+                        key={week}
+                        type="button"
+                        onClick={() => {
+                          const current = (formData.reminder_weeks_before as number[]) || []
+                          const updated = isSelected
+                            ? current.filter((w) => w !== week)
+                            : [...current, week].sort((a, b) => a - b)
+                          handleInputChange('reminder_weeks_before', updated)
+                        }}
+                        className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                          isSelected
+                            ? 'bg-primary-100 border-primary-300 text-primary-700'
+                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {week} {week === 1 ? t('settings.week', 'week') : t('settings.weeks', 'weken')}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Signature */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('settings.reminderSignature', 'Handtekening')}
+                </label>
+                <textarea
+                  value={formData.reminder_signature || ''}
+                  onChange={(e) => handleInputChange('reminder_signature', e.target.value)}
+                  rows={4}
+                  className="input-field w-full max-w-lg"
+                  placeholder={t('settings.reminderSignaturePlaceholder', 'Met vriendelijke groet,\nBedrijfsnaam')}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {t('settings.reminderSignatureHelp', 'Wordt onderaan elke herinneringsmail toegevoegd. Laat leeg voor standaard handtekening.')}
+                </p>
+              </div>
+
+              {/* Info Box */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-blue-800 mb-2">
+                  {t('settings.reminderInfo', 'Welke documenten worden bewaakt?')}
+                </h3>
+                <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
+                  <li>{t('settings.reminderFieldDriverCard', 'Bestuurderspas (einddatum)')}</li>
+                  <li>{t('settings.reminderFieldCode95', 'Code 95 (einddatum)')}</li>
+                  <li>{t('settings.reminderFieldAdr', 'ADR certificaat (einddatum)')}</li>
+                  <li>{t('settings.reminderFieldLicense', 'Rijbewijs (einddatum)')}</li>
+                </ul>
               </div>
             </div>
           )}

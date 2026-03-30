@@ -131,6 +131,10 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
             'ai_provider', 'ai_github_token', 'ai_openai_api_key',
             'ai_azure_endpoint', 'ai_azure_api_key', 'ai_azure_deployment', 'ai_model',
             'ai_status',
+            # Reminder Settings
+            'reminder_enabled', 'reminder_time', 'reminder_frequency',
+            'reminder_weekly_day', 'reminder_custom_days', 'reminder_weeks_before',
+            'reminder_email', 'reminder_signature',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'ai_status']

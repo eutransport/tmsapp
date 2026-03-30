@@ -1,11 +1,8 @@
 """
 Management command to send reminder emails for expiring driver documents.
 
-Checks all active drivers for documents expiring within the following intervals:
-- 1 month (30 days)
-- 3 weeks (21 days)
-- 2 weeks (14 days)
-- 1 week (7 days)
+Checks all active drivers for documents expiring within the configured intervals.
+Configuration is read from AppSettings (reminder_* fields).
 
 This command should be scheduled to run daily (e.g. via cron or Celery Beat).
 Usage: python manage.py send_driver_expiry_reminders
@@ -29,8 +26,8 @@ EXPIRY_FIELDS = [
     ('einddatum_rijbewijs', 'Rijbewijs'),
 ]
 
-# Reminder thresholds in days
-REMINDER_DAYS = [30, 21, 14, 7]
+# Default reminder thresholds in days (4 weeks, 3 weeks, 2 weeks, 1 week)
+DEFAULT_REMINDER_DAYS = [28, 21, 14, 7]
 
 
 def _safe_str(value):
@@ -49,11 +46,52 @@ def _safe_str(value):
     return s
 
 
+def _get_reminder_days(settings):
+    """
+    Get reminder thresholds from settings.
+    Converts weeks_before list (e.g. [1, 2, 3, 4]) to days (e.g. [7, 14, 21, 28]).
+    Falls back to DEFAULT_REMINDER_DAYS if not configured.
+    """
+    weeks_before = getattr(settings, 'reminder_weeks_before', None)
+    if weeks_before and isinstance(weeks_before, list) and len(weeks_before) > 0:
+        return sorted([w * 7 for w in weeks_before], reverse=True)
+    return DEFAULT_REMINDER_DAYS
+
+
+def _should_run_today(settings):
+    """
+    Check if reminders should be sent today based on frequency settings.
+    """
+    frequency = getattr(settings, 'reminder_frequency', 'daily')
+    today_weekday = date.today().weekday()  # 0=Monday, 6=Sunday
+
+    if frequency == 'daily':
+        return True
+    elif frequency == 'weekdays':
+        return today_weekday <= 4  # Monday-Friday
+    elif frequency == 'weekly':
+        weekly_day = getattr(settings, 'reminder_weekly_day', 0)
+        return today_weekday == weekly_day
+    elif frequency == 'custom':
+        custom_days = getattr(settings, 'reminder_custom_days', [])
+        if custom_days and isinstance(custom_days, list):
+            return today_weekday in custom_days
+        return False
+    return True
+
+
 class Command(BaseCommand):
     help = 'Verstuur herinneringsmails voor verlopen chauffeursdocumenten.'
 
     def handle(self, *args, **options):
         settings = AppSettings.get_settings()
+
+        # Check if reminders are enabled
+        if not getattr(settings, 'reminder_enabled', False):
+            self.stdout.write(self.style.WARNING(
+                'Herinneringen zijn uitgeschakeld. Schakel ze in via Instellingen > Herinneringen.'
+            ))
+            return
 
         if not settings.smtp_host:
             self.stderr.write(self.style.ERROR(
@@ -61,16 +99,30 @@ class Command(BaseCommand):
             ))
             return
 
-        admin_email = settings.company_email or settings.smtp_from_email or settings.smtp_username
+        # Use configured reminder email, fallback to company email / SMTP from
+        admin_email = (
+            getattr(settings, 'reminder_email', '') or
+            settings.company_email or
+            settings.smtp_from_email or
+            settings.smtp_username
+        )
         if not admin_email:
             self.stderr.write(self.style.ERROR(
                 'Geen e-mailadres geconfigureerd om herinneringen naar te sturen. '
-                'Vul het bedrijfs-e-mail of SMTP-afzender in bij de instellingen.'
+                'Vul het ontvanger e-mail in bij Instellingen > Herinneringen.'
+            ))
+            return
+
+        # Check if we should run today based on frequency
+        if not _should_run_today(settings):
+            self.stdout.write(self.style.SUCCESS(
+                'Vandaag geen herinneringen gepland op basis van de frequentie-instelling.'
             ))
             return
 
         today = date.today()
-        reminder_dates = {days: today + timedelta(days=days) for days in REMINDER_DAYS}
+        reminder_days = _get_reminder_days(settings)
+        reminder_dates = {days: today + timedelta(days=days) for days in reminder_days}
 
         drivers = Driver.objects.filter(actief=True)
         total_sent = 0
@@ -99,16 +151,24 @@ class Command(BaseCommand):
         """Send a single reminder email."""
         formatted_date = expiry_date.strftime('%d-%m-%Y')
 
-        if days_remaining >= 30:
-            time_label = 'een maand'
-        elif days_remaining >= 21:
-            time_label = '3 weken'
-        elif days_remaining >= 14:
-            time_label = '2 weken'
+        weeks = days_remaining // 7
+        if weeks > 1:
+            time_label = f'{weeks} weken'
         else:
             time_label = '1 week'
 
         subject = f'Herinnering: {document_label} van {driver.naam} verloopt over {time_label}'
+
+        # Build reminder intervals description from settings
+        reminder_days = _get_reminder_days(settings)
+        intervals = []
+        for d in sorted(reminder_days, reverse=True):
+            w = d // 7
+            if w > 1:
+                intervals.append(f'{w} weken')
+            else:
+                intervals.append('1 week')
+        intervals_str = ', '.join(intervals)
 
         body = (
             f'Beste beheerder,\n'
@@ -118,11 +178,19 @@ class Command(BaseCommand):
             f'Graag ervoor zorgen dat {document_label} op tijd verlengd wordt.\n'
             f'\n'
             f'Dit is een automatische herinnering. Er worden herinneringen verstuurd op '
-            f'1 maand, 3 weken, 2 weken en 1 week voor de verloopdatum.\n'
-            f'\n'
-            f'Met vriendelijke groet,\n'
-            f'{settings.company_name or "TMS"}'
+            f'{intervals_str} voor de verloopdatum.\n'
         )
+
+        # Add signature
+        reminder_signature = getattr(settings, 'reminder_signature', '')
+        if reminder_signature:
+            body += f'\n{reminder_signature}'
+        else:
+            body += (
+                f'\n'
+                f'Met vriendelijke groet,\n'
+                f'{settings.company_name or "TMS"}'
+            )
 
         try:
             smtp_username = _safe_str(settings.smtp_username) if settings.smtp_username else ''
