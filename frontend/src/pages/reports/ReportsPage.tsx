@@ -380,41 +380,41 @@ export default function ReportsPage() {
         ) : (
           <>
             {/* Desktop table */}
-            <div className="hidden sm:block bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="hidden sm:block bg-white rounded-lg border border-gray-200 overflow-x-auto">
+              <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Titel</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Type</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Status</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Rijen</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Aangevraagd</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-700">Acties</th>
+                    <th className="text-left px-3 py-2 font-semibold text-gray-700">Titel</th>
+                    <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Type</th>
+                    <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Status</th>
+                    <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Rijen</th>
+                    <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Aangevraagd</th>
+                    <th className="text-right px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Acties</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {requests.map((req) => (
                     <tr key={req.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-900">{req.title}</span>
+                      <td className="px-3 py-2 max-w-xs">
+                        <span className="font-medium text-gray-900 block truncate">{req.title}</span>
                         {req.error_message && (
                           <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1">
                             <ExclamationCircleIcon className="w-3 h-3" />
-                            {req.error_message}
+                            <span className="truncate">{req.error_message}</span>
                           </p>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{req.report_type_display}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{req.report_type_display}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
                         <StatusBadge status={req.status} display={req.status_display} />
                       </td>
-                      <td className="px-4 py-3 text-gray-600">
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
                         {req.row_count !== null ? req.row_count : '—'}
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
+                      <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                         {new Date(req.created_at).toLocaleString('nl-NL')}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2">
                         <div className="flex items-center justify-end gap-1">
                           <ReportActions
                             req={req}
@@ -434,13 +434,13 @@ export default function ReportsPage() {
             </div>
 
             {/* Mobile card list */}
-            <div className="sm:hidden space-y-3">
+            <div className="sm:hidden space-y-2">
               {requests.map((req) => (
-                <div key={req.id} className="bg-white rounded-lg border border-gray-200 p-4">
-                  <div className="flex items-start justify-between gap-2 mb-2">
+                <div key={req.id} className="bg-white rounded-lg border border-gray-200 p-3">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{req.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{req.report_type_display}</p>
+                      <p className="text-xs font-medium text-gray-900 truncate">{req.title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">{req.report_type_display}</p>
                     </div>
                     <StatusBadge status={req.status} display={req.status_display} />
                   </div>
