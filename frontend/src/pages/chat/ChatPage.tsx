@@ -3,7 +3,7 @@
  * Allows users to interact with the TMS AI assistant.
  * The assistant can query data, run reports and answer questions.
  */
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   ChatBubbleLeftRightIcon,
   PaperAirplaneIcon,
@@ -104,6 +104,39 @@ function cleanAssistantText(content: string, hasData: boolean): string {
   return cleaned.join('\n').trim()
 }
 
+// Render text with markdown links [text](url) as real clickable anchors
+function renderWithLinks(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  // Declare the regex inside the function so lastIndex always starts at 0
+  const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g
+
+  while ((match = linkPattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index))
+    }
+    parts.push(
+      <a
+        key={match.index}
+        href={match[2]}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline text-indigo-600 hover:text-indigo-800 break-all"
+      >
+        {match[1]}
+      </a>
+    )
+    lastIndex = match.index + match[0].length
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex))
+  }
+
+  return parts.length > 0 ? parts : [text]
+}
+
 // ---- Single message bubble ----
 function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isUser = msg.role === 'user'
@@ -127,7 +160,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
                 : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm'
               }`}
           >
-            <p className="whitespace-pre-wrap">{displayContent}</p>
+            <p className="whitespace-pre-wrap">{isUser ? displayContent : renderWithLinks(displayContent)}</p>
           </div>
         )}
         {msg.data && !msg.data.error && <DataTable data={msg.data} />}

@@ -42,6 +42,11 @@ Je kunt ook gewone gespreksvragen beantwoorden:
 - Vragen over het huidige tijdstip of datum beantwoord je direct op basis van bovenstaande info.
 - Voor weersberichten, afstanden en webzoekopdrachten gebruik je de beschikbare tools.
 - Je mag ook vragen over het TMS-systeem zelf beantwoorden op basis van je kennis.
+
+BELANGRIJK voor links en zoekresultaten:
+- Toon links altijd als klikbare Markdown-links: [tekst](url)
+- Als er geen directe zoekresultaten zijn, verwijs dan naar Google met: [Zoek op Google](https://www.google.com/search?q=...)
+- Gebruik nooit kale URLs; maak er altijd een Markdown-link van.
 """
 
 # ---------------------------------------------------------------------------
@@ -408,7 +413,7 @@ def _execute_tool_get_distance(tool_args: dict) -> dict:
 
 
 def _execute_tool_web_search(tool_args: dict) -> dict:
-    """Search the web using DuckDuckGo Instant Answer API (free, no API key)."""
+    """Search the web using DuckDuckGo Instant Answer API and fall back to Google."""
     import urllib.request
 
     query = tool_args.get("query", "")
@@ -416,8 +421,10 @@ def _execute_tool_web_search(tool_args: dict) -> dict:
     if not query:
         return {"error": "Geen zoekopdracht opgegeven."}
 
+    google_search_url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+
     try:
-        # DuckDuckGo Instant Answer API
+        # DuckDuckGo Instant Answer API for structured results
         url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(query)}&format=json&no_html=1&skip_disambig=1"
         req = urllib.request.Request(url, headers={"User-Agent": "TMS-Assistant/1.0"})
         with urllib.request.urlopen(req, timeout=8) as resp:
@@ -441,31 +448,34 @@ def _execute_tool_web_search(tool_args: dict) -> dict:
                     "title": topic.get("Text", "")[:80],
                     "snippet": topic.get("Text", ""),
                     "url": topic.get("FirstURL", ""),
-                    "source": "DuckDuckGo",
+                    "source": "Web",
                 })
             if len(results) >= max_results:
                 break
 
         if not results:
-            # Return search link when no instant results
-            search_url = f"https://duckduckgo.com/?q={urllib.parse.quote(query)}"
+            # No instant results – direct the user to Google
             return {
                 "query": query,
                 "results": [],
-                "search_url": search_url,
-                "message": f"Geen directe resultaten. Bekijk: {search_url}",
+                "search_url": google_search_url,
+                "message": (
+                    f"Geen directe resultaten gevonden voor '{query}'. "
+                    f"[Zoek op Google]({google_search_url})"
+                ),
             }
 
         return {
             "query": query,
             "results": results[:max_results],
-            "search_url": f"https://duckduckgo.com/?q={urllib.parse.quote(query)}",
+            "search_url": google_search_url,
         }
     except Exception as exc:
         logger.warning("web_search tool error: %s", exc)
         return {
             "error": f"Zoeken mislukt: {exc}",
-            "search_url": f"https://duckduckgo.com/?q={urllib.parse.quote(tool_args.get('query', ''))}",
+            "search_url": google_search_url,
+            "message": f"[Zoek op Google]({google_search_url})",
         }
 
 
