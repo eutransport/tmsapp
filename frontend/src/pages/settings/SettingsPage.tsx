@@ -105,6 +105,7 @@ export default function SettingsPage() {
       setFormData({
         app_name: data.app_name,
         primary_color: data.primary_color,
+        login_background_color: data.login_background_color,
         company_name: data.company_name,
         company_address: data.company_address,
         company_phone: data.company_phone,
@@ -130,6 +131,15 @@ export default function SettingsPage() {
         ai_azure_endpoint: data.ai_azure_endpoint,
         ai_azure_deployment: data.ai_azure_deployment,
         ai_model: data.ai_model || 'gpt-4o-mini',
+        // Reminder settings
+        reminder_enabled: data.reminder_enabled,
+        reminder_time: data.reminder_time,
+        reminder_frequency: data.reminder_frequency,
+        reminder_weekly_day: data.reminder_weekly_day,
+        reminder_custom_days: data.reminder_custom_days,
+        reminder_weeks_before: data.reminder_weeks_before,
+        reminder_email: data.reminder_email,
+        reminder_signature: data.reminder_signature,
       })
     } catch (err: any) {
       setError(t('errors.loadFailed'))
