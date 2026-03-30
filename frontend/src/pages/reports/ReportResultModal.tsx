@@ -61,23 +61,23 @@ export default function ReportResultModal({
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center gap-3 px-6 py-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-          <div className="flex items-center gap-2 flex-1">
-            <MagnifyingGlassIcon className="w-4 h-4 text-gray-400" />
+        <div className="flex flex-wrap items-center gap-3 px-6 py-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <input
               type="text"
               placeholder="Doorzoek resultaten..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="text-sm focus:outline-none bg-transparent flex-1"
+              className="text-sm focus:outline-none bg-transparent flex-1 min-w-0"
             />
             {search && (
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-400 flex-shrink-0">
                 {filteredRows.length} van {rows.length} rijen
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {report.excel_file && (
               <button
                 onClick={onDownloadExcel}

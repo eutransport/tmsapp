@@ -1,6 +1,7 @@
 """Views for the reports agent."""
 import logging
-from datetime import datetime
+from datetime import datetime, date
+from decimal import Decimal
 
 from django.core.files.base import ContentFile
 from django.http import FileResponse, HttpResponse
@@ -21,6 +22,24 @@ from .serializers import (
 from .services import execute_report
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _make_json_serializable(obj):
+    """Recursively convert non-JSON-serializable types (e.g. Decimal, date) to safe types."""
+    if isinstance(obj, dict):
+        return {k: _make_json_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_make_json_serializable(item) for item in obj]
+    if isinstance(obj, Decimal):
+        return str(obj)
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    return obj
+
 
 # ---------------------------------------------------------------------------
 # Report-type metadata for the frontend wizard
@@ -322,7 +341,7 @@ class ReportRequestViewSet(viewsets.ModelViewSet):
             )
 
             output_format = report_request.output_format
-            result_data = {'columns': columns, 'rows': rows, 'title': title}
+            result_data = _make_json_serializable({'columns': columns, 'rows': rows, 'title': title})
 
             # Generate Excel
             if output_format in (ReportOutputFormat.EXCEL, ReportOutputFormat.ALL):
