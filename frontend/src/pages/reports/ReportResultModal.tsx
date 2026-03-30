@@ -61,8 +61,30 @@ export default function ReportResultModal({
         </div>
 
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-3 px-6 py-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex flex-col gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+          {(report.excel_file || report.pdf_file) && (
+            <div className="flex items-center gap-2">
+              {report.excel_file && (
+                <button
+                  onClick={onDownloadExcel}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
+                >
+                  <ArrowDownTrayIcon className="w-4 h-4" />
+                  Excel
+                </button>
+              )}
+              {report.pdf_file && (
+                <button
+                  onClick={onDownloadPdf}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                  <ArrowDownTrayIcon className="w-4 h-4" />
+                  PDF
+                </button>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-2 min-w-0">
             <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <input
               type="text"
@@ -75,26 +97,6 @@ export default function ReportResultModal({
               <span className="text-xs text-gray-400 flex-shrink-0">
                 {filteredRows.length} van {rows.length} rijen
               </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {report.excel_file && (
-              <button
-                onClick={onDownloadExcel}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
-              >
-                <ArrowDownTrayIcon className="w-4 h-4" />
-                Excel
-              </button>
-            )}
-            {report.pdf_file && (
-              <button
-                onClick={onDownloadPdf}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                <ArrowDownTrayIcon className="w-4 h-4" />
-                PDF
-              </button>
             )}
           </div>
         </div>
