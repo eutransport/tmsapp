@@ -6,6 +6,7 @@ import uuid
 import hashlib
 import base64
 import logging
+from datetime import time
 from django.db import models
 from django.conf import settings
 from django.core.cache import cache
@@ -481,7 +482,7 @@ class AppSettings(models.Model):
         help_text='Schakel automatische herinneringen in voor verlopen chauffeursdocumenten.'
     )
     reminder_time = models.TimeField(
-        default='08:00',
+        default=time(8, 0),
         verbose_name='Verzendtijdstip',
         help_text='Tijdstip waarop herinneringen worden verstuurd.'
     )
