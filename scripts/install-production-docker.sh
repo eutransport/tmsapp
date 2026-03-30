@@ -653,6 +653,8 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ALLOWED_HOSTS=$DOMAIN_TMS,localhost,tms-backend
       - CORS_ALLOWED_ORIGINS=https://$DOMAIN_TMS
       - SECURE_SSL_REDIRECT=False
@@ -666,6 +668,67 @@ services:
       - tms-network
     expose:
       - "8000"
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tms-celery-worker
+    restart: always
+    command: celery -A tms worker --loglevel=info --concurrency=2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DJANGO_SETTINGS_MODULE=tms.settings.production
+      - SECRET_KEY=$SECRET_KEY
+      - DB_NAME=$DB_NAME
+      - DB_USER=$DB_USER
+      - DB_PASSWORD=$DB_PASSWORD
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ALLOWED_HOSTS=$DOMAIN_TMS,localhost,tms-backend
+      - CORS_ALLOWED_ORIGINS=https://$DOMAIN_TMS
+    volumes:
+      - $DOCKER_DIR/tms/media:/app/media
+      - $DOCKER_DIR/tms/logs:/app/logs
+    networks:
+      - tms-network
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tms-celery-beat
+    restart: always
+    command: celery -A tms beat --loglevel=info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DJANGO_SETTINGS_MODULE=tms.settings.production
+      - SECRET_KEY=$SECRET_KEY
+      - DB_NAME=$DB_NAME
+      - DB_USER=$DB_USER
+      - DB_PASSWORD=$DB_PASSWORD
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ALLOWED_HOSTS=$DOMAIN_TMS,localhost,tms-backend
+      - CORS_ALLOWED_ORIGINS=https://$DOMAIN_TMS
+    volumes:
+      - $DOCKER_DIR/tms/logs:/app/logs
+    networks:
+      - tms-network
 
   frontend:
     build:

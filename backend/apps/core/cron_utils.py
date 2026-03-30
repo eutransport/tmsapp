@@ -1,123 +1,18 @@
 """
-Utility functions for managing system crontab entries for reminder jobs.
+Utility functions for managing the Celery Beat schedule for reminder jobs.
 
-Uses subprocess to manage crontab entries for the current user.
+Uses Django settings CELERY_BEAT_SCHEDULE to manage the driver expiry
+reminder task schedule dynamically.
 """
 import logging
-import os
-import re
-import shutil
-import subprocess
-import sys
-import tempfile
+
+from celery.schedules import crontab
 
 logger = logging.getLogger(__name__)
 
-# Unique comment identifier to find our cron entry
-CRON_COMMENT = 'tmsapp_driver_reminders'
-
-
-def _get_crontab_executable():
-    """Find the crontab executable, checking common locations."""
-    # First try PATH
-    path = shutil.which('crontab')
-    if path:
-        return path
-    # Fall back to common locations on Linux/macOS
-    for candidate in ('/usr/bin/crontab', '/bin/crontab', '/usr/local/bin/crontab'):
-        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-            return candidate
-    return None
-
-
-def _get_manage_py_path():
-    """Get the absolute path to manage.py."""
-    return os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        'manage.py'
-    )
-
-
-def _get_python_path():
-    """Get the path to the current Python interpreter."""
-    return sys.executable
-
-
-def _get_current_crontab():
-    """Get the current user's crontab entries."""
-    crontab_exe = _get_crontab_executable()
-    if not crontab_exe:
-        logger.error('crontab executable not found on this system')
-        return ''
-    try:
-        result = subprocess.run(
-            [crontab_exe, '-l'],
-            capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0:
-            return result.stdout
-        # Exit code 1 typically means "no crontab for user" – not an error
-        stderr = result.stderr.strip()
-        if stderr and 'no crontab for' not in stderr.lower():
-            logger.warning('crontab -l returned rc=%d: %s', result.returncode, stderr)
-        return ''
-    except subprocess.TimeoutExpired:
-        logger.error('crontab -l timed out')
-        return ''
-    except FileNotFoundError:
-        logger.error('crontab executable not found: %s', crontab_exe)
-        return ''
-
-
-def _set_crontab(content):
-    """Set the current user's crontab using a temporary file."""
-    crontab_exe = _get_crontab_executable()
-    if not crontab_exe:
-        logger.error('crontab executable not found – cannot set crontab')
-        return False
-    tmpfile = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode='w', suffix='.crontab', delete=False
-        ) as f:
-            tmpfile = f.name
-            f.write(content)
-        result = subprocess.run(
-            [crontab_exe, tmpfile],
-            capture_output=True, text=True, timeout=10
-        )
-        if result.returncode != 0:
-            logger.error(
-                'Failed to set crontab (rc=%d): %s',
-                result.returncode,
-                result.stderr.strip(),
-            )
-        return result.returncode == 0
-    except subprocess.TimeoutExpired:
-        logger.error('crontab timed out while setting crontab')
-        return False
-    except FileNotFoundError:
-        logger.error('crontab executable not found: %s', crontab_exe)
-        return False
-    except Exception as e:
-        logger.error('Unexpected error setting crontab: %s', e)
-        return False
-    finally:
-        if tmpfile and os.path.exists(tmpfile):
-            try:
-                os.unlink(tmpfile)
-            except OSError:
-                pass
-
-
-def _remove_our_entry(crontab_content):
-    """Remove our cron entry from crontab content."""
-    lines = crontab_content.split('\n')
-    filtered = [
-        line for line in lines
-        if CRON_COMMENT not in line
-    ]
-    return '\n'.join(filtered)
+# Celery Beat schedule key for the driver reminders task
+BEAT_SCHEDULE_KEY = 'send-driver-expiry-reminders'
+TASK_NAME = 'apps.drivers.tasks.send_driver_expiry_reminders'
 
 
 def build_cron_expression(settings):
@@ -162,43 +57,63 @@ def build_cron_expression(settings):
     return f'{minute} {hour} * * {dow}'
 
 
-def build_cron_line(settings):
-    """Build the full crontab line including the command."""
-    expression = build_cron_expression(settings)
-    python_path = _get_python_path()
-    manage_path = _get_manage_py_path()
+def _build_celery_crontab(settings):
+    """
+    Build a Celery crontab object from reminder settings.
 
-    # Use DJANGO_SETTINGS_MODULE from environment if available
-    settings_module = os.environ.get('DJANGO_SETTINGS_MODULE', 'tms.settings.production')
+    Args:
+        settings: AppSettings instance
 
-    command = (
-        f'{expression} '
-        f'DJANGO_SETTINGS_MODULE={settings_module} '
-        f'{python_path} {manage_path} send_driver_expiry_reminders '
-        f'# {CRON_COMMENT}'
-    )
-    return command
+    Returns:
+        celery.schedules.crontab instance
+    """
+    reminder_time = getattr(settings, 'reminder_time', None)
+    if reminder_time:
+        minute = reminder_time.minute
+        hour = reminder_time.hour
+    else:
+        minute = 0
+        hour = 8
+
+    frequency = getattr(settings, 'reminder_frequency', 'daily')
+
+    if frequency == 'daily':
+        return crontab(minute=minute, hour=hour)
+    elif frequency == 'weekdays':
+        return crontab(minute=minute, hour=hour, day_of_week='1-5')
+    elif frequency == 'weekly':
+        weekly_day = getattr(settings, 'reminder_weekly_day', 0)
+        cron_day = (weekly_day + 1) % 7
+        return crontab(minute=minute, hour=hour, day_of_week=str(cron_day))
+    elif frequency == 'custom':
+        custom_days = getattr(settings, 'reminder_custom_days', [])
+        if custom_days and isinstance(custom_days, list):
+            cron_days = [(d + 1) % 7 for d in custom_days]
+            dow = ','.join(str(d) for d in sorted(cron_days))
+            return crontab(minute=minute, hour=hour, day_of_week=dow)
+    return crontab(minute=minute, hour=hour)
 
 
 def get_cron_status():
     """
-    Check if our cron job exists and get its details.
+    Check if the driver reminder task is scheduled in Celery Beat.
 
     Returns:
-        dict with 'active' (bool), 'expression' (str or None), 'next_run' description
+        dict with 'active' (bool), 'expression' (str or None)
     """
-    crontab = _get_current_crontab()
-    for line in crontab.split('\n'):
-        if CRON_COMMENT in line and not line.strip().startswith('#'):
-            # Extract the cron expression (first 5 fields)
-            parts = line.strip().split()
-            if len(parts) >= 5:
-                expression = ' '.join(parts[:5])
-                return {
-                    'active': True,
-                    'expression': expression,
-                    'cron_line': line.strip(),
-                }
+    from django.conf import settings as django_settings
+
+    beat_schedule = getattr(django_settings, 'CELERY_BEAT_SCHEDULE', {})
+    entry = beat_schedule.get(BEAT_SCHEDULE_KEY)
+
+    if entry:
+        schedule = entry.get('schedule')
+        expression = _crontab_to_expression(schedule) if schedule else None
+        return {
+            'active': True,
+            'expression': expression,
+            'cron_line': f'celery beat: {expression}',
+        }
     return {
         'active': False,
         'expression': None,
@@ -206,12 +121,24 @@ def get_cron_status():
     }
 
 
+def _crontab_to_expression(schedule):
+    """Convert a Celery crontab to a human-readable cron expression."""
+    if not isinstance(schedule, crontab):
+        return str(schedule)
+    minute = schedule._orig_minute if hasattr(schedule, '_orig_minute') else '*'
+    hour = schedule._orig_hour if hasattr(schedule, '_orig_hour') else '*'
+    dom = schedule._orig_day_of_month if hasattr(schedule, '_orig_day_of_month') else '*'
+    month = schedule._orig_month_of_year if hasattr(schedule, '_orig_month_of_year') else '*'
+    dow = schedule._orig_day_of_week if hasattr(schedule, '_orig_day_of_week') else '*'
+    return f'{minute} {hour} {dom} {month} {dow}'
+
+
 def sync_cron_job(settings):
     """
-    Create or update the cron job based on current reminder settings.
+    Create or update the Celery Beat schedule entry for driver reminders.
 
-    If reminders are enabled, creates/updates the cron entry.
-    If reminders are disabled, removes the cron entry.
+    If reminders are enabled, adds/updates the beat schedule entry.
+    If reminders are disabled, removes the beat schedule entry.
 
     Args:
         settings: AppSettings instance
@@ -219,81 +146,78 @@ def sync_cron_job(settings):
     Returns:
         dict with 'success' (bool), 'message' (str), 'status' dict
     """
-    enabled = getattr(settings, 'reminder_enabled', False)
-    crontab = _get_current_crontab()
-    cleaned = _remove_our_entry(crontab)
+    from django.conf import settings as django_settings
+    from tms.celery import app as celery_app
 
-    if not enabled:
-        # Remove the cron job
-        success = _set_crontab(cleaned)
-        if success:
+    enabled = getattr(settings, 'reminder_enabled', False)
+
+    if not hasattr(django_settings, 'CELERY_BEAT_SCHEDULE'):
+        django_settings.CELERY_BEAT_SCHEDULE = {}
+
+    try:
+        if not enabled:
+            # Remove from beat schedule
+            if BEAT_SCHEDULE_KEY in django_settings.CELERY_BEAT_SCHEDULE:
+                del django_settings.CELERY_BEAT_SCHEDULE[BEAT_SCHEDULE_KEY]
+                celery_app.conf.beat_schedule = django_settings.CELERY_BEAT_SCHEDULE
             return {
                 'success': True,
-                'message': 'Cron job verwijderd (herinneringen zijn uitgeschakeld).',
+                'message': 'Taakplanning verwijderd (herinneringen zijn uitgeschakeld).',
                 'status': get_cron_status(),
             }
-        crontab_exe = _get_crontab_executable()
-        if crontab_exe:
-            detail = 'Controleer de server logs voor meer details.'
-        else:
-            detail = 'crontab executable niet gevonden.'
-        return {
-            'success': False,
-            'message': 'Kon de cron job niet verwijderen.',
-            'detail': detail,
-            'status': get_cron_status(),
+
+        # Build the schedule entry
+        schedule = _build_celery_crontab(settings)
+        expression = build_cron_expression(settings)
+
+        django_settings.CELERY_BEAT_SCHEDULE[BEAT_SCHEDULE_KEY] = {
+            'task': TASK_NAME,
+            'schedule': schedule,
         }
+        celery_app.conf.beat_schedule = django_settings.CELERY_BEAT_SCHEDULE
 
-    # Build new cron line
-    cron_line = build_cron_line(settings)
+        logger.info('Celery Beat schedule updated: %s → %s', BEAT_SCHEDULE_KEY, expression)
 
-    # Add to crontab
-    new_crontab = cleaned.rstrip('\n')
-    if new_crontab:
-        new_crontab += '\n'
-    new_crontab += cron_line + '\n'
-
-    success = _set_crontab(new_crontab)
-    if success:
         return {
             'success': True,
-            'message': 'Cron job succesvol aangemaakt/bijgewerkt.',
+            'message': 'Taakplanning succesvol aangemaakt/bijgewerkt.',
             'status': get_cron_status(),
         }
-    crontab_exe = _get_crontab_executable()
-    if crontab_exe:
-        detail = (
-            'Controleer de server logs voor meer details. '
-            'Zorg dat de service gebruiker crontab-rechten heeft '
-            '(niet vermeld in /etc/cron.deny, of opgenomen in /etc/cron.allow).'
-        )
-    else:
-        detail = 'crontab executable niet gevonden.'
-    return {
-        'success': False,
-        'message': 'Kon de cron job niet aanmaken. Controleer de server permissies.',
-        'detail': detail,
-        'status': get_cron_status(),
-    }
+    except Exception as e:
+        logger.error('Failed to update Celery Beat schedule: %s', e)
+        return {
+            'success': False,
+            'message': 'Kon de taakplanning niet aanmaken.',
+            'detail': str(e),
+            'status': get_cron_status(),
+        }
 
 
 def remove_cron_job():
     """
-    Remove the reminder cron job.
+    Remove the driver reminder task from the Celery Beat schedule.
 
     Returns:
         dict with 'success' (bool), 'message' (str)
     """
-    crontab = _get_current_crontab()
-    cleaned = _remove_our_entry(crontab)
-    success = _set_crontab(cleaned)
+    from django.conf import settings as django_settings
+    from tms.celery import app as celery_app
 
-    if success:
+    try:
+        if not hasattr(django_settings, 'CELERY_BEAT_SCHEDULE'):
+            django_settings.CELERY_BEAT_SCHEDULE = {}
+
+        if BEAT_SCHEDULE_KEY in django_settings.CELERY_BEAT_SCHEDULE:
+            del django_settings.CELERY_BEAT_SCHEDULE[BEAT_SCHEDULE_KEY]
+            celery_app.conf.beat_schedule = django_settings.CELERY_BEAT_SCHEDULE
+
         return {
             'success': True,
-            'message': 'Cron job succesvol verwijderd.',
+            'message': 'Taakplanning succesvol verwijderd.',
         }
-    return {
-        'success': False,
-        'message': 'Kon de cron job niet verwijderen.',
-    }
+    except Exception as e:
+        logger.error('Failed to remove Celery Beat schedule entry: %s', e)
+        return {
+            'success': False,
+            'message': 'Kon de taakplanning niet verwijderen.',
+        }

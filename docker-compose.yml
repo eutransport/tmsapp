@@ -11,6 +11,8 @@
 # - redis: Cache server  
 # - backend: Django API
 # - frontend: React app
+# - celery-worker: Celery background task worker
+# - celery-beat: Celery periodic task scheduler
 # - npm: Nginx Proxy Manager (UI op poort 81)
 # - portainer: Container beheer (UI op poort 9443)
 # ===========================================
@@ -76,6 +78,8 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
       - ALLOWED_HOSTS=${DOMAIN_NAME:-localhost},localhost,backend
       - CORS_ALLOWED_ORIGINS=https://${DOMAIN_NAME:-localhost},http://localhost
       - SECURE_SSL_REDIRECT=false
@@ -118,6 +122,73 @@ services:
       - tms_internal
     expose:
       - "80"
+
+  # =========================================
+  # Celery Worker - Background task processing
+  # =========================================
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tms_celery_worker
+    restart: always
+    command: celery -A tms worker --loglevel=info --concurrency=2
+    environment:
+      - DJANGO_SETTINGS_MODULE=tms.settings.production
+      - SECRET_KEY=${SECRET_KEY:?Secret key is verplicht}
+      - DB_NAME=${DB_NAME:-tms_db}
+      - DB_USER=${DB_USER:-tms_user}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - ALLOWED_HOSTS=${DOMAIN_NAME:-localhost},localhost,backend
+      - CORS_ALLOWED_ORIGINS=https://${DOMAIN_NAME:-localhost},http://localhost
+    volumes:
+      - media_files:/app/media
+      - logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tms_internal
+
+  # =========================================
+  # Celery Beat - Periodic task scheduler
+  # =========================================
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tms_celery_beat
+    restart: always
+    command: celery -A tms beat --loglevel=info
+    environment:
+      - DJANGO_SETTINGS_MODULE=tms.settings.production
+      - SECRET_KEY=${SECRET_KEY:?Secret key is verplicht}
+      - DB_NAME=${DB_NAME:-tms_db}
+      - DB_USER=${DB_USER:-tms_user}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - ALLOWED_HOSTS=${DOMAIN_NAME:-localhost},localhost,backend
+      - CORS_ALLOWED_ORIGINS=https://${DOMAIN_NAME:-localhost},http://localhost
+    volumes:
+      - logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tms_internal
 
   # =========================================
   # Nginx Proxy Manager

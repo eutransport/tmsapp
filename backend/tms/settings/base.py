@@ -258,3 +258,27 @@ LOGGING = {
 # Create logs directory if it doesn't exist
 LOGS_DIR = BASE_DIR / 'logs'
 LOGS_DIR.mkdir(exist_ok=True)
+
+# Celery Configuration
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default=config('REDIS_URL', default='redis://localhost:6379/0'))
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default=config('REDIS_URL', default='redis://localhost:6379/0'))
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+
+# Celery Beat Schedule
+from celery.schedules import crontab  # noqa: E402
+
+CELERY_BEAT_SCHEDULE = {
+    'process-scheduled-notifications': {
+        'task': 'apps.notifications.tasks.process_scheduled_notifications',
+        'schedule': crontab(minute='*'),  # Every minute
+    },
+    'update-next-send-times': {
+        'task': 'apps.notifications.tasks.update_next_send_times',
+        'schedule': crontab(hour=0, minute=0),  # Daily at midnight
+    },
+    # Driver expiry reminders schedule is managed dynamically via cron_utils
+}

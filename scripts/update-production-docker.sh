@@ -159,7 +159,7 @@ rollback() {
     # Stop TMS containers (keep postgres and redis running for restore)
     print_step "Stopping application containers..."
     cd "$DOCKER_DIR/tms"
-    docker compose stop backend frontend || true
+    docker compose stop backend frontend celery-worker celery-beat || true
     
     # Restore database
     if [ -f "$BACKUP_PATH/database.sql" ]; then
@@ -197,7 +197,7 @@ rollback() {
     # Rebuild and restart containers
     print_step "Rebuilding containers..."
     cd "$DOCKER_DIR/tms"
-    docker compose build --no-cache backend frontend
+    docker compose build --no-cache backend frontend celery-worker celery-beat
     docker compose up -d
     
     # Cleanup
@@ -294,11 +294,11 @@ update() {
     if git diff "$LOCAL" "$REMOTE" --name-only | grep -q "requirements"; then
         print_step "Requirements changed - full rebuild needed..."
         cd "$DOCKER_DIR/tms"
-        docker compose build --no-cache backend
+        docker compose build --no-cache backend celery-worker celery-beat
     else
         print_step "Rebuilding containers..."
         cd "$DOCKER_DIR/tms"
-        docker compose build backend frontend
+        docker compose build backend frontend celery-worker celery-beat
     fi
     
     # Restart containers
@@ -504,6 +504,12 @@ logs() {
         redis)
             docker logs tms-redis --tail "$LINES" -f
             ;;
+        celery-worker|worker|celery)
+            docker logs tms-celery-worker --tail "$LINES" -f
+            ;;
+        celery-beat|beat)
+            docker logs tms-celery-beat --tail "$LINES" -f
+            ;;
         npm|proxy|nginx)
             docker logs nginx-proxy-manager --tail "$LINES" -f
             ;;
@@ -512,7 +518,7 @@ logs() {
             ;;
         *)
             echo "Unknown container: $CONTAINER"
-            echo "Available: backend, frontend, postgres, redis, npm, portainer"
+            echo "Available: backend, frontend, postgres, redis, celery-worker, celery-beat, npm, portainer"
             exit 1
             ;;
     esac
