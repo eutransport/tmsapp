@@ -141,6 +141,10 @@ export interface Driver {
   voertuig_ritnummer: string | null
   voertuig_kenteken: string | null
   adr: boolean
+  einddatum_bestuurderspas: string | null
+  einddatum_code95: string | null
+  einddatum_adr: string | null
+  einddatum_rijbewijs: string | null
   minimum_uren_per_week: number | null
   actief: boolean
   created_at: string

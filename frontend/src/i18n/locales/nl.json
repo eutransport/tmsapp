@@ -317,7 +317,12 @@
     "minimumHoursHelp": "Standaard minimum uren per week. Wordt automatisch gebruikt in het weekoverzicht als er geen specifieke waarde is ingesteld.",
     "minimumHoursPlaceholder": "Bijv. 40",
     "activeHelp": "Inactieve chauffeurs worden niet meegeteld in urenoverzichten",
-    "selectCompaniesHelp": "Houd Ctrl/Cmd ingedrukt om meerdere bedrijven te selecteren"
+    "selectCompaniesHelp": "Houd Ctrl/Cmd ingedrukt om meerdere bedrijven te selecteren",
+    "expiryDates": "Verloopdatums",
+    "expiryDriverCard": "Einddatum Bestuurderspas",
+    "expiryCode95": "Einddatum Code 95",
+    "expiryAdr": "Einddatum ADR",
+    "expiryLicense": "Einddatum Rijbewijs"
   },
   "fleet": {
     "title": "Vloot",

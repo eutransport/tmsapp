@@ -32,6 +32,26 @@ class Driver(models.Model):
         verbose_name='Voertuig (Ritnummer)'
     )
     adr = models.BooleanField(default=False, verbose_name='ADR Gecertificeerd')
+    einddatum_bestuurderspas = models.DateField(
+        null=True, blank=True,
+        verbose_name='Einddatum Bestuurderspas',
+        help_text='Verloopdatum van de bestuurderspas.'
+    )
+    einddatum_code95 = models.DateField(
+        null=True, blank=True,
+        verbose_name='Einddatum Code 95',
+        help_text='Verloopdatum van Code 95 certificering.'
+    )
+    einddatum_adr = models.DateField(
+        null=True, blank=True,
+        verbose_name='Einddatum ADR',
+        help_text='Verloopdatum van het ADR certificaat.'
+    )
+    einddatum_rijbewijs = models.DateField(
+        null=True, blank=True,
+        verbose_name='Einddatum Rijbewijs',
+        help_text='Verloopdatum van het rijbewijs.'
+    )
     minimum_uren_per_week = models.DecimalField(
         max_digits=5, decimal_places=2,
         null=True, blank=True,
