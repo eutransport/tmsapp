@@ -19,18 +19,27 @@ interface Props {
   companies: { id: string; naam: string }[]
   onSubmit: (data: CreateReportRequest) => Promise<void>
   onClose: () => void
+  initialType?: ReportTypeInfo
 }
 
 const CURRENT_YEAR = new Date().getFullYear()
 const YEARS = Array.from({ length: 10 }, (_, i) => CURRENT_YEAR - i)
 
-export default function ReportRequestForm({ reportTypes, users, drivers, vehicles, companies, onSubmit, onClose }: Props) {
-  const [step, setStep] = useState<'type' | 'params'>('type')
-  const [selectedType, setSelectedType] = useState<ReportTypeInfo | null>(null)
+export default function ReportRequestForm({ reportTypes, users, drivers, vehicles, companies, onSubmit, onClose, initialType }: Props) {
+  const [step, setStep] = useState<'type' | 'params'>(initialType ? 'params' : 'type')
+  const [selectedType, setSelectedType] = useState<ReportTypeInfo | null>(initialType ?? null)
   const [search, setSearch] = useState('')
-  const [title, setTitle] = useState('')
+  const [title, setTitle] = useState(initialType?.label ?? '')
   const [outputFormat, setOutputFormat] = useState<ReportOutputFormat>('all')
-  const [params, setParams] = useState<Record<string, string>>({})
+  const [params, setParams] = useState<Record<string, string>>(() => {
+    const defaultParams: Record<string, string> = {}
+    if (initialType) {
+      initialType.parameters.forEach((p) => {
+        if (p.default === 'current_year') defaultParams[p.name] = String(CURRENT_YEAR)
+      })
+    }
+    return defaultParams
+  })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const filteredTypes = useMemo(
