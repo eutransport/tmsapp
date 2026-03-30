@@ -145,6 +145,10 @@ function DriverForm({
     gekoppelde_gebruiker: driver?.gekoppelde_gebruiker?.toString() || '',
     voertuig: driver?.voertuig?.toString() || '',
     adr: driver?.adr || false,
+    einddatum_bestuurderspas: driver?.einddatum_bestuurderspas || '',
+    einddatum_code95: driver?.einddatum_code95 || '',
+    einddatum_adr: driver?.einddatum_adr || '',
+    einddatum_rijbewijs: driver?.einddatum_rijbewijs || '',
     minimum_uren_per_week: driver?.minimum_uren_per_week?.toString() || '',
     actief: driver?.actief ?? true,
   })
@@ -183,6 +187,10 @@ function DriverForm({
       gekoppelde_gebruiker: formData.gekoppelde_gebruiker || null,
       voertuig: formData.voertuig || null,
       adr: formData.adr,
+      einddatum_bestuurderspas: formData.einddatum_bestuurderspas || null,
+      einddatum_code95: formData.einddatum_code95 || null,
+      einddatum_adr: formData.einddatum_adr || null,
+      einddatum_rijbewijs: formData.einddatum_rijbewijs || null,
       minimum_uren_per_week: formData.minimum_uren_per_week ? parseFloat(formData.minimum_uren_per_week) : null,
       actief: formData.actief,
     }
@@ -301,6 +309,61 @@ function DriverForm({
         <span className="ml-2 text-xs text-gray-500">
           ({t('drivers.adrDescription')})
         </span>
+      </div>
+
+      {/* Expiry dates section */}
+      <div className="border-t pt-4 mt-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-3">{t('drivers.expiryDates')}</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('drivers.expiryDriverCard')}
+            </label>
+            <input
+              type="date"
+              name="einddatum_bestuurderspas"
+              value={formData.einddatum_bestuurderspas}
+              onChange={handleChange}
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('drivers.expiryCode95')}
+            </label>
+            <input
+              type="date"
+              name="einddatum_code95"
+              value={formData.einddatum_code95}
+              onChange={handleChange}
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('drivers.expiryAdr')}
+            </label>
+            <input
+              type="date"
+              name="einddatum_adr"
+              value={formData.einddatum_adr}
+              onChange={handleChange}
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('drivers.expiryLicense')}
+            </label>
+            <input
+              type="date"
+              name="einddatum_rijbewijs"
+              value={formData.einddatum_rijbewijs}
+              onChange={handleChange}
+              className="input"
+            />
+          </div>
+        </div>
       </div>
 
       <div>

@@ -317,7 +317,12 @@
     "minimumHoursHelp": "Default minimum hours per week. Automatically used in the weekly overview when no specific value is set.",
     "minimumHoursPlaceholder": "E.g. 40",
     "activeHelp": "Inactive drivers won't be counted in hour overviews",
-    "selectCompaniesHelp": "Hold Ctrl/Cmd to select multiple companies"
+    "selectCompaniesHelp": "Hold Ctrl/Cmd to select multiple companies",
+    "expiryDates": "Expiry Dates",
+    "expiryDriverCard": "Driver Card Expiry",
+    "expiryCode95": "Code 95 Expiry",
+    "expiryAdr": "ADR Expiry",
+    "expiryLicense": "Driving License Expiry"
   },
   "fleet": {
     "title": "Fleet",
