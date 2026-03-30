@@ -15,6 +15,8 @@ import {
   XCircleIcon,
   ExclamationCircleIcon,
   SparklesIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import {
@@ -136,6 +138,8 @@ function ReportActions({ req, executingId, onView, onExecute, onRetry, onDelete,
 
 // ---- Main page ----
 
+const REPORTS_PAGE_SIZE = 10
+
 export default function ReportsPage() {
   const [requests, setRequests] = useState<ReportRequest[]>([])
   const [reportTypes, setReportTypes] = useState<ReportTypeInfo[]>([])
@@ -148,21 +152,27 @@ export default function ReportsPage() {
   const [quickStartType, setQuickStartType] = useState<ReportTypeInfo | null>(null)
   const [viewingReport, setViewingReport] = useState<ReportRequest | null>(null)
   const [executingId, setExecutingId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
 
-  const fetchData = useCallback(async () => {
+  const totalPages = Math.max(1, Math.ceil(totalCount / REPORTS_PAGE_SIZE))
+
+  const fetchData = useCallback(async (page?: number) => {
     try {
-      const [requestsData, typesData] = await Promise.all([
-        getReportRequests(),
+      const targetPage = page ?? currentPage
+      const [paginatedData, typesData] = await Promise.all([
+        getReportRequests({ page: targetPage, page_size: REPORTS_PAGE_SIZE }),
         getReportTypes(),
       ])
-      setRequests(requestsData)
+      setRequests(paginatedData.results)
+      setTotalCount(paginatedData.count)
       setReportTypes(typesData)
     } catch {
       toast.error('Fout bij laden van rapporten')
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [currentPage])
 
   // Load users, drivers, vehicles and companies for parameter inputs
   useEffect(() => {
@@ -206,8 +216,9 @@ export default function ReportsPage() {
       const created = await createReportRequest(data)
       toast.success('Rapport verzoek aangemaakt')
       setIsFormOpen(false)
-      setRequests((prev) => [created, ...prev])
-      // Auto-execute
+      // Reset to page 1 so the new report is visible, then auto-execute
+      setCurrentPage(1)
+      await fetchData(1)
       handleExecute(created.id)
     } catch {
       toast.error('Fout bij aanmaken rapport verzoek')
@@ -234,6 +245,8 @@ export default function ReportsPage() {
       } else if (updated.status === 'failed') {
         toast.error(`Rapport mislukt: ${updated.error_message}`)
       }
+      // Refresh list so the queue reflects the latest state
+      await fetchData()
     } catch {
       toast.error('Fout bij uitvoeren rapport')
       await fetchData()
@@ -256,8 +269,15 @@ export default function ReportsPage() {
     if (!window.confirm('Weet u zeker dat u dit rapport wilt verwijderen?')) return
     try {
       await deleteReportRequest(id)
-      setRequests((prev) => prev.filter((r) => r.id !== id))
       toast.success('Rapport verwijderd')
+      // If deleting the last item on this page, go back one page
+      if (requests.length === 1 && currentPage > 1) {
+        const newPage = currentPage - 1
+        setCurrentPage(newPage)
+        await fetchData(newPage)
+      } else {
+        await fetchData()
+      }
     } catch {
       toast.error('Fout bij verwijderen rapport')
     }
@@ -335,10 +355,10 @@ export default function ReportsPage() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-            Rapport wachtrij ({requests.length})
+            Rapport wachtrij ({totalCount})
           </h2>
           <button
-            onClick={fetchData}
+            onClick={() => fetchData()}
             className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
           >
             <ArrowPathIcon className="w-4 h-4" />
@@ -450,6 +470,31 @@ export default function ReportsPage() {
                 </div>
               ))}
             </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between bg-white rounded-lg border border-gray-200 px-4 py-3 mt-3">
+                <span className="text-sm text-gray-500">
+                  Pagina {currentPage} van {totalPages}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => { setCurrentPage((p) => Math.max(1, p - 1)) }}
+                    disabled={currentPage <= 1}
+                    className="p-1.5 rounded text-gray-600 hover:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeftIcon className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => { setCurrentPage((p) => Math.min(totalPages, p + 1)) }}
+                    disabled={currentPage >= totalPages}
+                    className="p-1.5 rounded text-gray-600 hover:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRightIcon className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

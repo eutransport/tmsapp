@@ -67,6 +67,15 @@ export interface CreateReportRequest {
   output_format: ReportOutputFormat
 }
 
+// ---- Paginated response ----
+
+export interface PaginatedReportRequests {
+  count: number
+  next: string | null
+  previous: string | null
+  results: ReportRequest[]
+}
+
 // ---- API functions ----
 
 /** Get all available report types with their parameter schemas */
@@ -75,10 +84,16 @@ export async function getReportTypes(): Promise<ReportTypeInfo[]> {
   return response.data
 }
 
-/** List all report requests (paginated) */
-export async function getReportRequests(): Promise<ReportRequest[]> {
-  const response = await api.get('/reports/requests/')
-  return response.data.results ?? response.data
+/** List report requests (paginated) */
+export async function getReportRequests(
+  params?: { page?: number; page_size?: number },
+): Promise<PaginatedReportRequests> {
+  const response = await api.get('/reports/requests/', { params })
+  // Handle both paginated and non-paginated responses
+  if (response.data.results !== undefined) {
+    return response.data
+  }
+  return { count: response.data.length, next: null, previous: null, results: response.data }
 }
 
 /** Get a single report request */
@@ -95,7 +110,9 @@ export async function createReportRequest(data: CreateReportRequest): Promise<Re
 
 /** Execute (process) a report request */
 export async function executeReportRequest(id: string): Promise<ReportRequest> {
-  const response = await api.post(`/reports/requests/${id}/execute/`)
+  const response = await api.post(`/reports/requests/${id}/execute/`, null, {
+    timeout: 120000, // 2 minutes – report generation can be slow
+  })
   return response.data
 }
 
