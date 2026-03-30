@@ -5,7 +5,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from rest_framework import status, viewsets
+from rest_framework import status, viewsets, generics
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -36,7 +36,7 @@ def safe_str(value):
         s = s.replace(char, replacement)
     return s.encode('ascii', 'replace').decode('ascii')
 
-from .models import AppSettings, CustomFont
+from .models import AppSettings, CustomFont, ReminderJobLog
 from .permissions import IsAdminOrManager, IsAdminOnly, IsAdminOrManagerStrict
 from .serializers import (
     AppSettingsSerializer, 
@@ -44,7 +44,10 @@ from .serializers import (
     EmailTestSerializer,
     CustomFontSerializer,
     FontFamilySerializer,
+    ReminderJobLogSerializer,
 )
+from .pagination import SafePageNumberPagination
+from .cron_utils import get_cron_status, sync_cron_job, remove_cron_job
 
 
 class HealthCheckView(APIView):
@@ -127,7 +130,17 @@ class AdminSettingsViewSet(ViewSet):
             context={'request': request}
         )
         if serializer.is_valid():
-            serializer.save()
+            instance = serializer.save()
+            # Auto-sync cron job when reminder settings change
+            reminder_fields = {
+                'reminder_enabled', 'reminder_time', 'reminder_frequency',
+                'reminder_weekly_day', 'reminder_custom_days',
+            }
+            if reminder_fields & set(request.data.keys()):
+                try:
+                    sync_cron_job(instance)
+                except Exception:
+                    pass  # Don't fail the settings update if cron sync fails
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -947,3 +960,45 @@ class ServerContainerLogsView(APIView):
             'lines': logs,
             'count': len(logs),
         })
+
+
+class ReminderCronView(APIView):
+    """
+    Manage the reminder cron job.
+    GET: Get current cron job status
+    POST: Sync/create cron job based on settings
+    DELETE: Remove the cron job
+    """
+    permission_classes = [IsAdminOnly]
+
+    def get(self, request):
+        """Get the current cron job status."""
+        cron_status = get_cron_status()
+        return Response(cron_status)
+
+    def post(self, request):
+        """Sync/create the cron job based on current settings."""
+        settings = AppSettings.get_settings()
+        result = sync_cron_job(settings)
+        if result['success']:
+            return Response(result)
+        return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request):
+        """Remove the cron job."""
+        result = remove_cron_job()
+        if result['success']:
+            return Response(result)
+        return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ReminderJobLogListView(generics.ListAPIView):
+    """
+    List reminder job log entries with pagination.
+    """
+    permission_classes = [IsAdminOnly]
+    serializer_class = ReminderJobLogSerializer
+    pagination_class = SafePageNumberPagination
+
+    def get_queryset(self):
+        return ReminderJobLog.objects.all().order_by('-started_at')

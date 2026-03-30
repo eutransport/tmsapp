@@ -590,6 +590,37 @@ class AppSettings(models.Model):
         return uuid.UUID('00000000-0000-0000-0000-000000000001')
 
 
+class ReminderJobLog(models.Model):
+    """
+    Log of reminder cron job executions.
+    Tracks when the job ran, status, and results.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    started_at = models.DateTimeField(auto_now_add=True, verbose_name='Gestart op')
+    finished_at = models.DateTimeField(null=True, blank=True, verbose_name='Beëindigd op')
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('success', 'Succesvol'),
+            ('error', 'Fout'),
+            ('warning', 'Waarschuwing'),
+            ('skipped', 'Overgeslagen'),
+        ],
+        default='success',
+        verbose_name='Status'
+    )
+    reminders_sent = models.IntegerField(default=0, verbose_name='Herinneringen verstuurd')
+    message = models.TextField(blank=True, default='', verbose_name='Bericht')
+
+    class Meta:
+        verbose_name = 'Herinnering Job Log'
+        verbose_name_plural = 'Herinnering Job Logs'
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return f'{self.started_at} - {self.status} ({self.reminders_sent} verstuurd)'
+
+
 class ActivityType(models.TextChoices):
     """Types of activities that can be logged."""
     CREATED = 'created', 'Aangemaakt'

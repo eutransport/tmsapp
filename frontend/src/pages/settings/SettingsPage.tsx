@@ -6,7 +6,7 @@
  * - Company info (for invoices)
  * - Email settings (SMTP/OAuth)
  */
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Cog6ToothIcon,
@@ -32,7 +32,7 @@ import { settingsApi } from '@/api/settings'
 import { useAppStore } from '@/stores/appStore'
 import { useServerConfigStore } from '@/stores/serverConfigStore'
 import ThemeSelector from '@/components/settings/ThemeSelector'
-import type { AppSettingsAdmin } from '@/types'
+import type { AppSettingsAdmin, ReminderCronStatus, ReminderJobLog } from '@/types'
 import { CalendarDaysIcon, ShieldCheckIcon, BellAlertIcon } from '@heroicons/react/24/outline'
 import LicenseStatusCard from '@/components/licensing/LicenseStatusCard'
 import FontManagementPage from '@/pages/settings/FontManagementPage'
@@ -82,6 +82,15 @@ export default function SettingsPage() {
   // Email test
   const [testEmail, setTestEmail] = useState('')
   const [testingEmail, setTestingEmail] = useState(false)
+
+  // Reminder cron job state
+  const [cronStatus, setCronStatus] = useState<ReminderCronStatus | null>(null)
+  const [cronLoading, setCronLoading] = useState(false)
+  const [cronMessage, setCronMessage] = useState<string | null>(null)
+  const [jobLogs, setJobLogs] = useState<ReminderJobLog[]>([])
+  const [jobLogsPage, setJobLogsPage] = useState(1)
+  const [jobLogsTotalCount, setJobLogsTotalCount] = useState(0)
+  const jobLogsPageSize = 10
 
   // Load settings on mount
   useEffect(() => {
@@ -133,6 +142,67 @@ export default function SettingsPage() {
   const handleInputChange = (field: keyof AppSettingsAdmin, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     setHasChanges(true)
+  }
+
+  // Reminder cron functions
+  const loadCronStatus = useCallback(async () => {
+    try {
+      const status = await settingsApi.getReminderCronStatus()
+      setCronStatus(status)
+    } catch {
+      // Silently fail - cron status is optional info
+    }
+  }, [])
+
+  const loadJobLogs = useCallback(async (page: number = 1) => {
+    try {
+      const response = await settingsApi.getReminderLogs(page, jobLogsPageSize)
+      setJobLogs(response.results)
+      setJobLogsTotalCount(response.count)
+      setJobLogsPage(page)
+    } catch {
+      // Silently fail
+    }
+  }, [jobLogsPageSize])
+
+  // Load cron data when reminders tab is active
+  useEffect(() => {
+    if (activeTab === 'reminders') {
+      loadCronStatus()
+      loadJobLogs(1)
+    }
+  }, [activeTab, loadCronStatus, loadJobLogs])
+
+  const handleSyncCron = async () => {
+    try {
+      setCronLoading(true)
+      setCronMessage(null)
+      const result = await settingsApi.syncReminderCron()
+      setCronStatus(result.status)
+      setCronMessage(result.message)
+      setTimeout(() => setCronMessage(null), 5000)
+    } catch (err: any) {
+      setCronMessage(err.response?.data?.message || t('settings.cronSyncError'))
+      setTimeout(() => setCronMessage(null), 5000)
+    } finally {
+      setCronLoading(false)
+    }
+  }
+
+  const handleRemoveCron = async () => {
+    try {
+      setCronLoading(true)
+      setCronMessage(null)
+      const result = await settingsApi.removeReminderCron()
+      setCronStatus({ active: false, expression: null, cron_line: null })
+      setCronMessage(result.message)
+      setTimeout(() => setCronMessage(null), 5000)
+    } catch (err: any) {
+      setCronMessage(err.response?.data?.message || t('settings.cronRemoveError'))
+      setTimeout(() => setCronMessage(null), 5000)
+    } finally {
+      setCronLoading(false)
+    }
   }
 
   const handleSave = async () => {
@@ -1332,6 +1402,177 @@ export default function SettingsPage() {
                   <li>{t('settings.reminderFieldAdr', 'ADR certificaat (einddatum)')}</li>
                   <li>{t('settings.reminderFieldLicense', 'Rijbewijs (einddatum)')}</li>
                 </ul>
+              </div>
+
+              {/* Cron Job Management */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                <h3 className="text-md font-semibold text-gray-900 dark:text-white mb-3">
+                  {t('settings.cronJobManagement', 'Cron Job Beheer')}
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  {t('settings.cronJobDescription', 'Beheer de automatische taakplanning voor het versturen van herinneringen.')}
+                </p>
+
+                {/* Status */}
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('settings.cronStatus', 'Status')}:
+                  </span>
+                  {cronStatus?.active ? (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      {t('settings.cronActive', 'Actief')}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      {t('settings.cronInactive', 'Inactief')}
+                    </span>
+                  )}
+                  {cronStatus?.expression && (
+                    <span className="text-xs text-gray-500 font-mono">
+                      ({cronStatus.expression})
+                    </span>
+                  )}
+                </div>
+
+                {/* Buttons */}
+                <div className="flex gap-3 mb-4">
+                  <button
+                    type="button"
+                    onClick={handleSyncCron}
+                    disabled={cronLoading}
+                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {cronLoading ? (
+                      <ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <ArrowPathIcon className="h-4 w-4 mr-2" />
+                    )}
+                    {t('settings.cronSync', 'Cron Job Aanmaken / Bijwerken')}
+                  </button>
+                  {cronStatus?.active && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveCron}
+                      disabled={cronLoading}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <TrashIcon className="h-4 w-4 mr-2" />
+                      {t('settings.cronRemove', 'Cron Job Verwijderen')}
+                    </button>
+                  )}
+                </div>
+
+                {/* Message */}
+                {cronMessage && (
+                  <div className="mb-4 p-3 rounded-md bg-blue-50 border border-blue-200 text-sm text-blue-800">
+                    {cronMessage}
+                  </div>
+                )}
+              </div>
+
+              {/* Job Log History */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-md font-semibold text-gray-900 dark:text-white">
+                    {t('settings.jobLogHistory', 'Uitvoeringsgeschiedenis')}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => loadJobLogs(jobLogsPage)}
+                    className="text-sm text-primary-600 hover:text-primary-700"
+                  >
+                    <ArrowPathIcon className="h-4 w-4 inline mr-1" />
+                    {t('common.refresh', 'Verversen')}
+                  </button>
+                </div>
+
+                {jobLogs.length === 0 ? (
+                  <p className="text-sm text-gray-500 italic">
+                    {t('settings.noJobLogs', 'Nog geen uitvoeringen geregistreerd.')}
+                  </p>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-800">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('settings.jobLogDate', 'Datum')}</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('settings.jobLogStatus', 'Status')}</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('settings.jobLogSent', 'Verstuurd')}</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('settings.jobLogDuration', 'Duur')}</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('settings.jobLogMessage', 'Bericht')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                          {jobLogs.map((log) => {
+                            const startDate = new Date(log.started_at)
+                            const endDate = log.finished_at ? new Date(log.finished_at) : null
+                            const durationMs = endDate ? endDate.getTime() - startDate.getTime() : null
+                            const durationStr = durationMs !== null
+                              ? durationMs < 1000 ? '<1s' : `${Math.round(durationMs / 1000)}s`
+                              : '-'
+
+                            const statusColors: Record<string, string> = {
+                              success: 'bg-green-100 text-green-800',
+                              error: 'bg-red-100 text-red-800',
+                              warning: 'bg-yellow-100 text-yellow-800',
+                              skipped: 'bg-gray-100 text-gray-800',
+                            }
+
+                            return (
+                              <tr key={log.id}>
+                                <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                                  {startDate.toLocaleDateString('nl-NL')} {startDate.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[log.status] || 'bg-gray-100 text-gray-800'}`}>
+                                    {log.status_display}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
+                                  {log.reminders_sent}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-500 whitespace-nowrap">
+                                  {durationStr}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-500 max-w-xs truncate" title={log.message}>
+                                  {log.message}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Simple Pagination */}
+                    {jobLogsTotalCount > jobLogsPageSize && (
+                      <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-200">
+                        <span className="text-sm text-gray-500">
+                          {t('settings.jobLogShowing', 'Toont')} {((jobLogsPage - 1) * jobLogsPageSize) + 1}-{Math.min(jobLogsPage * jobLogsPageSize, jobLogsTotalCount)} {t('common.of', 'van')} {jobLogsTotalCount}
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => loadJobLogs(jobLogsPage - 1)}
+                            disabled={jobLogsPage <= 1}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {t('common.previous', 'Vorige')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => loadJobLogs(jobLogsPage + 1)}
+                            disabled={jobLogsPage * jobLogsPageSize >= jobLogsTotalCount}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {t('common.next', 'Volgende')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           )}

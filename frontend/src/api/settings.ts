@@ -1,5 +1,5 @@
 import api from './client'
-import type { AppSettings, AppSettingsAdmin } from '@/types'
+import type { AppSettings, AppSettingsAdmin, ReminderCronStatus, ReminderJobLogResponse } from '@/types'
 
 export interface OnlineUser {
   id: string
@@ -283,6 +283,28 @@ export const settingsApi = {
 
   getContainerLogs: async (containerId: string, tail: number = 100): Promise<ContainerLogsResponse> => {
     const response = await api.get(`/core/server/containers/${containerId}/logs/?tail=${tail}`)
+    return response.data
+  },
+
+  // Reminder cron job management
+  getReminderCronStatus: async (): Promise<ReminderCronStatus> => {
+    const response = await api.get('/core/admin/reminder-cron/')
+    return response.data
+  },
+
+  syncReminderCron: async (): Promise<{ success: boolean; message: string; status: ReminderCronStatus }> => {
+    const response = await api.post('/core/admin/reminder-cron/')
+    return response.data
+  },
+
+  removeReminderCron: async (): Promise<{ success: boolean; message: string }> => {
+    const response = await api.delete('/core/admin/reminder-cron/')
+    return response.data
+  },
+
+  // Reminder job logs (paginated)
+  getReminderLogs: async (page: number = 1, pageSize: number = 10): Promise<ReminderJobLogResponse> => {
+    const response = await api.get(`/core/admin/reminder-logs/?page=${page}&page_size=${pageSize}`)
     return response.data
   },
 }

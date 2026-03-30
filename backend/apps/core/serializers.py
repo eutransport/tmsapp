@@ -2,7 +2,7 @@
 Core app serializers.
 """
 from rest_framework import serializers
-from .models import AppSettings, CustomFont
+from .models import AppSettings, CustomFont, ReminderJobLog
 
 
 def safe_str(value):
@@ -193,3 +193,16 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
 class EmailTestSerializer(serializers.Serializer):
     """Serializer for testing email configuration."""
     to_email = serializers.EmailField()
+
+
+class ReminderJobLogSerializer(serializers.ModelSerializer):
+    """Serializer for reminder job log entries."""
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = ReminderJobLog
+        fields = [
+            'id', 'started_at', 'finished_at', 'status', 'status_display',
+            'reminders_sent', 'message',
+        ]
+        read_only_fields = fields

@@ -107,6 +107,30 @@ export interface AppSettingsAdmin extends AppSettings {
   reminder_signature: string
 }
 
+// Reminder cron job types
+export interface ReminderCronStatus {
+  active: boolean
+  expression: string | null
+  cron_line: string | null
+}
+
+export interface ReminderJobLog {
+  id: string
+  started_at: string
+  finished_at: string | null
+  status: 'success' | 'error' | 'warning' | 'skipped'
+  status_display: string
+  reminders_sent: number
+  message: string
+}
+
+export interface ReminderJobLogResponse {
+  count: number
+  next: string | null
+  previous: string | null
+  results: ReminderJobLog[]
+}
+
 // Company types
 export interface Company {
   id: string
