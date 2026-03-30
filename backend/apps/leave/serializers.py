@@ -66,11 +66,11 @@ class LeaveBalanceSerializer(serializers.ModelSerializer):
 
 
 class LeaveBalanceAdminUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for admin to update vacation hours only."""
+    """Serializer for admin to update vacation and overtime hours."""
     
     class Meta:
         model = LeaveBalance
-        fields = ['vacation_hours']
+        fields = ['vacation_hours', 'overtime_hours']
 
 
 class LeaveRequestSerializer(serializers.ModelSerializer):

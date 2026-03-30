@@ -87,7 +87,13 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
     setIsSaving(true)
     setError(null)
     try {
-      const updated = await updateGlobalSettings(globalSettings.id, globalForm)
+      const payload = {
+        default_leave_hours: String(globalForm.default_vacation_hours),
+        standard_work_week_hours: String(globalForm.work_week_hours),
+        overtime_leave_percentage: globalForm.overtime_leave_percentage,
+        free_special_leave_hours_per_month: String(globalForm.free_special_leave_hours),
+      }
+      const updated = await updateGlobalSettings(globalSettings.id, payload)
       setGlobalSettings(updated)
       setEditingGlobal(false)
       showSuccess(t('settings.saved'))
@@ -329,7 +335,7 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
             <tbody className="divide-y divide-gray-200">
               {balances.map((balance) => {
                 const isEditing = editingBalance === balance.id
-                const usableOvertime = balance.overtime_hours * (globalSettings?.overtime_leave_percentage || 50) / 100
+                const usableOvertime = (Number(balance.overtime_hours) || 0) * (globalSettings?.overtime_leave_percentage || 50) / 100
                 
                 return (
                   <tr key={balance.id} className="hover:bg-gray-50">
@@ -360,11 +366,11 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
                           value={balanceForm.overtime_hours}
                           onChange={(e) => setBalanceForm({ ...balanceForm, overtime_hours: Number(e.target.value) })}
                           className="input w-24 text-right"
-                          step="0.5"
+                          step="0.01"
                         />
                       ) : (
-                        <span className={`text-sm ${balance.overtime_hours >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {balance.overtime_hours >= 0 ? '+' : ''}{balance.overtime_hours} uur
+                        <span className={`text-sm ${(Number(balance.overtime_hours) || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {(Number(balance.overtime_hours) || 0) >= 0 ? '+' : ''}{Number(balance.overtime_hours) || 0} uur
                         </span>
                       )}
                     </td>
@@ -423,7 +429,7 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
           ) : (
             balances.map((balance) => {
               const isEditing = editingBalance === balance.id
-              const usableOvertime = balance.overtime_hours * (globalSettings?.overtime_leave_percentage || 50) / 100
+              const usableOvertime = (Number(balance.overtime_hours) || 0) * (globalSettings?.overtime_leave_percentage || 50) / 100
 
               return (
                 <div key={balance.id} className="p-3">
@@ -478,7 +484,7 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
                           value={balanceForm.overtime_hours}
                           onChange={(e) => setBalanceForm({ ...balanceForm, overtime_hours: Number(e.target.value) })}
                           className="input text-sm w-full"
-                          step="0.5"
+                          step="0.01"
                         />
                       </div>
                     </div>
@@ -490,8 +496,8 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
                       </div>
                       <div>
                         <span className="text-gray-500 block">Overwerk</span>
-                        <span className={`font-medium ${balance.overtime_hours >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {balance.overtime_hours >= 0 ? '+' : ''}{balance.overtime_hours} uur
+                        <span className={`font-medium ${(Number(balance.overtime_hours) || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {(Number(balance.overtime_hours) || 0) >= 0 ? '+' : ''}{Number(balance.overtime_hours) || 0} uur
                         </span>
                       </div>
                       <div>

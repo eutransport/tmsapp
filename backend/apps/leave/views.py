@@ -189,7 +189,7 @@ class LeaveBalanceViewSet(viewsets.ModelViewSet):
             'overtime_hours': str(balance.overtime_hours),
         }
         
-        response = super().update(request, *args, **kwargs)
+        super().update(request, *args, **kwargs)
         
         # Audit log the balance update
         balance.refresh_from_db()
@@ -209,7 +209,8 @@ class LeaveBalanceViewSet(viewsets.ModelViewSet):
             ip_address=get_client_ip(request)
         )
         
-        return response
+        # Return full balance using LeaveBalanceSerializer
+        return Response(LeaveBalanceSerializer(balance).data)
     
     def partial_update(self, request, *args, **kwargs):
         """Only admins can update balances."""
@@ -226,7 +227,7 @@ class LeaveBalanceViewSet(viewsets.ModelViewSet):
             'overtime_hours': str(balance.overtime_hours),
         }
         
-        response = super().partial_update(request, *args, **kwargs)
+        super().partial_update(request, *args, **kwargs)
         
         # Audit log the balance update
         balance.refresh_from_db()
@@ -246,7 +247,8 @@ class LeaveBalanceViewSet(viewsets.ModelViewSet):
             ip_address=get_client_ip(request)
         )
         
-        return response
+        # Return full balance using LeaveBalanceSerializer
+        return Response(LeaveBalanceSerializer(balance).data)
 
 
 class LeaveRequestViewSet(viewsets.ModelViewSet):
