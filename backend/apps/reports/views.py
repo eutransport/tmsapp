@@ -75,8 +75,8 @@ REPORT_TYPE_METADATA = [
         'label': 'Alle ritten van een voertuig',
         'description': 'Alle ritten van een voertuig op basis van ritnummer of kenteken.',
         'parameters': [
-            {'name': 'ritnummer', 'label': 'Ritnummer', 'type': 'text', 'required': False},
-            {'name': 'kenteken', 'label': 'Kenteken', 'type': 'text', 'required': False},
+            {'name': 'kenteken', 'label': 'Kenteken', 'type': 'vehicle', 'required': False},
+            {'name': 'ritnummer', 'label': 'Ritnummer (handmatig)', 'type': 'text', 'required': False},
             {'name': 'year', 'label': 'Jaar', 'type': 'year', 'required': False},
             {'name': 'date_from', 'label': 'Datum van', 'type': 'date', 'required': False},
             {'name': 'date_to', 'label': 'Datum t/m', 'type': 'date', 'required': False},

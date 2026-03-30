@@ -31,7 +31,9 @@ import {
 } from '@/api/reports'
 import { getUsers } from '@/api/users'
 import { getCompanies } from '@/api/companies'
-import { User } from '@/types'
+import { getAllDrivers } from '@/api/drivers'
+import { getAllVehicles } from '@/api/fleet'
+import { User, Driver, Vehicle } from '@/types'
 import ReportRequestForm from './ReportRequestForm'
 import ReportResultModal from './ReportResultModal'
 
@@ -138,6 +140,8 @@ export default function ReportsPage() {
   const [requests, setRequests] = useState<ReportRequest[]>([])
   const [reportTypes, setReportTypes] = useState<ReportTypeInfo[]>([])
   const [users, setUsers] = useState<User[]>([])
+  const [drivers, setDrivers] = useState<Driver[]>([])
+  const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [companies, setCompanies] = useState<{ id: string; naam: string }[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -159,10 +163,16 @@ export default function ReportsPage() {
     }
   }, [])
 
-  // Load users and companies for parameter inputs
+  // Load users, drivers, vehicles and companies for parameter inputs
   useEffect(() => {
     getUsers({ page_size: 200 })
       .then((r) => setUsers(r.results))
+      .catch(() => {})
+    getAllDrivers()
+      .then((list) => setDrivers(list))
+      .catch(() => {})
+    getAllVehicles()
+      .then((list) => setVehicles(list))
       .catch(() => {})
     getCompanies({ page_size: 200 } as Parameters<typeof getCompanies>[0])
       .then((data) => {
@@ -431,6 +441,8 @@ export default function ReportsPage() {
         <ReportRequestForm
           reportTypes={reportTypes}
           users={users}
+          drivers={drivers}
+          vehicles={vehicles}
           companies={companies}
           onSubmit={handleCreate}
           onClose={() => setIsFormOpen(false)}

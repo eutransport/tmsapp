@@ -17,7 +17,7 @@ export interface ReportParameterOption {
 export interface ReportParameter {
   name: string
   label: string
-  type: 'text' | 'user' | 'company' | 'year' | 'date' | 'select'
+  type: 'text' | 'user' | 'driver' | 'vehicle' | 'company' | 'year' | 'date' | 'select'
   required: boolean
   default?: string
   options?: ReportParameterOption[]

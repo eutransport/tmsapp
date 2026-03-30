@@ -8,12 +8,14 @@ import {
   DocumentChartBarIcon,
   ChevronRightIcon,
 } from '@heroicons/react/24/outline'
-import { User } from '@/types'
+import { User, Driver, Vehicle } from '@/types'
 import { ReportTypeInfo, CreateReportRequest, ReportOutputFormat } from '@/api/reports'
 
 interface Props {
   reportTypes: ReportTypeInfo[]
   users: User[]
+  drivers: Driver[]
+  vehicles: Vehicle[]
   companies: { id: string; naam: string }[]
   onSubmit: (data: CreateReportRequest) => Promise<void>
   onClose: () => void
@@ -22,7 +24,7 @@ interface Props {
 const CURRENT_YEAR = new Date().getFullYear()
 const YEARS = Array.from({ length: 10 }, (_, i) => CURRENT_YEAR - i)
 
-export default function ReportRequestForm({ reportTypes, users, companies, onSubmit, onClose }: Props) {
+export default function ReportRequestForm({ reportTypes, users, drivers, vehicles, companies, onSubmit, onClose }: Props) {
   const [step, setStep] = useState<'type' | 'params'>('type')
   const [selectedType, setSelectedType] = useState<ReportTypeInfo | null>(null)
   const [search, setSearch] = useState('')
@@ -180,6 +182,38 @@ export default function ReportRequestForm({ reportTypes, users, companies, onSub
                         {param.label}
                         {param.required && <span className="text-red-500 ml-1">*</span>}
                       </label>
+
+                      {param.type === 'driver' && (
+                        <select
+                          value={params[param.name] ?? ''}
+                          onChange={(e) => handleParamChange(param.name, e.target.value)}
+                          required={param.required}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">Alle chauffeurs</option>
+                          {drivers.filter(d => d.actief).map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.naam}{d.voertuig_kenteken ? ` (${d.voertuig_kenteken})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
+                      {param.type === 'vehicle' && (
+                        <select
+                          value={params[param.name] ?? ''}
+                          onChange={(e) => handleParamChange(param.name, e.target.value)}
+                          required={param.required}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">Alle voertuigen</option>
+                          {vehicles.filter(v => v.actief).map((v) => (
+                            <option key={v.id} value={v.kenteken}>
+                              {v.kenteken}{v.ritnummer ? ` – Rit ${v.ritnummer}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      )}
 
                       {param.type === 'user' && (
                         <select

@@ -382,6 +382,7 @@ def _execute_driver_activity(params):
 def _execute_invoice_overview(params):
     """Facturen overzicht."""
     from apps.invoicing.models import Invoice
+    from django.db.models import Sum
 
     year = params.get('year')
     status_filter = params.get('status')
@@ -389,23 +390,39 @@ def _execute_invoice_overview(params):
 
     qs = Invoice.objects.select_related('bedrijf', 'template').all()
     if year:
-        qs = qs.filter(created_at__year=int(year))
+        qs = qs.filter(factuurdatum__year=int(year))
     if status_filter:
         qs = qs.filter(status=status_filter)
     if bedrijf_id:
         qs = qs.filter(bedrijf_id=bedrijf_id)
 
-    columns = ['Factuurnummer', 'Bedrijf', 'Type', 'Status', 'Datum', 'Totaal']
+    columns = ['Factuurnummer', 'Bedrijf', 'Type', 'Status', 'Factuurdatum', 'Subtotaal', 'BTW', 'Totaal']
     rows = []
-    for inv in qs.order_by('-created_at'):
+    for inv in qs.order_by('-factuurdatum'):
         rows.append([
             inv.factuurnummer or '',
             inv.bedrijf.naam if inv.bedrijf else '',
             inv.get_type_display() if hasattr(inv, 'get_type_display') else str(inv.type),
             inv.get_status_display() if hasattr(inv, 'get_status_display') else str(inv.status),
-            str(inv.created_at.date()),
-            '',
+            str(inv.factuurdatum),
+            f'€ {inv.subtotaal:.2f}',
+            f'€ {inv.btw_bedrag:.2f}',
+            f'€ {inv.totaal:.2f}',
         ])
+
+    # Append totals row
+    totals = qs.aggregate(
+        subtotaal_sum=Sum('subtotaal'),
+        btw_sum=Sum('btw_bedrag'),
+        totaal_sum=Sum('totaal'),
+    )
+    rows.append([
+        'TOTAAL', '', '', '', '',
+        f'€ {totals["subtotaal_sum"] or 0:.2f}',
+        f'€ {totals["btw_sum"] or 0:.2f}',
+        f'€ {totals["totaal_sum"] or 0:.2f}',
+    ])
+
     return columns, rows, 'Facturen overzicht'
 
 
@@ -415,26 +432,48 @@ def _execute_invoice_by_company(params):
 
 
 def _execute_revenue_summary(params):
-    """Omzet samenvatting."""
+    """Omzet samenvatting per bedrijf."""
     from apps.invoicing.models import Invoice
+    from django.db.models import Count, Sum
 
     year = int(params.get('year', date.today().year))
-    qs = Invoice.objects.select_related('bedrijf').filter(created_at__year=year)
+    qs = Invoice.objects.select_related('bedrijf').filter(factuurdatum__year=year)
 
-    columns = ['Bedrijf', 'Aantal facturen', 'Status']
+    columns = ['Bedrijf', 'Status', 'Aantal facturen', 'Subtotaal', 'BTW', 'Totaal']
     rows = []
-    from django.db.models import Count
     summary = (
         qs.values('bedrijf__naam', 'status')
-        .annotate(count=Count('id'))
-        .order_by('bedrijf__naam')
+        .annotate(
+            count=Count('id'),
+            subtotaal_sum=Sum('subtotaal'),
+            btw_sum=Sum('btw_bedrag'),
+            totaal_sum=Sum('totaal'),
+        )
+        .order_by('bedrijf__naam', 'status')
     )
     for s in summary:
         rows.append([
             s['bedrijf__naam'] or 'Onbekend',
-            s['count'],
             s['status'],
+            s['count'],
+            f'€ {s["subtotaal_sum"] or 0:.2f}',
+            f'€ {s["btw_sum"] or 0:.2f}',
+            f'€ {s["totaal_sum"] or 0:.2f}',
         ])
+
+    # Grand total row
+    totals = qs.aggregate(
+        subtotaal_sum=Sum('subtotaal'),
+        btw_sum=Sum('btw_bedrag'),
+        totaal_sum=Sum('totaal'),
+    )
+    rows.append([
+        'TOTAAL', '', '',
+        f'€ {totals["subtotaal_sum"] or 0:.2f}',
+        f'€ {totals["btw_sum"] or 0:.2f}',
+        f'€ {totals["totaal_sum"] or 0:.2f}',
+    ])
+
     return columns, rows, f'Omzet samenvatting {year}'
 
 
@@ -501,10 +540,22 @@ def _execute_apk_overview(params):
 def _execute_planning_overview(params):
     """Planning overzicht."""
     from apps.planning.models import PlanningEntry
+    from django.db.models import Case, IntegerField, Value, When
 
     user_id = params.get('user_id')
     year = params.get('year')
     week = params.get('week')
+
+    # Logical day order: ma=1, di=2, wo=3, do=4, vr=5
+    DAY_ORDER = Case(
+        When(dag='ma', then=Value(1)),
+        When(dag='di', then=Value(2)),
+        When(dag='wo', then=Value(3)),
+        When(dag='do', then=Value(4)),
+        When(dag='vr', then=Value(5)),
+        default=Value(9),
+        output_field=IntegerField(),
+    )
 
     qs = PlanningEntry.objects.select_related(
         'planning', 'planning__bedrijf', 'vehicle', 'chauffeur',
@@ -519,7 +570,9 @@ def _execute_planning_overview(params):
 
     columns = ['Jaar', 'Week', 'Dag', 'Bedrijf', 'Voertuig', 'Ritnummer', 'Chauffeur', 'ADR']
     rows = []
-    for entry in qs.order_by('planning__jaar', 'planning__weeknummer', 'vehicle__ritnummer', 'dag'):
+    for entry in qs.annotate(dag_volgorde=DAY_ORDER).order_by(
+        'planning__jaar', 'planning__weeknummer', 'vehicle__ritnummer', 'dag_volgorde'
+    ):
         rows.append([
             entry.planning.jaar,
             entry.planning.weeknummer,
