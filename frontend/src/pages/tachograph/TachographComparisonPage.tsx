@@ -26,6 +26,7 @@ export default function TachographComparisonPage() {
   const [dateFrom, setDateFrom] = useState(() => toDateStr(getMonday(new Date())))
   const [dateTill, setDateTill] = useState(() => toDateStr(new Date()))
   const [rows, setRows] = useState<TachographComparisonRow[]>([])
+  const [drivers, setDrivers] = useState<{ id: string; naam: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filterChauffeur, setFilterChauffeur] = useState('')
@@ -40,6 +41,7 @@ export default function TachographComparisonPage() {
     try {
       const data = await getTachographComparison(dateFrom, dateTill)
       setRows(data.rows)
+      setDrivers(data.drivers || [])
     } catch (err: any) {
       setError(err?.response?.data?.error || t('tachograph.comparison.fetchError'))
     } finally {
@@ -121,7 +123,9 @@ export default function TachographComparisonPage() {
   }
 
   // Unique values for filters
-  const chauffeurs = [...new Set(rows.map(r => r.chauffeur_naam).filter(Boolean))].sort()
+  const chauffeurs = drivers.length > 0
+    ? drivers.map(d => d.naam)
+    : [...new Set(rows.map(r => r.chauffeur_naam).filter(Boolean))].sort()
   const kentekens = [...new Set(rows.map(r => r.kenteken).filter(Boolean))].sort()
 
   const filteredRows = rows.filter(r => {

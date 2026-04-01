@@ -135,6 +135,7 @@ export interface TachographComparisonResponse {
   date_till: string
   rows: TachographComparisonRow[]
   count: number
+  drivers: { id: string; naam: string }[]
 }
 
 export async function getTachographComparison(dateFrom: string, dateTill: string): Promise<TachographComparisonResponse> {

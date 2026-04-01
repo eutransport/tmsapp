@@ -702,13 +702,17 @@ class TachographComparisonView(APIView):
             if n:
                 plate_to_obj[n] = obj
 
-        # ── 2. TMS driver→plate mapping ──
+        # ── 2. TMS driver→plate mapping + user→driver mapping ──
+        all_drivers = list(
+            Driver.objects.select_related('gekoppelde_gebruiker').all()
+        )
         plate_driver_map = {}
-        for drv in Driver.objects.select_related('gekoppelde_gebruiker').filter(
-            auto_uren=True,
-        ).exclude(tacho_kenteken=''):
-            if drv.gekoppelde_gebruiker:
+        user_driver_map = {}   # user_id → Driver
+        for drv in all_drivers:
+            if drv.tacho_kenteken:
                 plate_driver_map[_norm(drv.tacho_kenteken)] = drv
+            if drv.gekoppelde_gebruiker_id:
+                user_driver_map[drv.gekoppelde_gebruiker_id] = drv
 
         # ── 3. All submitted time entries in the range ──
         all_entries = list(
@@ -719,8 +723,14 @@ class TachographComparisonView(APIView):
         )
 
         entries_by_date_plate = {}
+        entries_by_date_user = {}   # (date, user_id) → entry (for drivers without plate)
         entry_plates = set()
         for entry in all_entries:
+            # Index by user for drivers without tacho_kenteken
+            ukey = (entry.datum, entry.user_id)
+            if ukey not in entries_by_date_user:
+                entries_by_date_user[ukey] = entry
+
             if not entry.kenteken:
                 continue
             n = _norm(entry.kenteken)
@@ -791,6 +801,9 @@ class TachographComparisonView(APIView):
             entry_plates_today = {p for (d, p) in entries_by_date_plate if d == current}
             all_plates_today = tacho_plates_today | entry_plates_today
 
+            # Track which users already appeared via plate-based rows
+            seen_users_today = set()
+
             for norm_plate in sorted(all_plates_today):
                 vehicle = tacho_by_date_plate.get((current, norm_plate))
                 entry = entries_by_date_plate.get((current, norm_plate))
@@ -808,90 +821,128 @@ class TachographComparisonView(APIView):
                 if not driver_naam and entry and entry.user:
                     driver_naam = entry.user.full_name
 
-                # Tachograph times – calculate total as span (last_end − first_start)
-                tacho_begin = tacho_eind = None
-                tacho_total = None
-                if vehicle:
-                    fs = vehicle.get('first_start')
-                    le = vehicle.get('last_end')
-                    fs_dt = le_dt = None
-                    if fs:
-                        try:
-                            fs_dt = dt.fromisoformat(
-                                fs.replace('Z', '+00:00'),
-                            ).astimezone(NL_TZ)
-                            tacho_begin = fs_dt.strftime('%H:%M')
-                        except (ValueError, AttributeError):
-                            pass
-                    if le:
-                        try:
-                            le_dt = dt.fromisoformat(
-                                le.replace('Z', '+00:00'),
-                            ).astimezone(NL_TZ)
-                            tacho_eind = le_dt.strftime('%H:%M')
-                        except (ValueError, AttributeError):
-                            pass
-                    # Total = span from first start to last end
-                    if fs_dt and le_dt:
-                        tacho_total = round(
-                            (le_dt - fs_dt).total_seconds() / 3600, 2,
-                        )
+                if entry and entry.user_id:
+                    seen_users_today.add(entry.user_id)
+                if tms_driver and tms_driver.gekoppelde_gebruiker_id:
+                    seen_users_today.add(tms_driver.gekoppelde_gebruiker_id)
 
-                # Chauffeur times
-                chauffeur_begin = chauffeur_eind = None
-                chauffeur_total = None
-                if entry:
-                    if entry.aanvang:
-                        chauffeur_begin = entry.aanvang.strftime('%H:%M')
-                    if entry.eind:
-                        chauffeur_eind = entry.eind.strftime('%H:%M')
-                    if entry.totaal_uren:
-                        chauffeur_total = round(
-                            entry.totaal_uren.total_seconds() / 3600, 2,
-                        )
+                rows.append(self._build_single_row(
+                    current, raw_kenteken, driver_naam, vehicle, entry,
+                    tms_driver, NL_TZ,
+                ))
 
-                # Difference
-                verschil = None
-                verschil_bron = None
-                if chauffeur_total is not None and tacho_total:
-                    diff = round(chauffeur_total - tacho_total, 2)
-                    if diff != 0:
-                        verschil = abs(diff)
-                        verschil_bron = 'chauffeur' if diff > 0 else 'tacho'
+            # Also include drivers who have entries today but no plate match
+            entry_users_today = {
+                uid for (d, uid) in entries_by_date_user if d == current
+            }
+            for user_id in sorted(entry_users_today - seen_users_today):
+                entry = entries_by_date_user.get((current, user_id))
+                if not entry:
+                    continue
+                tms_driver = user_driver_map.get(user_id)
+                driver_naam = tms_driver.naam if tms_driver else ''
+                if not driver_naam and entry.user:
+                    driver_naam = entry.user.full_name
+                raw_kenteken = entry.kenteken or ''
 
-                # Uren per dag + overwerk
-                uren_per_dag = None
-                overwerk_uren = None
-                overwerk_tacho = None
-                drv_upd = getattr(tms_driver, 'uren_per_dag', None) if tms_driver else None
-                if drv_upd is not None:
-                    upd = float(drv_upd)
-                    uren_per_dag = upd
-                    if chauffeur_total is not None and chauffeur_total > upd:
-                        overwerk_uren = round(chauffeur_total - upd, 2)
-                    if tacho_total is not None and tacho_total > upd:
-                        overwerk_tacho = round(tacho_total - upd, 2)
-
-                rows.append({
-                    'datum': current.strftime('%Y-%m-%d'),
-                    'kenteken': raw_kenteken,
-                    'chauffeur_naam': driver_naam,
-                    'chauffeur_begin': chauffeur_begin,
-                    'chauffeur_eind': chauffeur_eind,
-                    'tacho_begin': tacho_begin,
-                    'tacho_eind': tacho_eind,
-                    'chauffeur_totaal': chauffeur_total,
-                    'tacho_totaal': tacho_total,
-                    'verschil': verschil,
-                    'verschil_bron': verschil_bron,
-                    'uren_per_dag': uren_per_dag,
-                    'overwerk_uren': overwerk_uren,
-                    'overwerk_tacho': overwerk_tacho,
-                })
+                rows.append(self._build_single_row(
+                    current, raw_kenteken, driver_naam, None, entry,
+                    tms_driver, NL_TZ,
+                ))
 
             current += timedelta(days=1)
 
-        return rows, date_from_str, date_till_str
+        # ── 7. Build drivers list for frontend filter ──
+        drivers_list = [
+            {'id': str(drv.id), 'naam': drv.naam}
+            for drv in sorted(all_drivers, key=lambda d: d.naam)
+        ]
+
+        return rows, date_from_str, date_till_str, drivers_list
+
+    @staticmethod
+    def _build_single_row(current, raw_kenteken, driver_naam, vehicle, entry, tms_driver, NL_TZ):
+        from datetime import datetime as dt
+
+        # Tachograph times
+        tacho_begin = tacho_eind = None
+        tacho_total = None
+        if vehicle:
+            fs = vehicle.get('first_start')
+            le = vehicle.get('last_end')
+            fs_dt = le_dt = None
+            if fs:
+                try:
+                    fs_dt = dt.fromisoformat(
+                        fs.replace('Z', '+00:00'),
+                    ).astimezone(NL_TZ)
+                    tacho_begin = fs_dt.strftime('%H:%M')
+                except (ValueError, AttributeError):
+                    pass
+            if le:
+                try:
+                    le_dt = dt.fromisoformat(
+                        le.replace('Z', '+00:00'),
+                    ).astimezone(NL_TZ)
+                    tacho_eind = le_dt.strftime('%H:%M')
+                except (ValueError, AttributeError):
+                    pass
+            if fs_dt and le_dt:
+                tacho_total = round(
+                    (le_dt - fs_dt).total_seconds() / 3600, 2,
+                )
+
+        # Chauffeur times
+        chauffeur_begin = chauffeur_eind = None
+        chauffeur_total = None
+        if entry:
+            if entry.aanvang:
+                chauffeur_begin = entry.aanvang.strftime('%H:%M')
+            if entry.eind:
+                chauffeur_eind = entry.eind.strftime('%H:%M')
+            if entry.totaal_uren:
+                chauffeur_total = round(
+                    entry.totaal_uren.total_seconds() / 3600, 2,
+                )
+
+        # Difference
+        verschil = None
+        verschil_bron = None
+        if chauffeur_total is not None and tacho_total:
+            diff = round(chauffeur_total - tacho_total, 2)
+            if diff != 0:
+                verschil = abs(diff)
+                verschil_bron = 'chauffeur' if diff > 0 else 'tacho'
+
+        # Uren per dag + overwerk
+        uren_per_dag = None
+        overwerk_uren = None
+        overwerk_tacho = None
+        drv_upd = getattr(tms_driver, 'uren_per_dag', None) if tms_driver else None
+        if drv_upd is not None:
+            upd = float(drv_upd)
+            uren_per_dag = upd
+            if chauffeur_total is not None and chauffeur_total > upd:
+                overwerk_uren = round(chauffeur_total - upd, 2)
+            if tacho_total is not None and tacho_total > upd:
+                overwerk_tacho = round(tacho_total - upd, 2)
+
+        return {
+            'datum': current.strftime('%Y-%m-%d'),
+            'kenteken': raw_kenteken,
+            'chauffeur_naam': driver_naam,
+            'chauffeur_begin': chauffeur_begin,
+            'chauffeur_eind': chauffeur_eind,
+            'tacho_begin': tacho_begin,
+            'tacho_eind': tacho_eind,
+            'chauffeur_totaal': chauffeur_total,
+            'tacho_totaal': tacho_total,
+            'verschil': verschil,
+            'verschil_bron': verschil_bron,
+            'uren_per_dag': uren_per_dag,
+            'overwerk_uren': overwerk_uren,
+            'overwerk_tacho': overwerk_tacho,
+        }
 
     def get(self, request):
         try:
@@ -906,7 +957,7 @@ class TachographComparisonView(APIView):
         if isinstance(result, Response):
             return result
 
-        rows, date_from_str, date_till_str = result
+        rows, date_from_str, date_till_str, drivers_list = result
 
         # ── Export ──
         fmt = request.query_params.get('format')
@@ -920,6 +971,7 @@ class TachographComparisonView(APIView):
             'date_till': date_till_str,
             'rows': rows,
             'count': len(rows),
+            'drivers': drivers_list,
         })
 
     @staticmethod
