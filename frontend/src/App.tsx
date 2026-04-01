@@ -96,6 +96,7 @@ import MaintenanceSettingsPage from '@/pages/maintenance/MaintenanceSettingsPage
 
 // Tachograph
 import TachographPage from '@/pages/tachograph/TachographPage'
+import TachographComparisonPage from '@/pages/tachograph/TachographComparisonPage'
 
 // Reports
 import ReportsPage from '@/pages/reports/ReportsPage'
@@ -293,6 +294,7 @@ function App() {
 
         {/* Tachograph */}
         <Route path="/tachograph" element={<AdminRoute><TachographPage /></AdminRoute>} />
+        <Route path="/tachograph/comparison" element={<AdminRoute><TachographComparisonPage /></AdminRoute>} />
         
         {/* Time tracking */}
         <Route path="/time-entries" element={<TimeEntriesPage />} />

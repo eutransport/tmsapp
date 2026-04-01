@@ -623,6 +623,424 @@ class TachographManualSyncView(APIView):
             )
 
 
+class TachographComparisonView(APIView):
+    """
+    GET /api/tracking/tachograph/comparison/?date_from=YYYY-MM-DD&date_till=YYYY-MM-DD
+    Compare tachograph hours with submitted TimeEntry hours for a date range.
+    Fetches tachograph data live from FM-Track API per relevant plate.
+    Optional: &format=xlsx to download as Excel.
+    """
+    permission_classes = [IsAdminOrManager]
+
+    def _build_rows(self, request):
+        """Build comparison rows and return (rows, date_from_str, date_till_str) or Response on error."""
+        from datetime import datetime as dt, timedelta
+        from zoneinfo import ZoneInfo
+        from collections import defaultdict
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from apps.timetracking.models import TimeEntry
+        from apps.drivers.models import Driver
+        from apps.tracking.tachograph_service import (
+            get_objects, get_drivers, get_trips,
+            _build_vehicle_summary, _format_driver_name, FMTrackError,
+        )
+
+        NL_TZ = ZoneInfo('Europe/Amsterdam')
+        UTC = ZoneInfo('UTC')
+
+        date_from_str = request.query_params.get('date_from')
+        date_till_str = request.query_params.get('date_till')
+        if not date_from_str or not date_till_str:
+            return Response(
+                {'error': 'Parameters date_from en date_till zijn verplicht (YYYY-MM-DD).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            from_date = dt.strptime(date_from_str, '%Y-%m-%d').date()
+            till_date = dt.strptime(date_till_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Ongeldig datumformaat. Gebruik YYYY-MM-DD.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if from_date > till_date:
+            return Response(
+                {'error': 'date_from mag niet na date_till liggen.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if (till_date - from_date).days > 31:
+            return Response(
+                {'error': 'Maximaal 31 dagen per keer.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        def _norm(plate):
+            return (plate or '').upper().replace('-', '').replace(' ', '')
+
+        # ── 1. FM-Track objects & drivers (2 API calls) ──
+        try:
+            fm_objects = get_objects()
+            fm_drivers_list = get_drivers()
+        except FMTrackError as e:
+            return Response(
+                {'error': f'FM-Track fout: {e}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        driver_map = {d['id']: _format_driver_name(d) for d in fm_drivers_list}
+
+        # plate_norm → FM-Track object
+        plate_to_obj = {}
+        for obj in fm_objects:
+            plate = (
+                obj.get('vehicle_params', {}).get('plate_number')
+                or obj.get('name', '')
+            )
+            n = _norm(plate)
+            if n:
+                plate_to_obj[n] = obj
+
+        # ── 2. TMS driver→plate mapping ──
+        plate_driver_map = {}
+        for drv in Driver.objects.select_related('gekoppelde_gebruiker').filter(
+            auto_uren=True,
+        ).exclude(tacho_kenteken=''):
+            if drv.gekoppelde_gebruiker:
+                plate_driver_map[_norm(drv.tacho_kenteken)] = drv
+
+        # ── 3. All submitted time entries in the range ──
+        all_entries = list(
+            TimeEntry.objects.select_related('user').filter(
+                datum__range=[from_date, till_date],
+                status='ingediend',
+            )
+        )
+
+        entries_by_date_plate = {}
+        entry_plates = set()
+        for entry in all_entries:
+            if not entry.kenteken:
+                continue
+            n = _norm(entry.kenteken)
+            key = (entry.datum, n)
+            if key not in entries_by_date_plate:
+                entries_by_date_plate[key] = entry
+            else:
+                tms_drv = plate_driver_map.get(n)
+                if tms_drv and tms_drv.gekoppelde_gebruiker_id == entry.user_id:
+                    entries_by_date_plate[key] = entry
+            entry_plates.add(n)
+
+        # ── 4. Determine which FM-Track vehicles to fetch ──
+        plates_to_fetch = entry_plates | set(plate_driver_map.keys())
+        objs_to_fetch = {}
+        for p in plates_to_fetch:
+            obj = plate_to_obj.get(p)
+            if obj:
+                objs_to_fetch[p] = obj
+
+        # ── 5. Fetch trips per vehicle for the full range (parallel) ──
+        utc_start = dt(
+            from_date.year, from_date.month, from_date.day, 0, 0, 0,
+            tzinfo=NL_TZ,
+        ).astimezone(UTC)
+        utc_end = dt(
+            till_date.year, till_date.month, till_date.day, 23, 59, 59,
+            tzinfo=NL_TZ,
+        ).astimezone(UTC)
+
+        tacho_by_date_plate = {}  # (date, plate_norm) → vehicle_summary
+
+        def _fetch_and_group(plate, obj):
+            try:
+                trips = get_trips(obj['id'], utc_start, utc_end)
+                return plate, obj, (trips or [])
+            except FMTrackError:
+                return plate, obj, []
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [
+                executor.submit(_fetch_and_group, p, o)
+                for p, o in objs_to_fetch.items()
+            ]
+            for future in as_completed(futures):
+                plate, obj, trips = future.result()
+                if not trips:
+                    continue
+                trips_by_date = defaultdict(list)
+                for trip in trips:
+                    ts = trip.get('trip_start', {}).get('datetime', '')
+                    if ts:
+                        try:
+                            td = dt.strptime(ts[:10], '%Y-%m-%d').date()
+                            if from_date <= td <= till_date:
+                                trips_by_date[td].append(trip)
+                        except ValueError:
+                            pass
+                for d, d_trips in trips_by_date.items():
+                    summary = _build_vehicle_summary(obj, d_trips, driver_map)
+                    tacho_by_date_plate[(d, plate)] = summary
+
+        # ── 6. Build comparison rows ──
+        rows = []
+        current = from_date
+        while current <= till_date:
+            tacho_plates_today = {p for (d, p) in tacho_by_date_plate if d == current}
+            entry_plates_today = {p for (d, p) in entries_by_date_plate if d == current}
+            all_plates_today = tacho_plates_today | entry_plates_today
+
+            for norm_plate in sorted(all_plates_today):
+                vehicle = tacho_by_date_plate.get((current, norm_plate))
+                entry = entries_by_date_plate.get((current, norm_plate))
+                tms_driver = plate_driver_map.get(norm_plate)
+
+                raw_kenteken = ''
+                if vehicle:
+                    raw_kenteken = vehicle.get(
+                        'plate_number', vehicle.get('vehicle_name', ''),
+                    )
+                elif entry:
+                    raw_kenteken = entry.kenteken
+
+                driver_naam = tms_driver.naam if tms_driver else ''
+                if not driver_naam and entry and entry.user:
+                    driver_naam = entry.user.get_full_name()
+
+                # Tachograph times – calculate total as span (last_end − first_start)
+                tacho_begin = tacho_eind = None
+                tacho_total = None
+                if vehicle:
+                    fs = vehicle.get('first_start')
+                    le = vehicle.get('last_end')
+                    fs_dt = le_dt = None
+                    if fs:
+                        try:
+                            fs_dt = dt.fromisoformat(
+                                fs.replace('Z', '+00:00'),
+                            ).astimezone(NL_TZ)
+                            tacho_begin = fs_dt.strftime('%H:%M')
+                        except (ValueError, AttributeError):
+                            pass
+                    if le:
+                        try:
+                            le_dt = dt.fromisoformat(
+                                le.replace('Z', '+00:00'),
+                            ).astimezone(NL_TZ)
+                            tacho_eind = le_dt.strftime('%H:%M')
+                        except (ValueError, AttributeError):
+                            pass
+                    # Total = span from first start to last end
+                    if fs_dt and le_dt:
+                        tacho_total = round(
+                            (le_dt - fs_dt).total_seconds() / 3600, 2,
+                        )
+
+                # Chauffeur times
+                chauffeur_begin = chauffeur_eind = None
+                chauffeur_total = None
+                if entry:
+                    if entry.aanvang:
+                        chauffeur_begin = entry.aanvang.strftime('%H:%M')
+                    if entry.eind:
+                        chauffeur_eind = entry.eind.strftime('%H:%M')
+                    if entry.totaal_uren:
+                        chauffeur_total = round(
+                            entry.totaal_uren.total_seconds() / 3600, 2,
+                        )
+
+                # Difference
+                verschil = None
+                verschil_bron = None
+                if chauffeur_total is not None and tacho_total:
+                    diff = round(chauffeur_total - tacho_total, 2)
+                    if diff != 0:
+                        verschil = abs(diff)
+                        verschil_bron = 'chauffeur' if diff > 0 else 'tacho'
+
+                rows.append({
+                    'datum': current.strftime('%Y-%m-%d'),
+                    'kenteken': raw_kenteken,
+                    'chauffeur_naam': driver_naam,
+                    'chauffeur_begin': chauffeur_begin,
+                    'chauffeur_eind': chauffeur_eind,
+                    'tacho_begin': tacho_begin,
+                    'tacho_eind': tacho_eind,
+                    'chauffeur_totaal': chauffeur_total,
+                    'tacho_totaal': tacho_total,
+                    'verschil': verschil,
+                    'verschil_bron': verschil_bron,
+                })
+
+            current += timedelta(days=1)
+
+        return rows, date_from_str, date_till_str
+
+    def get(self, request):
+        result = self._build_rows(request)
+        if isinstance(result, Response):
+            return result
+
+        rows, date_from_str, date_till_str = result
+
+        # ── Export ──
+        fmt = request.query_params.get('format')
+        if fmt == 'xlsx':
+            return self._export_xlsx(rows, date_from_str, date_till_str)
+        if fmt == 'pdf':
+            return self._export_pdf(rows, date_from_str, date_till_str)
+
+        return Response({
+            'date_from': date_from_str,
+            'date_till': date_till_str,
+            'rows': rows,
+            'count': len(rows),
+        })
+
+    @staticmethod
+    def _format_hours(hours):
+        if hours is None:
+            return ''
+        h = int(hours)
+        m = round((hours - h) * 60)
+        return f'{h}:{m:02d}'
+
+    def _export_xlsx(self, rows, date_from_str, date_till_str):
+        import io
+        from django.http import HttpResponse
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Uren Vergelijking'
+
+        # Styles
+        header_fill = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
+        header_font = Font(color='FFFFFF', bold=True, size=11)
+        header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        odd_fill = PatternFill(start_color='EBF1F8', end_color='EBF1F8', fill_type='solid')
+        thin_border = Border(
+            bottom=Side(style='thin', color='D0D5DD'),
+        )
+        center_align = Alignment(horizontal='center', vertical='center')
+
+        headers = [
+            'Datum', 'Chauffeur', 'Kenteken',
+            'Begin (uren)', 'Eind (uren)',
+            'Begin (tacho)', 'Eind (tacho)',
+            'Totaal (uren)', 'Totaal (tacho)', 'Verschil',
+        ]
+        col_widths = [14, 20, 14, 13, 13, 13, 13, 14, 14, 16]
+
+        for col_idx, (header, width) in enumerate(zip(headers, col_widths), 1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_align
+            ws.column_dimensions[cell.column_letter].width = width
+
+        for row_idx, row in enumerate(rows, 2):
+            is_odd = (row_idx % 2) == 0  # data row 1 = even excel row
+
+            verschil_text = ''
+            if row['verschil'] is not None:
+                bron = 'Chauffeur' if row['verschil_bron'] == 'chauffeur' else 'Tacho'
+                verschil_text = f'+{self._format_hours(row["verschil"])} ({bron})'
+
+            values = [
+                row['datum'],
+                row['chauffeur_naam'],
+                row['kenteken'],
+                row['chauffeur_begin'] or '',
+                row['chauffeur_eind'] or '',
+                row['tacho_begin'] or '',
+                row['tacho_eind'] or '',
+                self._format_hours(row['chauffeur_totaal']),
+                self._format_hours(row['tacho_totaal']),
+                verschil_text,
+            ]
+            for col_idx, val in enumerate(values, 1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                cell.alignment = center_align if col_idx >= 4 else Alignment(vertical='center')
+                cell.border = thin_border
+                if is_odd:
+                    cell.fill = odd_fill
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        filename = f'uren_vergelijking_{date_from_str}_{date_till_str}.xlsx'
+        response = HttpResponse(
+            buf.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    def _export_pdf(self, rows, date_from_str, date_till_str):
+        import io
+        from django.http import HttpResponse
+        from weasyprint import HTML
+
+        # Build HTML table
+        html_rows = ''
+        for i, row in enumerate(rows):
+            bg = ' style="background:#EBF1F8"' if i % 2 == 0 else ''
+            verschil_text = ''
+            if row['verschil'] is not None:
+                bron = 'Chauffeur' if row['verschil_bron'] == 'chauffeur' else 'Tacho'
+                verschil_text = f'+{self._format_hours(row["verschil"])} ({bron})'
+            html_rows += f'''<tr{bg}>
+                <td>{row["datum"]}</td>
+                <td>{row["chauffeur_naam"]}</td>
+                <td>{row["kenteken"]}</td>
+                <td class="c">{row["chauffeur_begin"] or "-"}</td>
+                <td class="c">{row["chauffeur_eind"] or "-"}</td>
+                <td class="c">{row["tacho_begin"] or "-"}</td>
+                <td class="c">{row["tacho_eind"] or "-"}</td>
+                <td class="c">{self._format_hours(row["chauffeur_totaal"]) or "-"}</td>
+                <td class="c">{self._format_hours(row["tacho_totaal"]) or "-"}</td>
+                <td class="c">{verschil_text or "\u2713"}</td>
+            </tr>'''
+
+        html_content = f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  @page {{ size: A4 landscape; margin: 15mm; }}
+  body {{ font-family: Arial, sans-serif; font-size: 10px; }}
+  h1 {{ font-size: 16px; color: #1F4E79; margin-bottom: 4px; }}
+  .sub {{ font-size: 11px; color: #666; margin-bottom: 12px; }}
+  table {{ width: 100%; border-collapse: collapse; }}
+  th {{ background: #1F4E79; color: #fff; padding: 6px 4px; font-size: 9px;
+       text-transform: uppercase; text-align: left; }}
+  td {{ padding: 5px 4px; border-bottom: 1px solid #ddd; }}
+  .c {{ text-align: center; }}
+  th.c {{ text-align: center; }}
+</style></head><body>
+<h1>Uren Vergelijking</h1>
+<div class="sub">{date_from_str} &mdash; {date_till_str}</div>
+<table>
+  <thead><tr>
+    <th>Datum</th><th>Chauffeur</th><th>Kenteken</th>
+    <th class="c">Begin (uren)</th><th class="c">Eind (uren)</th>
+    <th class="c">Begin (tacho)</th><th class="c">Eind (tacho)</th>
+    <th class="c">Totaal (uren)</th><th class="c">Totaal (tacho)</th>
+    <th class="c">Verschil</th>
+  </tr></thead>
+  <tbody>{html_rows}</tbody>
+</table>
+</body></html>'''
+
+        pdf = HTML(string=html_content).write_pdf()
+        filename = f'uren_vergelijking_{date_from_str}_{date_till_str}.pdf'
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+
 class VehicleDetailView(APIView):
     """
     GET /api/tracking/fm-positions/<object_id>/detail/?date=YYYY-MM-DD

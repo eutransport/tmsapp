@@ -1095,34 +1095,36 @@ export default function SettingsPage() {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {t('settings.linqoDescription', 'Koppel de FM-Track tachograaf API om ritgegevens automatisch op te halen.')}
                 </p>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('settings.linqoApiKey', 'API Key')}
-                  </label>
-                  <input
-                    type="password"
-                    value={formData.linqo_api_key || ''}
-                    onChange={(e) => handleInputChange('linqo_api_key', e.target.value)}
-                    placeholder={t('settings.linqoApiKeyPlaceholder', 'Voer de FM-Track API key in...')}
-                    className="input w-full"
-                  />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {t('settings.linqoApiKeyHint', 'De API key is beschikbaar in het FM-Track / Linqo dashboard.')}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('settings.tachograafStartDatum', 'Startdatum tachograaf')}
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.tachograaf_start_datum || ''}
-                    onChange={(e) => handleInputChange('tachograaf_start_datum', e.target.value || null)}
-                    className="input w-full"
-                  />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {t('settings.tachograafStartDatumHint', 'Vanaf deze datum worden automatisch uren ingediend op basis van tachograaf gegevens.')}
-                  </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {t('settings.linqoApiKey', 'API Key')}
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.linqo_api_key || ''}
+                      onChange={(e) => handleInputChange('linqo_api_key', e.target.value)}
+                      placeholder={t('settings.linqoApiKeyPlaceholder', 'Voer de FM-Track API key in...')}
+                      className="input"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {t('settings.linqoApiKeyHint', 'De API key is beschikbaar in het FM-Track / Linqo dashboard.')}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {t('settings.tachograafStartDatum', 'Startdatum tachograaf')}
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.tachograaf_start_datum || ''}
+                      onChange={(e) => handleInputChange('tachograaf_start_datum', e.target.value || null)}
+                      className="input"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {t('settings.tachograafStartDatumHint', 'Vanaf deze datum worden automatisch uren ingediend op basis van tachograaf gegevens.')}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

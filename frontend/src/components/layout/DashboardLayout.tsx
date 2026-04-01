@@ -74,6 +74,7 @@ const navigation: NavItem[] = [
   { name: 'nav.maintenance', href: '/maintenance', icon: WrenchScrewdriverIcon, roles: ['admin', 'gebruiker'], permission: 'view_maintenance' },
   { name: 'nav.trackTrace', href: '/track-trace', icon: MapPinIcon, roles: ['admin'] },
   { name: 'nav.tachograph', href: '/tachograph', icon: ChartBarSquareIcon, roles: ['admin'] },
+  { name: 'nav.tachographComparison', href: '/tachograph/comparison', icon: ChartBarSquareIcon, roles: ['admin'] },
   { name: 'nav.reports', href: '/reports', icon: DocumentChartBarIcon, roles: ['admin', 'gebruiker', 'chauffeur'], permission: 'view_reports' },
 ]
 

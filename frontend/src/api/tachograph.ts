@@ -112,3 +112,45 @@ export async function triggerTachographSync(force = false): Promise<{
   const response = await api.post('/tracking/tachograph/sync/', { force })
   return response.data
 }
+
+export interface TachographComparisonRow {
+  datum: string
+  kenteken: string
+  chauffeur_naam: string
+  chauffeur_begin: string | null
+  chauffeur_eind: string | null
+  tacho_begin: string | null
+  tacho_eind: string | null
+  chauffeur_totaal: number | null
+  tacho_totaal: number | null
+  verschil: number | null
+  verschil_bron: 'tacho' | 'chauffeur' | null
+}
+
+export interface TachographComparisonResponse {
+  date_from: string
+  date_till: string
+  rows: TachographComparisonRow[]
+  count: number
+}
+
+export async function getTachographComparison(dateFrom: string, dateTill: string): Promise<TachographComparisonResponse> {
+  const response = await api.get(`/tracking/tachograph/comparison/?date_from=${encodeURIComponent(dateFrom)}&date_till=${encodeURIComponent(dateTill)}`)
+  return response.data
+}
+
+export async function exportTachographComparisonXlsx(dateFrom: string, dateTill: string): Promise<Blob> {
+  const response = await api.get(
+    `/tracking/tachograph/comparison/?date_from=${encodeURIComponent(dateFrom)}&date_till=${encodeURIComponent(dateTill)}&format=xlsx`,
+    { responseType: 'blob' },
+  )
+  return response.data
+}
+
+export async function exportTachographComparisonPdf(dateFrom: string, dateTill: string): Promise<Blob> {
+  const response = await api.get(
+    `/tracking/tachograph/comparison/?date_from=${encodeURIComponent(dateFrom)}&date_till=${encodeURIComponent(dateTill)}&format=pdf`,
+    { responseType: 'blob' },
+  )
+  return response.data
+}
