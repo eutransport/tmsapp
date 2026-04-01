@@ -415,23 +415,40 @@ function ResultsTable({ result }: { result: SqlQueryResult }) {
 // ---- Example Queries Panel ----
 
 function ExampleQueries({ examples, onSelect }: { examples: SqlExampleQuery[]; onSelect: (q: string) => void }) {
+  const [isOpen, setIsOpen] = useState(true)
+
   return (
-    <div className="space-y-1.5">
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-        <LightBulbIcon className="w-3.5 h-3.5" />
-        Voorbeeld queries
-      </h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-        {examples.map((ex, i) => (
-          <button
-            key={i}
-            onClick={() => onSelect(ex.query)}
-            className="text-left p-2 bg-white border border-gray-200 rounded hover:border-blue-300 hover:bg-blue-50 transition-colors text-xs group"
-          >
-            <span className="font-medium text-gray-800 group-hover:text-blue-800">{ex.label}</span>
-          </button>
-        ))}
-      </div>
+    <div className="border border-gray-200 rounded-lg bg-white">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center gap-1.5 px-3 py-2 hover:bg-gray-50 transition-colors"
+      >
+        {isOpen ? (
+          <ChevronDownIcon className="w-3.5 h-3.5 text-gray-400" />
+        ) : (
+          <ChevronRightIcon className="w-3.5 h-3.5 text-gray-400" />
+        )}
+        <LightBulbIcon className="w-3.5 h-3.5 text-amber-500" />
+        <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+          Voorbeeld queries
+        </span>
+        <span className="text-[10px] text-gray-400 ml-1">({examples.length})</span>
+      </button>
+      {isOpen && (
+        <div className="px-3 pb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+            {examples.map((ex, i) => (
+              <button
+                key={i}
+                onClick={() => onSelect(ex.query)}
+                className="text-left p-2 bg-gray-50 border border-gray-200 rounded hover:border-blue-300 hover:bg-blue-50 transition-colors text-xs group"
+              >
+                <span className="font-medium text-gray-800 group-hover:text-blue-800">{ex.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -596,8 +613,8 @@ export default function SqlQueryTab() {
             isRunning={isRunning}
           />
 
-          {/* Example queries */}
-          {schema && !result && !error && (
+          {/* Example queries - always visible, collapsible */}
+          {schema && (
             <ExampleQueries examples={schema.example_queries} onSelect={setQuery} />
           )}
 

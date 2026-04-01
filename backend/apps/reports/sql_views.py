@@ -191,43 +191,61 @@ def _generate_example_queries(schema_data: list) -> list:
     if 'accounts_user' in table_names:
         examples.append({
             'label': 'Alle gebruikers',
-            'query': "SELECT id, gebruikersnaam, naam, email, rol FROM accounts_user ORDER BY naam",
+            'query': "SELECT id, username, voornaam, achternaam, email, rol\nFROM accounts_user\nORDER BY achternaam",
         })
 
     if 'timetracking_timeentry' in table_names:
         examples.append({
             'label': 'Uren deze maand',
-            'query': "SELECT te.datum, u.naam, te.start_tijd, te.eind_tijd, te.ritnummer\nFROM timetracking_timeentry te\nJOIN accounts_user u ON te.user_id = u.id\nWHERE te.datum >= date_trunc('month', CURRENT_DATE)\nORDER BY te.datum DESC",
+            'query': "SELECT te.datum, u.voornaam, u.achternaam, te.aanvang, te.eind, te.ritnummer, te.kenteken\nFROM timetracking_timeentry te\nJOIN accounts_user u ON te.user_id = u.id\nWHERE te.datum >= date_trunc('month', CURRENT_DATE)\nORDER BY te.datum DESC",
         })
 
     if 'fleet_vehicle' in table_names:
         examples.append({
             'label': 'Voertuigen overzicht',
-            'query': "SELECT id, kenteken, merk, model, actief FROM fleet_vehicle ORDER BY kenteken",
+            'query': "SELECT v.id, v.kenteken, v.type_wagen, v.ritnummer, c.naam AS bedrijf\nFROM fleet_vehicle v\nLEFT JOIN companies_company c ON v.bedrijf_id = c.id\nORDER BY v.kenteken",
         })
 
     if 'companies_company' in table_names:
         examples.append({
             'label': 'Bedrijven overzicht',
-            'query': "SELECT id, naam, kvk_nummer, stad FROM companies_company ORDER BY naam",
+            'query': "SELECT id, naam, kvk, contactpersoon, email, stad\nFROM companies_company\nORDER BY naam",
         })
 
     if 'invoicing_invoice' in table_names:
         examples.append({
             'label': 'Facturen dit jaar',
-            'query': "SELECT factuurnummer, bedrijf_naam, totaal_bedrag, status, factuurdatum\nFROM invoicing_invoice\nWHERE factuurdatum >= date_trunc('year', CURRENT_DATE)\nORDER BY factuurdatum DESC",
+            'query': "SELECT i.factuurnummer, c.naam AS bedrijf, i.totaal, i.status, i.factuurdatum\nFROM invoicing_invoice i\nJOIN companies_company c ON i.bedrijf_id = c.id\nWHERE i.factuurdatum >= date_trunc('year', CURRENT_DATE)\nORDER BY i.factuurdatum DESC",
         })
 
     if 'leave_leaverequest' in table_names:
         examples.append({
             'label': 'Verlofaanvragen',
-            'query': "SELECT lr.id, u.naam, lr.start_datum, lr.eind_datum, lr.status, lr.verlof_type\nFROM leave_leaverequest lr\nJOIN accounts_user u ON lr.user_id = u.id\nORDER BY lr.start_datum DESC",
+            'query': "SELECT lr.id, u.voornaam, u.achternaam, lr.start_date, lr.end_date, lr.status, lr.leave_type\nFROM leave_leaverequest lr\nJOIN accounts_user u ON lr.user_id = u.id\nORDER BY lr.start_date DESC",
         })
 
     if 'drivers_driver' in table_names:
         examples.append({
             'label': 'Chauffeurs met voertuig',
-            'query': "SELECT d.id, u.naam, v.kenteken\nFROM drivers_driver d\nJOIN accounts_user u ON d.user_id = u.id\nLEFT JOIN fleet_vehicle v ON d.voertuig_id = v.id\nORDER BY u.naam",
+            'query': "SELECT d.id, d.naam, d.telefoon, v.kenteken, c.naam AS bedrijf\nFROM drivers_driver d\nLEFT JOIN fleet_vehicle v ON d.voertuig_id = v.id\nLEFT JOIN companies_company c ON d.bedrijf_id = c.id\nORDER BY d.naam",
+        })
+
+    if 'planning_planningentry' in table_names:
+        examples.append({
+            'label': 'Planning deze week',
+            'query': "SELECT pe.dag, d.naam AS chauffeur, v.kenteken, pe.ritnummer\nFROM planning_planningentry pe\nJOIN planning_weekplanning wp ON pe.planning_id = wp.id\nLEFT JOIN drivers_driver d ON pe.chauffeur_id = d.id\nJOIN fleet_vehicle v ON pe.vehicle_id = v.id\nWHERE wp.weeknummer = EXTRACT(WEEK FROM CURRENT_DATE)\n  AND wp.jaar = EXTRACT(YEAR FROM CURRENT_DATE)\nORDER BY pe.dag",
+        })
+
+    if 'maintenance_maintenancetask' in table_names:
+        examples.append({
+            'label': 'Openstaande onderhoudstaken',
+            'query': "SELECT mt.title, mt.status, mt.priority, mt.scheduled_date, v.kenteken\nFROM maintenance_maintenancetask mt\nJOIN fleet_vehicle v ON mt.vehicle_id = v.id\nWHERE mt.status NOT IN ('completed', 'cancelled')\nORDER BY mt.scheduled_date",
+        })
+
+    if 'invoicing_expense' in table_names:
+        examples.append({
+            'label': 'Kosten per categorie',
+            'query': "SELECT categorie, COUNT(*) AS aantal, SUM(totaal) AS totaal_bedrag\nFROM invoicing_expense\nWHERE datum >= date_trunc('year', CURRENT_DATE)\nGROUP BY categorie\nORDER BY totaal_bedrag DESC",
         })
 
     # Always add a generic count example

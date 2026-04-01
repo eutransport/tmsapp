@@ -216,9 +216,12 @@ export default function ReportRequestForm({ reportTypes, users, drivers, vehicle
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">Alle voertuigen</option>
-                          {vehicles.filter(v => v.actief).map((v) => (
+                          {[...vehicles].sort((a, b) => {
+                            if (a.actief === b.actief) return a.kenteken.localeCompare(b.kenteken)
+                            return a.actief ? -1 : 1
+                          }).map((v) => (
                             <option key={v.id} value={v.kenteken}>
-                              {v.kenteken}{v.ritnummer ? ` – Rit ${v.ritnummer}` : ''}
+                              {v.kenteken}{v.ritnummer ? ` – Rit ${v.ritnummer}` : ''}{!v.actief ? ' (inactief)' : ''}
                             </option>
                           ))}
                         </select>
@@ -232,9 +235,12 @@ export default function ReportRequestForm({ reportTypes, users, drivers, vehicle
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">Alle medewerkers</option>
-                          {users.map((u) => (
+                          {[...users].sort((a, b) => {
+                            if (a.is_active === b.is_active) return `${a.voornaam} ${a.achternaam}`.localeCompare(`${b.voornaam} ${b.achternaam}`)
+                            return a.is_active ? -1 : 1
+                          }).map((u) => (
                             <option key={u.id} value={u.id}>
-                              {u.voornaam} {u.achternaam} ({u.email})
+                              {u.voornaam} {u.achternaam} ({u.email}){!u.is_active ? ' (inactief)' : ''}
                             </option>
                           ))}
                         </select>
