@@ -32,7 +32,7 @@ import {
   getCurrentYear,
   formatMinutesToDuration,
 } from '@/api/timetracking'
-import { getAllVehicles } from '@/api/fleet'
+import { getVehiclesForDropdown } from '@/api/fleet'
 import { Vehicle } from '@/types'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -672,7 +672,7 @@ export default function TimeEntriesPage() {
   useEffect(() => {
     const fetchVehicles = async () => {
       try {
-        const data = await getAllVehicles()
+        const data = await getVehiclesForDropdown()
         setVehicles(data)
       } catch (err) {
         console.error('Error fetching vehicles:', err)

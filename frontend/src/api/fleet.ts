@@ -75,6 +75,12 @@ export async function getAllVehicles(): Promise<Vehicle[]> {
   return response.data.results || response.data
 }
 
+// Get vehicles for dropdown (accessible by all authenticated users including chauffeurs)
+export async function getVehiclesForDropdown(): Promise<Vehicle[]> {
+  const response = await api.get('/fleet/dropdown/')
+  return response.data
+}
+
 // Get single vehicle by ID
 export async function getVehicle(id: string): Promise<Vehicle> {
   const response = await api.get(`/fleet/${id}/`)

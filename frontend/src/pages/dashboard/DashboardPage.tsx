@@ -733,11 +733,12 @@ function formatTimestamp(timestamp: string, t: any) {
 export default function DashboardPage() {
   const { user } = useAuthStore()
   
-  // Show chauffeur-specific dashboard
-  if (user?.rol === 'chauffeur') {
+  // Show chauffeur-specific dashboard for both chauffeur and gebruiker roles
+  // (gebruiker should not see financial data)
+  if (user?.rol === 'chauffeur' || user?.rol === 'gebruiker') {
     return <ChauffeurDashboard user={user} />
   }
   
-  // Show admin/gebruiker dashboard
+  // Show admin dashboard (with financial data) only for admin role
   return <AdminDashboard user={user} />
 }

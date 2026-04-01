@@ -45,6 +45,18 @@ class VehicleViewSet(viewsets.ModelViewSet):
         )
         instance.delete()
 
+    @action(detail=False, methods=['get'], url_path='dropdown',
+            permission_classes=[IsAuthenticated])
+    def dropdown(self, request):
+        """
+        Lightweight vehicle list for dropdowns.
+        Accessible by all authenticated users (including chauffeurs)
+        so they can select a vehicle when registering hours.
+        """
+        vehicles = Vehicle.objects.filter(actief=True).select_related('bedrijf').order_by('kenteken')
+        serializer = self.get_serializer(vehicles, many=True)
+        return Response(serializer.data)
+
     @action(detail=False, methods=['get'], url_path='vehicle_weeks_overview')
     def vehicle_weeks_overview(self, request):
         """
