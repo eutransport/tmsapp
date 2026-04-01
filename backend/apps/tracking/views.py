@@ -743,13 +743,8 @@ class TachographComparisonView(APIView):
                     entries_by_date_plate[key] = entry
             entry_plates.add(n)
 
-        # ── 4. Determine which FM-Track vehicles to fetch ──
-        plates_to_fetch = entry_plates | set(plate_driver_map.keys())
-        objs_to_fetch = {}
-        for p in plates_to_fetch:
-            obj = plate_to_obj.get(p)
-            if obj:
-                objs_to_fetch[p] = obj
+        # ── 4. Fetch ALL FM-Track vehicles (not just configured ones) ──
+        objs_to_fetch = dict(plate_to_obj)  # fetch every vehicle from the API
 
         # ── 5. Fetch trips per vehicle for the full range (parallel) ──
         utc_start = dt(
@@ -858,7 +853,18 @@ class TachographComparisonView(APIView):
             for drv in sorted(all_drivers, key=lambda d: d.naam)
         ]
 
-        return rows, date_from_str, date_till_str, drivers_list
+        # ── 8. Build plates list for frontend filter (all from Linqo API) ──
+        plates_list = []
+        for obj in fm_objects:
+            plate = (
+                obj.get('vehicle_params', {}).get('plate_number')
+                or obj.get('name', '')
+            )
+            if plate:
+                plates_list.append(plate)
+        plates_list = sorted(set(plates_list))
+
+        return rows, date_from_str, date_till_str, drivers_list, plates_list
 
     @staticmethod
     def _build_single_row(current, raw_kenteken, driver_naam, vehicle, entry, tms_driver, NL_TZ):
@@ -957,7 +963,7 @@ class TachographComparisonView(APIView):
         if isinstance(result, Response):
             return result
 
-        rows, date_from_str, date_till_str, drivers_list = result
+        rows, date_from_str, date_till_str, drivers_list, plates_list = result
 
         # ── Export ──
         fmt = request.query_params.get('format')
@@ -972,6 +978,7 @@ class TachographComparisonView(APIView):
             'rows': rows,
             'count': len(rows),
             'drivers': drivers_list,
+            'plates': plates_list,
         })
 
     @staticmethod
