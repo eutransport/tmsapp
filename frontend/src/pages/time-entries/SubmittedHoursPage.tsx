@@ -8,6 +8,7 @@ import { Dialog, Transition } from '@headlessui/react'
 import {
   MagnifyingGlassIcon,
   PencilIcon,
+  TrashIcon,
   XMarkIcon,
   ClockIcon,
   ChartBarIcon,
@@ -16,6 +17,7 @@ import {
   ChevronDownIcon,
   DocumentArrowDownIcon,
   TableCellsIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -27,6 +29,7 @@ import { TimeEntry } from '@/types'
 import {
   getTimeEntries,
   updateTimeEntry,
+  deleteTimeEntry,
   WeekHistory,
   getWeekHistory,
 } from '@/api/timetracking'
@@ -94,6 +97,11 @@ export default function SubmittedHoursPage() {
     km_eind: 0,
   })
   const [saving, setSaving] = useState(false)
+
+  // Delete entry state
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletingEntry, setDeletingEntry] = useState<TimeEntry | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   // Load week history on mount and when status filter changes
   useEffect(() => {
@@ -228,6 +236,36 @@ export default function SubmittedHoursPage() {
       toast.error(t('timeEntries.updateFailed'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDeleteClick = (entry: TimeEntry) => {
+    setDeletingEntry(entry)
+    setShowDeleteModal(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingEntry) return
+
+    try {
+      setDeleting(true)
+      await deleteTimeEntry(deletingEntry.id)
+      toast.success(t('timeEntries.entryDeleted'))
+      setShowDeleteModal(false)
+      setDeletingEntry(null)
+
+      // Reload entries for this week
+      if (selectedWeek) {
+        await loadWeekEntries(selectedWeek)
+      }
+
+      // Reload week history for updated totals
+      loadWeekHistory()
+    } catch (err) {
+      console.error('Failed to delete entry:', err)
+      toast.error(t('timeEntries.deleteFailed'))
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -930,13 +968,22 @@ export default function SubmittedHoursPage() {
                                     {entry.totaal_km}
                                   </td>
                                   <td className="px-4 py-3 text-right">
-                                    <button
-                                      onClick={() => handleEditEntry(entry)}
-                                      className="text-primary-600 hover:text-primary-900 p-1"
-                                      title={t('common.edit')}
-                                    >
-                                      <PencilIcon className="h-5 w-5" />
-                                    </button>
+                                    <div className="flex items-center justify-end gap-1">
+                                      <button
+                                        onClick={() => handleEditEntry(entry)}
+                                        className="text-primary-600 hover:text-primary-900 p-1"
+                                        title={t('common.edit')}
+                                      >
+                                        <PencilIcon className="h-5 w-5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteClick(entry)}
+                                        className="text-red-500 hover:text-red-700 p-1"
+                                        title={t('common.delete')}
+                                      >
+                                        <TrashIcon className="h-5 w-5" />
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
@@ -961,12 +1008,20 @@ export default function SubmittedHoursPage() {
                                   <h4 className="font-semibold text-gray-900 text-sm">{formatDate(entry.datum)}</h4>
                                   <p className="text-xs text-gray-500 font-mono">{entry.ritnummer}</p>
                                 </div>
-                                <button
-                                  onClick={() => handleEditEntry(entry)}
-                                  className="text-primary-600 hover:text-primary-900 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                                >
-                                  <PencilIcon className="h-5 w-5" />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleEditEntry(entry)}
+                                    className="text-primary-600 hover:text-primary-900 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                  >
+                                    <PencilIcon className="h-5 w-5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteClick(entry)}
+                                    className="text-red-500 hover:text-red-700 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                  >
+                                    <TrashIcon className="h-5 w-5" />
+                                  </button>
+                                </div>
                               </div>
                               
                               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -1300,6 +1355,75 @@ export default function SubmittedHoursPage() {
                       disabled={saving}
                     >
                       {saving ? t('common.saving') : t('common.save')}
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Delete Confirmation Modal */}
+      <Transition appear show={showDeleteModal} as={Fragment}>
+        <Dialog as="div" className="relative z-[60]" onClose={() => setShowDeleteModal(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-4 sm:p-6 shadow-xl transition-all">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                      <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+                    </div>
+                    <div>
+                      <Dialog.Title className="text-lg font-semibold text-gray-900">
+                        {t('timeEntries.deleteEntry')}
+                      </Dialog.Title>
+                      <p className="mt-2 text-sm text-gray-500">
+                        {t('timeEntries.deleteConfirm')}
+                      </p>
+                      {deletingEntry && (
+                        <p className="mt-2 text-sm font-medium">
+                          {formatDate(deletingEntry.datum)} - {deletingEntry.ritnummer}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button
+                      onClick={() => setShowDeleteModal(false)}
+                      className="btn-secondary min-h-[44px]"
+                      disabled={deleting}
+                    >
+                      {t('common.cancel')}
+                    </button>
+                    <button
+                      onClick={handleDeleteConfirm}
+                      className="btn-primary bg-red-600 hover:bg-red-700 min-h-[44px]"
+                      disabled={deleting}
+                    >
+                      {deleting ? t('common.deleting') : t('common.delete')}
                     </button>
                   </div>
                 </Dialog.Panel>
