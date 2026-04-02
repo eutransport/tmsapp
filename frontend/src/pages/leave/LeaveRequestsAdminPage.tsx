@@ -662,7 +662,7 @@ export default function LeaveRequestsAdminPage() {
                         const start = e.target.value
                         const end = createForm.end_date || start
                         const hours = calculateWorkDays(start, end, holidayDates) * HOURS_PER_DAY
-                        setCreateForm({ ...createForm, start_date: start, end_date: end, hours_requested: hours || HOURS_PER_DAY })
+                        setCreateForm({ ...createForm, start_date: start, end_date: end, hours_requested: hours })
                       }}
                       className="input w-full"
                     />
@@ -677,7 +677,7 @@ export default function LeaveRequestsAdminPage() {
                       onChange={(e) => {
                         const end = e.target.value
                         const hours = calculateWorkDays(createForm.start_date, end, holidayDates) * HOURS_PER_DAY
-                        setCreateForm({ ...createForm, end_date: end, hours_requested: hours || HOURS_PER_DAY })
+                        setCreateForm({ ...createForm, end_date: end, hours_requested: hours })
                       }}
                       min={createForm.start_date}
                       className="input w-full"

@@ -3,7 +3,7 @@ from decimal import Decimal
 from rest_framework import serializers
 from django.utils import timezone
 
-from .models import GlobalLeaveSettings, LeaveBalance, LeaveRequest, LeaveType, LeaveRequestStatus
+from .models import GlobalLeaveSettings, LeaveBalance, LeaveRequest, LeaveType, LeaveRequestStatus, PublicHoliday
 
 
 class GlobalLeaveSettingsSerializer(serializers.ModelSerializer):
@@ -198,7 +198,6 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
         start_date = data.get('start_date')
         end_date = data.get('end_date')
         leave_type = data.get('leave_type')
-        hours_requested = data.get('hours_requested')
         
         # Validate dates
         if start_date > end_date:
@@ -206,10 +205,15 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
                 'end_date': 'Einddatum moet na startdatum liggen.'
             })
         
+        # Recalculate hours based on actual work days (excluding holidays)
+        work_days = PublicHoliday.count_work_days(start_date, end_date)
+        hours_requested = Decimal(str(work_days * 8))
+        data['hours_requested'] = hours_requested
+        
         # Validate hours
         if hours_requested <= 0:
             raise serializers.ValidationError({
-                'hours_requested': 'Aantal uren moet groter zijn dan 0.'
+                'hours_requested': 'Geen werkdagen in de geselecteerde periode (alleen feestdagen/weekenden).'
             })
         
         # Check balance for leave type

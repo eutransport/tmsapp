@@ -430,13 +430,23 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 vacation_hours=settings_obj.default_leave_hours
             )
 
+        # Recalculate hours based on actual work days (excluding holidays)
+        work_days = PublicHoliday.count_work_days(data['start_date'], data['end_date'])
+        hours_requested = Decimal(str(work_days * 8))
+
+        if hours_requested <= 0:
+            return Response(
+                {'error': 'Geen werkdagen in de geselecteerde periode (alleen feestdagen/weekenden).'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Create the leave request
         leave_request = LeaveRequest.objects.create(
             user=target_user,
             leave_type=data['leave_type'],
             start_date=data['start_date'],
             end_date=data['end_date'],
-            hours_requested=data['hours_requested'],
+            hours_requested=hours_requested,
             reason=data.get('reason', ''),
             status=LeaveRequestStatus.PENDING,
         )
@@ -549,6 +559,15 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Recalculate hours based on actual work days (excluding holidays)
+        work_days = PublicHoliday.count_work_days(
+            leave_request.start_date, leave_request.end_date
+        )
+        recalculated_hours = Decimal(str(work_days * 8))
+        if recalculated_hours != leave_request.hours_requested:
+            leave_request.hours_requested = recalculated_hours
+            leave_request.save(update_fields=['hours_requested'])
+
         # Calculate and apply deductions
         deductions = leave_request.calculate_deductions()
         
