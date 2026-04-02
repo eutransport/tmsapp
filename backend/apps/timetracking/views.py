@@ -24,7 +24,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
     """
     serializer_class = TimeEntrySerializer
     permission_classes = [IsAuthenticated]
-    filterset_fields = ['status', 'weeknummer', 'ritnummer', 'datum']
+    filterset_fields = ['status', 'weeknummer', 'ritnummer', 'datum', 'bron']
     search_fields = ['ritnummer', 'kenteken', 'user__voornaam', 'user__achternaam', 'user__email']
     ordering_fields = ['datum', 'weeknummer', 'created_at']
     ordering = ['-datum', '-aanvang']
@@ -73,6 +73,21 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         if weeknummer_lte:
             queryset = queryset.filter(weeknummer__lte=int(weeknummer_lte))
         
+        # Filter by bron if provided
+        bron = self.request.query_params.get('bron')
+        if bron:
+            queryset = queryset.filter(bron=bron)
+
+        # Filter to only show entries for drivers with auto_uren enabled
+        auto_uren_only = self.request.query_params.get('auto_uren_only')
+        if auto_uren_only and auto_uren_only.lower() in ('true', '1'):
+            from apps.drivers.models import Driver
+            auto_user_ids = Driver.objects.filter(
+                auto_uren=True,
+                gekoppelde_gebruiker__isnull=False,
+            ).values_list('gekoppelde_gebruiker_id', flat=True)
+            queryset = queryset.filter(user_id__in=auto_user_ids)
+
         return queryset
     
     def perform_create(self, serializer):
