@@ -72,24 +72,84 @@ def get_drivers():
 def get_trips(object_id, date_from, date_till):
     """
     Fetch trips for a specific vehicle/object.
+    Auto-chunks requests into ≤25-day periods and clamps the start to
+    max 29 days before *now* (FM-Track rejects from_datetime >30 days ago).
 
     Args:
         object_id: FM-Track object UUID
-        date_from: datetime object (start)
-        date_till: datetime object (end)
+        date_from: datetime (start, tz-aware)
+        date_till: datetime (end, tz-aware)
 
     Returns:
         list of trip dicts
     """
-    data = _api_get(f'/objects/{object_id}/trips', {
-        'from_datetime': date_from.strftime('%Y-%m-%dT%H:%M:%SZ'),
-        'till_datetime': date_till.strftime('%Y-%m-%dT%H:%M:%SZ'),
-    })
-    if isinstance(data, list):
-        return data
-    if isinstance(data, dict):
-        return data.get('trips', data.get('value', []))
-    return []
+    MAX_DAYS = 25       # chunk size
+    MAX_HISTORY = 29    # FM-Track rejects from_datetime > 30 days before now
+
+    # Clamp start so it's never more than 29 days before the current moment
+    now = datetime.now(date_from.tzinfo or ZoneInfo('UTC'))
+    earliest_allowed = now - timedelta(days=MAX_HISTORY)
+    if date_from < earliest_allowed:
+        logger.info(
+            'Clamping from_datetime from %s to %s (FM-Track 30-day history limit)',
+            date_from, earliest_allowed,
+        )
+        date_from = earliest_allowed
+
+    if date_from >= date_till:
+        return []
+
+    total_days = (date_till - date_from).days
+    if total_days <= MAX_DAYS:
+        return _get_trips_single(object_id, date_from, date_till)
+
+    # Chunk into ≤MAX_DAYS periods
+    all_trips = []
+    chunk_start = date_from
+    while chunk_start < date_till:
+        chunk_end = min(chunk_start + timedelta(days=MAX_DAYS), date_till)
+        try:
+            trips = _get_trips_single(object_id, chunk_start, chunk_end)
+            all_trips.extend(trips)
+        except FMTrackError:
+            logger.warning(
+                'Chunk %s→%s failed for object %s, skipping',
+                chunk_start, chunk_end, object_id,
+            )
+        chunk_start = chunk_end + timedelta(seconds=1)
+    return all_trips
+
+
+def _get_trips_single(object_id, date_from, date_till):
+    """Fetch trips for a single ≤30-day period, handling pagination."""
+    all_trips = []
+    current_from = date_from
+
+    for _ in range(50):  # safety limit on pages
+        data = _api_get(f'/objects/{object_id}/trips', {
+            'from_datetime': current_from.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'till_datetime': date_till.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        })
+        if isinstance(data, list):
+            all_trips.extend(data)
+            break
+        if isinstance(data, dict):
+            trips = data.get('trips', data.get('value', []))
+            all_trips.extend(trips)
+            cont = data.get('continuation_token')
+            if cont:
+                try:
+                    current_from = datetime.strptime(cont, '%Y-%m-%dT%H:%M:%S.%fZ')
+                    current_from = current_from.replace(tzinfo=ZoneInfo('UTC'))
+                    if current_from > date_till:
+                        break
+                except ValueError:
+                    break
+            else:
+                break
+        else:
+            break
+    return all_trips
 
 
 def get_raw_data(object_id, date_from, date_till):

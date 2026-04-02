@@ -10,6 +10,11 @@ class TimeEntryStatus(models.TextChoices):
     INGEDIEND = 'ingediend', 'Ingediend'
 
 
+class TimeEntryBron(models.TextChoices):
+    HANDMATIG = 'handmatig', 'Handmatig'
+    AUTO_IMPORT = 'auto_import', 'Automatische import'
+
+
 class TimeEntry(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
@@ -38,6 +43,12 @@ class TimeEntry(models.Model):
         choices=TimeEntryStatus.choices,
         default=TimeEntryStatus.CONCEPT,
         verbose_name='Status'
+    )
+    bron = models.CharField(
+        max_length=20,
+        choices=TimeEntryBron.choices,
+        default=TimeEntryBron.HANDMATIG,
+        verbose_name='Bron'
     )
     
     created_at = models.DateTimeField(auto_now_add=True)

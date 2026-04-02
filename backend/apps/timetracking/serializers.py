@@ -17,7 +17,7 @@ class TimeEntrySerializer(serializers.ModelSerializer):
             'km_start', 'km_eind', 'totaal_km',
             'aanvang', 'eind', 'pauze', 'pauze_display',
             'totaal_uren', 'totaal_uren_display',
-            'status', 'created_at', 'updated_at'
+            'status', 'bron', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'weeknummer', 'totaal_km', 'totaal_uren', 'created_at', 'updated_at']
     

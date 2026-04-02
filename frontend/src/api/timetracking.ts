@@ -7,6 +7,7 @@ export interface TimeEntryFilters {
   page_size?: number
   search?: string
   status?: 'concept' | 'ingediend'
+  bron?: 'handmatig' | 'auto_import'
   weeknummer?: number
   weeknummer__gte?: number
   weeknummer__lte?: number
@@ -76,6 +77,7 @@ export async function getTimeEntries(filters?: TimeEntryFilters): Promise<Pagina
   if (filters?.page_size) params.append('page_size', filters.page_size.toString())
   if (filters?.search) params.append('search', filters.search)
   if (filters?.status) params.append('status', filters.status)
+  if (filters?.bron) params.append('bron', filters.bron)
   if (filters?.weeknummer) params.append('weeknummer', filters.weeknummer.toString())
   if (filters?.weeknummer__gte) params.append('weeknummer__gte', filters.weeknummer__gte.toString())
   if (filters?.weeknummer__lte) params.append('weeknummer__lte', filters.weeknummer__lte.toString())

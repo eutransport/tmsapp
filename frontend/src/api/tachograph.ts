@@ -98,6 +98,15 @@ export async function getTachographVehicles(): Promise<{ vehicles: TachoVehicle[
   return response.data
 }
 
+export async function getTachographSyncInfo(): Promise<{
+  start_datum: string | null
+  effective_start: string | null
+  unprocessed_dates: number
+}> {
+  const response = await api.get('/tracking/tachograph/sync/')
+  return response.data
+}
+
 export async function triggerTachographSync(force = false): Promise<{
   status: string
   reason?: string
@@ -119,10 +128,13 @@ export interface TachographComparisonRow {
   chauffeur_naam: string
   chauffeur_begin: string | null
   chauffeur_eind: string | null
+  auto_begin: string | null
+  auto_eind: string | null
   tacho_begin: string | null
   tacho_eind: string | null
   chauffeur_totaal: number | null
   tacho_totaal: number | null
+  auto_totaal: number | null
   verschil: number | null
   verschil_bron: 'tacho' | 'chauffeur' | null
   uren_per_dag: number | null
@@ -139,14 +151,16 @@ export interface TachographComparisonResponse {
   plates: string[]
 }
 
-export async function getTachographComparison(dateFrom: string, dateTill: string): Promise<TachographComparisonResponse> {
-  const response = await api.get(`/tracking/tachograph/comparison/?date_from=${encodeURIComponent(dateFrom)}&date_till=${encodeURIComponent(dateTill)}`)
+export async function getTachographComparison(dateFrom: string, dateTill: string, kenteken?: string): Promise<TachographComparisonResponse> {
+  const params = new URLSearchParams({ date_from: dateFrom, date_till: dateTill })
+  if (kenteken) params.append('kenteken', kenteken)
+  const response = await api.get(`/tracking/tachograph/comparison/?${params.toString()}`)
   return response.data
 }
 
 export async function exportTachographComparisonXlsx(dateFrom: string, dateTill: string): Promise<Blob> {
   const response = await api.get(
-    `/tracking/tachograph/comparison/?date_from=${encodeURIComponent(dateFrom)}&date_till=${encodeURIComponent(dateTill)}&format=xlsx`,
+    `/tracking/tachograph/comparison/?date_from=${encodeURIComponent(dateFrom)}&date_till=${encodeURIComponent(dateTill)}&export=xlsx`,
     { responseType: 'blob' },
   )
   return response.data
@@ -154,7 +168,7 @@ export async function exportTachographComparisonXlsx(dateFrom: string, dateTill:
 
 export async function exportTachographComparisonPdf(dateFrom: string, dateTill: string): Promise<Blob> {
   const response = await api.get(
-    `/tracking/tachograph/comparison/?date_from=${encodeURIComponent(dateFrom)}&date_till=${encodeURIComponent(dateTill)}&format=pdf`,
+    `/tracking/tachograph/comparison/?date_from=${encodeURIComponent(dateFrom)}&date_till=${encodeURIComponent(dateTill)}&export=pdf`,
     { responseType: 'blob' },
   )
   return response.data

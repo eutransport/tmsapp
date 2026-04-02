@@ -14,7 +14,7 @@ import {
   MapPinIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
-import { getTachographOverview, writeOvertime, triggerTachographSync, TachographVehicle, TachographTrip } from '@/api/tachograph'
+import { getTachographOverview, writeOvertime, triggerTachographSync, getTachographSyncInfo, TachographVehicle, TachographTrip } from '@/api/tachograph'
 import { getAllDrivers } from '@/api/drivers'
 import { Driver } from '@/types'
 import clsx from '@/utils/clsx'
@@ -44,6 +44,9 @@ export default function TachographPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [syncStartDatum, setSyncStartDatum] = useState<string | null>(null)
+  const [syncEffectiveStart, setSyncEffectiveStart] = useState<string | null>(null)
+  const [showSyncConfirm, setShowSyncConfirm] = useState(false)
 
   // Date navigation helpers
   const addDays = (dateStr: string, days: number) => {
@@ -88,6 +91,10 @@ export default function TachographPage() {
 
   useEffect(() => {
     getAllDrivers().then(setDrivers).catch(() => {})
+    getTachographSyncInfo().then(info => {
+      setSyncStartDatum(info.start_datum)
+      setSyncEffectiveStart(info.effective_start)
+    }).catch(() => {})
   }, [])
 
   const toggleExpand = (id: string) => {
@@ -139,9 +146,15 @@ export default function TachographPage() {
   }
 
   const handleManualSync = async (force = false) => {
-    if (force && !window.confirm(t('tachograph.forceResyncConfirm'))) {
+    if (force) {
+      setShowSyncConfirm(true)
       return
     }
+    await executeSync(false)
+  }
+
+  const executeSync = async (force: boolean) => {
+    setShowSyncConfirm(false)
     setIsSyncing(true)
     setError(null)
     try {
@@ -413,6 +426,41 @@ export default function TachographPage() {
             >
               {t('common.next')}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Force Resync Confirm Modal */}
+      {showSyncConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              {t('tachograph.forceResync')}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
+              {t('tachograph.forceResyncConfirm')}
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              {t('tachograph.syncStartInfo', {
+                datum: (syncEffectiveStart || syncStartDatum)
+                  ? new Date(((syncEffectiveStart || syncStartDatum) as string) + 'T12:00:00').toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
+                  : '-',
+              })}
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowSyncConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => executeSync(true)}
+                className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700"
+              >
+                {t('tachograph.forceResync')}
+              </button>
+            </div>
           </div>
         </div>
       )}

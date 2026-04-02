@@ -40,16 +40,19 @@ export default function TachographComparisonPage() {
     setLoading(true)
     setError(null)
     try {
-      const data = await getTachographComparison(dateFrom, dateTill)
+      const data = await getTachographComparison(dateFrom, dateTill, filterKenteken || undefined)
       setRows(data.rows)
       setDrivers(data.drivers || [])
-      setPlates(data.plates || [])
+      // Only update plates when no filter active (keep dropdown populated)
+      if (!filterKenteken) {
+        setPlates(data.plates || [])
+      }
     } catch (err: any) {
       setError(err?.response?.data?.error || t('tachograph.comparison.fetchError'))
     } finally {
       setLoading(false)
     }
-  }, [dateFrom, dateTill, t])
+  }, [dateFrom, dateTill, filterKenteken, t])
 
   useEffect(() => {
     fetchData()
@@ -312,6 +315,12 @@ export default function TachographComparisonPage() {
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-blue-50 dark:bg-blue-900/20">
                       {t('tachograph.comparison.colDriverEnd')}
                     </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-purple-50 dark:bg-purple-900/20">
+                      Aut. Begin
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-purple-50 dark:bg-purple-900/20">
+                      Aut. Eind
+                    </th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-amber-50 dark:bg-amber-900/20">
                       {t('tachograph.comparison.colTachoStart')}
                     </th>
@@ -341,7 +350,7 @@ export default function TachographComparisonPage() {
                 <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                   {filteredRows.length === 0 ? (
                     <tr>
-                      <td colSpan={13} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={15} className="px-4 py-8 text-center text-gray-500">
                         {t('tachograph.comparison.noData')}
                       </td>
                     </tr>
@@ -361,6 +370,12 @@ export default function TachographComparisonPage() {
                       </td>
                       <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300 bg-blue-50/50 dark:bg-blue-900/10">
                         {row.chauffeur_eind || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300 bg-purple-50/50 dark:bg-purple-900/10">
+                        {row.auto_begin || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300 bg-purple-50/50 dark:bg-purple-900/10">
+                        {row.auto_eind || '-'}
                       </td>
                       <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300 bg-amber-50/50 dark:bg-amber-900/10">
                         {row.tacho_begin || '-'}
@@ -436,7 +451,20 @@ export default function TachographComparisonPage() {
                       {row.chauffeur_totaal !== null ? formatHours(row.chauffeur_totaal) : '-'}
                     </div>
                   </div>
-                  <div className="bg-amber-100 dark:bg-amber-900/40 rounded-lg p-2 border border-amber-200 dark:border-amber-800">
+                  <div className="bg-purple-100 dark:bg-purple-900/40 rounded-lg p-2 border border-purple-200 dark:border-purple-800">
+                    <div className="text-xs text-purple-700 dark:text-purple-300 font-medium mb-1">Aut. Import</div>
+                    <div className="flex justify-between">
+                      <span className="text-purple-900 dark:text-purple-200">{row.auto_begin || '-'}</span>
+                      <span className="text-purple-400 dark:text-purple-500">→</span>
+                      <span className="text-purple-900 dark:text-purple-200">{row.auto_eind || '-'}</span>
+                    </div>
+                    <div className="text-center font-semibold text-purple-900 dark:text-white mt-1">
+                      {row.auto_totaal !== null ? formatHours(row.auto_totaal) : '-'}
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="col-span-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg p-2 border border-amber-200 dark:border-amber-800">
                     <div className="text-xs text-amber-700 dark:text-amber-300 font-medium mb-1">{t('tachograph.comparison.colTachoTotal', 'Totaal (tacho)')}</div>
                     <div className="flex justify-between">
                       <span className="text-amber-900 dark:text-amber-200">{row.tacho_begin || '-'}</span>

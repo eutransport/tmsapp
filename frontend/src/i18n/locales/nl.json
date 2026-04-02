@@ -2001,6 +2001,7 @@
     "forceResync": "Opnieuw synchroniseren",
     "forceResyncTooltip": "Verwijder alle bestaande automatische uren en synchroniseer opnieuw vanaf de startdatum",
     "forceResyncConfirm": "Weet je zeker dat je alle automatisch aangemaakte uren wilt verwijderen en opnieuw wilt synchroniseren? Dit kan niet ongedaan worden gemaakt.",
+    "syncStartInfo": "Gegevens worden opgehaald vanaf {{datum}}.",
     "forceResyncComplete": "Hernieuwde synchronisatie voltooid: {{deleted}} oude entries verwijderd, {{entries}} nieuwe uren aangemaakt over {{dates}} dagen",
     "today": "Vandaag",
     "previousDay": "Vorige dag",

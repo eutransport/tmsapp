@@ -2001,6 +2001,7 @@
     "forceResync": "Re-sync all",
     "forceResyncTooltip": "Delete all existing auto-created entries and re-sync from start date",
     "forceResyncConfirm": "Are you sure you want to delete all auto-created entries and re-sync? This cannot be undone.",
+    "syncStartInfo": "Data will be synced from {{datum}}.",
     "forceResyncComplete": "Re-sync complete: {{deleted}} old entries deleted, {{entries}} new entries created over {{dates}} days",
     "today": "Today",
     "previousDay": "Previous day",

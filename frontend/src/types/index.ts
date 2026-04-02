@@ -194,6 +194,7 @@ export interface TimeEntry {
   totaal_uren: string
   totaal_uren_display: string
   status: 'concept' | 'ingediend'
+  bron: 'handmatig' | 'auto_import'
   created_at: string
   updated_at: string
 }

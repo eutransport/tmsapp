@@ -48,6 +48,11 @@ def sync_tachograph_hours():
 
     yesterday = date.today() - timedelta(days=1)
 
+    # FM-Track only allows fetching data from the last 29 days
+    MAX_HISTORY = 29
+    earliest_allowed = date.today() - timedelta(days=MAX_HISTORY)
+    effective_start = max(start_datum, earliest_allowed)
+
     # Find dates that haven't been synced yet
     synced_dates = set(
         TachographSyncLog.objects.filter(
@@ -56,8 +61,30 @@ def sync_tachograph_hours():
         ).values_list('date', flat=True)
     )
 
-    dates_to_process = []
+    # Mark dates before the FM-Track window as synced (data unavailable)
+    dates_too_old = []
     current = start_datum
+    while current < effective_start:
+        if current not in synced_dates:
+            dates_too_old.append(current)
+        current += timedelta(days=1)
+
+    if dates_too_old:
+        logs_to_create = [
+            TachographSyncLog(
+                date=d,
+                errors='Datum ouder dan 30 dagen - FM-Track data niet meer beschikbaar',
+            )
+            for d in dates_too_old
+        ]
+        TachographSyncLog.objects.bulk_create(logs_to_create)
+        logger.info(
+            'Tachograaf sync: %d datums overgeslagen (ouder dan 30 dagen)',
+            len(dates_too_old),
+        )
+
+    dates_to_process = []
+    current = effective_start
     while current <= yesterday:
         if current not in synced_dates:
             dates_to_process.append(current)
@@ -138,13 +165,13 @@ def force_resync_tachograph_hours():
     )
     auto_user_ids = [d.gekoppelde_gebruiker_id for d in auto_drivers]
 
-    # Delete auto-created TimeEntries (status='ingediend') for these drivers
-    # in the tachograph date range
+    # Delete auto-created TimeEntries (bron='auto_import') for these drivers
+    # in the tachograph date range - manual entries are preserved
     deleted_entries, _ = TimeEntry.objects.filter(
         user_id__in=auto_user_ids,
         datum__gte=start_datum,
         datum__lte=yesterday,
-        status='ingediend',
+        bron='auto_import',
     ).delete()
 
     # Delete overtime records in the date range
@@ -153,9 +180,14 @@ def force_resync_tachograph_hours():
         date__lte=yesterday,
     ).delete()
 
-    # Clear all sync logs in the date range
+    # Clear sync logs only for dates within the FM-Track window (last 29 days)
+    # so old dates don't get retried needlessly
+    MAX_HISTORY = 29
+    earliest_allowed = date.today() - timedelta(days=MAX_HISTORY)
+    effective_start = max(start_datum, earliest_allowed)
+
     deleted_logs, _ = TachographSyncLog.objects.filter(
-        date__gte=start_datum,
+        date__gte=effective_start,
         date__lte=yesterday,
     ).delete()
 
@@ -293,13 +325,15 @@ def _process_date(date_str, process_date, driver_lookup, plate_lookup):
         user = tms_driver.gekoppelde_gebruiker
 
         # Check if entry already exists for this user+date+kenteken
-        existing = TimeEntry.objects.filter(
+        # Only skip if an auto_import entry exists; manual entries are preserved
+        existing_auto = TimeEntry.objects.filter(
             user=user,
             datum=process_date,
             kenteken=kenteken,
+            bron='auto_import',
         ).exists()
 
-        if existing:
+        if existing_auto:
             continue
 
         # Extract trip data
@@ -355,6 +389,7 @@ def _process_date(date_str, process_date, driver_lookup, plate_lookup):
                 eind=eind,
                 pauze=pauze,
                 status='ingediend',
+                bron='auto_import',
             )
             entry.save()  # save() auto-calculates weeknummer, totaal_km, totaal_uren
             entries_created += 1

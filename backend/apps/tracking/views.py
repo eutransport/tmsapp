@@ -596,13 +596,51 @@ class TachographVehiclesListView(APIView):
 
 class TachographManualSyncView(APIView):
     """
-    POST /api/tracking/tachograph/sync/
-    Manually trigger the tachograph hours sync task.
-    Returns the task result directly (synchronous).
+    GET  /api/tracking/tachograph/sync/  — Return sync info (start date, unprocessed count).
+    POST /api/tracking/tachograph/sync/  — Trigger sync.
 
     Pass {"force": true} to clear existing sync data and re-sync everything.
     """
     permission_classes = [IsAdminOrManager]
+
+    def get(self, request):
+        from datetime import date, timedelta
+        from apps.core.models import AppSettings
+        from apps.tracking.models import TachographSyncLog
+
+        settings = AppSettings.get_settings()
+        start_datum = settings.tachograaf_start_datum
+
+        if not start_datum:
+            return Response({'start_datum': None, 'effective_start': None, 'unprocessed_dates': 0})
+
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+
+        # FM-Track only allows the last 29 days
+        MAX_HISTORY = 29
+        earliest_allowed = today - timedelta(days=MAX_HISTORY)
+        effective_start = max(start_datum, earliest_allowed)
+
+        synced_dates = set(
+            TachographSyncLog.objects.filter(
+                date__gte=effective_start,
+                date__lte=yesterday,
+            ).values_list('date', flat=True)
+        )
+
+        unprocessed = 0
+        current = effective_start
+        while current <= yesterday:
+            if current not in synced_dates:
+                unprocessed += 1
+            current += timedelta(days=1)
+
+        return Response({
+            'start_datum': start_datum.strftime('%Y-%m-%d'),
+            'effective_start': effective_start.strftime('%Y-%m-%d'),
+            'unprocessed_dates': unprocessed,
+        })
 
     def post(self, request):
         force = request.data.get('force', False)
@@ -714,37 +752,53 @@ class TachographComparisonView(APIView):
             if drv.gekoppelde_gebruiker_id:
                 user_driver_map[drv.gekoppelde_gebruiker_id] = drv
 
-        # ── 3. All submitted time entries in the range ──
+        # ── 3. All time entries in the range (concept + ingediend) ──
         all_entries = list(
             TimeEntry.objects.select_related('user').filter(
                 datum__range=[from_date, till_date],
-                status='ingediend',
+                status__in=['concept', 'ingediend'],
             )
         )
 
-        entries_by_date_plate = {}
+        # Optional kenteken filter from frontend
+        kenteken_filter = request.query_params.get('kenteken', '').strip()
+        kenteken_filter_norm = _norm(kenteken_filter) if kenteken_filter else ''
+
+        entries_by_date_plate = {}      # manual/chauffeur entries
+        auto_entries_by_date_plate = {}  # auto-import entries
         entries_by_date_user = {}   # (date, user_id) → entry (for drivers without plate)
         entry_plates = set()
         for entry in all_entries:
+            is_auto = getattr(entry, 'bron', 'handmatig') == 'auto_import'
+
             # Index by user for drivers without tacho_kenteken
             ukey = (entry.datum, entry.user_id)
-            if ukey not in entries_by_date_user:
+            if not is_auto and ukey not in entries_by_date_user:
                 entries_by_date_user[ukey] = entry
 
             if not entry.kenteken:
                 continue
             n = _norm(entry.kenteken)
             key = (entry.datum, n)
-            if key not in entries_by_date_plate:
-                entries_by_date_plate[key] = entry
+
+            if is_auto:
+                if key not in auto_entries_by_date_plate:
+                    auto_entries_by_date_plate[key] = entry
             else:
-                tms_drv = plate_driver_map.get(n)
-                if tms_drv and tms_drv.gekoppelde_gebruiker_id == entry.user_id:
+                if key not in entries_by_date_plate:
                     entries_by_date_plate[key] = entry
+                else:
+                    tms_drv = plate_driver_map.get(n)
+                    if tms_drv and tms_drv.gekoppelde_gebruiker_id == entry.user_id:
+                        entries_by_date_plate[key] = entry
             entry_plates.add(n)
 
-        # ── 4. Fetch ALL FM-Track vehicles (not just configured ones) ──
-        objs_to_fetch = dict(plate_to_obj)  # fetch every vehicle from the API
+        # ── 4. Determine which FM-Track vehicles to fetch ──
+        if kenteken_filter_norm and kenteken_filter_norm in plate_to_obj:
+            # Only fetch the selected vehicle for efficiency
+            objs_to_fetch = {kenteken_filter_norm: plate_to_obj[kenteken_filter_norm]}
+        else:
+            objs_to_fetch = dict(plate_to_obj)  # fetch every vehicle from the API
 
         # ── 5. Fetch trips per vehicle for the full range (parallel) ──
         utc_start = dt(
@@ -796,12 +850,18 @@ class TachographComparisonView(APIView):
             entry_plates_today = {p for (d, p) in entries_by_date_plate if d == current}
             all_plates_today = tacho_plates_today | entry_plates_today
 
+            # When a kenteken filter is active, always include that plate
+            # so we generate a row even if no trips/entries exist
+            if kenteken_filter_norm:
+                all_plates_today.add(kenteken_filter_norm)
+
             # Track which users already appeared via plate-based rows
             seen_users_today = set()
 
             for norm_plate in sorted(all_plates_today):
                 vehicle = tacho_by_date_plate.get((current, norm_plate))
                 entry = entries_by_date_plate.get((current, norm_plate))
+                auto_entry = auto_entries_by_date_plate.get((current, norm_plate))
                 tms_driver = plate_driver_map.get(norm_plate)
 
                 raw_kenteken = ''
@@ -811,19 +871,35 @@ class TachographComparisonView(APIView):
                     )
                 elif entry:
                     raw_kenteken = entry.kenteken
+                elif auto_entry:
+                    raw_kenteken = auto_entry.kenteken
+                elif kenteken_filter_norm:
+                    # Filtered plate with no trips/entries: use original plate from FM-Track
+                    fm_obj = plate_to_obj.get(norm_plate)
+                    if fm_obj:
+                        raw_kenteken = (
+                            fm_obj.get('vehicle_params', {}).get('plate_number')
+                            or fm_obj.get('name', '')
+                        )
+                    else:
+                        raw_kenteken = kenteken_filter
 
                 driver_naam = tms_driver.naam if tms_driver else ''
                 if not driver_naam and entry and entry.user:
                     driver_naam = entry.user.full_name
+                if not driver_naam and auto_entry and auto_entry.user:
+                    driver_naam = auto_entry.user.full_name
 
                 if entry and entry.user_id:
                     seen_users_today.add(entry.user_id)
+                if auto_entry and auto_entry.user_id:
+                    seen_users_today.add(auto_entry.user_id)
                 if tms_driver and tms_driver.gekoppelde_gebruiker_id:
                     seen_users_today.add(tms_driver.gekoppelde_gebruiker_id)
 
                 rows.append(self._build_single_row(
                     current, raw_kenteken, driver_naam, vehicle, entry,
-                    tms_driver, NL_TZ,
+                    auto_entry, tms_driver, NL_TZ,
                 ))
 
             # Also include drivers who have entries today but no plate match
@@ -842,7 +918,7 @@ class TachographComparisonView(APIView):
 
                 rows.append(self._build_single_row(
                     current, raw_kenteken, driver_naam, None, entry,
-                    tms_driver, NL_TZ,
+                    None, tms_driver, NL_TZ,
                 ))
 
             current += timedelta(days=1)
@@ -867,7 +943,7 @@ class TachographComparisonView(APIView):
         return rows, date_from_str, date_till_str, drivers_list, plates_list
 
     @staticmethod
-    def _build_single_row(current, raw_kenteken, driver_naam, vehicle, entry, tms_driver, NL_TZ):
+    def _build_single_row(current, raw_kenteken, driver_naam, vehicle, entry, auto_entry, tms_driver, NL_TZ):
         from datetime import datetime as dt
 
         # Tachograph times
@@ -898,7 +974,7 @@ class TachographComparisonView(APIView):
                     (le_dt - fs_dt).total_seconds() / 3600, 2,
                 )
 
-        # Chauffeur times
+        # Chauffeur times (manual entries)
         chauffeur_begin = chauffeur_eind = None
         chauffeur_total = None
         if entry:
@@ -909,6 +985,19 @@ class TachographComparisonView(APIView):
             if entry.totaal_uren:
                 chauffeur_total = round(
                     entry.totaal_uren.total_seconds() / 3600, 2,
+                )
+
+        # Auto-import times
+        auto_begin = auto_eind = None
+        auto_totaal = None
+        if auto_entry:
+            if auto_entry.aanvang:
+                auto_begin = auto_entry.aanvang.strftime('%H:%M')
+            if auto_entry.eind:
+                auto_eind = auto_entry.eind.strftime('%H:%M')
+            if auto_entry.totaal_uren:
+                auto_totaal = round(
+                    auto_entry.totaal_uren.total_seconds() / 3600, 2,
                 )
 
         # Difference
@@ -943,6 +1032,9 @@ class TachographComparisonView(APIView):
             'tacho_eind': tacho_eind,
             'chauffeur_totaal': chauffeur_total,
             'tacho_totaal': tacho_total,
+            'auto_begin': auto_begin,
+            'auto_eind': auto_eind,
+            'auto_totaal': auto_totaal,
             'verschil': verschil,
             'verschil_bron': verschil_bron,
             'uren_per_dag': uren_per_dag,
@@ -966,7 +1058,7 @@ class TachographComparisonView(APIView):
         rows, date_from_str, date_till_str, drivers_list, plates_list = result
 
         # ── Export ──
-        fmt = request.query_params.get('format')
+        fmt = request.query_params.get('export')
         if fmt == 'xlsx':
             return self._export_xlsx(rows, date_from_str, date_till_str)
         if fmt == 'pdf':
@@ -1012,11 +1104,12 @@ class TachographComparisonView(APIView):
         headers = [
             'Datum', 'Chauffeur', 'Kenteken',
             'Begin (uren)', 'Eind (uren)',
+            'Aut. Begin', 'Aut. Eind',
             'Begin (tacho)', 'Eind (tacho)',
             'Totaal (uren)', 'Totaal (tacho)', 'Verschil',
             'Uren/dag', 'Overwerk (uren)', 'Overwerk (tacho)',
         ]
-        col_widths = [14, 20, 14, 13, 13, 13, 13, 14, 14, 16, 12, 16, 16]
+        col_widths = [14, 20, 14, 13, 13, 11, 11, 13, 13, 14, 14, 16, 12, 16, 16]
 
         for col_idx, (header, width) in enumerate(zip(headers, col_widths), 1):
             cell = ws.cell(row=1, column=col_idx, value=header)
@@ -1039,6 +1132,8 @@ class TachographComparisonView(APIView):
                 row['kenteken'],
                 row['chauffeur_begin'] or '',
                 row['chauffeur_eind'] or '',
+                row.get('auto_begin') or '',
+                row.get('auto_eind') or '',
                 row['tacho_begin'] or '',
                 row['tacho_eind'] or '',
                 self._format_hours(row['chauffeur_totaal']),
@@ -1086,6 +1181,8 @@ class TachographComparisonView(APIView):
                 <td>{row["kenteken"]}</td>
                 <td class="c">{row["chauffeur_begin"] or "-"}</td>
                 <td class="c">{row["chauffeur_eind"] or "-"}</td>
+                <td class="c">{row.get("auto_begin") or "-"}</td>
+                <td class="c">{row.get("auto_eind") or "-"}</td>
                 <td class="c">{row["tacho_begin"] or "-"}</td>
                 <td class="c">{row["tacho_eind"] or "-"}</td>
                 <td class="c">{self._format_hours(row["chauffeur_totaal"]) or "-"}</td>
@@ -1116,6 +1213,7 @@ class TachographComparisonView(APIView):
   <thead><tr>
     <th>Datum</th><th>Chauffeur</th><th>Kenteken</th>
     <th class="c">Begin (uren)</th><th class="c">Eind (uren)</th>
+    <th class="c">Aut. Begin</th><th class="c">Aut. Eind</th>
     <th class="c">Begin (tacho)</th><th class="c">Eind (tacho)</th>
     <th class="c">Totaal (uren)</th><th class="c">Totaal (tacho)</th>
     <th class="c">Verschil</th>
