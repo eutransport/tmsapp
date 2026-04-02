@@ -567,35 +567,55 @@ function VehicleCard({ vehicle, date, isExpanded, onToggle, onWriteOvertime, for
     }
     doc.setTextColor(0)
 
-    // Trips table
-    const tableData = vehicle.trips.map((trip: TachographTrip) => [
-      formatTime(trip.start_time),
-      formatTime(trip.end_time),
-      trip.duration_display,
-      `${trip.distance_km.toFixed(1)} km`,
-      trip.drivers.map(d => d.name).join(', ') || '-',
-      trip.start_address && trip.end_address
-        ? `${trip.start_address} \u2192 ${trip.end_address}`
-        : trip.start_address || trip.end_address || '-',
-    ])
+    // Trips table - decide columns based on data
+    const hasMultipleDrivers = new Set(vehicle.trips.flatMap(t => t.drivers.map(d => d.name))).size > 1
+    const hasRoutes = vehicle.trips.some(t => t.start_address || t.end_address)
 
-    const footRow = [
+    const headers: string[] = ['Start', 'Eind', 'Duur', 'Afstand']
+    if (hasMultipleDrivers) headers.push('Chauffeur')
+    if (hasRoutes) headers.push('Route')
+
+    const tableData = vehicle.trips.map((trip: TachographTrip) => {
+      const row: string[] = [
+        formatTime(trip.start_time),
+        formatTime(trip.end_time),
+        trip.duration_display,
+        `${trip.distance_km.toFixed(1)} km`,
+      ]
+      if (hasMultipleDrivers) row.push(trip.drivers.map(d => d.name).join(', ') || '-')
+      if (hasRoutes) {
+        const route = trip.start_address && trip.end_address
+          ? `${trip.start_address} -> ${trip.end_address}`
+          : trip.start_address || trip.end_address || '-'
+        row.push(route)
+      }
+      return row
+    })
+
+    const footRow: string[] = [
       'Totaal', '', vehicle.total_hours_display + (vehicle.has_overtime ? ` (+${vehicle.overtime_display})` : ''),
-      `${formatKm(vehicle.total_km)} km`, '', '',
+      `${formatKm(vehicle.total_km)} km`,
     ]
+    if (hasMultipleDrivers) footRow.push('')
+    if (hasRoutes) footRow.push('')
+
+    // Column styles
+    const colStyles: Record<number, { cellWidth?: number | 'auto' | 'wrap' }> = {}
+    const routeColIdx = headers.indexOf('Route')
+    if (routeColIdx !== -1) {
+      colStyles[routeColIdx] = { cellWidth: 'wrap' }
+    }
 
     autoTable(doc, {
-      head: [['Start', 'Eind', 'Duur', 'Afstand', 'Chauffeur', 'Route']],
+      head: [headers],
       body: tableData,
       foot: [footRow],
       startY: vehicle.drivers.length > 0 ? 38 : 33,
-      styles: { fontSize: 9, cellPadding: 2.5 },
+      styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
       footStyles: { fillColor: [243, 244, 246], textColor: [0, 0, 0], fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [249, 250, 251] },
-      columnStyles: {
-        5: { cellWidth: 80 },
-      },
+      columnStyles: colStyles,
     })
 
     // Overtime calculation breakdown
