@@ -181,26 +181,29 @@ def force_resync_tachograph_hours():
     )
     auto_user_ids = [d.gekoppelde_gebruiker_id for d in auto_drivers]
 
+    # Only delete records within the FM-Track re-sync window (last 29 days).
+    # Records older than 29 days cannot be re-fetched from FM-Track and would
+    # be permanently lost — destroying overtime balances and leave calculations.
+    MAX_HISTORY = 29
+    earliest_allowed = date.today() - timedelta(days=MAX_HISTORY)
+    effective_start = max(start_datum, earliest_allowed)
+
     # Delete auto-created TimeEntries (bron='auto_import') for these drivers
-    # in the tachograph date range - manual entries are preserved
+    # only within the re-syncable window - older entries are preserved
     deleted_entries, _ = TimeEntry.objects.filter(
         user_id__in=auto_user_ids,
-        datum__gte=start_datum,
+        datum__gte=effective_start,
         datum__lte=yesterday,
         bron='auto_import',
     ).delete()
 
-    # Delete overtime records in the date range
+    # Delete overtime records only within the re-syncable window
+    # and only for auto_uren drivers (not all drivers)
     deleted_overtime, _ = TachographOvertime.objects.filter(
-        date__gte=start_datum,
+        driver__in=auto_drivers,
+        date__gte=effective_start,
         date__lte=yesterday,
     ).delete()
-
-    # Clear sync logs only for dates within the FM-Track window (last 29 days)
-    # so old dates don't get retried needlessly
-    MAX_HISTORY = 29
-    earliest_allowed = date.today() - timedelta(days=MAX_HISTORY)
-    effective_start = max(start_datum, earliest_allowed)
 
     deleted_logs, _ = TachographSyncLog.objects.filter(
         date__gte=effective_start,
