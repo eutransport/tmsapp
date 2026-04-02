@@ -1,6 +1,6 @@
 """Admin configuration for leave app."""
 from django.contrib import admin
-from .models import GlobalLeaveSettings, LeaveBalance, LeaveRequest
+from .models import GlobalLeaveSettings, LeaveBalance, LeaveRequest, PublicHoliday
 
 
 @admin.register(GlobalLeaveSettings)
@@ -21,3 +21,10 @@ class LeaveRequestAdmin(admin.ModelAdmin):
     list_filter = ['status', 'leave_type']
     search_fields = ['user__voornaam', 'user__achternaam', 'user__email']
     date_hierarchy = 'start_date'
+
+
+@admin.register(PublicHoliday)
+class PublicHolidayAdmin(admin.ModelAdmin):
+    list_display = ['name', 'date', 'year']
+    list_filter = ['year']
+    ordering = ['date']

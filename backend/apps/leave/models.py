@@ -1,8 +1,9 @@
 """
 Leave management models.
-Handles employee leave balance, leave requests, and global settings.
+Handles employee leave balance, leave requests, public holidays, and global settings.
 """
 import uuid
+from datetime import date, timedelta
 from decimal import Decimal
 from django.db import models
 from django.conf import settings
@@ -306,3 +307,91 @@ class LeaveRequest(models.Model):
                 result['vacation_deduct'] = self.hours_requested - free_remaining
         
         return result
+
+
+class PublicHoliday(models.Model):
+    """
+    Public holidays (feestdagen).
+    Auto-generated for Dutch national holidays per year.
+    These days are excluded from leave calculations.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    date = models.DateField(verbose_name='Datum', unique=True)
+    name = models.CharField(max_length=100, verbose_name='Naam')
+    year = models.IntegerField(verbose_name='Jaar', db_index=True)
+
+    class Meta:
+        verbose_name = 'Feestdag'
+        verbose_name_plural = 'Feestdagen'
+        ordering = ['date']
+
+    def __str__(self):
+        return f"{self.name} ({self.date})"
+
+    @staticmethod
+    def _easter(year):
+        """Calculate Easter Sunday using the Anonymous Gregorian algorithm."""
+        a = year % 19
+        b, c = divmod(year, 100)
+        d, e = divmod(b, 4)
+        f = (b + 8) // 25
+        g = (b - f + 1) // 3
+        h = (19 * a + b - d - g + 15) % 30
+        i, k = divmod(c, 4)
+        l = (32 + 2 * e + 2 * i - h - k) % 7
+        m = (a + 11 * h + 22 * l) // 451
+        month = (h + l - 7 * m + 114) // 31
+        day = ((h + l - 7 * m + 114) % 31) + 1
+        return date(year, month, day)
+
+    @classmethod
+    def get_dutch_holidays(cls, year):
+        """Return a list of (date, name) tuples for Dutch national holidays."""
+        easter = cls._easter(year)
+        return [
+            (date(year, 1, 1), "Nieuwjaarsdag"),
+            (easter - timedelta(days=2), "Goede Vrijdag"),
+            (easter, "Eerste Paasdag"),
+            (easter + timedelta(days=1), "Tweede Paasdag"),
+            (date(year, 4, 27), "Koningsdag"),
+            (date(year, 5, 5), "Bevrijdingsdag"),
+            (easter + timedelta(days=39), "Hemelvaartsdag"),
+            (easter + timedelta(days=49), "Eerste Pinksterdag"),
+            (easter + timedelta(days=50), "Tweede Pinksterdag"),
+            (date(year, 12, 25), "Eerste Kerstdag"),
+            (date(year, 12, 26), "Tweede Kerstdag"),
+        ]
+
+    @classmethod
+    def ensure_year(cls, year):
+        """Create holiday records for a year if they don't exist yet."""
+        if cls.objects.filter(year=year).exists():
+            return
+        holidays = cls.get_dutch_holidays(year)
+        cls.objects.bulk_create([
+            cls(date=d, name=name, year=year)
+            for d, name in holidays
+        ], ignore_conflicts=True)
+
+    @classmethod
+    def get_holiday_dates(cls, start_date, end_date):
+        """Return a set of holiday dates in the given range."""
+        for y in range(start_date.year, end_date.year + 1):
+            cls.ensure_year(y)
+        return set(
+            cls.objects.filter(
+                date__gte=start_date, date__lte=end_date
+            ).values_list('date', flat=True)
+        )
+
+    @classmethod
+    def count_work_days(cls, start_date, end_date):
+        """Count work days between two dates, excluding weekends and holidays."""
+        holidays = cls.get_holiday_dates(start_date, end_date)
+        work_days = 0
+        current = start_date
+        while current <= end_date:
+            if current.weekday() < 5 and current not in holidays:
+                work_days += 1
+            current += timedelta(days=1)
+        return work_days

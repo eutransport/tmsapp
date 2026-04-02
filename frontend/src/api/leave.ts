@@ -243,3 +243,19 @@ export async function checkConcurrentLeave(
   const response = await api.get(`/leave/requests/check_concurrent/?${params.toString()}`)
   return response.data
 }
+
+// ===== Public Holidays =====
+
+export interface PublicHoliday {
+  id: string
+  date: string
+  name: string
+  year: number
+}
+
+export async function getPublicHolidays(year?: number): Promise<PublicHoliday[]> {
+  const params = new URLSearchParams()
+  if (year) params.append('year', year.toString())
+  const response = await api.get(`/leave/holidays/?${params.toString()}`)
+  return response.data
+}

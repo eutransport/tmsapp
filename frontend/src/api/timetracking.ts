@@ -18,6 +18,7 @@ export interface TimeEntryFilters {
   user?: string
   jaar?: number
   ordering?: string
+  auto_uren_only?: boolean
 }
 
 export interface TimeEntryCreate {
@@ -88,6 +89,7 @@ export async function getTimeEntries(filters?: TimeEntryFilters): Promise<Pagina
   if (filters?.user) params.append('user', filters.user)
   if (filters?.jaar) params.append('jaar', filters.jaar.toString())
   if (filters?.ordering) params.append('ordering', filters.ordering)
+  if (filters?.auto_uren_only) params.append('auto_uren_only', 'true')
   
   const response = await api.get(`/time-entries/?${params.toString()}`)
   return response.data

@@ -100,6 +100,7 @@ export default function AutoImportTab() {
         datum__lte: endDate,
         page_size: 500,
         ordering: 'datum',
+        auto_uren_only: true,
       })
       setEntries(response.results)
     } catch (err) {

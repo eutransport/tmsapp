@@ -15,6 +15,7 @@ import {
 } from '@heroicons/react/24/outline'
 import {
   getLeaveCalendar,
+  getPublicHolidays,
   CalendarLeaveEntry,
 } from '@/api/leave'
 
@@ -35,6 +36,7 @@ export default function LeaveCalendarPage() {
   const [entries, setEntries] = useState<CalendarLeaveEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [holidayMap, setHolidayMap] = useState<Map<string, string>>(new Map())
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -62,6 +64,12 @@ export default function LeaveCalendarPage() {
       try {
         const data = await getLeaveCalendar(startDate, endDate)
         setEntries(data)
+        
+        // Load holidays for this month's year
+        const holidays = await getPublicHolidays(year)
+        const map = new Map<string, string>()
+        holidays.forEach(h => map.set(h.date, h.name))
+        setHolidayMap(map)
       } catch (err) {
         console.error('Error fetching calendar:', err)
       } finally {
@@ -187,6 +195,10 @@ export default function LeaveCalendarPage() {
               </span>
             </div>
           ))}
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-red-100 border border-red-300 flex items-center justify-center text-[8px] text-red-500">★</div>
+            <span className="text-sm text-gray-600">Feestdag</span>
+          </div>
         </div>
 
         {isLoading ? (
@@ -214,21 +226,29 @@ export default function LeaveCalendarPage() {
                     const dateStr = date.toISOString().split('T')[0]
                     const isToday = dateStr === todayStr
                     const isWeekend = date.getDay() === 0 || date.getDay() === 6
+                    const holidayName = holidayMap.get(dateStr)
+                    const isHoliday = !!holidayName
                     const dayNames = [t('planning.sun'), t('planning.mon'), t('planning.tue'), t('planning.wed'), t('planning.thu'), t('planning.fri'), t('planning.sat')]
                     
                     return (
                       <div
                         key={idx}
                         className={`flex-1 min-w-[28px] px-0.5 py-1 text-center text-xs border-l border-gray-100 ${
-                          isWeekend ? 'bg-gray-50' : ''
+                          isHoliday ? 'bg-red-50' : isWeekend ? 'bg-gray-50' : ''
                         } ${isToday ? 'bg-primary-50' : ''}`}
+                        title={holidayName || ''}
                       >
-                        <div className={`font-medium ${isToday ? 'text-primary-600' : 'text-gray-400'}`}>
+                        <div className={`font-medium ${isHoliday ? 'text-red-500' : isToday ? 'text-primary-600' : 'text-gray-400'}`}>
                           {dayNames[date.getDay()]}
                         </div>
-                        <div className={`${isToday ? 'text-primary-700 font-bold' : 'text-gray-600'}`}>
+                        <div className={`${isHoliday ? 'text-red-600 font-bold' : isToday ? 'text-primary-700 font-bold' : 'text-gray-600'}`}>
                           {date.getDate()}
                         </div>
+                        {isHoliday && (
+                          <div className="text-[9px] text-red-500 leading-tight truncate" title={holidayName}>
+                            ★
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -250,11 +270,12 @@ export default function LeaveCalendarPage() {
                         const isWeekend = date.getDay() === 0 || date.getDay() === 6
                         const dateStr = date.toISOString().split('T')[0]
                         const isToday = dateStr === todayStr
+                        const isHoliday = holidayMap.has(dateStr)
                         return (
                           <div
                             key={idx}
                             className={`flex-1 min-w-[28px] border-l border-gray-100 ${
-                              isWeekend ? 'bg-gray-50/50' : ''
+                              isHoliday ? 'bg-red-50/50' : isWeekend ? 'bg-gray-50/50' : ''
                             } ${isToday ? 'bg-primary-50/50' : ''}`}
                           />
                         )

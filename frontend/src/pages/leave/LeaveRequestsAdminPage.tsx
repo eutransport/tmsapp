@@ -23,6 +23,7 @@ import {
   adminLeaveAction,
   adminUpdateLeaveRequest,
   adminCreateLeaveRequest,
+  getPublicHolidays,
   LeaveRequest,
   LeaveRequestCreate,
   AdminLeaveRequestCreate,
@@ -32,7 +33,7 @@ import { getUsers } from '@/api/users'
 
 const HOURS_PER_DAY = 8
 
-function calculateWorkDays(startDate: string, endDate: string): number {
+function calculateWorkDays(startDate: string, endDate: string, holidayDates: Set<string>): number {
   if (!startDate || !endDate) return 0
   const start = new Date(startDate)
   const end = new Date(endDate)
@@ -41,7 +42,8 @@ function calculateWorkDays(startDate: string, endDate: string): number {
   const current = new Date(start)
   while (current <= end) {
     const day = current.getDay()
-    if (day !== 0 && day !== 6) workDays++
+    const dateStr = current.toISOString().split('T')[0]
+    if (day !== 0 && day !== 6 && !holidayDates.has(dateStr)) workDays++
     current.setDate(current.getDate() + 1)
   }
   return workDays
@@ -102,9 +104,21 @@ export default function LeaveRequestsAdminPage() {
   })
   const [isCreating, setIsCreating] = useState(false)
 
+  // Public holidays
+  const [holidayDates, setHolidayDates] = useState<Set<string>>(new Set())
+
   useEffect(() => {
     fetchRequests()
     fetchUsers()
+    
+    // Load holidays for current and next year
+    const currentYear = new Date().getFullYear()
+    Promise.all([
+      getPublicHolidays(currentYear),
+      getPublicHolidays(currentYear + 1),
+    ]).then(([thisYear, nextYear]) => {
+      setHolidayDates(new Set([...thisYear, ...nextYear].map(h => h.date)))
+    }).catch(console.error)
   }, [])
 
   useEffect(() => {
@@ -647,7 +661,7 @@ export default function LeaveRequestsAdminPage() {
                       onChange={(e) => {
                         const start = e.target.value
                         const end = createForm.end_date || start
-                        const hours = calculateWorkDays(start, end) * HOURS_PER_DAY
+                        const hours = calculateWorkDays(start, end, holidayDates) * HOURS_PER_DAY
                         setCreateForm({ ...createForm, start_date: start, end_date: end, hours_requested: hours || HOURS_PER_DAY })
                       }}
                       className="input w-full"
@@ -662,7 +676,7 @@ export default function LeaveRequestsAdminPage() {
                       value={createForm.end_date}
                       onChange={(e) => {
                         const end = e.target.value
-                        const hours = calculateWorkDays(createForm.start_date, end) * HOURS_PER_DAY
+                        const hours = calculateWorkDays(createForm.start_date, end, holidayDates) * HOURS_PER_DAY
                         setCreateForm({ ...createForm, end_date: end, hours_requested: hours || HOURS_PER_DAY })
                       }}
                       min={createForm.start_date}

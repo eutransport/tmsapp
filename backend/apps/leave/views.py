@@ -15,6 +15,7 @@ from .models import (
     LeaveRequest, 
     LeaveRequestStatus,
     LeaveType,
+    PublicHoliday,
 )
 from .serializers import (
     GlobalLeaveSettingsSerializer,
@@ -854,3 +855,19 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             'warning': concurrent_count >= max_concurrent,
             'employees_on_leave': concurrent_users,
         })
+
+
+class PublicHolidayViewSet(viewsets.ViewSet):
+    """API endpoint to list public holidays for a year."""
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        year = request.query_params.get('year', date.today().year)
+        year = int(year)
+        PublicHoliday.ensure_year(year)
+        holidays = PublicHoliday.objects.filter(year=year).order_by('date')
+        data = [
+            {'id': str(h.id), 'date': h.date.isoformat(), 'name': h.name, 'year': h.year}
+            for h in holidays
+        ]
+        return Response(data)

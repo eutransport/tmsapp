@@ -14,19 +14,21 @@ import {
   getMyLeaveBalance,
   checkConcurrentLeave,
   createLeaveRequest,
+  getPublicHolidays,
   LeaveBalance,
   LeaveRequestCreate,
   LEAVE_TYPE_OPTIONS,
   ConcurrentLeaveCheck,
+  PublicHoliday,
 } from '@/api/leave'
 
 const HOURS_PER_DAY = 8
 
 /**
  * Calculate the number of work days between two dates (inclusive)
- * Excludes weekends (Saturday and Sunday)
+ * Excludes weekends (Saturday and Sunday) and public holidays
  */
-function calculateWorkDays(startDate: string, endDate: string): number {
+function calculateWorkDays(startDate: string, endDate: string, holidayDates: Set<string>): number {
   if (!startDate || !endDate) return 0
   
   const start = new Date(startDate)
@@ -39,8 +41,9 @@ function calculateWorkDays(startDate: string, endDate: string): number {
   
   while (current <= end) {
     const dayOfWeek = current.getDay()
+    const dateStr = current.toISOString().split('T')[0]
     // 0 = Sunday, 6 = Saturday
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidayDates.has(dateStr)) {
       workDays++
     }
     current.setDate(current.getDate() + 1)
@@ -51,29 +54,28 @@ function calculateWorkDays(startDate: string, endDate: string): number {
 
 /**
  * Calculate end date based on start date and hours
- * Returns the date string in YYYY-MM-DD format
+ * Skips weekends and public holidays
  */
-function calculateEndDate(startDate: string, hours: number): string {
+function calculateEndDate(startDate: string, hours: number, holidayDates: Set<string>): string {
   if (!startDate || hours <= 0) return startDate || ''
   
   const fullDays = Math.floor(hours / HOURS_PER_DAY)
   const remainingHours = hours % HOURS_PER_DAY
   
-  // Start from the start date and count work days
   const current = new Date(startDate)
   let workDaysCounted = 0
   const totalWorkDaysNeeded = remainingHours > 0 ? fullDays + 1 : Math.max(fullDays, 1)
   
   while (workDaysCounted < totalWorkDaysNeeded) {
     const dayOfWeek = current.getDay()
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+    const dateStr = current.toISOString().split('T')[0]
+    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidayDates.has(dateStr)) {
       workDaysCounted++
       if (workDaysCounted === totalWorkDaysNeeded) break
     }
     current.setDate(current.getDate() + 1)
   }
   
-  // Format as YYYY-MM-DD
   return current.toISOString().split('T')[0]
 }
 
@@ -99,6 +101,10 @@ export default function LeaveRequestPage() {
   
   // Track whether user is manually editing hours vs auto-calculated
   const [isManualHours, setIsManualHours] = useState(false)
+  
+  // Public holidays
+  const [holidayDates, setHolidayDates] = useState<Set<string>>(new Set())
+  const [holidays, setHolidays] = useState<PublicHoliday[]>([])
 
   useEffect(() => {
     const fetchBalance = async () => {
@@ -113,28 +119,39 @@ export default function LeaveRequestPage() {
       }
     }
     fetchBalance()
+    
+    // Load holidays for current and next year
+    const currentYear = new Date().getFullYear()
+    Promise.all([
+      getPublicHolidays(currentYear),
+      getPublicHolidays(currentYear + 1),
+    ]).then(([thisYear, nextYear]) => {
+      const all = [...thisYear, ...nextYear]
+      setHolidays(all)
+      setHolidayDates(new Set(all.map(h => h.date)))
+    }).catch(console.error)
   }, [])
 
   // Auto-calculate hours when dates change (if not manually set)
   useEffect(() => {
     if (formData.start_date && formData.end_date && !isManualHours) {
-      const workDays = calculateWorkDays(formData.start_date, formData.end_date)
+      const workDays = calculateWorkDays(formData.start_date, formData.end_date, holidayDates)
       const calculatedHours = workDays * HOURS_PER_DAY
       if (calculatedHours !== formData.hours_requested) {
         setFormData(prev => ({ ...prev, hours_requested: calculatedHours }))
       }
     }
-  }, [formData.start_date, formData.end_date, isManualHours])
+  }, [formData.start_date, formData.end_date, isManualHours, holidayDates])
 
   // Auto-calculate end date when hours change manually
   useEffect(() => {
     if (formData.start_date && isManualHours && formData.hours_requested > 0) {
-      const newEndDate = calculateEndDate(formData.start_date, formData.hours_requested)
+      const newEndDate = calculateEndDate(formData.start_date, formData.hours_requested, holidayDates)
       if (newEndDate !== formData.end_date) {
         setFormData(prev => ({ ...prev, end_date: newEndDate }))
       }
     }
-  }, [formData.hours_requested, formData.start_date, isManualHours])
+  }, [formData.hours_requested, formData.start_date, isManualHours, holidayDates])
 
   // Check concurrent leave when dates change
   useEffect(() => {
@@ -399,6 +416,29 @@ export default function LeaveRequestPage() {
             {t('leave.hoursCalculationNote')}
           </p>
         </div>
+
+        {/* Holiday info */}
+        {formData.start_date && formData.end_date && (() => {
+          const holidaysInRange = holidays.filter(h => h.date >= formData.start_date && h.date <= formData.end_date)
+          if (holidaysInRange.length === 0) return null
+          return (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+              <p className="font-medium text-blue-800 mb-1">
+                Feestdagen in deze periode ({holidaysInRange.length}):
+              </p>
+              <ul className="text-blue-700 space-y-0.5">
+                {holidaysInRange.map(h => (
+                  <li key={h.id}>
+                    • {h.name} — {new Date(h.date).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-blue-600 mt-1 text-xs">
+                Deze dagen worden niet afgetrokken van je verlofuren.
+              </p>
+            </div>
+          )
+        })()}
 
         {/* Reason */}
         <div>
