@@ -398,16 +398,19 @@ def _process_date(date_str, process_date, driver_lookup, plate_lookup):
             continue
 
         # Create overtime record if applicable
-        # If driver has standaard_begintijd, recalculate overtime based on adjusted hours
+        # Determine the daily hours threshold from the driver's uren_per_dag, with 8 as fallback
+        daily_hours = float(tms_driver.uren_per_dag) if tms_driver.uren_per_dag is not None else 8
+
+        # If driver has standaard_begintijd or uren_per_dag, recalculate overtime based on adjusted hours
         overtime_hours = vehicle.get('overtime_hours', 0)
-        if tms_driver.standaard_begintijd:
+        if tms_driver.standaard_begintijd or tms_driver.uren_per_dag is not None:
             from datetime import date as date_cls
             aanvang_dt = datetime.combine(date_cls.today(), aanvang)
             eind_dt = datetime.combine(date_cls.today(), eind)
             if eind_dt < aanvang_dt:
                 eind_dt += timedelta(days=1)
             adjusted_work = (eind_dt - aanvang_dt - pauze).total_seconds() / 3600
-            overtime_hours = max(0, round(adjusted_work - 8, 2))
+            overtime_hours = max(0, round(adjusted_work - daily_hours, 2))
 
         if overtime_hours > 0:
             TachographOvertime.objects.update_or_create(
