@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Count, Q
-from apps.core.permissions import IsAdminOrManager, HasModulePermission
+from apps.core.permissions import FleetPermission
 from .models import Vehicle
 from .serializers import VehicleSerializer
 
@@ -20,8 +20,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
     """
     queryset = Vehicle.objects.select_related('bedrijf').all()
     serializer_class = VehicleSerializer
-    permission_classes = [IsAuthenticated, IsAdminOrManager, HasModulePermission]
-    module_permission = 'view_fleet'
+    permission_classes = [IsAuthenticated, FleetPermission]
     search_fields = ['kenteken', 'ritnummer', 'type_wagen']
     filterset_fields = ['bedrijf', 'type_wagen']
     ordering_fields = ['kenteken', 'type_wagen', 'created_at']
@@ -45,8 +44,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
         )
         instance.delete()
 
-    @action(detail=False, methods=['get'], url_path='dropdown',
-            permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get'], url_path='dropdown')
     def dropdown(self, request):
         """
         Lightweight vehicle list for dropdowns.

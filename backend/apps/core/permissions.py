@@ -142,6 +142,66 @@ class PlanningPermission(BasePermission):
         return False
 
 
+class FleetPermission(BasePermission):
+    """
+    Fleet permission:
+    - Admins: full access
+    - manage_fleet: full CRUD
+    - view_fleet: read-only
+    - dropdown action: all authenticated users (for vehicle selection in time entries)
+    """
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if request.user.is_superuser or request.user.rol == 'admin':
+            return True
+
+        # dropdown is accessible to all authenticated users
+        if getattr(view, 'action', None) == 'dropdown':
+            return True
+
+        # manage_fleet: full CRUD
+        if request.user.has_module_permission('manage_fleet'):
+            return True
+
+        # view_fleet: read-only
+        if request.user.has_module_permission('view_fleet'):
+            return request.method in ['GET', 'HEAD', 'OPTIONS']
+
+        return False
+
+
+class SubmittedHoursPermission(BasePermission):
+    """
+    Submitted hours permission for admin-level time entry management:
+    - Admins: full access
+    - manage_submitted_hours: full CRUD on all entries
+    - view_submitted_hours: read-only on all entries
+    - All authenticated users: always access their own entries
+    """
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if request.user.is_superuser or request.user.rol == 'admin':
+            return True
+
+        # manage_submitted_hours: full CRUD
+        if request.user.has_module_permission('manage_submitted_hours'):
+            return True
+
+        # view_submitted_hours: read-only
+        if request.user.has_module_permission('view_submitted_hours'):
+            return request.method in ['GET', 'HEAD', 'OPTIONS']
+
+        # All authenticated users can manage their own entries
+        # (filtered in get_queryset)
+        return True
+
+
 class IsOwnerOrAdmin(BasePermission):
     """
     Permission for objects that belong to a user.

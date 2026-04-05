@@ -62,6 +62,7 @@ export default function SubmittedHoursPage() {
   const { t } = useTranslation()
   const { user } = useAuthStore()
   const isDriver = user?.rol === 'chauffeur'
+  const canManage = user?.rol === 'admin' || (user?.module_permissions || []).includes('manage_submitted_hours')
   
   // Tab state
   const [activeTab, setActiveTab] = useState<'submitted' | 'weekly' | 'monthly' | 'vehicleWeeks' | 'autoImport'>('submitted')
@@ -968,6 +969,7 @@ export default function SubmittedHoursPage() {
                                     {entry.totaal_km}
                                   </td>
                                   <td className="px-4 py-3 text-right">
+                                    {canManage && (
                                     <div className="flex items-center justify-end gap-1">
                                       <button
                                         onClick={() => handleEditEntry(entry)}
@@ -984,6 +986,7 @@ export default function SubmittedHoursPage() {
                                         <TrashIcon className="h-5 w-5" />
                                       </button>
                                     </div>
+                                    )}
                                   </td>
                                 </tr>
                               ))}
@@ -1009,6 +1012,7 @@ export default function SubmittedHoursPage() {
                                   <p className="text-xs text-gray-500 font-mono">{entry.ritnummer}</p>
                                 </div>
                                 <div className="flex items-center gap-1">
+                                  {canManage && (<>
                                   <button
                                     onClick={() => handleEditEntry(entry)}
                                     className="text-primary-600 hover:text-primary-900 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -1021,6 +1025,7 @@ export default function SubmittedHoursPage() {
                                   >
                                     <TrashIcon className="h-5 w-5" />
                                   </button>
+                                  </>)}
                                 </div>
                               </div>
                               

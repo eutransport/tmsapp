@@ -13,6 +13,7 @@ import {
   TruckIcon,
 } from '@heroicons/react/24/outline'
 import { Vehicle, Company } from '@/types'
+import { useAuthStore } from '@/stores/authStore'
 import { 
   getVehicles, 
   createVehicle, 
@@ -298,6 +299,8 @@ function VehicleForm({
 // Main FleetPage component
 export default function FleetPage() {
   const { t } = useTranslation()
+  const { user } = useAuthStore()
+  const canManage = user?.rol === 'admin' || (user?.module_permissions || []).includes('manage_fleet')
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [totalCount, setTotalCount] = useState(0)
@@ -475,6 +478,7 @@ export default function FleetPage() {
       {/* Header */}
       <div className="page-header">
         <h1 className="page-title">{t('fleet.title')}</h1>
+        {canManage && (
         <button
           onClick={() => setShowCreateModal(true)}
           className="btn-primary"
@@ -482,6 +486,7 @@ export default function FleetPage() {
           <PlusIcon className="w-5 h-5 mr-2" />
           {t('fleet.newVehicle')}
         </button>
+        )}
       </div>
 
       {/* Success message */}
@@ -647,6 +652,7 @@ export default function FleetPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-0.5">
+                        {canManage && (<>
                         <button
                           onClick={() => { setSelectedVehicle(vehicle); setShowEditModal(true) }}
                           className="p-1.5 min-w-[36px] min-h-[36px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
@@ -661,6 +667,7 @@ export default function FleetPage() {
                         >
                           <TrashIcon className="w-4 h-4" />
                         </button>
+                        </>)}
                       </div>
                     </td>
                   </tr>
@@ -713,6 +720,7 @@ export default function FleetPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
+                    {canManage && (<>
                     <button
                       onClick={() => { setSelectedVehicle(vehicle); setShowEditModal(true) }}
                       className="p-1 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
@@ -727,6 +735,7 @@ export default function FleetPage() {
                     >
                       <TrashIcon className="w-4 h-4" />
                     </button>
+                    </>)}
                   </div>
                 </div>
               </div>

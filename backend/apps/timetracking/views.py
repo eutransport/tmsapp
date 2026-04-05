@@ -28,14 +28,25 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
     search_fields = ['ritnummer', 'kenteken', 'user__voornaam', 'user__achternaam', 'user__email']
     ordering_fields = ['datum', 'weeknummer', 'created_at']
     ordering = ['-datum', '-aanvang']
-    
+
+    def _can_view_all(self):
+        user = self.request.user
+        if user.is_superuser or user.rol == 'admin':
+            return True
+        return user.has_module_permission('view_submitted_hours') or user.has_module_permission('manage_submitted_hours')
+
+    def _can_manage_all(self):
+        user = self.request.user
+        if user.is_superuser or user.rol == 'admin':
+            return True
+        return user.has_module_permission('manage_submitted_hours')
+
     def get_queryset(self):
         user = self.request.user
         queryset = TimeEntry.objects.select_related('user')
         
         # Admins and managers see ALL entries (including concept), others see only their own
-        if user.is_superuser or user.rol in ['admin', 'gebruiker']:
-            # Admins can see all entries (concept and submitted)
+        if self._can_view_all():
             # Filter by user if provided
             user_filter = self.request.query_params.get('user')
             status_filter = self.request.query_params.get('status')
@@ -101,13 +112,13 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         
         # Only admins can edit submitted entries
         if instance.status == TimeEntryStatus.INGEDIEND:
-            if not (self.request.user.is_superuser or self.request.user.rol == 'admin'):
+            if not self._can_manage_all():
                 from rest_framework.exceptions import PermissionDenied
-                raise PermissionDenied('Ingediende uren kunnen alleen door een admin worden aangepast.')
+                raise PermissionDenied('Ingediende uren kunnen alleen door een beheerder worden aangepast.')
         
         # Users can only edit their own entries
         if instance.user != self.request.user:
-            if not (self.request.user.is_superuser or self.request.user.rol in ['admin', 'gebruiker']):
+            if not self._can_manage_all():
                 from rest_framework.exceptions import PermissionDenied
                 raise PermissionDenied('Je kunt alleen je eigen uren bewerken.')
         
@@ -119,13 +130,13 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         # Only admins can delete submitted entries
         if instance.status == TimeEntryStatus.INGEDIEND:
-            if not (self.request.user.is_superuser or self.request.user.rol == 'admin'):
+            if not self._can_manage_all():
                 from rest_framework.exceptions import PermissionDenied
-                raise PermissionDenied('Ingediende uren kunnen alleen door een admin worden verwijderd.')
+                raise PermissionDenied('Ingediende uren kunnen alleen door een beheerder worden verwijderd.')
         
         # Users can only delete their own entries
         if instance.user != self.request.user:
-            if not (self.request.user.is_superuser or self.request.user.rol in ['admin', 'gebruiker']):
+            if not self._can_manage_all():
                 from rest_framework.exceptions import PermissionDenied
                 raise PermissionDenied('Je kunt alleen je eigen uren verwijderen.')
         
@@ -144,15 +155,15 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         if not weeknummer:
             return Response({'error': 'Weeknummer is verplicht.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        is_admin = request.user.is_superuser or request.user.rol == 'admin'
+        is_manager = self._can_manage_all()
 
-        if user_id and is_admin:
+        if user_id and is_manager:
             entries = TimeEntry.objects.filter(
                 user_id=user_id,
                 weeknummer=weeknummer,
                 status=TimeEntryStatus.CONCEPT
             )
-        elif is_admin:
+        elif is_manager:
             entries = TimeEntry.objects.filter(
                 weeknummer=weeknummer,
                 status=TimeEntryStatus.CONCEPT
@@ -221,7 +232,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(datum__year=int(jaar))
         
         # Filter by user based on permissions
-        if request.user.is_superuser or request.user.rol in ['admin', 'gebruiker']:
+        if self._can_view_all():
             if user_id:
                 queryset = queryset.filter(user_id=user_id)
         else:
@@ -356,8 +367,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         queryset = TimeEntry.objects.all()
         
         # Filter based on permissions
-        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
-            # Chauffeurs see all their own entries
+        if not self._can_view_all():
             queryset = queryset.filter(user=user)
         # Admins see ALL entries (including concept) - no status filter
         
@@ -368,7 +378,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         
         # Optional user filter for admins
         user_filter = request.query_params.get('user')
-        if user_filter and (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+        if user_filter and self._can_view_all():
             queryset = queryset.filter(user_id=user_filter)
         
         # Optional year filter
@@ -399,7 +409,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         """
         import math
         user = request.user
-        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+        if not self._can_view_all():
             return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
         
         jaar = request.query_params.get('jaar')
@@ -535,7 +545,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         Returns one row per ritnummer per week.
         """
         user = request.user
-        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+        if not self._can_view_all():
             return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
         
         from datetime import date
@@ -715,7 +725,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         from django.db.models.functions import ExtractYear
 
         user = request.user
-        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+        if not self._can_view_all():
             return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
 
         years_te = set(
@@ -747,7 +757,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         from django.db.models.functions import ExtractYear, ExtractMonth
         
         user = request.user
-        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+        if not self._can_view_all():
             return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
         
         jaar = request.query_params.get('jaar')
@@ -853,7 +863,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         """
         import calendar
         user = request.user
-        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+        if not self._can_manage_all():
             return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
         
         target_user_id = request.data.get('user_id')
@@ -1019,7 +1029,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         Only accessible by admins.
         """
         user = request.user
-        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+        if not self._can_manage_all():
             return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
         
         user_id = request.data.get('user_id')
@@ -1065,7 +1075,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         Only accessible by admins.
         """
         user = request.user
-        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+        if not self._can_manage_all():
             return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
         
         user_id = request.data.get('user_id')
@@ -1129,7 +1139,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         """
         import math
         user = request.user
-        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+        if not self._can_manage_all():
             return Response({'error': 'Geen toegang'}, status=status.HTTP_403_FORBIDDEN)
         
         target_user_id = request.data.get('user_id')

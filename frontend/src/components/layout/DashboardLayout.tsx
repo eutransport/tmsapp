@@ -110,11 +110,13 @@ export default function DashboardLayout() {
   // Filter navigation items based on user role and module permissions
   const filterByRole = (items: NavItem[]) => 
     items.filter(item => {
-      // First check role
-      if (item.roles && !item.roles.includes(userRole)) return false
-      // Admins bypass permission checks
+      // Admins bypass all checks
       if (userRole === 'admin') return true
-      // If item has a permission requirement, check the user has it
+      // If user has the required module permission, show regardless of role
+      if (item.permission && userPermissions.includes(item.permission)) return true
+      // Otherwise check role restriction
+      if (item.roles && !item.roles.includes(userRole)) return false
+      // If item requires a permission the user doesn't have, hide it
       if (item.permission && !userPermissions.includes(item.permission)) return false
       return true
     })
