@@ -24,6 +24,9 @@ import {
 
 const HOURS_PER_DAY = 8
 
+/** Leave types that should not deduct hours from balance */
+const NO_DEDUCT_TYPES = ['ziekteverzuim', 'bijzonder_tandarts', 'bijzonder_huisarts']
+
 /**
  * Calculate the number of work days between two dates (inclusive)
  * Excludes weekends (Saturday and Sunday) and public holidays
@@ -135,13 +138,19 @@ export default function LeaveRequestPage() {
   // Auto-calculate hours when dates change (if not manually set)
   useEffect(() => {
     if (formData.start_date && formData.end_date && !isManualHours) {
-      const workDays = calculateWorkDays(formData.start_date, formData.end_date, holidayDates)
-      const calculatedHours = workDays * HOURS_PER_DAY
-      if (calculatedHours !== formData.hours_requested) {
-        setFormData(prev => ({ ...prev, hours_requested: calculatedHours }))
+      if (NO_DEDUCT_TYPES.includes(formData.leave_type)) {
+        if (formData.hours_requested !== 0) {
+          setFormData(prev => ({ ...prev, hours_requested: 0 }))
+        }
+      } else {
+        const workDays = calculateWorkDays(formData.start_date, formData.end_date, holidayDates)
+        const calculatedHours = workDays * HOURS_PER_DAY
+        if (calculatedHours !== formData.hours_requested) {
+          setFormData(prev => ({ ...prev, hours_requested: calculatedHours }))
+        }
       }
     }
-  }, [formData.start_date, formData.end_date, isManualHours, holidayDates])
+  }, [formData.start_date, formData.end_date, formData.leave_type, isManualHours, holidayDates])
 
   // Auto-calculate end date when hours change manually
   useEffect(() => {
@@ -190,10 +199,30 @@ export default function LeaveRequestPage() {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
+    if (name === 'leave_type' && NO_DEDUCT_TYPES.includes(value)) {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+        hours_requested: 0,
+      }))
+      setIsManualHours(false)
+    } else if (name === 'leave_type' && !NO_DEDUCT_TYPES.includes(value)) {
+      // Switching back to a deductible type: recalculate hours
+      const workDays = formData.start_date && formData.end_date
+        ? calculateWorkDays(formData.start_date, formData.end_date, holidayDates)
+        : 0
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+        hours_requested: workDays * HOURS_PER_DAY || prev.hours_requested,
+      }))
+      setIsManualHours(false)
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }))
+    }
     setFormErrors((prev) => ({ ...prev, [name]: '' }))
   }
 
@@ -205,8 +234,11 @@ export default function LeaveRequestPage() {
     if (formData.start_date && formData.end_date && formData.start_date > formData.end_date) {
       errors.end_date = t('leave.endDateAfterStart')
     }
-    if (!formData.hours_requested || formData.hours_requested <= 0) {
-      errors.hours_requested = t('leave.hoursGreaterThanZero')
+    // Only validate hours > 0 for deductible leave types
+    if (!NO_DEDUCT_TYPES.includes(formData.leave_type)) {
+      if (!formData.hours_requested || formData.hours_requested <= 0) {
+        errors.hours_requested = t('leave.hoursGreaterThanZero')
+      }
     }
     
     // Check balance
@@ -398,8 +430,9 @@ export default function LeaveRequestPage() {
             name="hours_requested"
             value={formData.hours_requested}
             onChange={handleHoursChange}
-            min="0.5"
+            min="0"
             step="0.5"
+            disabled={NO_DEDUCT_TYPES.includes(formData.leave_type)}
             className={`input w-full ${formErrors.hours_requested ? 'border-red-500' : ''}`}
           />
           {formErrors.hours_requested && (

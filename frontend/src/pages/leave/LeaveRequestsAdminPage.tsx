@@ -33,6 +33,9 @@ import { getUsers } from '@/api/users'
 
 const HOURS_PER_DAY = 8
 
+/** Leave types that should not deduct hours from balance */
+const NO_DEDUCT_TYPES = ['ziekteverzuim', 'bijzonder_tandarts', 'bijzonder_huisarts']
+
 function calculateWorkDays(startDate: string, endDate: string, holidayDates: Set<string>): number {
   if (!startDate || !endDate) return 0
   const start = new Date(startDate)
@@ -638,7 +641,19 @@ export default function LeaveRequestsAdminPage() {
                   </label>
                   <select
                     value={createForm.leave_type}
-                    onChange={(e) => setCreateForm({ ...createForm, leave_type: e.target.value as any })}
+                    onChange={(e) => {
+                      const newType = e.target.value as any
+                      const isNoDeduct = NO_DEDUCT_TYPES.includes(newType)
+                      setCreateForm({
+                        ...createForm,
+                        leave_type: newType,
+                        hours_requested: isNoDeduct ? 0 : (
+                          createForm.start_date && createForm.end_date
+                            ? calculateWorkDays(createForm.start_date, createForm.end_date, holidayDates) * HOURS_PER_DAY
+                            : createForm.hours_requested
+                        ),
+                      })
+                    }}
                     className="input w-full"
                   >
                     {LEAVE_TYPE_OPTIONS.map((opt) => (
@@ -661,7 +676,7 @@ export default function LeaveRequestsAdminPage() {
                       onChange={(e) => {
                         const start = e.target.value
                         const end = createForm.end_date || start
-                        const hours = calculateWorkDays(start, end, holidayDates) * HOURS_PER_DAY
+                        const hours = NO_DEDUCT_TYPES.includes(createForm.leave_type) ? 0 : calculateWorkDays(start, end, holidayDates) * HOURS_PER_DAY
                         setCreateForm({ ...createForm, start_date: start, end_date: end, hours_requested: hours })
                       }}
                       className="input w-full"
@@ -676,7 +691,7 @@ export default function LeaveRequestsAdminPage() {
                       value={createForm.end_date}
                       onChange={(e) => {
                         const end = e.target.value
-                        const hours = calculateWorkDays(createForm.start_date, end, holidayDates) * HOURS_PER_DAY
+                        const hours = NO_DEDUCT_TYPES.includes(createForm.leave_type) ? 0 : calculateWorkDays(createForm.start_date, end, holidayDates) * HOURS_PER_DAY
                         setCreateForm({ ...createForm, end_date: end, hours_requested: hours })
                       }}
                       min={createForm.start_date}
@@ -694,8 +709,9 @@ export default function LeaveRequestsAdminPage() {
                     type="number"
                     value={createForm.hours_requested}
                     onChange={(e) => setCreateForm({ ...createForm, hours_requested: parseFloat(e.target.value) || 0 })}
-                    min="0.5"
+                    min="0"
                     step="0.5"
+                    disabled={NO_DEDUCT_TYPES.includes(createForm.leave_type)}
                     className="input w-full"
                   />
                 </div>

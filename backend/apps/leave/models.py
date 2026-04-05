@@ -279,6 +279,9 @@ class LeaveRequest(models.Model):
         """
         Calculate how hours should be deducted based on leave type.
         Returns dict with 'vacation_deduct', 'overtime_deduct', 'special_free'
+        
+        Bijzonder verlof (tandarts/huisarts) and ziekteverzuim do NOT deduct
+        hours from the employee's balance.
         """
         result = {
             'vacation_deduct': Decimal('0'),
@@ -293,18 +296,10 @@ class LeaveRequest(models.Model):
             result['overtime_deduct'] = self.hours_requested
             
         elif self.is_special_leave:
-            # Check how much free special leave is available this month
-            balance = self.user.leave_balance
-            month_key = self.get_month_key()
-            free_remaining = balance.get_free_special_leave_remaining(month_key)
-            
-            if self.hours_requested <= free_remaining:
-                # All hours are free
-                result['special_free'] = self.hours_requested
-            else:
-                # Part is free, rest from vacation
-                result['special_free'] = free_remaining
-                result['vacation_deduct'] = self.hours_requested - free_remaining
+            # Bijzonder verlof: no deduction from balance
+            result['special_free'] = self.hours_requested
+        
+        # Ziekteverzuim: no deductions (result stays all zeros)
         
         return result
 

@@ -431,14 +431,19 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             )
 
         # Recalculate hours based on actual work days (excluding holidays)
-        work_days = PublicHoliday.count_work_days(data['start_date'], data['end_date'])
-        hours_requested = Decimal(str(work_days * 8))
+        # Ziekteverzuim and bijzonder verlof: no hours deducted
+        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS]
+        if data['leave_type'] in no_deduct_types:
+            hours_requested = Decimal('0')
+        else:
+            work_days = PublicHoliday.count_work_days(data['start_date'], data['end_date'])
+            hours_requested = Decimal(str(work_days * 8))
 
-        if hours_requested <= 0:
-            return Response(
-                {'error': 'Geen werkdagen in de geselecteerde periode (alleen feestdagen/weekenden).'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            if hours_requested <= 0:
+                return Response(
+                    {'error': 'Geen werkdagen in de geselecteerde periode (alleen feestdagen/weekenden).'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         # Create the leave request
         leave_request = LeaveRequest.objects.create(
@@ -560,10 +565,15 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             )
         
         # Recalculate hours based on actual work days (excluding holidays)
-        work_days = PublicHoliday.count_work_days(
-            leave_request.start_date, leave_request.end_date
-        )
-        recalculated_hours = Decimal(str(work_days * 8))
+        # Ziekteverzuim and bijzonder verlof: no hours deducted
+        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS]
+        if leave_request.leave_type in no_deduct_types:
+            recalculated_hours = Decimal('0')
+        else:
+            work_days = PublicHoliday.count_work_days(
+                leave_request.start_date, leave_request.end_date
+            )
+            recalculated_hours = Decimal(str(work_days * 8))
         if recalculated_hours != leave_request.hours_requested:
             leave_request.hours_requested = recalculated_hours
             leave_request.save(update_fields=['hours_requested'])

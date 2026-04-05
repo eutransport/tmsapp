@@ -31,6 +31,20 @@ function getLeaveTypeColor(type: string) {
   return LEAVE_TYPE_COLORS[type] || { bg: 'bg-gray-400', border: 'border-gray-500', text: 'text-gray-900' }
 }
 
+/** Format a local Date as YYYY-MM-DD without UTC conversion */
+function formatLocalDate(d: Date): string {
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+/** Parse a YYYY-MM-DD string as a local-time Date (avoids UTC midnight shift) */
+function parseLocalDate(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
 export default function LeaveCalendarPage() {
   const { t } = useTranslation()
   const [entries, setEntries] = useState<CalendarLeaveEntry[]>([])
@@ -58,8 +72,8 @@ export default function LeaveCalendarPage() {
   useEffect(() => {
     const fetchCalendar = async () => {
       setIsLoading(true)
-      const startDate = firstDayOfMonth.toISOString().split('T')[0]
-      const endDate = lastDayOfMonth.toISOString().split('T')[0]
+      const startDate = formatLocalDate(firstDayOfMonth)
+      const endDate = formatLocalDate(lastDayOfMonth)
       
       try {
         const data = await getLeaveCalendar(startDate, endDate)
@@ -116,12 +130,17 @@ export default function LeaveCalendarPage() {
   ]
 
   const today = new Date()
-  const todayStr = today.toISOString().split('T')[0]
+  const todayStr = formatLocalDate(today)
 
   // Calculate bar position and width for a leave entry
   const getBarStyle = (entry: CalendarLeaveEntry) => {
-    const startDate = new Date(entry.start_date)
-    const endDate = new Date(entry.end_date)
+    const startDate = parseLocalDate(entry.start_date)
+    const endDate = parseLocalDate(entry.end_date)
+    
+    // Skip entries that don't actually overlap with the current month
+    if (endDate < firstDayOfMonth || startDate > lastDayOfMonth) {
+      return null
+    }
     
     // Clamp to current month
     const effectiveStart = startDate < firstDayOfMonth ? firstDayOfMonth : startDate
@@ -223,7 +242,7 @@ export default function LeaveCalendarPage() {
                 {/* Day columns */}
                 <div className="flex-1 flex">
                   {monthDates.map((date, idx) => {
-                    const dateStr = date.toISOString().split('T')[0]
+                    const dateStr = formatLocalDate(date)
                     const isToday = dateStr === todayStr
                     const isWeekend = date.getDay() === 0 || date.getDay() === 6
                     const holidayName = holidayMap.get(dateStr)
@@ -268,7 +287,7 @@ export default function LeaveCalendarPage() {
                     <div className="absolute inset-0 flex">
                       {monthDates.map((date, idx) => {
                         const isWeekend = date.getDay() === 0 || date.getDay() === 6
-                        const dateStr = date.toISOString().split('T')[0]
+                        const dateStr = formatLocalDate(date)
                         const isToday = dateStr === todayStr
                         const isHoliday = holidayMap.has(dateStr)
                         return (
@@ -286,6 +305,7 @@ export default function LeaveCalendarPage() {
                     <div className="absolute inset-0 py-2 px-0.5">
                       {userLeaveEntries.map((entry) => {
                         const style = getBarStyle(entry)
+                        if (!style) return null
                         const colors = getLeaveTypeColor(entry.leave_type)
                         
                         return (
@@ -293,7 +313,7 @@ export default function LeaveCalendarPage() {
                             key={entry.id}
                             className={`absolute top-2 h-8 ${colors.bg} ${colors.border} border rounded-md shadow-sm cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center overflow-hidden`}
                             style={{ left: style.left, width: style.width, minWidth: '24px' }}
-                            title={`${entry.user_naam}: ${entry.leave_type_display}\n${new Date(entry.start_date).toLocaleDateString('nl-NL')} - ${new Date(entry.end_date).toLocaleDateString('nl-NL')}`}
+                            title={`${entry.user_naam}: ${entry.leave_type_display}\n${parseLocalDate(entry.start_date).toLocaleDateString('nl-NL')} - ${parseLocalDate(entry.end_date).toLocaleDateString('nl-NL')}`}
                           >
                             <span className={`text-xs font-medium ${colors.text} truncate px-1`}>
                               {entry.leave_type_display}
@@ -332,9 +352,9 @@ export default function LeaveCalendarPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-gray-900">
-                      {new Date(entry.start_date).toLocaleDateString('nl-NL')}
+                      {parseLocalDate(entry.start_date).toLocaleDateString('nl-NL')}
                       {entry.start_date !== entry.end_date && (
-                        <> - {new Date(entry.end_date).toLocaleDateString('nl-NL')}</>
+                        <> - {parseLocalDate(entry.end_date).toLocaleDateString('nl-NL')}</>
                       )}
                     </p>
                   </div>

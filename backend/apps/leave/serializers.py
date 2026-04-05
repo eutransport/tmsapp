@@ -141,10 +141,12 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
             })
         
         # Validate hours
-        if hours_requested and hours_requested <= 0:
-            raise serializers.ValidationError({
-                'hours_requested': 'Aantal uren moet groter zijn dan 0.'
-            })
+        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS]
+        if leave_type not in no_deduct_types:
+            if hours_requested and hours_requested <= 0:
+                raise serializers.ValidationError({
+                    'hours_requested': 'Aantal uren moet groter zijn dan 0.'
+                })
         
         # Check balance for leave type
         try:
@@ -165,16 +167,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
                     'hours_requested': f'Onvoldoende overuren beschikbaar voor verlof. Beschikbaar: {available}u'
                 })
         
-        elif leave_type in [LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS]:
-            # Calculate how much would come from vacation
-            month_key = start_date.strftime('%Y-%m')
-            free_remaining = balance.get_free_special_leave_remaining(month_key)
-            vacation_needed = max(Decimal('0'), hours_requested - free_remaining)
-            
-            if vacation_needed > balance.vacation_hours:
-                raise serializers.ValidationError({
-                    'hours_requested': f'Onvoldoende verlofuren voor bijzonder verlof. Na gratis uur(en) heb je {vacation_needed}u nodig, beschikbaar: {balance.vacation_hours}u'
-                })
+        # Bijzonder verlof and ziekteverzuim: no balance check needed
         
         return data
 
@@ -206,15 +199,21 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
             })
         
         # Recalculate hours based on actual work days (excluding holidays)
-        work_days = PublicHoliday.count_work_days(start_date, end_date)
-        hours_requested = Decimal(str(work_days * 8))
-        data['hours_requested'] = hours_requested
-        
-        # Validate hours
-        if hours_requested <= 0:
-            raise serializers.ValidationError({
-                'hours_requested': 'Geen werkdagen in de geselecteerde periode (alleen feestdagen/weekenden).'
-            })
+        # Ziekteverzuim and bijzonder verlof: set hours to 0 (no deduction)
+        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS]
+        if leave_type in no_deduct_types:
+            hours_requested = Decimal('0')
+            data['hours_requested'] = hours_requested
+        else:
+            work_days = PublicHoliday.count_work_days(start_date, end_date)
+            hours_requested = Decimal(str(work_days * 8))
+            data['hours_requested'] = hours_requested
+            
+            # Validate hours
+            if hours_requested <= 0:
+                raise serializers.ValidationError({
+                    'hours_requested': 'Geen werkdagen in de geselecteerde periode (alleen feestdagen/weekenden).'
+                })
         
         # Check balance for leave type
         try:
@@ -235,15 +234,7 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
                     'hours_requested': f'Onvoldoende overuren beschikbaar voor verlof. Beschikbaar: {available}u'
                 })
         
-        elif leave_type in [LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS]:
-            month_key = start_date.strftime('%Y-%m')
-            free_remaining = balance.get_free_special_leave_remaining(month_key)
-            vacation_needed = max(Decimal('0'), hours_requested - free_remaining)
-            
-            if vacation_needed > balance.vacation_hours:
-                raise serializers.ValidationError({
-                    'hours_requested': f'Onvoldoende verlofuren. Na gratis uur(en) heb je {vacation_needed}u nodig, beschikbaar: {balance.vacation_hours}u'
-                })
+        # Bijzonder verlof and ziekteverzuim: no balance check needed
         
         return data
     
