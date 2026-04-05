@@ -107,6 +107,41 @@ class IsAdminOnly(BasePermission):
         return request.user.rol == 'admin'
 
 
+class PlanningPermission(BasePermission):
+    """
+    Planning permission:
+    - Admins: full access
+    - manage_all_planning: full CRUD on all planning
+    - view_all_planning: read-only on all planning
+    - All authenticated users: read-only on own planning (my_planning)
+    """
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if request.user.is_superuser or request.user.rol == 'admin':
+            return True
+
+        # my_planning is accessible to all authenticated users
+        if getattr(view, 'action', None) == 'my_planning':
+            return True
+
+        # current_week and next_week are informational
+        if getattr(view, 'action', None) in ('current_week', 'next_week'):
+            return True
+
+        # manage_all_planning: full CRUD
+        if request.user.has_module_permission('manage_all_planning'):
+            return True
+
+        # view_all_planning: read-only
+        if request.user.has_module_permission('view_all_planning'):
+            return request.method in ['GET', 'HEAD', 'OPTIONS']
+
+        return False
+
+
 class IsOwnerOrAdmin(BasePermission):
     """
     Permission for objects that belong to a user.

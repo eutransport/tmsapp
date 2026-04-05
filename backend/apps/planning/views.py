@@ -12,7 +12,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-from apps.core.permissions import IsAdminOrManager
+from apps.core.permissions import IsAdminOrManager, PlanningPermission
 from apps.core.models import AppSettings
 from apps.fleet.models import Vehicle
 from apps.drivers.models import Driver
@@ -56,13 +56,16 @@ class WeekPlanningViewSet(viewsets.ModelViewSet):
     """
     ViewSet voor weekplanningen.
     
-    Chauffeurs: alleen lezen
-    Gebruikers/Admins: volledige CRUD
+    Permissies via PlanningPermission:
+    - Admins: volledige CRUD
+    - manage_all_planning: volledige CRUD
+    - view_all_planning: alleen lezen
+    - Iedereen: eigen planning via my_planning
     """
     queryset = WeekPlanning.objects.select_related('bedrijf').prefetch_related(
         'entries__vehicle', 'entries__chauffeur'
     ).all()
-    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    permission_classes = [IsAuthenticated, PlanningPermission]
     filterset_fields = ['bedrijf', 'weeknummer', 'jaar']
     ordering_fields = ['weeknummer', 'jaar']
     search_fields = ['bedrijf__naam']
@@ -142,7 +145,7 @@ class WeekPlanningViewSet(viewsets.ModelViewSet):
             'jaar': year
         })
     
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get'])
     def my_planning(self, request):
         """Get planning for the current logged-in driver (chauffeur role only)."""
         user = request.user
@@ -417,18 +420,33 @@ TMS
         return buffer
 
 
+    @action(detail=False, methods=['get'])
+    def planning_data(self, request):
+        """Return companies and drivers for the planning admin view.
+        Accessible to users with view_all_planning or manage_all_planning."""
+        from apps.companies.models import Company
+        from apps.companies.serializers import CompanySerializer
+        from apps.drivers.serializers import DriverSerializer
+
+        companies = Company.objects.all().order_by('naam')
+        drivers = Driver.objects.select_related('bedrijf', 'gekoppelde_gebruiker', 'voertuig').all().order_by('naam')
+
+        return Response({
+            'companies': CompanySerializer(companies, many=True).data,
+            'drivers': DriverSerializer(drivers, many=True).data,
+        })
+
 class PlanningEntryViewSet(viewsets.ModelViewSet):
     """
     ViewSet voor planningsregels.
     
-    Chauffeurs: alleen lezen
-    Gebruikers/Admins: volledige CRUD
+    Permissies via PlanningPermission.
     """
     queryset = PlanningEntry.objects.select_related(
         'planning__bedrijf', 'vehicle', 'chauffeur'
     ).all()
     serializer_class = PlanningEntrySerializer
-    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    permission_classes = [IsAuthenticated, PlanningPermission]
     filterset_fields = ['planning', 'dag', 'chauffeur', 'vehicle']
     
     def perform_update(self, serializer):

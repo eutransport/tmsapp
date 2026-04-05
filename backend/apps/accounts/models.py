@@ -19,6 +19,8 @@ AVAILABLE_MODULE_PERMISSIONS = [
     ('view_companies', 'Bedrijven'),
     ('view_drivers', 'Chauffeurs'),
     ('view_fleet', 'Vloot'),
+    ('view_all_planning', 'Alle planning inzien (alleen lezen)'),
+    ('manage_all_planning', 'Alle planning inzien en bewerken'),
     ('view_submitted_hours', 'Ingediende uren'),
     ('view_uren_import', 'Uren import'),
     ('view_invoices', 'Facturen'),
@@ -39,6 +41,7 @@ MODULE_PERMISSION_DEPENDENCIES = {
     'view_invoice_templates': ['view_invoices', 'view_submitted_hours'],
     'view_invoice_import': ['view_invoices', 'view_submitted_hours'],
     'view_spreadsheet_templates': ['view_spreadsheets'],
+    'manage_all_planning': ['view_all_planning'],
 }
 
 VALID_MODULE_PERMISSIONS = {code for code, _ in AVAILABLE_MODULE_PERMISSIONS}

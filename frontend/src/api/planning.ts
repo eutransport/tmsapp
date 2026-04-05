@@ -3,7 +3,7 @@
  * CRUD operations for week planning management
  */
 import api from './client'
-import { WeekPlanning, PlanningEntry } from '@/types'
+import { WeekPlanning, PlanningEntry, Company, Driver } from '@/types'
 
 // Types
 export interface WeekPlanningCreate {
@@ -159,5 +159,19 @@ export async function getMyPlanning(weeknummer: number, jaar: number): Promise<M
  */
 export async function sendPlanningEmail(id: string, email: string): Promise<{ message: string }> {
   const response = await api.post(`/planning/weeks/${id}/send_email/`, { email })
+  return response.data
+}
+
+export interface PlanningDataResponse {
+  companies: Company[]
+  drivers: Driver[]
+}
+
+/**
+ * Get companies and drivers for the planning admin view.
+ * Uses dedicated endpoint that respects planning permissions.
+ */
+export async function getPlanningData(): Promise<PlanningDataResponse> {
+  const response = await api.get('/planning/weeks/planning_data/')
   return response.data
 }

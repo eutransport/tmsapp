@@ -30,11 +30,11 @@ import {
   updatePlanningEntry,
   getMyPlanning,
   sendPlanningEmail,
+  getPlanningData,
   MyPlanningEntry,
 } from '@/api/planning'
-import { getCompanies } from '@/api/companies'
-import { getDrivers } from '@/api/drivers'
 import { getDriverReport, DriverReport, downloadDriverReportPdf, getDriverReportYears } from '@/api/timetracking'
+import { getDrivers } from '@/api/drivers'
 import clsx from '@/utils/clsx'
 
 const DAYS = [
@@ -272,9 +272,8 @@ function ChauffeurPlanningView() {
 }
 
 // Admin/Manager Planning View
-function AdminPlanningView() {
+function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
   const { t } = useTranslation()
-  const isReadOnly = false
   
   // State
   const [loading, setLoading] = useState(true)
@@ -317,20 +316,19 @@ function AdminPlanningView() {
   const loadInitialData = async () => {
     try {
       setLoading(true)
-      const [companiesRes, driversRes, weekInfo] = await Promise.all([
-        getCompanies({ page_size: 100 }),
-        getDrivers({ page_size: 100 }),
+      const [planningData, weekInfo] = await Promise.all([
+        getPlanningData(),
         getCurrentWeek(),
       ])
       
-      setCompanies(companiesRes.results)
-      setDrivers(driversRes.results)
+      setCompanies(planningData.companies)
+      setDrivers(planningData.drivers)
       setCurrentWeek(weekInfo.weeknummer)
       setCurrentYear(weekInfo.jaar)
       
       // Auto-select first company
-      if (companiesRes.results.length > 0) {
-        setSelectedCompany(companiesRes.results[0].id)
+      if (planningData.companies.length > 0) {
+        setSelectedCompany(planningData.companies[0].id)
       }
     } catch (err) {
       console.error('Failed to load initial data:', err)
@@ -1545,19 +1543,21 @@ export default function PlanningPage() {
   const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<'planning' | 'historie'>('planning')
   
-  // Chauffeurs see their own planning
-  if (user?.rol === 'chauffeur') {
+  const userPermissions = user?.module_permissions || []
+  const isAdmin = user?.rol === 'admin'
+  const hasViewAll = isAdmin || userPermissions.includes('view_all_planning') || userPermissions.includes('manage_all_planning')
+  const hasManageAll = isAdmin || userPermissions.includes('manage_all_planning')
+  
+  // Users without view_all_planning or manage_all_planning see only their own planning
+  if (!hasViewAll) {
     return <ChauffeurPlanningView />
   }
   
-  // Only admins see the historie tab
-  const isAdmin = user?.rol === 'admin'
-  
-  // Admins and managers see the full planning management
+  // Users with view/manage all planning see the full planning management
   return (
     <div className="space-y-6">
-      {/* Tabs (only for admins) */}
-      {isAdmin && (
+      {/* Tabs (only for admins or manage_all_planning) */}
+      {hasManageAll && (
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8">
             <button
@@ -1589,7 +1589,7 @@ export default function PlanningPage() {
       )}
       
       {/* Tab Content */}
-      {activeTab === 'planning' ? <AdminPlanningView /> : <HistorieView />}
+      {activeTab === 'planning' ? <AdminPlanningView isReadOnly={!hasManageAll} /> : <HistorieView />}
     </div>
   )
 }
