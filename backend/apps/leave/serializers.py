@@ -246,16 +246,12 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
 class LeaveRequestAdminCreateSerializer(serializers.Serializer):
     """Serializer for admin creating leave requests on behalf of a user."""
     user_id = serializers.UUIDField()
-    leave_type = serializers.ChoiceField(choices=[
-        ('vakantie', 'Vakantie'),
-        ('overuren', 'Verlof overuren'),
-        ('bijzonder_tandarts', 'Bijzonder verlof tandarts'),
-        ('bijzonder_huisarts', 'Bijzonder verlof huisarts'),
-        ('ziekteverzuim', 'Ziekteverzuim'),
-    ])
+    leave_type = serializers.ChoiceField(choices=LeaveType.choices)
     start_date = serializers.DateField()
     end_date = serializers.DateField()
-    hours_requested = serializers.DecimalField(max_digits=6, decimal_places=2)
+    hours_requested = serializers.DecimalField(
+        max_digits=6, decimal_places=2, required=False, default=Decimal('0')
+    )
     reason = serializers.CharField(required=False, allow_blank=True, default='')
     auto_approve = serializers.BooleanField(default=True)
 
@@ -264,7 +260,7 @@ class LeaveRequestAdminCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({
                 'end_date': 'Einddatum moet na startdatum liggen.'
             })
-        no_deduct_types = ['ziekteverzuim', 'bijzonder_tandarts', 'bijzonder_huisarts']
+        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS]
         if data['leave_type'] in no_deduct_types:
             data['hours_requested'] = Decimal('0')
         elif data['hours_requested'] <= 0:
