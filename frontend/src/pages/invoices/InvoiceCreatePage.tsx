@@ -178,7 +178,7 @@ function TemplateCard({
     <div
       onClick={onSelect}
       className={`
-        border-2 rounded-lg p-4 cursor-pointer transition-all
+        border-2 rounded-lg p-3 cursor-pointer transition-all
         ${selected 
           ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200' 
           : 'border-gray-200 hover:border-gray-300 bg-white'}
@@ -1862,8 +1862,8 @@ export default function InvoiceCreatePage() {
       )}
 
       {/* Step 1: Select Template */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">1. {t('invoices.selectTemplate')}</h2>
+      <div className="bg-white rounded-lg shadow p-4">
+        <h2 className="text-lg font-semibold mb-3">1. {t('invoices.selectTemplate')}</h2>
         {templates.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <p>{t('templates.noTemplates')}</p>
@@ -1875,7 +1875,7 @@ export default function InvoiceCreatePage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {templates.map((template) => (
               <TemplateCard
                 key={template.id}

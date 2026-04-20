@@ -765,22 +765,22 @@ export default function SubmittedHoursPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('common.week')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('common.year')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('drivers.title')}
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('timeEntries.trips')}
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('timeEntries.totalKm')}
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('common.actions')}
                     </th>
                   </tr>
@@ -788,26 +788,26 @@ export default function SubmittedHoursPage() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {paginatedWeeks.map((week) => (
                     <tr key={`${week.user_id}-${week.jaar}-${week.weeknummer}`} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-2.5 whitespace-nowrap">
                         <span className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-primary-100 text-primary-700 font-bold">
                           {week.weeknummer}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-500">
                         {week.jaar}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-2.5 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
                           {week.user__voornaam} {week.user__achternaam}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                      <td className="px-4 py-2.5 whitespace-nowrap text-sm text-right">
                         {week.ingediend_count}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
+                      <td className="px-4 py-2.5 whitespace-nowrap text-sm text-right font-medium">
                         {week.totaal_km} km
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <td className="px-4 py-2.5 whitespace-nowrap text-right">
                         <button
                           onClick={() => handleViewWeek(week)}
                           className="btn-secondary text-sm"

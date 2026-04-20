@@ -796,8 +796,8 @@ export default function CompaniesPage() {
       )}
 
       {/* Filters */}
-      <div className="card mb-6">
-        <div className="p-4">
+      <div className="card mb-4">
+        <div className="p-3">
           <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
             {/* Search */}
             <div className="flex-1 min-w-0 sm:min-w-64">
@@ -836,27 +836,27 @@ export default function CompaniesPage() {
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th 
-                  className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
+                  className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('naam')}
                 >
                   {t('companies.companyName')} <SortIcon field="naam" />
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
                   {t('companies.kvkNumber')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
                   {t('companies.contactPerson')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
                   {t('companies.contact')}
                 </th>
                 <th 
-                  className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
+                  className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('stad')}
                 >
                   {t('companies.location')} <SortIcon field="stad" />
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">
                   {t('common.actions')}
                 </th>
               </tr>
@@ -887,26 +887,26 @@ export default function CompaniesPage() {
               ) : (
                 companies.map(company => (
                   <tr key={company.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <div className="font-medium text-gray-900">{company.naam}</div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{company.kvk || '-'}</td>
-                    <td className="px-4 py-3 text-gray-600">{company.contactpersoon || '-'}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2 text-gray-600">{company.kvk || '-'}</td>
+                    <td className="px-3 py-2 text-gray-600">{company.contactpersoon || '-'}</td>
+                    <td className="px-3 py-2">
                       <div className="text-sm">
                         {company.telefoon && <div className="text-gray-600">{company.telefoon}</div>}
                         {company.email && <div className="text-gray-500">{company.email}</div>}
                         {!company.telefoon && !company.email && <span className="text-gray-400">-</span>}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <div className="text-sm">
                         {company.stad && <div className="text-gray-600">{company.stad}</div>}
                         {company.postcode && <div className="text-gray-500">{company.postcode}</div>}
                         {!company.stad && !company.postcode && <span className="text-gray-400">-</span>}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => { setSelectedCompany(company); setShowMailingModal(true) }}
@@ -963,9 +963,9 @@ export default function CompaniesPage() {
             </div>
           ) : (
             companies.map(company => (
-              <div key={company.id} className="p-4 hover:bg-gray-50">
+              <div key={company.id} className="p-3 hover:bg-gray-50">
                 {/* Card Header */}
-                <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-900 truncate">{company.naam}</h3>
                     {company.contactpersoon && (

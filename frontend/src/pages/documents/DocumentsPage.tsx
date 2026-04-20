@@ -95,7 +95,7 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-3 sm:space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
@@ -151,10 +151,10 @@ export default function DocumentsPage() {
                     to={`/documents/${doc.id}`}
                     className="block hover:bg-gray-50 transition-colors"
                   >
-                    <div className="px-3 py-3 sm:px-6 sm:py-4">
+                    <div className="px-3 py-2 sm:px-4 sm:py-3">
                       <div className="flex items-start sm:items-center justify-between gap-2">
                         <div className="flex items-start sm:items-center min-w-0 flex-1">
-                          <DocumentIcon className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400 flex-shrink-0 mt-0.5 sm:mt-0" />
+                          <DocumentIcon className="h-7 w-7 sm:h-8 sm:w-8 text-gray-400 flex-shrink-0 mt-0.5 sm:mt-0" />
                           <div className="ml-2 sm:ml-4 min-w-0 flex-1">
                             <p className="text-sm font-medium text-blue-600 truncate">
                               {doc.title}
@@ -200,7 +200,7 @@ export default function DocumentsPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="mt-1.5 sm:mt-2 ml-10 sm:ml-14 flex flex-wrap items-center text-xs sm:text-sm text-gray-500 gap-x-2 sm:gap-x-4">
+                      <div className="mt-1 sm:mt-1.5 ml-9 sm:ml-12 flex flex-wrap items-center text-xs sm:text-sm text-gray-500 gap-x-2 sm:gap-x-4">
                         <span>{doc.uploaded_by_name}</span>
                         <span className="hidden sm:inline">•</span>
                         <span>{formatDate(doc.created_at)}</span>
