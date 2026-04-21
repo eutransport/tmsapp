@@ -11,6 +11,7 @@ Security architecture:
 - Audit logging for session start/stop
 """
 import logging
+from zoneinfo import ZoneInfo
 from django.utils import timezone
 from django.db.models import Prefetch, Subquery, OuterRef
 from rest_framework import status, viewsets
@@ -39,6 +40,8 @@ from .security import (
 )
 
 logger = logging.getLogger('tracking')
+NL_TZ = ZoneInfo('Europe/Amsterdam')
+UTC_TZ = ZoneInfo('UTC')
 
 
 class TrackingSessionView(APIView):
@@ -1633,8 +1636,10 @@ class VehicleDetailView(APIView):
             )
 
         target_date = dt.strptime(date_str, '%Y-%m-%d').date()
-        date_from = dt(target_date.year, target_date.month, target_date.day, 0, 0, 0)
-        date_till = dt(target_date.year, target_date.month, target_date.day, 23, 59, 59)
+        local_start = dt(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=NL_TZ)
+        local_end = dt(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=NL_TZ)
+        date_from = local_start.astimezone(UTC_TZ)
+        date_till = local_end.astimezone(UTC_TZ)
 
         try:
             # Fetch trips for this vehicle on this date
@@ -1886,4 +1891,21 @@ class VehicleDetailView(APIView):
             return Response(result)
 
         except FMTrackError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning('FM-Track vehicle detail unavailable: %s', e)
+            return Response(
+                {
+                    'error': 'De FM-Track-service is tijdelijk niet beschikbaar. Probeer het later opnieuw.',
+                    'code': 'fm_track_unavailable',
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        except Exception:
+            logger.exception(
+                'Unexpected error while loading FM-Track vehicle detail (object_id=%s, date=%s)',
+                object_id,
+                date_str,
+            )
+            return Response(
+                {'error': 'Voertuiggegevens konden niet worden geladen.', 'code': 'fm_track_internal_error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
