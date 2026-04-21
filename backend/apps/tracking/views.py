@@ -11,6 +11,7 @@ Security architecture:
 - Audit logging for session start/stop
 """
 import logging
+from zoneinfo import ZoneInfo
 from django.utils import timezone
 from django.db.models import Prefetch, Subquery, OuterRef
 from rest_framework import status, viewsets
@@ -39,6 +40,8 @@ from .security import (
 )
 
 logger = logging.getLogger('tracking')
+NL_TZ = ZoneInfo('Europe/Amsterdam')
+UTC_TZ = ZoneInfo('UTC')
 
 
 class TrackingSessionView(APIView):
@@ -1615,7 +1618,6 @@ class VehicleDetailView(APIView):
 
     def get(self, request, object_id):
         from datetime import datetime as dt, date as date_type
-        from zoneinfo import ZoneInfo
         from apps.tracking.tachograph_service import (
             get_trips, get_raw_data, get_objects, get_vehicle_locations, FMTrackError,
             _format_address, _format_duration,
@@ -1634,12 +1636,10 @@ class VehicleDetailView(APIView):
             )
 
         target_date = dt.strptime(date_str, '%Y-%m-%d').date()
-        nl_tz = ZoneInfo('Europe/Amsterdam')
-        utc = ZoneInfo('UTC')
-        local_start = dt(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=nl_tz)
-        local_end = dt(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=nl_tz)
-        date_from = local_start.astimezone(utc)
-        date_till = local_end.astimezone(utc)
+        local_start = dt(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=NL_TZ)
+        local_end = dt(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=NL_TZ)
+        date_from = local_start.astimezone(UTC_TZ)
+        date_till = local_end.astimezone(UTC_TZ)
 
         try:
             # Fetch trips for this vehicle on this date
@@ -1893,7 +1893,10 @@ class VehicleDetailView(APIView):
         except FMTrackError as e:
             logger.warning('FM-Track vehicle detail unavailable: %s', e)
             return Response(
-                {'error': str(e), 'code': 'fm_track_unavailable'},
+                {
+                    'error': 'De FM-Track-service is tijdelijk niet beschikbaar. Probeer het later opnieuw.',
+                    'code': 'fm_track_unavailable',
+                },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         except Exception:
