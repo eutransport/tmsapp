@@ -1615,6 +1615,7 @@ class VehicleDetailView(APIView):
 
     def get(self, request, object_id):
         from datetime import datetime as dt, date as date_type
+        from zoneinfo import ZoneInfo
         from apps.tracking.tachograph_service import (
             get_trips, get_raw_data, get_objects, get_vehicle_locations, FMTrackError,
             _format_address, _format_duration,
@@ -1633,8 +1634,12 @@ class VehicleDetailView(APIView):
             )
 
         target_date = dt.strptime(date_str, '%Y-%m-%d').date()
-        date_from = dt(target_date.year, target_date.month, target_date.day, 0, 0, 0)
-        date_till = dt(target_date.year, target_date.month, target_date.day, 23, 59, 59)
+        nl_tz = ZoneInfo('Europe/Amsterdam')
+        utc = ZoneInfo('UTC')
+        local_start = dt(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=nl_tz)
+        local_end = dt(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=nl_tz)
+        date_from = local_start.astimezone(utc)
+        date_till = local_end.astimezone(utc)
 
         try:
             # Fetch trips for this vehicle on this date
@@ -1886,4 +1891,18 @@ class VehicleDetailView(APIView):
             return Response(result)
 
         except FMTrackError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning('FM-Track vehicle detail unavailable: %s', e)
+            return Response(
+                {'error': str(e), 'code': 'fm_track_unavailable'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        except Exception:
+            logger.exception(
+                'Unexpected error while loading FM-Track vehicle detail (object_id=%s, date=%s)',
+                object_id,
+                date_str,
+            )
+            return Response(
+                {'error': 'Voertuiggegevens konden niet worden geladen.', 'code': 'fm_track_internal_error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
