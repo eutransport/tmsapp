@@ -781,6 +781,14 @@ class TachographArchiveListView(APIView):
     """
     permission_classes = [IsAdminOrManager]
 
+    def perform_content_negotiation(self, request, force=False):
+        """
+        Keep DRF from treating ?format=csv|xlsx|pdf as a renderer suffix.
+        Export formats are handled in get() by returning HttpResponse directly.
+        """
+        from rest_framework.renderers import JSONRenderer
+        return JSONRenderer(), 'application/json'
+
     @staticmethod
     def _format_dt(value):
         from datetime import datetime
