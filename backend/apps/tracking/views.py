@@ -401,7 +401,8 @@ class TachographOverviewView(APIView):
     permission_classes = [IsAdminOrManager]
 
     def get(self, request):
-        from .tachograph_service import get_tachograph_overview, FMTrackError
+        from .tachograph_archive_service import fetch_live_tachograph_data
+        from .tachograph_service import FMTrackError
         from datetime import date as date_type
 
         date_str = request.query_params.get('date')
@@ -419,11 +420,7 @@ class TachographOverviewView(APIView):
             )
 
         try:
-            data = get_tachograph_overview(date_str)
-
-            # Enrich with driver-based overtime calculation
-            self._enrich_with_driver_overtime(data, date_str)
-
+            data = fetch_live_tachograph_data(date_str)
             return Response({'date': date_str, 'vehicles': data, 'count': len(data)})
         except FMTrackError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -772,6 +769,79 @@ class TachographManualSyncView(APIView):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class TachographArchiveListView(APIView):
+    """
+    GET /api/tracking/tachograph/archive/?date=YYYY-MM-DD
+    Returns stored tachograph archive data from local database.
+    """
+    permission_classes = [IsAdminOrManager]
+
+    def get(self, request):
+        from datetime import date as date_type
+        from .tachograph_archive_service import get_tachograph_archive
+
+        date_str = request.query_params.get('date')
+        date_from = request.query_params.get('date_from')
+        date_till = request.query_params.get('date_till')
+        if not date_str and not date_from and not date_till:
+            date_str = date_type.today().isoformat()
+
+        from datetime import datetime
+        try:
+            if date_str:
+                datetime.strptime(date_str, '%Y-%m-%d')
+            if date_from:
+                datetime.strptime(date_from, '%Y-%m-%d')
+            if date_till:
+                datetime.strptime(date_till, '%Y-%m-%d')
+        except ValueError:
+            return Response(
+                {'error': 'Ongeldig datumformaat. Gebruik YYYY-MM-DD.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        rows = get_tachograph_archive(
+            date_str=date_str,
+            date_from=date_from,
+            date_till=date_till,
+        )
+        return Response({
+            'date': date_str,
+            'vehicles': rows,
+            'count': len(rows),
+        })
+
+
+class TachographArchiveSyncView(APIView):
+    """
+    POST /api/tracking/tachograph/archive/sync/
+    Body: {"date": "YYYY-MM-DD"}
+    """
+    permission_classes = [IsAdminOrManager]
+
+    def post(self, request):
+        from .tachograph_archive_service import upsert_tachograph_archive_for_date
+        from .tachograph_service import FMTrackError
+
+        date_str = request.data.get('date')
+        if not date_str:
+            return Response(
+                {'error': 'Veld "date" is verplicht (YYYY-MM-DD).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            result = upsert_tachograph_archive_for_date(date_str)
+            return Response(result, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except FMTrackError as e:
+            return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+        except Exception as e:
+            logger.exception('Tachograaf archief sync mislukt voor %s', date_str)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class TachographComparisonView(APIView):

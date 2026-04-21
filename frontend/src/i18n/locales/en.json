@@ -2004,10 +2004,20 @@
     "syncStartInfo": "Data will be synced from {{datum}}.",
     "forceResyncComplete": "Re-sync complete: {{deleted}} old entries deleted, {{entries}} new entries created over {{dates}} days",
     "today": "Today",
+    "liveTab": "Tachograph Live",
     "previousDay": "Previous day",
     "nextDay": "Next day",
     "previousWeek": "Previous week",
     "nextWeek": "Next week",
+    "archive": {
+      "tab": "Tachograph Archive",
+      "syncDay": "Sync this day",
+      "syncConfirm": "Fetch and store tachograph data for {{date}}? Existing rows for this day will be overwritten.",
+      "syncComplete": "{{created}} rows updated",
+      "syncError": "Error synchronizing archive data",
+      "noData": "No archived data stored",
+      "noDataHint": "No tachograph data has been stored for this day yet."
+    },
     "comparison": {
       "title": "Hours Comparison",
       "subtitle": "Compare submitted hours with tachograph data",

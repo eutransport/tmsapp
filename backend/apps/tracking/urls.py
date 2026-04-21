@@ -25,6 +25,8 @@ urlpatterns = [
     path('tachograph/overtime/list/', views.TachographOvertimeListView.as_view(), name='tachograph-overtime-list'),
     path('tachograph/vehicles/', views.TachographVehiclesListView.as_view(), name='tachograph-vehicles'),
     path('tachograph/sync/', views.TachographManualSyncView.as_view(), name='tachograph-sync'),
+    path('tachograph/archive/', views.TachographArchiveListView.as_view(), name='tachograph-archive-list'),
+    path('tachograph/archive/sync/', views.TachographArchiveSyncView.as_view(), name='tachograph-archive-sync'),
     path('tachograph/comparison/', views.TachographComparisonView.as_view(), name='tachograph-comparison'),
     
     # Assigned vehicle for current user

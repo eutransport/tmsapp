@@ -79,6 +79,20 @@ export async function getTachographOverview(date: string): Promise<TachographOve
   return response.data
 }
 
+export async function getTachographArchive(date: string): Promise<TachographOverview> {
+  const response = await api.get(`/tracking/tachograph/archive/?date=${date}`)
+  return response.data
+}
+
+export async function syncTachographArchiveDay(date: string): Promise<{
+  date: string
+  deleted_count: number
+  created_count: number
+}> {
+  const response = await api.post('/tracking/tachograph/archive/sync/', { date })
+  return response.data
+}
+
 export async function writeOvertime(data: {
   driver_id: string
   date: string

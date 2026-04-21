@@ -2004,10 +2004,20 @@
     "syncStartInfo": "Gegevens worden opgehaald vanaf {{datum}}.",
     "forceResyncComplete": "Hernieuwde synchronisatie voltooid: {{deleted}} oude entries verwijderd, {{entries}} nieuwe uren aangemaakt over {{dates}} dagen",
     "today": "Vandaag",
+    "liveTab": "Tachograaf Live",
     "previousDay": "Vorige dag",
     "nextDay": "Volgende dag",
     "previousWeek": "Week terug",
     "nextWeek": "Week vooruit",
+    "archive": {
+      "tab": "Tachograaf Archief",
+      "syncDay": "Synchroniseer deze dag",
+      "syncConfirm": "Tachograafgegevens voor {{date}} ophalen en opslaan? Bestaande regels voor deze dag worden overschreven.",
+      "syncComplete": "{{created}} regels bijgewerkt",
+      "syncError": "Fout bij synchroniseren van archiefgegevens",
+      "noData": "Geen opgeslagen archiefgegevens",
+      "noDataHint": "Voor deze dag zijn nog geen tachograafgegevens opgeslagen."
+    },
     "comparison": {
       "title": "Uren Vergelijking",
       "subtitle": "Vergelijk ingediende uren met tachograaf gegevens",
