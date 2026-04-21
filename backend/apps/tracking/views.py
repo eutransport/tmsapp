@@ -638,7 +638,20 @@ class FMTrackPositionsView(APIView):
         try:
             positions = get_vehicle_locations()
         except FMTrackError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning('FM-Track positions unavailable: %s', e)
+            return Response(
+                {
+                    'error': 'De FM-Track-service is tijdelijk niet beschikbaar. Probeer het later opnieuw.',
+                    'code': 'fm_track_unavailable',
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        except Exception:
+            logger.exception('Unexpected error while loading FM-Track positions')
+            return Response(
+                {'error': 'FM-Track posities konden niet worden geladen.', 'code': 'fm_track_internal_error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         # Build a lookup of TMS vehicles by kenteken for enrichment
         vehicle_lookup = {}

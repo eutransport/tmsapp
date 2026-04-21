@@ -798,20 +798,20 @@ export default function CompaniesPage() {
       {/* Filters */}
       <div className="card mb-4">
         <div className="p-3">
-          <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
             {/* Search */}
             <div className="flex-1 min-w-0 sm:min-w-64">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
                 {t('common.search')}
               </label>
               <div className="relative">
-                <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1) }}
                   placeholder={t('companies.searchCompanies')}
-                  className="input pl-10"
+                  className="input pl-9 h-9 text-sm"
                 />
               </div>
             </div>
@@ -819,10 +819,10 @@ export default function CompaniesPage() {
             {/* Refresh button */}
             <button
               onClick={() => fetchCompanies()}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+              className="h-9 w-9 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
               title={t('common.refresh')}
             >
-              <ArrowPathIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+              <ArrowPathIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
@@ -832,31 +832,31 @@ export default function CompaniesPage() {
       <div className="card overflow-hidden">
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th 
-                  className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
+                  className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('naam')}
                 >
                   {t('companies.companyName')} <SortIcon field="naam" />
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   {t('companies.kvkNumber')}
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   {t('companies.contactPerson')}
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   {t('companies.contact')}
                 </th>
                 <th 
-                  className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
+                  className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('stad')}
                 >
                   {t('companies.location')} <SortIcon field="stad" />
                 </th>
-                <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase">
                   {t('common.actions')}
                 </th>
               </tr>
@@ -887,50 +887,50 @@ export default function CompaniesPage() {
               ) : (
                 companies.map(company => (
                   <tr key={company.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2">
+                    <td className="px-2 py-1.5">
                       <div className="font-medium text-gray-900">{company.naam}</div>
                     </td>
-                    <td className="px-3 py-2 text-gray-600">{company.kvk || '-'}</td>
-                    <td className="px-3 py-2 text-gray-600">{company.contactpersoon || '-'}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-2 py-1.5 text-gray-600">{company.kvk || '-'}</td>
+                    <td className="px-2 py-1.5 text-gray-600">{company.contactpersoon || '-'}</td>
+                    <td className="px-2 py-1.5">
                       <div className="text-sm">
                         {company.telefoon && <div className="text-gray-600">{company.telefoon}</div>}
                         {company.email && <div className="text-gray-500">{company.email}</div>}
                         {!company.telefoon && !company.email && <span className="text-gray-400">-</span>}
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-2 py-1.5">
                       <div className="text-sm">
                         {company.stad && <div className="text-gray-600">{company.stad}</div>}
                         {company.postcode && <div className="text-gray-500">{company.postcode}</div>}
                         {!company.stad && !company.postcode && <span className="text-gray-400">-</span>}
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-2 py-1.5">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => { setSelectedCompany(company); setShowMailingModal(true) }}
-                          className="p-2 min-w-[40px] min-h-[40px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
+                          className="p-1 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
                           title={t('companies.mailingList')}
                         >
-                          <EnvelopeIcon className="w-5 h-5" />
+                          <EnvelopeIcon className="w-4 h-4" />
                           {(company.mailing_contacts_count > 0) && (
                             <span className="sr-only">{company.mailing_contacts_count}</span>
                           )}
                         </button>
                         <button
                           onClick={() => { setSelectedCompany(company); setShowEditModal(true) }}
-                          className="p-2 min-w-[40px] min-h-[40px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
+                          className="p-1 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
                           title={t('common.edit')}
                         >
-                          <PencilSquareIcon className="w-5 h-5" />
+                          <PencilSquareIcon className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => { setSelectedCompany(company); setShowDeleteModal(true) }}
-                          className="p-2 min-w-[40px] min-h-[40px] text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded"
+                          className="p-1 text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded"
                           title={t('common.delete')}
                         >
-                          <TrashIcon className="w-5 h-5" />
+                          <TrashIcon className="w-4 h-4" />
                         </button>
                       </div>
                     </td>

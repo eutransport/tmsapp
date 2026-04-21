@@ -578,6 +578,7 @@ export default function TrackingPage() {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
   const [selectedFMObject, setSelectedFMObject] = useState<{ objectId: string; plateNumber: string } | null>(null)
   const [fmRouteCoords, setFmRouteCoords] = useState<RouteCoordinate[]>([])
+  const [fmTrackError, setFmTrackError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -622,8 +623,10 @@ export default function TrackingPage() {
         try {
           const positions = await trackingApi.getFMTrackPositions()
           setFmPositions(positions)
+          setFmTrackError(null)
         } catch (err) {
           console.error('Failed to load FM-Track positions:', err)
+          setFmTrackError(t('tracking.fmTrackUnavailable', 'FM-Track posities zijn tijdelijk niet beschikbaar.'))
         }
       }
 
@@ -646,9 +649,12 @@ export default function TrackingPage() {
       try {
         const positions = await trackingApi.getFMTrackPositions()
         setFmPositions(positions)
-      } catch {}
+        setFmTrackError(null)
+      } catch {
+        setFmTrackError(t('tracking.fmTrackUnavailable', 'FM-Track posities zijn tijdelijk niet beschikbaar.'))
+      }
     }
-  }, [user])
+  }, [user, t])
 
   useEffect(() => {
     // Poll immediately on mount, then every 5s
@@ -727,6 +733,12 @@ export default function TrackingPage() {
 
   return (
     <div className="space-y-4">
+      {fmTrackError && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-700 px-3 py-2 rounded-lg flex items-center gap-2 text-sm">
+          <ExclamationTriangleIcon className="h-4 w-4 shrink-0" />
+          <span>{fmTrackError}</span>
+        </div>
+      )}
       {/* Page Header */}
       <div className="page-header">
         <div>

@@ -679,22 +679,22 @@ export default function DriversPage() {
       )}
 
       {/* Filters */}
-      <div className="card mb-6">
+      <div className="card mb-4">
         <div className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
             {/* Search */}
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1">
                 {t('common.search')}
               </label>
               <div className="relative">
-                <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1) }}
                   placeholder={t('drivers.searchDrivers')}
-                  className="input pl-10 min-h-[44px]"
+                  className="input pl-9 h-9 text-sm"
                 />
               </div>
             </div>
@@ -703,13 +703,13 @@ export default function DriversPage() {
             <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
               {/* Company filter */}
               <div className="flex-1 sm:w-40">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('companies.title')}
-                </label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    {t('companies.title')}
+                  </label>
                 <select
                   value={companyFilter}
                   onChange={(e) => { setCompanyFilter(e.target.value); setPage(1) }}
-                  className="input min-h-[44px]"
+                  className="input h-9 text-sm"
                 >
                   <option value="">{t('companies.allCompanies')}</option>
                   {companies.map(company => (
@@ -722,13 +722,13 @@ export default function DriversPage() {
 
               {/* ADR filter */}
               <div className="flex-1 sm:w-36">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ADR
-                </label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    ADR
+                  </label>
                 <select
                   value={adrFilter}
                   onChange={(e) => { setAdrFilter(e.target.value as 'all' | 'yes' | 'no'); setPage(1) }}
-                  className="input min-h-[44px]"
+                  className="input h-9 text-sm"
                 >
                   <option value="all">{t('common.all')}</option>
                   <option value="yes">{t('drivers.adrCertified')}</option>
@@ -740,10 +740,10 @@ export default function DriversPage() {
             {/* Refresh button */}
             <button
               onClick={() => fetchDrivers()}
-              className="p-2 min-w-[44px] min-h-[44px] text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg self-end"
+              className="h-9 w-9 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg self-end"
               title={t('common.refresh')}
             >
-              <ArrowPathIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+              <ArrowPathIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
@@ -753,31 +753,31 @@ export default function DriversPage() {
       <div className="card overflow-hidden">
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th 
-                  className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
+                  className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('naam')}
                 >
                   {t('common.name')} <SortIcon field="naam" />
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   {t('common.phone')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   {t('companies.title')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   {t('drivers.vehicle')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   {t('drivers.linkedUser')}
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">
                   ADR
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">
+                <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase">
                   {t('common.actions')}
                 </th>
               </tr>
@@ -808,43 +808,43 @@ export default function DriversPage() {
               ) : (
                 drivers.map(driver => (
                   <tr key={driver.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-1.5">
                       <div className="font-medium text-gray-900">{driver.naam}</div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{driver.telefoon || '-'}</td>
-                    <td className="px-4 py-3 text-gray-600">{getCompanyName(driver)}</td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className="px-2 py-1.5 text-gray-600">{driver.telefoon || '-'}</td>
+                    <td className="px-2 py-1.5 text-gray-600">{getCompanyName(driver)}</td>
+                    <td className="px-2 py-1.5 text-gray-600">
                       {driver.voertuig_ritnummer 
                         ? `${driver.voertuig_ritnummer} (${driver.voertuig_kenteken})`
                         : '-'}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className="px-2 py-1.5 text-gray-600">
                       {driver.gekoppelde_gebruiker_naam || '-'}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-2 py-1.5 text-center">
                       {driver.adr ? (
                         <span className="inline-flex items-center text-green-600" title="ADR gecertificeerd">
-                          <ShieldCheckIcon className="w-5 h-5" />
+                          <ShieldCheckIcon className="w-4 h-4" />
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-1.5">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => { setSelectedDriver(driver); setShowEditModal(true) }}
-                          className="p-2 min-w-[40px] min-h-[40px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
+                          className="p-1 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
                           title={t('common.edit')}
                         >
-                          <PencilSquareIcon className="w-5 h-5" />
+                          <PencilSquareIcon className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => { setSelectedDriver(driver); setShowDeleteModal(true) }}
-                          className="p-2 min-w-[40px] min-h-[40px] text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded"
+                          className="p-1 text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded"
                           title={t('common.delete')}
                         >
-                          <TrashIcon className="w-5 h-5" />
+                          <TrashIcon className="w-4 h-4" />
                         </button>
                       </div>
                     </td>

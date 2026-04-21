@@ -139,31 +139,91 @@ export default function DocumentsPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          <ul className="divide-y divide-gray-200">
+        <div className="card overflow-hidden">
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('common.name')}</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('common.status')}</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('common.createdAt', 'Aangemaakt')}</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('documents.signed')}</th>
+                  <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {documents.map((doc) => {
+                  const status = statusConfig[doc.status];
+                  const StatusIcon = status.icon;
+                  return (
+                    <tr key={doc.id} className="hover:bg-gray-50">
+                      <td className="px-2 py-1.5">
+                        <Link to={`/documents/${doc.id}`} className="flex items-center gap-2 min-w-0">
+                          <DocumentIcon className="h-4 w-4 text-gray-400 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-medium text-blue-600 truncate">{doc.title}</p>
+                            <p className="text-xs text-gray-500 truncate">{doc.original_filename}</p>
+                          </div>
+                        </Link>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${status.className}`}>
+                          <StatusIcon className="h-3.5 w-3.5 mr-1" />
+                          {status.label}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5 text-gray-600">{formatDate(doc.created_at)}</td>
+                      <td className="px-2 py-1.5 text-gray-600">{doc.signed_at ? formatDate(doc.signed_at) : '-'}</td>
+                      <td className="px-2 py-1.5">
+                        <div className="flex justify-end gap-1">
+                          {doc.status === 'pending' && (
+                            <button
+                              onClick={() => navigate(`/documents/${doc.id}/sign`)}
+                              className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                              title={t('documents.sign')}
+                            >
+                              <PencilSquareIcon className="h-4 w-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => handleDelete(doc.id, e)}
+                            className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+                            title={t('common.delete')}
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <ul className="md:hidden divide-y divide-gray-200">
             {documents.map((doc) => {
               const status = statusConfig[doc.status];
               const StatusIcon = status.icon;
-              
+
               return (
                 <li key={doc.id}>
                   <Link
                     to={`/documents/${doc.id}`}
                     className="block hover:bg-gray-50 transition-colors"
                   >
-                    <div className="px-3 py-2 sm:px-4 sm:py-3">
-                      <div className="flex items-start sm:items-center justify-between gap-2">
-                        <div className="flex items-start sm:items-center min-w-0 flex-1">
-                          <DocumentIcon className="h-7 w-7 sm:h-8 sm:w-8 text-gray-400 flex-shrink-0 mt-0.5 sm:mt-0" />
-                          <div className="ml-2 sm:ml-4 min-w-0 flex-1">
+                    <div className="px-3 py-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start min-w-0 flex-1">
+                          <DocumentIcon className="h-7 w-7 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="ml-2 min-w-0 flex-1">
                             <p className="text-sm font-medium text-blue-600 truncate">
                               {doc.title}
                             </p>
-                            <p className="text-xs sm:text-sm text-gray-500 truncate">
+                            <p className="text-xs text-gray-500 truncate">
                               {doc.original_filename}
                             </p>
-                            {/* Mobile: status badge inline */}
-                            <div className="sm:hidden mt-1">
+                            <div className="mt-1">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${status.className}`}>
                                 <StatusIcon className="h-3 w-3 mr-0.5" />
                                 {status.label}
@@ -171,38 +231,31 @@ export default function DocumentsPage() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-                          {/* Desktop: status badge */}
-                          <span className={`hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.className}`}>
-                            <StatusIcon className="h-4 w-4 mr-1" />
-                            {status.label}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            {doc.status === 'pending' && (
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  navigate(`/documents/${doc.id}/sign`);
-                                }}
-                                className="p-1.5 sm:p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md"
-                                title={t('documents.sign')}
-                              >
-                                <PencilSquareIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                              </button>
-                            )}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {doc.status === 'pending' && (
                             <button
-                              onClick={(e) => handleDelete(doc.id, e)}
-                              className="p-1.5 sm:p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md"
-                              title={t('common.delete')}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                navigate(`/documents/${doc.id}/sign`);
+                              }}
+                              className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md"
+                              title={t('documents.sign')}
                             >
-                              <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                              <PencilSquareIcon className="h-4 w-4" />
                             </button>
-                          </div>
+                          )}
+                          <button
+                            onClick={(e) => handleDelete(doc.id, e)}
+                            className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md"
+                            title={t('common.delete')}
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
-                      <div className="mt-1 sm:mt-1.5 ml-9 sm:ml-12 flex flex-wrap items-center text-xs sm:text-sm text-gray-500 gap-x-2 sm:gap-x-4">
+                      <div className="mt-1 ml-9 flex flex-wrap items-center text-xs text-gray-500 gap-x-2">
                         <span>{doc.uploaded_by_name}</span>
-                        <span className="hidden sm:inline">•</span>
+                        <span>•</span>
                         <span>{formatDate(doc.created_at)}</span>
                         {doc.signed_at && (
                           <>

@@ -380,8 +380,9 @@ def get_vehicle_locations():
 
     # Fetch last trip for each object to get fuel_level and mileage
     today = date_type.today()
-    date_from = datetime(today.year, today.month, today.day, 0, 0, 0) - timedelta(days=7)
-    date_till = datetime(today.year, today.month, today.day, 23, 59, 59)
+    utc_tz = ZoneInfo('UTC')
+    date_from = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=utc_tz) - timedelta(days=7)
+    date_till = datetime(today.year, today.month, today.day, 23, 59, 59, tzinfo=utc_tz)
     fuel_data = {}  # object_id -> {fuel_level, mileage}
 
     def _fetch_fuel_data(obj):
@@ -480,8 +481,8 @@ def get_vehicle_locations():
     # Fall back to trip-based approach for vehicles without GPS data on object
     if objects_without_gps:
         today = date_type.today()
-        date_from = datetime(today.year, today.month, today.day, 0, 0, 0) - timedelta(days=7)
-        date_till = datetime(today.year, today.month, today.day, 23, 59, 59)
+        date_from = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=utc_tz) - timedelta(days=7)
+        date_till = datetime(today.year, today.month, today.day, 23, 59, 59, tzinfo=utc_tz)
 
         def _fetch_last_position(obj):
             try:
