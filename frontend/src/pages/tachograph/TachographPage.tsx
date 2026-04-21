@@ -18,7 +18,7 @@ import {
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import toast from 'react-hot-toast'
-import { getTachographOverview, writeOvertime, triggerTachographSync, getTachographSyncInfo, TachographVehicle, TachographTrip } from '@/api/tachograph'
+import { getTachographOverview, getTachographArchive, syncTachographArchiveDay, writeOvertime, triggerTachographSync, getTachographSyncInfo, TachographVehicle, TachographTrip } from '@/api/tachograph'
 import { getAllDrivers } from '@/api/drivers'
 import { Driver } from '@/types'
 import clsx from '@/utils/clsx'
@@ -31,6 +31,7 @@ function formatKm(km: number): string {
 
 export default function TachographPage() {
   const { t } = useTranslation()
+  const [activeTab, setActiveTab] = useState<'live' | 'archive'>('live')
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
   const [vehicles, setVehicles] = useState<TachographVehicle[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -51,6 +52,8 @@ export default function TachographPage() {
   const [syncStartDatum, setSyncStartDatum] = useState<string | null>(null)
   const [syncEffectiveStart, setSyncEffectiveStart] = useState<string | null>(null)
   const [showSyncConfirm, setShowSyncConfirm] = useState(false)
+  const [showArchiveSyncConfirm, setShowArchiveSyncConfirm] = useState(false)
+  const [isArchiveSyncing, setIsArchiveSyncing] = useState(false)
 
   // Date navigation helpers
   const addDays = (dateStr: string, days: number) => {
@@ -76,7 +79,9 @@ export default function TachographPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const data = await getTachographOverview(date)
+      const data = activeTab === 'live'
+        ? await getTachographOverview(date)
+        : await getTachographArchive(date)
       setVehicles(data.vehicles)
       setCurrentPage(1)
       setExpandedIds(new Set())
@@ -87,7 +92,7 @@ export default function TachographPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [date, t])
+  }, [activeTab, date, t])
 
   useEffect(() => {
     fetchData()
@@ -187,6 +192,23 @@ export default function TachographPage() {
     }
   }
 
+  const executeArchiveSync = async () => {
+    setShowArchiveSyncConfirm(false)
+    setIsArchiveSyncing(true)
+    setError(null)
+    try {
+      const result = await syncTachographArchiveDay(date)
+      setSaveSuccess(t('tachograph.archive.syncComplete', { created: result.created_count }))
+      setTimeout(() => setSaveSuccess(null), 5000)
+      await fetchData()
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || t('tachograph.archive.syncError')
+      setError(msg)
+    } finally {
+      setIsArchiveSyncing(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -198,27 +220,64 @@ export default function TachographPage() {
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t('tachograph.subtitle')}
           </p>
+          <nav className="mt-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="-mb-px flex gap-6" aria-label="Tabs">
+              <button
+                onClick={() => setActiveTab('live')}
+                className={`py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'live'
+                    ? 'border-primary-600 text-primary-700 dark:text-primary-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                }`}
+              >
+                {t('tachograph.liveTab')}
+              </button>
+              <button
+                onClick={() => setActiveTab('archive')}
+                className={`py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'archive'
+                    ? 'border-primary-600 text-primary-700 dark:text-primary-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                }`}
+              >
+                {t('tachograph.archive.tab')}
+              </button>
+            </div>
+          </nav>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleManualSync(true)}
-            disabled={isSyncing}
-            className="btn-outline flex items-center gap-2 text-sm text-orange-600 border-orange-300 hover:bg-orange-50"
-            title={t('tachograph.forceResyncTooltip')}
-          >
-            <ArrowPathIcon className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            {t('tachograph.forceResync')}
-          </button>
-          <button
-            onClick={() => handleManualSync(false)}
-            disabled={isSyncing}
-            className="btn-primary flex items-center gap-2 text-sm"
-            title={t('tachograph.syncTooltip')}
-          >
-            <ArrowPathIcon className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            {isSyncing ? t('tachograph.syncing') : t('tachograph.syncNow')}
-          </button>
-        </div>
+        {activeTab === 'live' ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleManualSync(true)}
+              disabled={isSyncing}
+              className="btn-outline flex items-center gap-2 text-sm text-orange-600 border-orange-300 hover:bg-orange-50"
+              title={t('tachograph.forceResyncTooltip')}
+            >
+              <ArrowPathIcon className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              {t('tachograph.forceResync')}
+            </button>
+            <button
+              onClick={() => handleManualSync(false)}
+              disabled={isSyncing}
+              className="btn-primary flex items-center gap-2 text-sm"
+              title={t('tachograph.syncTooltip')}
+            >
+              <ArrowPathIcon className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? t('tachograph.syncing') : t('tachograph.syncNow')}
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowArchiveSyncConfirm(true)}
+              disabled={isArchiveSyncing}
+              className="btn-primary flex items-center gap-2 text-sm"
+            >
+              <ArrowPathIcon className={`w-4 h-4 ${isArchiveSyncing ? 'animate-spin' : ''}`} />
+              {isArchiveSyncing ? t('tachograph.syncing') : t('tachograph.archive.syncDay')}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Date Navigation */}
@@ -380,8 +439,21 @@ export default function TachographPage() {
       {!isLoading && vehicles.length === 0 && !error && (
         <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow">
           <TruckIcon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">{t('tachograph.noData')}</h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t('tachograph.noDataHint')}</p>
+          <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+            {activeTab === 'archive' ? t('tachograph.archive.noData') : t('tachograph.noData')}
+          </h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {activeTab === 'archive' ? t('tachograph.archive.noDataHint') : t('tachograph.noDataHint')}
+          </p>
+          {activeTab === 'archive' && (
+            <button
+              onClick={() => setShowArchiveSyncConfirm(true)}
+              className="mt-4 inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+            >
+              <ArrowPathIcon className="h-4 w-4" />
+              {t('tachograph.archive.syncDay')}
+            </button>
+          )}
         </div>
       )}
 
@@ -464,6 +536,33 @@ export default function TachographPage() {
                 className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700"
               >
                 {t('tachograph.forceResync')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showArchiveSyncConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              {t('tachograph.archive.syncDay')}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+              {t('tachograph.archive.syncConfirm', { date })}
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowArchiveSyncConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={executeArchiveSync}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700"
+              >
+                {t('tachograph.archive.syncDay')}
               </button>
             </div>
           </div>

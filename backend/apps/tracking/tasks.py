@@ -32,7 +32,8 @@ def sync_tachograph_hours():
     from apps.drivers.models import Driver
     from apps.timetracking.models import TimeEntry
     from apps.tracking.models import TachographOvertime, TachographSyncLog
-    from apps.tracking.tachograph_service import get_tachograph_overview, FMTrackError
+    from apps.tracking.tachograph_archive_service import upsert_tachograph_archive_for_date
+    from apps.tracking.tachograph_service import FMTrackError
 
     settings = AppSettings.get_settings()
     start_datum = settings.tachograaf_start_datum
@@ -102,11 +103,20 @@ def sync_tachograph_hours():
 
     total_entries = 0
     total_overtime = 0
+    total_archive_created = 0
     all_affected_users = set()
     results = []
 
     for process_date in dates_to_process:
         date_str = process_date.strftime('%Y-%m-%d')
+        try:
+            archive_result = upsert_tachograph_archive_for_date(date_str)
+            total_archive_created += archive_result['created_count']
+        except FMTrackError as e:
+            logger.error('Tachograaf archief sync fout voor %s: %s', date_str, e)
+        except Exception:
+            logger.exception('Onverwachte fout bij tachograaf archief sync voor %s', date_str)
+
         try:
             result = _process_date(
                 date_str, process_date, driver_lookup, plate_lookup
@@ -151,6 +161,7 @@ def sync_tachograph_hours():
         'dates_processed': len(dates_to_process),
         'entries_created': total_entries,
         'overtime_created': total_overtime,
+        'archive_created': total_archive_created,
     }
 
 

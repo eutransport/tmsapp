@@ -189,3 +189,46 @@ class TachographSyncLog(models.Model):
 
     def __str__(self):
         return f"Sync {self.date} - {self.entries_created} entries"
+
+
+class TachographArchiveEntry(models.Model):
+    """
+    Stored tachograph overview row for a specific day and vehicle/object.
+    """
+    id = models.BigAutoField(primary_key=True)
+    date = models.DateField(verbose_name='Datum')
+    object_id = models.CharField(max_length=100, verbose_name='Object ID')
+    vehicle_name = models.CharField(max_length=255, blank=True, verbose_name='Voertuig')
+    vehicle_make = models.CharField(max_length=100, blank=True, verbose_name='Merk')
+    vehicle_model = models.CharField(max_length=100, blank=True, verbose_name='Model')
+    plate_number = models.CharField(max_length=100, blank=True, verbose_name='Kenteken')
+    first_start = models.DateTimeField(null=True, blank=True, verbose_name='Eerste start')
+    last_end = models.DateTimeField(null=True, blank=True, verbose_name='Laatste einde')
+    first_km = models.FloatField(default=0, verbose_name='Start KM')
+    last_km = models.FloatField(default=0, verbose_name='Eind KM')
+    total_km = models.FloatField(default=0, verbose_name='Totaal KM')
+    total_duration_seconds = models.PositiveIntegerField(default=0, verbose_name='Totale duur (s)')
+    total_hours = models.FloatField(default=0, verbose_name='Totale uren')
+    total_hours_display = models.CharField(max_length=20, blank=True, verbose_name='Totale uren (weergave)')
+    overtime_hours = models.FloatField(default=0, verbose_name='Overuren')
+    overtime_display = models.CharField(max_length=20, null=True, blank=True, verbose_name='Overuren (weergave)')
+    has_overtime = models.BooleanField(default=False, verbose_name='Heeft overuren')
+    overtime_calculation = models.JSONField(null=True, blank=True, verbose_name='Overuren berekening')
+    drivers = models.JSONField(default=list, blank=True, verbose_name='Chauffeurs')
+    trips = models.JSONField(default=list, blank=True, verbose_name='Ritten')
+    trip_count = models.PositiveIntegerField(default=0, verbose_name='Aantal ritten')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Tachograaf Archief Regel'
+        verbose_name_plural = 'Tachograaf Archief Regels'
+        ordering = ['-date', 'vehicle_name']
+        unique_together = ['date', 'object_id']
+        indexes = [
+            models.Index(fields=['date']),
+            models.Index(fields=['date', 'plate_number']),
+            models.Index(fields=['date', 'vehicle_name']),
+        ]
+
+    def __str__(self):
+        return f"{self.date} - {self.plate_number or self.vehicle_name}"
