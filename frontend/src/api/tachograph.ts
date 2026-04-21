@@ -93,28 +93,48 @@ export async function syncTachographArchiveDay(date: string): Promise<{
   return response.data
 }
 
-export async function exportTachographArchiveCsv(date: string): Promise<Blob> {
+export interface TachographArchiveExportFile {
+  blob: Blob
+  filename: string
+}
+
+function getDownloadFilename(contentDisposition: string | undefined, fallback: string): string {
+  if (!contentDisposition) return fallback
+  const match = contentDisposition.match(/filename="?([^";\n]+)"?/)
+  return match?.[1] || fallback
+}
+
+export async function exportTachographArchiveCsv(date: string): Promise<TachographArchiveExportFile> {
   const response = await api.get(
     `/tracking/tachograph/archive/?date=${encodeURIComponent(date)}&format=csv`,
     { responseType: 'blob' },
   )
-  return response.data
+  return {
+    blob: response.data,
+    filename: getDownloadFilename(response.headers['content-disposition'], 'tachograaf_archief.csv'),
+  }
 }
 
-export async function exportTachographArchiveXlsx(date: string): Promise<Blob> {
+export async function exportTachographArchiveXlsx(date: string): Promise<TachographArchiveExportFile> {
   const response = await api.get(
     `/tracking/tachograph/archive/?date=${encodeURIComponent(date)}&format=xlsx`,
     { responseType: 'blob' },
   )
-  return response.data
+  return {
+    blob: response.data,
+    filename: getDownloadFilename(response.headers['content-disposition'], 'tachograaf_archief.xlsx'),
+  }
 }
 
-export async function exportTachographArchivePdf(date: string): Promise<Blob> {
+export async function exportTachographArchivePdf(date: string): Promise<TachographArchiveExportFile> {
   const response = await api.get(
     `/tracking/tachograph/archive/?date=${encodeURIComponent(date)}&format=pdf`,
     { responseType: 'blob' },
   )
-  return response.data
+  return {
+    blob: response.data,
+    filename: getDownloadFilename(response.headers['content-disposition'], 'tachograaf_archief.pdf'),
+  }
 }
 
 export async function writeOvertime(data: {

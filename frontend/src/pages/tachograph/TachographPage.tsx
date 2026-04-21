@@ -225,13 +225,12 @@ export default function TachographPage() {
     setArchiveExporting(format)
     setError(null)
     try {
-      const blob = format === 'csv'
+      const file = format === 'csv'
         ? await exportTachographArchiveCsv(date)
         : format === 'xlsx'
           ? await exportTachographArchiveXlsx(date)
           : await exportTachographArchivePdf(date)
-      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-      downloadBlob(blob, `tachograaf_archief_${stamp}.${format}`)
+      downloadBlob(file.blob, file.filename)
     } catch (err: any) {
       const msg = err?.response?.data?.error || t('tachograph.archive.exportError')
       setError(msg)

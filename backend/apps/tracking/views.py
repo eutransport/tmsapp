@@ -982,7 +982,7 @@ class TachographArchiveListView(APIView):
             return result
         rows, date_str = result
 
-        fmt = request.query_params.get('format') or request.query_params.get('export')
+        fmt = request.query_params.get('format')
         if fmt == 'csv':
             return self._export_csv(rows)
         if fmt == 'xlsx':
