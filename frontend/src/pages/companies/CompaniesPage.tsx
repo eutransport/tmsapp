@@ -963,68 +963,52 @@ export default function CompaniesPage() {
             </div>
           ) : (
             companies.map(company => (
-              <div key={company.id} className="p-3 hover:bg-gray-50">
-                {/* Card Header */}
-                <div className="flex items-start justify-between gap-3 mb-2">
+              <div key={company.id} className="px-3 py-2 hover:bg-gray-50">
+                <div className="flex items-center justify-between gap-1.5">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 truncate">{company.naam}</h3>
+                    <div className="text-sm font-medium text-gray-900 truncate">{company.naam}</div>
                     {company.contactpersoon && (
-                      <p className="text-sm text-gray-500">{company.contactpersoon}</p>
+                      <p className="text-xs text-gray-500 truncate">{company.contactpersoon}</p>
                     )}
+                    <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5 truncate">
+                      {company.kvk && <span>KVK {company.kvk}</span>}
+                      {company.kvk && (company.postcode || company.stad) && <span className="text-gray-300">&middot;</span>}
+                      {(company.postcode || company.stad) && (
+                        <span className="truncate">{[company.postcode, company.stad].filter(Boolean).join(' ')}</span>
+                      )}
+                      {(company.kvk || company.postcode || company.stad) && (company.telefoon || company.email) && <span className="text-gray-300">&middot;</span>}
+                      {company.telefoon && (
+                        <a href={`tel:${company.telefoon}`} className="text-primary-600 truncate">{company.telefoon}</a>
+                      )}
+                      {company.telefoon && company.email && <span className="text-gray-300">&middot;</span>}
+                      {company.email && (
+                        <a href={`mailto:${company.email}`} className="text-primary-600 truncate">{company.email}</a>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-0.5 shrink-0">
                     <button
                       onClick={() => { setSelectedCompany(company); setShowMailingModal(true) }}
-                      className="p-2 min-w-[44px] min-h-[44px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-lg"
+                      className="p-1 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
                       title={t('companies.mailingList')}
                     >
-                      <EnvelopeIcon className="w-5 h-5" />
+                      <EnvelopeIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => { setSelectedCompany(company); setShowEditModal(true) }}
-                      className="p-2 min-w-[44px] min-h-[44px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-lg"
+                      className="p-1 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
                       title={t('common.edit')}
                     >
-                      <PencilSquareIcon className="w-5 h-5" />
+                      <PencilSquareIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => { setSelectedCompany(company); setShowDeleteModal(true) }}
-                      className="p-2 min-w-[44px] min-h-[44px] text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded-lg"
+                      className="p-1 text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded"
                       title={t('common.delete')}
                     >
-                      <TrashIcon className="w-5 h-5" />
+                      <TrashIcon className="w-4 h-4" />
                     </button>
                   </div>
-                </div>
-
-                {/* Card Details */}
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  {company.kvk && (
-                    <div>
-                      <span className="text-gray-500">KVK: </span>
-                      <span className="text-gray-700">{company.kvk}</span>
-                    </div>
-                  )}
-                  {company.telefoon && (
-                    <div>
-                      <span className="text-gray-500">Tel: </span>
-                      <a href={`tel:${company.telefoon}`} className="text-primary-600">{company.telefoon}</a>
-                    </div>
-                  )}
-                  {company.email && (
-                    <div className="col-span-2">
-                      <span className="text-gray-500">E-mail: </span>
-                      <a href={`mailto:${company.email}`} className="text-primary-600 truncate">{company.email}</a>
-                    </div>
-                  )}
-                  {(company.stad || company.postcode) && (
-                    <div className="col-span-2">
-                      <span className="text-gray-500">Locatie: </span>
-                      <span className="text-gray-700">
-                        {[company.postcode, company.stad].filter(Boolean).join(' ')}
-                      </span>
-                    </div>
-                  )}
                 </div>
               </div>
             ))
