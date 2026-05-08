@@ -87,23 +87,35 @@ export default function InvoiceEditPage() {
 
   const { subtotaal, btw, totaal } = calculateTotals()
 
-  // Update line
-  const handleLineUpdate = async (lineId: string, field: keyof InvoiceLine, value: any) => {
+  // Update line locally only (called on every keystroke). Prevents cursor jumping
+  // because we don't replace the input value with a server response mid-edit.
+  const handleLineChange = (lineId: string, field: keyof InvoiceLine, value: any) => {
+    setLines(prev => prev.map(l => {
+      if (l.id !== lineId) return l
+      const updated: InvoiceLine = { ...l, [field]: value }
+      if (field === 'aantal' || field === 'prijs_per_eenheid') {
+        const aantal = field === 'aantal' ? value : l.aantal
+        const prijs = field === 'prijs_per_eenheid' ? value : l.prijs_per_eenheid
+        updated.totaal = (Number(aantal) || 0) * (Number(prijs) || 0)
+      }
+      return updated
+    }))
+  }
+
+  // Persist line on blur
+  const handleLineBlur = async (lineId: string, field: keyof InvoiceLine) => {
     const line = lines.find(l => l.id === lineId)
     if (!line) return
 
-    const updates: any = { [field]: value }
-    
-    // Recalculate totaal if needed
+    const updates: any = { [field]: line[field] }
     if (field === 'aantal' || field === 'prijs_per_eenheid') {
-      const aantal = field === 'aantal' ? value : line.aantal
-      const prijs = field === 'prijs_per_eenheid' ? value : line.prijs_per_eenheid
-      updates.totaal = aantal * prijs
+      updates.totaal = (Number(line.aantal) || 0) * (Number(line.prijs_per_eenheid) || 0)
     }
 
     try {
       const updatedLine = await updateInvoiceLine(lineId, updates)
-      setLines(lines.map(l => l.id === lineId ? updatedLine : l))
+      // Merge server response without clobbering any field the user is currently editing
+      setLines(prev => prev.map(l => l.id === lineId ? { ...l, ...updatedLine } : l))
     } catch (err) {
       toast.error(t('timeEntries.updateFailed'))
     }
@@ -267,7 +279,8 @@ export default function InvoiceEditPage() {
                         <input
                           type="text"
                           value={line.omschrijving}
-                          onChange={(e) => handleLineUpdate(line.id, 'omschrijving', e.target.value)}
+                          onChange={(e) => handleLineChange(line.id, 'omschrijving', e.target.value)}
+                          onBlur={() => handleLineBlur(line.id, 'omschrijving')}
                           className="w-full border-0 bg-transparent focus:ring-0 p-0"
                         />
                       </td>
@@ -275,7 +288,8 @@ export default function InvoiceEditPage() {
                         <input
                           type="number"
                           value={line.aantal}
-                          onChange={(e) => handleLineUpdate(line.id, 'aantal', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleLineChange(line.id, 'aantal', parseFloat(e.target.value) || 0)}
+                          onBlur={() => handleLineBlur(line.id, 'aantal')}
                           className="w-full text-right border-0 bg-transparent focus:ring-0 p-0"
                         />
                       </td>
@@ -284,7 +298,8 @@ export default function InvoiceEditPage() {
                           type="number"
                           step="0.01"
                           value={line.prijs_per_eenheid}
-                          onChange={(e) => handleLineUpdate(line.id, 'prijs_per_eenheid', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleLineChange(line.id, 'prijs_per_eenheid', parseFloat(e.target.value) || 0)}
+                          onBlur={() => handleLineBlur(line.id, 'prijs_per_eenheid')}
                           className="w-full text-right border-0 bg-transparent focus:ring-0 p-0"
                         />
                       </td>

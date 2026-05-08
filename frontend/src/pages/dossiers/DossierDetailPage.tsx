@@ -1,16 +1,21 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Fragment } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeftIcon,
+  ArrowDownTrayIcon,
+  EyeIcon,
   PaperClipIcon,
   PlusIcon,
   XMarkIcon,
   LockClosedIcon,
   EnvelopeIcon,
 } from '@heroicons/react/24/outline'
+import { Dialog, Transition } from '@headlessui/react'
+import toast from 'react-hot-toast'
+import api from '@/api/client'
 import { useAuthStore } from '@/stores/authStore'
-import { getDossier, addReactie, getDossierTypes, createDossierType, DossierDetail, DossierReactie, DossierType } from '@/api/dossiers'
+import { getDossier, addReactie, getDossierTypes, createDossierType, getDossierBijlageDownloadUrl, DossierDetail, DossierBijlage, DossierReactie, DossierType } from '@/api/dossiers'
 import { stuurDossierMail } from '@/api/organisaties'
 import type { Contactpersoon } from '@/api/organisaties'
 import { parseEmailInput } from '@/utils/email'
@@ -54,6 +59,54 @@ export default function DossierDetailPage() {
   const [newMailTypeName, setNewMailTypeName] = useState('')
   const [savingMailType, setSavingMailType] = useState(false)
   const [newMailTypeError, setNewMailTypeError] = useState<string | null>(null)
+
+  // Bijlage viewer modal state
+  const [pdfBijlage, setPdfBijlage] = useState<DossierBijlage | null>(null)
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
+
+  // Cleanup blob URL when modal closes
+  useEffect(() => {
+    if (!pdfBijlage && pdfBlobUrl) {
+      URL.revokeObjectURL(pdfBlobUrl)
+      setPdfBlobUrl(null)
+    }
+  }, [pdfBijlage, pdfBlobUrl])
+
+  const handleViewBijlage = async (bijlage: DossierBijlage) => {
+    if (!id) return
+    setPdfBijlage(bijlage)
+    setPdfLoading(true)
+    try {
+      const response = await api.get(getDossierBijlageDownloadUrl(id, bijlage.id), { responseType: 'blob' })
+      const contentType = response.headers['Content-Type'] || response.headers['content-type'] || bijlage.mimetype || 'application/octet-stream'
+      const blob = new Blob([response.data], { type: contentType })
+      setPdfBlobUrl(URL.createObjectURL(blob))
+    } catch {
+      toast.error(t('dossiers.bijlageLoadError', 'Fout bij laden van bijlage'))
+      setPdfBijlage(null)
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
+  const handleDownloadBijlage = async (bijlage: DossierBijlage) => {
+    if (!id) return
+    try {
+      const response = await api.get(getDossierBijlageDownloadUrl(id, bijlage.id), { responseType: 'blob' })
+      const url = URL.createObjectURL(new Blob([response.data]))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = bijlage.bestandsnaam || `bijlage-${bijlage.id}`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error(t('dossiers.bijlageDownloadError', 'Fout bij downloaden'))
+    }
+  }
+
+  const handleClosePdfModal = () => setPdfBijlage(null)
+
 
   useEffect(() => {
     if (id) loadDossier()
@@ -259,14 +312,26 @@ export default function DossierDetailPage() {
               {dossier.bijlagen.map(b => (
                 <li key={b.id} className="flex items-center gap-2 text-sm">
                   <PaperClipIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                  {b.bestand_url ? (
-                    <a href={b.bestand_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate">
-                      {b.bestandsnaam}
-                    </a>
-                  ) : (
-                    <span className="text-gray-600">{b.bestandsnaam}</span>
-                  )}
-                  <span className="text-gray-400 text-xs ml-auto flex-shrink-0">{formatSize(b.grootte)}</span>
+                  <span className="text-gray-700 truncate">{b.bestandsnaam}</span>
+                  <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleViewBijlage(b)}
+                      className="p-1 text-blue-600 hover:text-blue-800"
+                      title={t('common.view', 'Bekijken')}
+                    >
+                      <EyeIcon className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadBijlage(b)}
+                      className="p-1 text-gray-500 hover:text-gray-700"
+                      title={t('common.download', 'Downloaden')}
+                    >
+                      <ArrowDownTrayIcon className="h-4 w-4" />
+                    </button>
+                    <span className="text-gray-400 text-xs ml-1">{formatSize(b.grootte)}</span>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -321,11 +386,25 @@ export default function DossierDetailPage() {
                     {r.bijlagen.map(b => (
                       <li key={b.id} className="flex items-center gap-1.5 text-xs">
                         <PaperClipIcon className="h-3.5 w-3.5 text-gray-400" />
-                        {b.bestand_url ? (
-                          <a href={b.bestand_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{b.bestandsnaam}</a>
-                        ) : (
-                          <span>{b.bestandsnaam}</span>
-                        )}
+                        <span className="text-gray-700 truncate">{b.bestandsnaam}</span>
+                        <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleViewBijlage(b)}
+                            className="p-0.5 text-blue-600 hover:text-blue-800"
+                            title={t('common.view', 'Bekijken')}
+                          >
+                            <EyeIcon className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadBijlage(b)}
+                            className="p-0.5 text-gray-500 hover:text-gray-700"
+                            title={t('common.download', 'Downloaden')}
+                          >
+                            <ArrowDownTrayIcon className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -656,6 +735,75 @@ export default function DossierDetailPage() {
           </div>
         </div>
       )}
+      {/* Bijlage viewer modal */}
+      <Transition show={pdfBijlage !== null} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={handleClosePdfModal}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-200"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-150"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black/50" />
+          </Transition.Child>
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-200"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-150"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="bg-white rounded-xl shadow-xl w-full max-w-4xl flex flex-col" style={{ maxHeight: '90vh' }}>
+                  <div className="flex items-center justify-between px-4 py-3 border-b">
+                    <Dialog.Title className="text-base font-semibold text-gray-900 truncate">
+                      {pdfBijlage?.bestandsnaam}
+                    </Dialog.Title>
+                    <div className="flex items-center gap-2">
+                      {pdfBijlage && (
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadBijlage(pdfBijlage)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                        >
+                          <ArrowDownTrayIcon className="w-4 h-4" /> {t('common.download', 'Downloaden')}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleClosePdfModal}
+                        className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                      >
+                        <XMarkIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-hidden" style={{ minHeight: '60vh' }}>
+                    {pdfLoading ? (
+                      <div className="flex items-center justify-center h-full py-16">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+                      </div>
+                    ) : pdfBlobUrl ? (
+                      <iframe
+                        src={pdfBlobUrl}
+                        className="w-full h-full border-0"
+                        style={{ minHeight: '60vh' }}
+                        title={pdfBijlage?.bestandsnaam || 'Bijlage'}
+                      />
+                    ) : null}
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
     </div>
   )
 }

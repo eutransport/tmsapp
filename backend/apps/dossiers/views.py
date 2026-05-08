@@ -1,6 +1,10 @@
 """Views voor dossiers."""
 import logging
+import os
 from django.core.mail import EmailMessage, get_connection
+from django.db.models import Q
+from django.http import FileResponse
+from django.shortcuts import get_object_or_404
 
 from apps.core.models import AppSettings
 from rest_framework import viewsets, status
@@ -232,6 +236,35 @@ class DossierViewSet(viewsets.ModelViewSet):
             )
             created.append(bijlage)
         return Response(DossierBijlageSerializer(created, many=True, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get'], url_path=r'bijlagen/(?P<bijlage_id>[^/.]+)/download')
+    def download_bijlage(self, request, pk=None, bijlage_id=None):
+        """Download a dossier or reactie attachment.
+
+        Access is granted to anyone who can retrieve the parent dossier
+        (managers always, drivers for their own dossiers).
+        """
+        dossier = self.get_object()  # uses get_queryset → enforces access rules
+        bijlage = get_object_or_404(
+            DossierBijlage.objects.filter(
+                Q(dossier=dossier) | Q(reactie__dossier=dossier)
+            ),
+            pk=bijlage_id,
+        )
+
+        # Hide internal reactie attachments from non-managers
+        if bijlage.reactie and bijlage.reactie.intern and not _is_dossier_manager(request.user):
+            return Response({'detail': 'Geen toegang.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if not bijlage.bestand:
+            return Response({'detail': 'Geen bestand.'}, status=status.HTTP_404_NOT_FOUND)
+
+        response = FileResponse(
+            bijlage.bestand.open('rb'),
+            filename=bijlage.bestandsnaam or os.path.basename(bijlage.bestand.name),
+            content_type=bijlage.mimetype or 'application/octet-stream',
+        )
+        return response
 
     @action(detail=True, methods=['post'], url_path='stuur-mail', parser_classes=[MultiPartParser, FormParser, JSONParser])
     def stuur_mail(self, request, pk=None):

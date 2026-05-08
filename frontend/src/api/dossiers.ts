@@ -142,3 +142,7 @@ export async function getReacties(dossierId: string): Promise<DossierReactie[]> 
   const res = await api.get(`/dossiers/${dossierId}/reacties/`)
   return res.data
 }
+
+export function getDossierBijlageDownloadUrl(dossierId: string, bijlageId: string): string {
+  return `/dossiers/${dossierId}/bijlagen/${bijlageId}/download/`
+}
