@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TMS — Bezig met updaten</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(160deg, #0a0f1e 0%, #0f172a 50%, #0a0f1e 100%);
+      min-height: 100vh;
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 24px 16px 32px;
+      overflow-x: hidden;
+    }
+
+    /* ── Stars canvas (background) ── */
+    #starsBg {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 860px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    /* ── Header ── */
+    .header { text-align: center; }
+
+    .logo {
+      font-size: 1.6rem;
+      font-weight: 900;
+      letter-spacing: .12em;
+      color: #f97316;
+    }
+    .logo em { color: #60a5fa; font-style: normal; }
+
+    .title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      margin-top: 4px;
+    }
+
+    .sub {
+      font-size: .9rem;
+      color: #475569;
+      margin-top: 2px;
+    }
+
+    /* ── Status bar ── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 22px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 50px;
+      backdrop-filter: blur(8px);
+      width: 100%;
+      justify-content: center;
+    }
+
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #f97316;
+      flex-shrink: 0;
+      animation: blink 1.6s ease-in-out infinite;
+    }
+    .dot.check { background: #60a5fa; }
+    .dot.ok    { background: #22c55e; animation: none; box-shadow: 0 0 8px #22c55e; }
+
+    @keyframes blink {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: .4; transform: scale(1.35); }
+    }
+
+    .status-label { font-size: .88rem; color: #94a3b8; }
+
+    /* ── Available banner ── */
+    .banner {
+      display: none;
+      width: 100%;
+      padding: 18px 28px;
+      background: linear-gradient(135deg, #15803d, #22c55e);
+      border-radius: 14px;
+      text-align: center;
+      animation: drop .5s cubic-bezier(.34,1.56,.64,1);
+    }
+    .banner.show { display: block; }
+
+    @keyframes drop {
+      from { transform: translateY(-28px) scale(.95); opacity: 0; }
+      to   { transform: translateY(0) scale(1);    opacity: 1; }
+    }
+
+    .banner h2 { font-size: 1.25rem; margin-bottom: 12px; }
+
+    .go-btn {
+      display: inline-block;
+      background: #fff;
+      color: #15803d;
+      font-weight: 800;
+      font-size: 1rem;
+      padding: 12px 36px;
+      border-radius: 10px;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .go-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+
+    /* ── Game card ── */
+    .game-card {
+      width: 100%;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 16px;
+      padding: 16px 16px 12px;
+    }
+
+    .game-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .game-label {
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: #475569;
+    }
+
+    .score-box { font-size: .95rem; font-weight: 700; color: #f97316; }
+    .score-box span { color: #fbbf24; }
+
+    #gc {
+      display: block;
+      width: 100%;
+      border-radius: 10px;
+      image-rendering: pixelated;
+      cursor: pointer;
+      touch-action: none;
+    }
+
+    .hint {
+      margin-top: 8px;
+      font-size: .78rem;
+      color: #334155;
+      text-align: center;
+    }
+
+    /* ── Jump button (touch devices) ── */
+    .jump-btn {
+      display: none;
+      width: 100%;
+      margin-top: 10px;
+      padding: 18px;
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      border: none;
+      border-radius: 14px;
+      color: #fff;
+      font-size: 1.3rem;
+      font-weight: 900;
+      letter-spacing: .06em;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      active-transform: scale(.97);
+      transition: transform .1s, box-shadow .1s;
+      box-shadow: 0 4px 16px rgba(249,115,22,.35);
+    }
+    .jump-btn:active { transform: scale(.96); box-shadow: 0 2px 8px rgba(249,115,22,.2); }
+
+    @media (pointer: coarse) {
+      .jump-btn { display: block; }
+    }
+
+    /* ── Countdown ── */
+    .cdown { font-size: .78rem; color: #334155; text-align: center; }
+    .cdown b { color: #475569; }
+  </style>
+</head>
+<body>
+
+<!-- Stars background -->
+<canvas id="starsBg"></canvas>
+
+<div class="wrap">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">TMS <em>//</em> Transport</div>
+    <div class="title">Applicatie wordt bijgewerkt ⚙️</div>
+    <div class="sub">Even geduld — speel een spelletje terwijl je wacht!</div>
+  </div>
+
+  <!-- App-available banner (hidden until online) -->
+  <div class="banner" id="banner">
+    <h2>🎉 De applicatie is weer beschikbaar!</h2>
+    <a href="/" class="go-btn">🚀 Ga door naar de applicatie</a>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar">
+    <div class="dot" id="dot"></div>
+    <span class="status-label" id="stlabel">App wordt bijgewerkt…</span>
+  </div>
+
+  <!-- Game -->
+  <div class="game-card">
+    <div class="game-head">
+      <span class="game-label">🚛 Truck Runner — spring over de obstakels!</span>
+      <span class="score-box">Score&nbsp;<span id="scoreEl">0</span></span>
+    </div>
+    <canvas id="gc"></canvas>
+    <button class="jump-btn" id="jumpBtn" aria-label="Springen">🚛 &nbsp;SPRING!</button>
+    <p class="hint" id="hint">Pc: <b>SPATIE</b> &nbsp;|&nbsp; Mobiel: tik op het canvas of de knop</p>
+  </div>
+
+  <!-- Countdown -->
+  <p class="cdown" id="cdown">Volgende controle over <b id="cdNum">10</b>s</p>
+
+</div>
+
+<script>
+/* =========================================================
+   STARS
+   ========================================================= */
+(function () {
+  const cv = document.getElementById('starsBg');
+  const cx = cv.getContext('2d');
+  let stars = [];
+
+  function resize () {
+    cv.width  = innerWidth;
+    cv.height = innerHeight;
+    stars = Array.from({ length: 140 }, () => ({
+      x: Math.random() * cv.width,
+      y: Math.random() * cv.height,
+      r: Math.random() * 1.4 + 0.2,
+      a: Math.random() * 0.7 + 0.1,
+      da: (Math.random() * 0.4 + 0.05) * (Math.random() < .5 ? 1 : -1)
+    }));
+  }
+
+  function draw () {
+    cx.clearRect(0, 0, cv.width, cv.height);
+    for (const s of stars) {
+      cx.beginPath();
+      cx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      cx.fillStyle = `rgba(255,255,255,${s.a.toFixed(2)})`;
+      cx.fill();
+      s.a += s.da * 0.012;
+      if (s.a > 0.9 || s.a < 0.05) s.da = -s.da;
+    }
+    requestAnimationFrame(draw);
+  }
+
+  addEventListener('resize', resize);
+  resize();
+  draw();
+})();
+
+/* =========================================================
+   TRUCK RUNNER GAME
+   ========================================================= */
+(function () {
+  const cv    = document.getElementById('gc');
+  const cx    = cv.getContext('2d');
+  const SCALE = window.devicePixelRatio || 1;
+  const CW    = 800;
+  const CH    = 230;
+
+  cv.width  = CW * SCALE;
+  cv.height = CH * SCALE;
+  cx.scale(SCALE, SCALE);
+  cv.style.maxWidth = CW + 'px';
+
+  const GY     = CH - 38;   // ground y
+  const TX     = 90;        // truck x position
+
+  const scoreEl = document.getElementById('scoreEl');
+  const hintEl  = document.getElementById('hint');
+  const jumpBtn = document.getElementById('jumpBtn');
+
+  const isTouch = window.matchMedia('(pointer: coarse)').matches;
+  const hiHint  = () => `Hi-score: ${hi}`;
+  const ctrlHint = isTouch
+    ? 'Tik op het canvas of de knop om te springen'
+    : 'SPATIE of tik om te springen';
+
+  let state    = 'start';   // start | play | dead
+  let frame    = 0;
+  let score    = 0;
+  let hi       = +localStorage.getItem('tms_hi') || 0;
+  let spd      = 4;
+  let wRot     = 0;         // wheel rotation angle
+  let smokeT   = 0;
+
+  // Truck
+  const truck = { y: GY, vy: 0, grounded: true, jumpsLeft: 2 };
+
+  // Game objects
+  let obstacles = [];
+  let obsTimer  = 0;
+  let nextObs   = 100;
+  let particles = [];
+  let clouds    = [
+    { x: 180, y: 28, w: 100 },
+    { x: 480, y: 48, w:  75 },
+    { x: 680, y: 22, w:  90 }
+  ];
+  let dashOff = 0;
+
+  /* ── input ── */
+  function jump () {
+    if (state === 'dead')  { restart(); return; }
+    if (state === 'start') { state = 'play'; hintEl.textContent = ctrlHint + '  |  ' + hiHint(); }
+    if (truck.jumpsLeft > 0) {
+      truck.vy = -12.5;
+      truck.grounded = false;
+      truck.jumpsLeft--;
+    }
+  }
+
+  document.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); jump(); } });
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); jump(); });
+  jumpBtn.addEventListener('pointerdown', e => { e.preventDefault(); jump(); });
+
+  function restart () {
+    score = 0; spd = 4; obstacles = []; obsTimer = 0; nextObs = 100;
+    truck.y = GY; truck.vy = 0; truck.grounded = true; truck.jumpsLeft = 2;
+    particles = []; frame = 0; state = 'play';
+    scoreEl.textContent = '0';
+    hintEl.textContent = ctrlHint + '  |  ' + hiHint();
+  }
+
+  /* ── drawing helpers ── */
+  function roundRect (x, y, w, h, r) {
+    cx.beginPath();
+    cx.moveTo(x + r, y);
+    cx.lineTo(x + w - r, y);
+    cx.quadraticCurveTo(x + w, y, x + w, y + r);
+    cx.lineTo(x + w, y + h - r);
+    cx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    cx.lineTo(x + r, y + h);
+    cx.quadraticCurveTo(x, y + h, x, y + h - r);
+    cx.lineTo(x, y + r);
+    cx.quadraticCurveTo(x, y, x + r, y);
+    cx.closePath();
+  }
+
+  function drawWheel (cx_, x, y, r, rot) {
+    // Tyre
+    cx_.beginPath();
+    cx_.arc(x, y, r, 0, Math.PI * 2);
+    cx_.fillStyle = '#111827';
+    cx_.fill();
+    cx_.strokeStyle = '#374151';
+    cx_.lineWidth = 2;
+    cx_.stroke();
+    // Hub
+    cx_.beginPath();
+    cx_.arc(x, y, r * 0.38, 0, Math.PI * 2);
+    cx_.fillStyle = '#9ca3af';
+    cx_.fill();
+    // Spokes
+    cx_.save();
+    cx_.translate(x, y);
+    cx_.rotate(rot);
+    cx_.strokeStyle = '#6b7280';
+    cx_.lineWidth = 1.5;
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 2;
+      cx_.beginPath();
+      cx_.moveTo(0, 0);
+      cx_.lineTo(Math.cos(a) * r * 0.78, Math.sin(a) * r * 0.78);
+      cx_.stroke();
+    }
+    cx_.restore();
+  }
+
+  function drawTruck (bx, by) {
+    // Exhaust pipe
+    cx.fillStyle = '#475569';
+    cx.fillRect(bx + 33, by - 82, 5, 22);
+    // Exhaust tip
+    cx.fillStyle = '#334155';
+    cx.fillRect(bx + 31, by - 84, 9, 4);
+
+    // Trailer body
+    cx.fillStyle = '#1d4ed8';
+    roundRect(bx, by - 60, 44, 50, 3);
+    cx.fill();
+    // Trailer highlight
+    cx.fillStyle = '#2563eb';
+    cx.fillRect(bx + 3, by - 58, 38, 6);
+    // Trailer stripes
+    cx.strokeStyle = '#1e40af';
+    cx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      cx.beginPath();
+      cx.moveTo(bx + 4, by - 48 + i * 12);
+      cx.lineTo(bx + 40, by - 48 + i * 12);
+      cx.stroke();
+    }
+    // TMS logo on trailer
+    cx.fillStyle = '#f97316';
+    cx.font = 'bold 9px monospace';
+    cx.fillText('TMS', bx + 10, by - 29);
+
+    // Cab body
+    cx.fillStyle = '#f97316';
+    roundRect(bx + 39, by - 62, 46, 50, 5);
+    cx.fill();
+    // Cab roof strip
+    cx.fillStyle = '#ea580c';
+    cx.fillRect(bx + 39, by - 62, 46, 8);
+
+    // Windshield
+    cx.fillStyle = '#bfdbfe';
+    roundRect(bx + 56, by - 56, 24, 26, 2);
+    cx.fill();
+    cx.fillStyle = 'rgba(0,0,0,.12)';
+    cx.fillRect(bx + 56, by - 56, 24, 4);
+
+    // Headlight
+    cx.fillStyle = '#fef08a';
+    cx.beginPath();
+    cx.ellipse(bx + 83, by - 24, 5, 4, 0, 0, Math.PI * 2);
+    cx.fill();
+    // Bumper
+    cx.fillStyle = '#d97706';
+    cx.fillRect(bx + 82, by - 14, 5, 10);
+
+    // Side mirror
+    cx.fillStyle = '#78350f';
+    cx.fillRect(bx + 83, by - 54, 8, 5);
+
+    // Wheels
+    drawWheel(cx, bx + 15, by - 10, 15, wRot);
+    drawWheel(cx, bx + 62, by - 10, 15, wRot);
+    drawWheel(cx, bx + 77, by - 10, 12, -wRot);
+  }
+
+  function drawCone (x, y) {
+    // Base plate
+    cx.fillStyle = '#374151';
+    cx.fillRect(x - 18, y - 5, 36, 5);
+    // Body
+    cx.beginPath();
+    cx.moveTo(x - 18, y - 5);
+    cx.lineTo(x + 18, y - 5);
+    cx.lineTo(x + 5, y - 57);
+    cx.lineTo(x - 5, y - 57);
+    cx.closePath();
+    cx.fillStyle = '#f97316';
+    cx.fill();
+    // Stripes
+    cx.fillStyle = '#fff';
+    cx.beginPath();
+    cx.moveTo(x - 12, y - 22);
+    cx.lineTo(x + 12, y - 22);
+    cx.lineTo(x + 8, y - 32);
+    cx.lineTo(x - 8, y - 32);
+    cx.closePath();
+    cx.fill();
+    cx.beginPath();
+    cx.moveTo(x - 7,  y - 44);
+    cx.lineTo(x + 7,  y - 44);
+    cx.lineTo(x + 4,  y - 52);
+    cx.lineTo(x - 4,  y - 52);
+    cx.closePath();
+    cx.fill();
+  }
+
+  function drawBox (x, y) {
+    cx.fillStyle = '#78350f';
+    cx.fillRect(x - 22, y - 48, 44, 48);
+    cx.strokeStyle = '#92400e';
+    cx.lineWidth = 2;
+    cx.strokeRect(x - 22, y - 48, 44, 48);
+    cx.strokeStyle = '#b45309';
+    cx.lineWidth = 1.5;
+    cx.beginPath();
+    cx.moveTo(x - 22, y - 48); cx.lineTo(x + 22, y);
+    cx.moveTo(x + 22, y - 48); cx.lineTo(x - 22, y);
+    cx.stroke();
+    cx.fillStyle = '#fbbf24';
+    cx.font = 'bold 10px monospace';
+    cx.textAlign = 'center';
+    cx.fillText('⚠', x, y - 20);
+    cx.textAlign = 'left';
+  }
+
+  function drawCloud (x, y, w) {
+    cx.fillStyle = 'rgba(148,163,184,.1)';
+    cx.beginPath();
+    cx.ellipse(x,          y,      w * .5, 14, 0, 0, Math.PI * 2);
+    cx.ellipse(x - w * .2, y + 6,  w * .3, 11, 0, 0, Math.PI * 2);
+    cx.ellipse(x + w * .25, y + 5, w * .32, 11, 0, 0, Math.PI * 2);
+    cx.fill();
+  }
+
+  function addObstacle () {
+    const roll = Math.random();
+    if (roll < 0.15 && score > 30) {
+      // double cones
+      obstacles.push({ x: CW + 20, t: 'cone' });
+      obstacles.push({ x: CW + 62, t: 'cone' });
+    } else if (roll < 0.45) {
+      obstacles.push({ x: CW + 20, t: 'box' });
+    } else {
+      obstacles.push({ x: CW + 20, t: 'cone' });
+    }
+  }
+
+  function spawnSmoke () {
+    particles.push({
+      x: TX + 36, y: truck.y - 80,
+      vx: -Math.random() * 1.2,
+      vy: -Math.random() * 1.4 - 0.3,
+      r:  Math.random() * 5 + 3,
+      a:  0.55,
+      life: Math.random() * 28 + 18
+    });
+  }
+
+  /* ── collision (AABB with shrink) ── */
+  function hit (obs) {
+    const TL = TX + 4,  TR = TX + 88;
+    const TT = truck.y - 58, TB = truck.y - 4;
+    const isBox = obs.t === 'box';
+    const OL = obs.x - (isBox ? 17 : 12);
+    const OR = obs.x + (isBox ? 17 : 12);
+    const OT = isBox ? obs.y - 46 : obs.y - 50;
+    const OB = obs.y;
+    return TR > OL && TL < OR && TB > OT && TT < OB;
+  }
+
+  /* ── background rendering ── */
+  function drawBg () {
+    // Sky gradient
+    const g = cx.createLinearGradient(0, 0, 0, GY);
+    g.addColorStop(0, '#060d1f');
+    g.addColorStop(1, '#0f172a');
+    cx.fillStyle = g;
+    cx.fillRect(0, 0, CW, CH);
+
+    // Clouds
+    clouds.forEach(c => drawCloud(c.x, c.y, c.w));
+
+    // Ground
+    const rg = cx.createLinearGradient(0, GY, 0, CH);
+    rg.addColorStop(0, '#1e293b');
+    rg.addColorStop(1, '#0f172a');
+    cx.fillStyle = rg;
+    cx.fillRect(0, GY, CW, CH - GY);
+
+    // Ground edge
+    cx.strokeStyle = '#334155';
+    cx.lineWidth = 2;
+    cx.beginPath(); cx.moveTo(0, GY); cx.lineTo(CW, GY); cx.stroke();
+
+    // Road dashes
+    cx.save();
+    cx.setLineDash([40, 28]);
+    cx.lineDashOffset = -dashOff;
+    cx.strokeStyle = 'rgba(255,255,255,.1)';
+    cx.lineWidth = 2.5;
+    cx.beginPath(); cx.moveTo(0, GY + 16); cx.lineTo(CW, GY + 16); cx.stroke();
+    cx.restore();
+  }
+
+  /* ── update ── */
+  function update () {
+    if (state !== 'play') return;
+    frame++;
+
+    // Increase speed every 500 frames
+    if (frame % 500 === 0) spd = Math.min(spd + .6, 13);
+
+    // Truck physics
+    truck.vy  += 0.50;
+    truck.y   += truck.vy;
+    if (truck.y >= GY) { truck.y = GY; truck.vy = 0; truck.grounded = true; truck.jumpsLeft = 2; }
+
+    wRot   += spd * 0.045;
+    dashOff = (dashOff + spd) % 68;
+
+    // Clouds
+    clouds.forEach(c => { c.x -= spd * 0.25; if (c.x + c.w < 0) c.x = CW + c.w; });
+
+    // Smoke
+    smokeT++;
+    if (smokeT % 7 === 0) spawnSmoke();
+    particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.a -= 0.02; p.life--; });
+    particles = particles.filter(p => p.life > 0 && p.a > 0);
+
+    // Obstacles
+    obsTimer++;
+    if (obsTimer >= nextObs) {
+      addObstacle();
+      obsTimer = 0;
+      nextObs = Math.floor(Math.random() * 55) + 65 + Math.max(0, 25 - ~~(score / 12));
+    }
+    obstacles.forEach(o => { o.x -= spd; o.y = GY; });
+    obstacles = obstacles.filter(o => o.x > -60);
+
+    // Collision
+    for (const o of obstacles) {
+      if (hit(o)) {
+        state = 'dead';
+        if (score > hi) { hi = score; localStorage.setItem('tms_hi', hi); }
+        hintEl.textContent = `💥 Geraakt! Score: ${score}  |  Hi-score: ${hi}  —  ${isTouch ? 'tik om opnieuw' : 'klik / SPATIE om opnieuw'}`;
+        return;
+      }
+    }
+
+    // Score (every 6 frames)
+    if (frame % 6 === 0) { score++; scoreEl.textContent = score; }
+  }
+
+  function drawOverlay () {
+    if (state === 'start') {
+      cx.fillStyle = 'rgba(0,0,0,.52)';
+      cx.fillRect(0, 0, CW, CH);
+      cx.textAlign = 'center';
+      cx.fillStyle = '#f97316';
+      cx.font = 'bold 28px sans-serif';
+      cx.fillText('🚛  Truck Runner', CW / 2, CH / 2 - 22);
+      cx.fillStyle = '#94a3b8';
+      cx.font = '15px sans-serif';
+      cx.fillText(isTouch ? 'Tik op de knop of het canvas om te starten' : 'Druk SPATIE of tik om te starten', CW / 2, CH / 2 + 14);
+      cx.textAlign = 'left';
+    } else if (state === 'dead') {
+      cx.fillStyle = 'rgba(0,0,0,.55)';
+      cx.fillRect(0, 0, CW, CH);
+      cx.textAlign = 'center';
+      cx.fillStyle = '#ef4444';
+      cx.font = 'bold 27px sans-serif';
+      cx.fillText('💥  Game Over!', CW / 2, CH / 2 - 24);
+      cx.fillStyle = '#94a3b8';
+      cx.font = '15px sans-serif';
+      cx.fillText(`Score: ${score}   |   Hi-score: ${hi}`, CW / 2, CH / 2 + 10);
+      cx.fillStyle = '#60a5fa';
+      cx.font = '13px sans-serif';
+      cx.fillText(isTouch ? 'Tik op de knop of canvas om opnieuw te spelen' : 'Klik of druk SPATIE om opnieuw te spelen', CW / 2, CH / 2 + 36);
+      cx.textAlign = 'left';
+    }
+  }
+
+  function loop () {
+    update();
+
+    drawBg();
+
+    // Particles (smoke)
+    particles.forEach(p => {
+      cx.beginPath();
+      cx.arc(p.x, p.y, Math.max(p.r, 0), 0, Math.PI * 2);
+      cx.fillStyle = `rgba(100,116,139,${p.a.toFixed(2)})`;
+      cx.fill();
+    });
+
+    // Obstacles
+    obstacles.forEach(o => {
+      if (o.t === 'cone') drawCone(o.x, o.y);
+      else                drawBox(o.x, o.y);
+    });
+
+    drawTruck(TX, truck.y);
+    drawOverlay();
+
+    // Hi-score watermark
+    cx.fillStyle = 'rgba(100,116,139,.35)';
+    cx.font = '11px monospace';
+    cx.textAlign = 'right';
+    cx.fillText(`HI ${hi}`, CW - 10, 18);
+    cx.textAlign = 'left';
+
+    requestAnimationFrame(loop);
+  }
+
+  loop();
+})();
+
+/* =========================================================
+   HEALTH CHECK POLLING
+   ========================================================= */
+(function () {
+  const TICK_SECONDS = 10;
+  const HEALTH_URL   = '/api/health/';
+
+  const dot     = document.getElementById('dot');
+  const label   = document.getElementById('stlabel');
+  const banner  = document.getElementById('banner');
+  const cdNum   = document.getElementById('cdNum');
+  const cdWrap  = document.getElementById('cdown');
+
+  let online     = false;
+  let checks     = 0;
+  let remaining  = 5; // first check after 5s
+
+  async function checkHealth () {
+    if (online) return;
+    checks++;
+    dot.className = 'dot check';
+    label.textContent = `Controleren of app beschikbaar is… (poging ${checks})`;
+
+    try {
+      const res = await fetch(HEALTH_URL, {
+        method: 'GET',
+        cache:  'no-store',
+        signal: AbortSignal.timeout(5000)
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.status === 'healthy') {
+          online = true;
+          dot.className = 'dot ok';
+          label.textContent = '✓ Applicatie is weer online!';
+          banner.classList.add('show');
+          cdWrap.style.display = 'none';
+          return;
+        }
+      }
+    } catch (_) { /* still down */ }
+
+    dot.className = 'dot';
+    label.textContent = `App wordt nog bijgewerkt… (${checks}× gecontroleerd)`;
+    remaining = TICK_SECONDS;
+  }
+
+  function tick () {
+    if (online) return;
+    remaining--;
+    cdNum.textContent = Math.max(remaining, 0);
+    if (remaining <= 0) {
+      checkHealth();
+      remaining = TICK_SECONDS;
+    }
+    setTimeout(tick, 1000);
+  }
+
+  // First check after 5s, then every TICK_SECONDS
+  cdNum.textContent = remaining;
+  setTimeout(checkHealth, 5000);
+  setTimeout(tick, 1000);
+})();
+</script>
+</body>
+</html>
