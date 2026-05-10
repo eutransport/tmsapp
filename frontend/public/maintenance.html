@@ -153,6 +153,11 @@
 
     .score-box { font-size: .95rem; font-weight: 700; color: #f97316; }
     .score-box span { color: #fbbf24; }
+    .score-box.flash span { animation: scoreFlash .5s ease; }
+    @keyframes scoreFlash {
+      0%   { color: #fff; transform: scale(1.5); }
+      100% { color: #fbbf24; transform: scale(1); }
+    }
 
     #gc {
       display: block;
@@ -317,6 +322,9 @@
   let spd      = 4;
   let wRot     = 0;         // wheel rotation angle
   let smokeT   = 0;
+  let lastMilestone = 0;    // last 200-point milestone handled
+  let waveQueue = 0;        // number of wave obstacles still to spawn
+  let waveTimer = 0;        // countdown between wave obstacles
 
   // Truck
   const truck = { y: GY, vy: 0, grounded: true, jumpsLeft: 2 };
@@ -352,6 +360,7 @@
     score = 0; spd = 4; obstacles = []; obsTimer = 0; nextObs = 100;
     truck.y = GY; truck.vy = 0; truck.grounded = true; truck.jumpsLeft = 2;
     particles = []; frame = 0; state = 'play';
+    lastMilestone = 0; waveQueue = 0; waveTimer = 0;
     scoreEl.textContent = '0';
     hintEl.textContent = ctrlHint + '  |  ' + hiHint();
   }
@@ -514,6 +523,132 @@
     cx.textAlign = 'left';
   }
 
+  function drawBarrel (x, y) {
+    // Shadow
+    cx.fillStyle = 'rgba(0,0,0,.25)';
+    cx.beginPath();
+    cx.ellipse(x, y, 12, 4, 0, 0, Math.PI * 2);
+    cx.fill();
+    // Body
+    cx.fillStyle = '#7f1d1d';
+    roundRect(x - 12, y - 44, 24, 44, 5);
+    cx.fill();
+    // Side highlight
+    cx.fillStyle = '#991b1b';
+    cx.fillRect(x - 10, y - 42, 7, 40);
+    // Top cap
+    cx.fillStyle = '#450a0a';
+    cx.fillRect(x - 12, y - 47, 24, 6);
+    // Metal bands
+    cx.strokeStyle = '#b45309';
+    cx.lineWidth = 2.5;
+    for (let b = 0; b < 3; b++) {
+      cx.beginPath();
+      cx.moveTo(x - 12, y - 10 - b * 11);
+      cx.lineTo(x + 12,  y - 10 - b * 11);
+      cx.stroke();
+    }
+    // Warning label
+    cx.fillStyle = '#fef08a';
+    cx.fillRect(x - 8, y - 34, 16, 14);
+    cx.fillStyle = '#dc2626';
+    cx.font = 'bold 10px monospace';
+    cx.textAlign = 'center';
+    cx.fillText('⚠', x, y - 23);
+    cx.textAlign = 'left';
+  }
+
+  function drawTireStack (x, y) {
+    function oneTire (cy) {
+      // Outer tyre
+      cx.beginPath();
+      cx.arc(x, cy, 14, 0, Math.PI * 2);
+      cx.fillStyle = '#111827';
+      cx.fill();
+      cx.strokeStyle = '#374151';
+      cx.lineWidth = 3;
+      cx.stroke();
+      // Inner rim
+      cx.beginPath();
+      cx.arc(x, cy, 7, 0, Math.PI * 2);
+      cx.fillStyle = '#6b7280';
+      cx.fill();
+      cx.beginPath();
+      cx.arc(x, cy, 4, 0, Math.PI * 2);
+      cx.fillStyle = '#1f2937';
+      cx.fill();
+      // Tread lines
+      cx.strokeStyle = '#374151';
+      cx.lineWidth = 1.5;
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3;
+        cx.save();
+        cx.translate(x, cy);
+        cx.rotate(a);
+        cx.beginPath();
+        cx.moveTo(8, 0); cx.lineTo(13, 0);
+        cx.stroke();
+        cx.restore();
+      }
+    }
+    oneTire(y - 14);
+    oneTire(y - 40);
+  }
+
+  function drawJerseyBarrier (x, y) {
+    // Bottom bevel
+    cx.fillStyle = '#334155';
+    cx.beginPath();
+    cx.moveTo(x - 26, y);
+    cx.lineTo(x + 26, y);
+    cx.lineTo(x + 20, y - 14);
+    cx.lineTo(x - 20, y - 14);
+    cx.closePath();
+    cx.fill();
+    // Upper body
+    cx.fillStyle = '#475569';
+    cx.fillRect(x - 14, y - 36, 28, 22);
+    // Top cap
+    cx.fillStyle = '#94a3b8';
+    cx.fillRect(x - 12, y - 38, 24, 4);
+    // Highlight
+    cx.fillStyle = 'rgba(255,255,255,.07)';
+    cx.fillRect(x - 12, y - 36, 6, 20);
+    // Orange stripe
+    cx.fillStyle = '#f97316';
+    cx.fillRect(x - 14, y - 20, 28, 4);
+    // Shadow under stripe
+    cx.fillStyle = '#ea580c';
+    cx.fillRect(x - 14, y - 16, 28, 2);
+  }
+
+  function drawSign (x, y) {
+    // Post
+    cx.fillStyle = '#9ca3af';
+    cx.fillRect(x - 3, y - 58, 6, 58);
+    cx.fillStyle = '#6b7280';
+    cx.fillRect(x - 1, y - 58, 2, 58);
+    // Diamond board (rotated square)
+    cx.save();
+    cx.translate(x, y - 46);
+    cx.rotate(Math.PI / 4);
+    cx.fillStyle = '#fef08a';
+    cx.fillRect(-13, -13, 26, 26);
+    cx.strokeStyle = '#dc2626';
+    cx.lineWidth = 3;
+    cx.strokeRect(-13, -13, 26, 26);
+    cx.restore();
+    // Exclamation text on board
+    cx.fillStyle = '#dc2626';
+    cx.font = 'bold 16px sans-serif';
+    cx.textAlign = 'center';
+    cx.fillText('!', x, y - 40);
+    cx.fillStyle = '#1e293b';
+    cx.font = '7px monospace';
+    cx.fillText('WERK', x, y - 30);
+    cx.textAlign = 'left';
+  }
+
   function drawCloud (x, y, w) {
     cx.fillStyle = 'rgba(148,163,184,.1)';
     cx.beginPath();
@@ -523,16 +658,55 @@
     cx.fill();
   }
 
+  // Hitboxes per obstacle type { hw: half-width, ht: height from ground }
+  const HITBOXES = {
+    cone:   { hw: 12, ht: 50 },
+    box:    { hw: 20, ht: 44 },
+    barrel: { hw: 12, ht: 44 },
+    tires:  { hw: 14, ht: 52 },
+    jersey: { hw: 22, ht: 36 },
+    sign:   { hw: 10, ht: 56 },
+  };
+
   function addObstacle () {
+    const tier = Math.floor(score / 200); // moeilijkheidsgraad per 200 punten
     const roll = Math.random();
-    if (roll < 0.15 && score > 30) {
-      // double cones
-      obstacles.push({ x: CW + 20, t: 'cone' });
-      obstacles.push({ x: CW + 62, t: 'cone' });
-    } else if (roll < 0.45) {
-      obstacles.push({ x: CW + 20, t: 'box' });
+
+    if (tier === 0) {
+      // Tier 0 (0–199): alleen kegel en kist
+      if (roll < 0.65) obstacles.push({ x: CW + 20, t: 'cone' });
+      else             obstacles.push({ x: CW + 20, t: 'box'  });
+
+    } else if (tier === 1) {
+      // Tier 1 (200–399): + olievat, dubbele kegel
+      if      (roll < 0.28) obstacles.push({ x: CW + 20, t: 'cone' });
+      else if (roll < 0.48) { obstacles.push({ x: CW + 20, t: 'cone' }); obstacles.push({ x: CW + 64, t: 'cone' }); }
+      else if (roll < 0.70) obstacles.push({ x: CW + 20, t: 'box'   });
+      else                   obstacles.push({ x: CW + 20, t: 'barrel'});
+
+    } else if (tier === 2) {
+      // Tier 2 (400–599): + bandenstapel, betonblok
+      if      (roll < 0.15) obstacles.push({ x: CW + 20, t: 'cone'   });
+      else if (roll < 0.30) { obstacles.push({ x: CW + 20, t: 'cone' }); obstacles.push({ x: CW + 64, t: 'cone' }); }
+      else if (roll < 0.45) obstacles.push({ x: CW + 20, t: 'box'    });
+      else if (roll < 0.60) obstacles.push({ x: CW + 20, t: 'barrel' });
+      else if (roll < 0.78) obstacles.push({ x: CW + 20, t: 'jersey' });
+      else                   obstacles.push({ x: CW + 20, t: 'tires'  });
+
     } else {
-      obstacles.push({ x: CW + 20, t: 'cone' });
+      // Tier 3+ (600+): alles + verkeersbord + combo's
+      if      (roll < 0.10) obstacles.push({ x: CW + 20, t: 'cone'   });
+      else if (roll < 0.20) { obstacles.push({ x: CW + 20, t: 'cone' }); obstacles.push({ x: CW + 64, t: 'cone' }); }
+      else if (roll < 0.32) obstacles.push({ x: CW + 20, t: 'box'    });
+      else if (roll < 0.45) obstacles.push({ x: CW + 20, t: 'barrel' });
+      else if (roll < 0.57) obstacles.push({ x: CW + 20, t: 'jersey' });
+      else if (roll < 0.69) obstacles.push({ x: CW + 20, t: 'tires'  });
+      else if (roll < 0.80) obstacles.push({ x: CW + 20, t: 'sign'   });
+      else {
+        // Combo: olievat gevolgd door kist
+        obstacles.push({ x: CW + 20, t: 'barrel' });
+        obstacles.push({ x: CW + 74, t: 'box'    });
+      }
     }
   }
 
@@ -547,16 +721,13 @@
     });
   }
 
-  /* ── collision (AABB with shrink) ── */
+  /* ── collision (AABB met type-specifieke hitbox) ── */
   function hit (obs) {
-    const TL = TX + 4,  TR = TX + 88;
-    const TT = truck.y - 58, TB = truck.y - 4;
-    const isBox = obs.t === 'box';
-    const OL = obs.x - (isBox ? 17 : 12);
-    const OR = obs.x + (isBox ? 17 : 12);
-    const OT = isBox ? obs.y - 46 : obs.y - 50;
-    const OB = obs.y;
-    return TR > OL && TL < OR && TB > OT && TT < OB;
+    const TL = TX + 6,  TR = TX + 86;
+    const TT = truck.y - 56, TB = truck.y - 6;
+    const hb = HITBOXES[obs.t] || { hw: 15, ht: 44 };
+    return TR > obs.x - hb.hw && TL < obs.x + hb.hw &&
+           TB > obs.y - hb.ht && TT < obs.y;
   }
 
   /* ── background rendering ── */
@@ -598,8 +769,21 @@
     if (state !== 'play') return;
     frame++;
 
-    // Increase speed every 500 frames
-    if (frame % 500 === 0) spd = Math.min(spd + .6, 13);
+    // Moeilijkheidsgraad: elke 200 punten sneller + wave
+    const milestone = Math.floor(score / 200);
+    if (milestone > lastMilestone) {
+      lastMilestone = milestone;
+      spd = Math.min(spd + 0.8, 14);
+      // Start een wave: 3 of 4 obstakels snel achter elkaar
+      waveQueue = (milestone % 3 === 0) ? 4 : 3;
+      waveTimer = 0;
+      // Flash score
+      const sb = scoreEl.parentElement;
+      sb.classList.remove('flash');
+      void sb.offsetWidth;
+      sb.classList.add('flash');
+      setTimeout(() => sb.classList.remove('flash'), 520);
+    }
 
     // Truck physics
     truck.vy  += 0.50;
@@ -618,12 +802,26 @@
     particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.a -= 0.02; p.life--; });
     particles = particles.filter(p => p.life > 0 && p.a > 0);
 
-    // Obstacles
+    // Wave-modus: snel achter elkaar spawnen
+    if (waveQueue > 0) {
+      waveTimer++;
+      const waveGap = Math.max(28, 42 - milestone * 2);
+      if (waveTimer >= waveGap) {
+        addObstacle();
+        waveQueue--;
+        waveTimer = 0;
+        obsTimer = -30; // kleine pauze ná de wave
+      }
+    }
+
+    // Normale obstacle spawn
     obsTimer++;
-    if (obsTimer >= nextObs) {
+    const minGap = Math.max(52, 90 - Math.floor(score / 80) * 4);
+    const randRange = Math.max(25, 55 - Math.floor(score / 100) * 3);
+    if (waveQueue === 0 && obsTimer >= nextObs) {
       addObstacle();
       obsTimer = 0;
-      nextObs = Math.floor(Math.random() * 55) + 65 + Math.max(0, 25 - ~~(score / 12));
+      nextObs = Math.floor(Math.random() * randRange) + minGap;
     }
     obstacles.forEach(o => { o.x -= spd; o.y = GY; });
     obstacles = obstacles.filter(o => o.x > -60);
@@ -686,8 +884,14 @@
 
     // Obstacles
     obstacles.forEach(o => {
-      if (o.t === 'cone') drawCone(o.x, o.y);
-      else                drawBox(o.x, o.y);
+      switch (o.t) {
+        case 'cone':   drawCone(o.x, o.y);           break;
+        case 'box':    drawBox(o.x, o.y);            break;
+        case 'barrel': drawBarrel(o.x, o.y);         break;
+        case 'tires':  drawTireStack(o.x, o.y);      break;
+        case 'jersey': drawJerseyBarrier(o.x, o.y);  break;
+        case 'sign':   drawSign(o.x, o.y);           break;
+      }
     });
 
     drawTruck(TX, truck.y);
