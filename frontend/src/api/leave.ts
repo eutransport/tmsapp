@@ -147,6 +147,20 @@ export async function updateLeaveBalance(
   return response.data
 }
 
+export interface LeaveBalanceAdjustment {
+  vacation_delta?: number
+  overtime_delta?: number
+  reason?: string
+}
+
+export async function adjustLeaveBalance(
+  id: string,
+  data: LeaveBalanceAdjustment
+): Promise<LeaveBalance> {
+  const response = await api.post(`/leave/balances/${id}/adjust/`, data)
+  return response.data
+}
+
 // ===== Leave Requests =====
 
 export async function getMyLeaveRequests(): Promise<LeaveRequest[]> {

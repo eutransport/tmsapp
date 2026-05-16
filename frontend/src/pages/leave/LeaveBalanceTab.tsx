@@ -10,8 +10,10 @@ import {
   SunIcon,
   ClockIcon,
   ArrowPathIcon,
+  PencilSquareIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline'
-import { getAllLeaveBalances, LeaveBalance } from '@/api/leave'
+import { adjustLeaveBalance, getAllLeaveBalances, LeaveBalance } from '@/api/leave'
 import { useAuthStore } from '@/stores/authStore'
 
 export default function LeaveBalanceTab() {
@@ -32,6 +34,14 @@ export default function LeaveBalanceTab() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 20
+
+  // Adjust-balance modal state (only used when canViewAll)
+  const [editingBalance, setEditingBalance] = useState<LeaveBalance | null>(null)
+  const [vacationDelta, setVacationDelta] = useState<string>('')
+  const [overtimeDelta, setOvertimeDelta] = useState<string>('')
+  const [adjustReason, setAdjustReason] = useState<string>('')
+  const [saving, setSaving] = useState(false)
+  const [modalError, setModalError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchBalances()
@@ -65,6 +75,62 @@ export default function LeaveBalanceTab() {
       setError(err.message || 'Fout bij ophalen verlofsaldo\'s.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const openAdjustModal = (balance: LeaveBalance) => {
+    setEditingBalance(balance)
+    setVacationDelta('')
+    setOvertimeDelta('')
+    setAdjustReason('')
+    setModalError(null)
+  }
+
+  const closeAdjustModal = () => {
+    if (saving) return
+    setEditingBalance(null)
+    setVacationDelta('')
+    setOvertimeDelta('')
+    setAdjustReason('')
+    setModalError(null)
+  }
+
+  const handleAdjustSave = async () => {
+    if (!editingBalance) return
+    const vacNum = vacationDelta.trim() === '' ? 0 : Number(vacationDelta)
+    const otNum = overtimeDelta.trim() === '' ? 0 : Number(overtimeDelta)
+    if (Number.isNaN(vacNum) || Number.isNaN(otNum)) {
+      setModalError('Voer geldige getallen in.')
+      return
+    }
+    if (vacNum === 0 && otNum === 0) {
+      setModalError('Geef minstens één wijziging op (verlofuren of overuren).')
+      return
+    }
+    setSaving(true)
+    setModalError(null)
+    try {
+      const updated = await adjustLeaveBalance(editingBalance.id, {
+        vacation_delta: vacNum,
+        overtime_delta: otNum,
+        reason: adjustReason.trim() || undefined,
+      })
+      // Replace the balance in local state
+      setBalances((prev) =>
+        prev.map((b) => (b.id === updated.id ? updated : b))
+      )
+      setEditingBalance(null)
+      setVacationDelta('')
+      setOvertimeDelta('')
+      setAdjustReason('')
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.error ||
+        err?.message ||
+        'Bijwerken van het verlofsaldo is mislukt.'
+      setModalError(msg)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -182,6 +248,11 @@ export default function LeaveBalanceTab() {
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Totaal beschikbaar
                 </th>
+                {canViewAll && (
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acties
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -214,12 +285,25 @@ export default function LeaveBalanceTab() {
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
                       <span className="font-bold text-green-700">{totalAvailable.toFixed(1)}u</span>
                     </td>
+                    {canViewAll && (
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
+                        <button
+                          type="button"
+                          onClick={() => openAdjustModal(balance)}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-50 rounded"
+                          title="Verlofsaldo bijwerken"
+                        >
+                          <PencilSquareIcon className="h-4 w-4" />
+                          Bijwerken
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
               {paginatedData.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={canViewAll ? 7 : 6} className="px-4 py-8 text-center text-gray-500">
                     Geen resultaten gevonden.
                   </td>
                 </tr>
@@ -263,6 +347,18 @@ export default function LeaveBalanceTab() {
                     <span className="font-bold text-green-700">{totalAvailable.toFixed(1)}u</span>
                   </div>
                 </div>
+                {canViewAll && (
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => openAdjustModal(balance)}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-50 rounded border border-primary-200"
+                    >
+                      <PencilSquareIcon className="h-4 w-4" />
+                      Bijwerken
+                    </button>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -301,6 +397,126 @@ export default function LeaveBalanceTab() {
           </div>
         )}
       </div>
+
+      {/* Adjust balance modal (admins / view_leave_balances permission only) */}
+      {canViewAll && editingBalance && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={closeAdjustModal}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Verlofsaldo bijwerken
+              </h2>
+              <button
+                type="button"
+                onClick={closeAdjustModal}
+                disabled={saving}
+                className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                aria-label="Sluiten"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-4 py-4 space-y-4">
+              <div className="text-sm text-gray-600">
+                <div>
+                  <span className="font-medium text-gray-900">{editingBalance.user_naam}</span>
+                </div>
+                <div className="text-xs text-gray-500">{editingBalance.user_email}</div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    Huidige verlofuren:{' '}
+                    <span className="font-semibold text-blue-600">
+                      {Number(editingBalance.vacation_hours)}u
+                    </span>
+                  </div>
+                  <div>
+                    Huidige overuren:{' '}
+                    <span className="font-semibold text-purple-600">
+                      {Number(editingBalance.overtime_hours)}u
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {modalError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                  {modalError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Verlofuren toevoegen (gebruik negatief om af te trekken)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={vacationDelta}
+                  onChange={(e) => setVacationDelta(e.target.value)}
+                  placeholder="bijv. 8 of -4"
+                  className="form-input w-full"
+                  disabled={saving}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Overuren toevoegen (gebruik negatief om af te trekken)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={overtimeDelta}
+                  onChange={(e) => setOvertimeDelta(e.target.value)}
+                  placeholder="bijv. 2 of -1"
+                  className="form-input w-full"
+                  disabled={saving}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Reden (optioneel)
+                </label>
+                <input
+                  type="text"
+                  value={adjustReason}
+                  onChange={(e) => setAdjustReason(e.target.value)}
+                  placeholder="bijv. correctie, bonus"
+                  className="form-input w-full"
+                  disabled={saving}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t bg-gray-50 rounded-b-lg">
+              <button
+                type="button"
+                onClick={closeAdjustModal}
+                disabled={saving}
+                className="px-3 py-1.5 text-sm border rounded hover:bg-gray-100 disabled:opacity-50"
+              >
+                {t('common.cancel', 'Annuleren')}
+              </button>
+              <button
+                type="button"
+                onClick={handleAdjustSave}
+                disabled={saving}
+                className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50"
+              >
+                {saving ? 'Bezig...' : t('common.save', 'Opslaan')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

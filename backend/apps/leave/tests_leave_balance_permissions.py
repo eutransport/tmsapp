@@ -121,3 +121,88 @@ class LeaveBalancePermissionTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(str(response.data['id']), str(self.bal1.id))
+
+    # ------------------------------------------------------------------
+    # adjust() — admin can add hours per type to any balance
+    # ------------------------------------------------------------------
+    def test_admin_can_adjust_balance(self):
+        self.client.force_authenticate(self.admin)
+        url = f'/api/leave/balances/{self.bal1.id}/adjust/'
+        response = self.client.post(
+            url,
+            {'vacation_delta': '8', 'overtime_delta': '2', 'reason': 'correctie'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.bal1.refresh_from_db()
+        self.assertEqual(self.bal1.vacation_hours, 108)
+        self.assertEqual(self.bal1.overtime_hours, 7)
+
+    # ------------------------------------------------------------------
+    # adjust() — manager with view_leave_balances can also adjust
+    # ------------------------------------------------------------------
+    def test_manager_with_permission_can_adjust_balance(self):
+        self.client.force_authenticate(self.manager)
+        url = f'/api/leave/balances/{self.bal2.id}/adjust/'
+        response = self.client.post(
+            url,
+            {'vacation_delta': '4'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.bal2.refresh_from_db()
+        self.assertEqual(self.bal2.vacation_hours, 204)
+        self.assertEqual(self.bal2.overtime_hours, 10)
+
+    # ------------------------------------------------------------------
+    # adjust() — regular employee may NOT adjust any balance (their own or others)
+    # ------------------------------------------------------------------
+    def test_user_without_permission_cannot_adjust_own_balance(self):
+        self.client.force_authenticate(self.employee1)
+        url = f'/api/leave/balances/{self.bal1.id}/adjust/'
+        response = self.client.post(
+            url,
+            {'vacation_delta': '8'},
+            format='json',
+        )
+        # Forbidden — the balance is in their queryset but adjust is permission-gated
+        self.assertEqual(response.status_code, 403)
+        self.bal1.refresh_from_db()
+        self.assertEqual(self.bal1.vacation_hours, 100)
+
+    def test_user_without_permission_cannot_adjust_other_balance(self):
+        self.client.force_authenticate(self.employee1)
+        url = f'/api/leave/balances/{self.bal2.id}/adjust/'
+        response = self.client.post(
+            url,
+            {'vacation_delta': '8'},
+            format='json',
+        )
+        # 404 (object not in queryset) or 403 — both are acceptable denials
+        self.assertIn(response.status_code, (403, 404))
+        self.bal2.refresh_from_db()
+        self.assertEqual(self.bal2.vacation_hours, 200)
+
+    # ------------------------------------------------------------------
+    # adjust() — validation: empty payload is rejected
+    # ------------------------------------------------------------------
+    def test_adjust_requires_non_zero_delta(self):
+        self.client.force_authenticate(self.admin)
+        url = f'/api/leave/balances/{self.bal1.id}/adjust/'
+        response = self.client.post(url, {}, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    # ------------------------------------------------------------------
+    # adjust() — resulting balance may not go negative
+    # ------------------------------------------------------------------
+    def test_adjust_rejects_negative_resulting_balance(self):
+        self.client.force_authenticate(self.admin)
+        url = f'/api/leave/balances/{self.bal1.id}/adjust/'
+        response = self.client.post(
+            url,
+            {'vacation_delta': '-1000'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.bal1.refresh_from_db()
+        self.assertEqual(self.bal1.vacation_hours, 100)

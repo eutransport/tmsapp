@@ -1,10 +1,11 @@
 """Views for leave management."""
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from datetime import date, timedelta
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -183,10 +184,10 @@ class LeaveBalanceViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     def update(self, request, *args, **kwargs):
-        """Only admins can update balances."""
-        if not (request.user.is_superuser or request.user.rol == 'admin'):
+        """Admins and users with view_leave_balances permission can update balances."""
+        if not _can_view_all_leave_balances(request.user):
             return Response(
-                {'error': 'Alleen admins kunnen verlofsaldo aanpassen.'},
+                {'error': 'Je hebt geen rechten om verlofsaldo aan te passen.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
@@ -221,10 +222,10 @@ class LeaveBalanceViewSet(viewsets.ModelViewSet):
         return Response(LeaveBalanceSerializer(balance).data)
     
     def partial_update(self, request, *args, **kwargs):
-        """Only admins can update balances."""
-        if not (request.user.is_superuser or request.user.rol == 'admin'):
+        """Admins and users with view_leave_balances permission can update balances."""
+        if not _can_view_all_leave_balances(request.user):
             return Response(
-                {'error': 'Alleen admins kunnen verlofsaldo aanpassen.'},
+                {'error': 'Je hebt geen rechten om verlofsaldo aan te passen.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
@@ -256,6 +257,101 @@ class LeaveBalanceViewSet(viewsets.ModelViewSet):
         )
         
         # Return full balance using LeaveBalanceSerializer
+        return Response(LeaveBalanceSerializer(balance).data)
+    
+    @action(detail=True, methods=['post'])
+    def adjust(self, request, *args, **kwargs):
+        """
+        Add (or subtract) hours to an employee's leave balance per type.
+        
+        Expects JSON body with optional decimal fields:
+          - vacation_delta: hours to add to vacation_hours (can be negative)
+          - overtime_delta: hours to add to overtime_hours (can be negative)
+          - reason: optional human readable reason for the audit log
+        
+        Only admins and users with the `view_leave_balances` module
+        permission can perform this action.
+        """
+        if not _can_view_all_leave_balances(request.user):
+            return Response(
+                {'error': 'Je hebt geen rechten om verlofsaldo aan te passen.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Parse and validate deltas
+        def _parse_delta(value):
+            if value in (None, ''):
+                return Decimal('0')
+            try:
+                return Decimal(str(value))
+            except (InvalidOperation, TypeError):
+                return None
+        
+        vacation_delta = _parse_delta(request.data.get('vacation_delta'))
+        overtime_delta = _parse_delta(request.data.get('overtime_delta'))
+        if vacation_delta is None or overtime_delta is None:
+            return Response(
+                {'error': 'Ongeldige waarde voor vacation_delta of overtime_delta.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        if vacation_delta == 0 and overtime_delta == 0:
+            return Response(
+                {'error': 'Geef minstens één wijziging op (vacation_delta of overtime_delta).'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        reason = (request.data.get('reason') or '').strip()
+        
+        with transaction.atomic():
+            # Lock the row to avoid concurrent adjustments
+            balance = LeaveBalance.objects.select_for_update().get(pk=self.get_object().pk)
+            
+            old_values = {
+                'vacation_hours': str(balance.vacation_hours),
+                'overtime_hours': str(balance.overtime_hours),
+            }
+            
+            new_vacation = balance.vacation_hours + vacation_delta
+            new_overtime = balance.overtime_hours + overtime_delta
+            
+            # Disallow negative resulting balances
+            if new_vacation < 0:
+                return Response(
+                    {'error': f'Verlofuren kunnen niet negatief worden (huidig: {balance.vacation_hours}u, wijziging: {vacation_delta}u).'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if new_overtime < 0:
+                return Response(
+                    {'error': f'Overuren kunnen niet negatief worden (huidig: {balance.overtime_hours}u, wijziging: {overtime_delta}u).'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            balance.vacation_hours = new_vacation
+            balance.overtime_hours = new_overtime
+            balance.save(update_fields=['vacation_hours', 'overtime_hours', 'updated_at'])
+        
+        # Audit log
+        log_leave_action(
+            action=LeaveAuditAction.BALANCE_UPDATED,
+            admin_user=request.user,
+            target_user=balance.user,
+            leave_balance=balance,
+            details={
+                'old_values': old_values,
+                'new_values': {
+                    'vacation_hours': str(balance.vacation_hours),
+                    'overtime_hours': str(balance.overtime_hours),
+                },
+                'deltas': {
+                    'vacation_delta': str(vacation_delta),
+                    'overtime_delta': str(overtime_delta),
+                },
+                'reason': reason,
+            },
+            ip_address=get_client_ip(request)
+        )
+        
         return Response(LeaveBalanceSerializer(balance).data)
 
 
