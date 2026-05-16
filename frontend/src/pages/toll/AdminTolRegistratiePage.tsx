@@ -196,81 +196,152 @@ export default function AdminTolRegistratiePage() {
             <p className="text-sm">Geen tolregistraties gevonden</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Chauffeur</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Wagen</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Bedrag</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Bijlage</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Acties</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filtered.map(reg => (
-                  <tr key={reg.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 font-medium">{reg.user_naam || '—'}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">{formatDate(reg.datum)}</td>
-                    <td className="px-4 py-2 font-mono text-xs">{reg.kenteken}</td>
-                    <td className="px-4 py-2 text-right font-medium">{formatBedrag(reg.totaal_bedrag)}</td>
-                    <td className="px-4 py-2 text-center">
-                      {reg.bijlage_url ? (
-                        <div className="flex items-center justify-center gap-1">
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Chauffeur</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Wagen</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Bedrag</th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Bijlage</th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Acties</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filtered.map(reg => (
+                    <tr key={reg.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 font-medium">{reg.user_naam || '—'}</td>
+                      <td className="px-4 py-2 whitespace-nowrap">{formatDate(reg.datum)}</td>
+                      <td className="px-4 py-2 font-mono text-xs">{reg.kenteken}</td>
+                      <td className="px-4 py-2 text-right font-medium">{formatBedrag(reg.totaal_bedrag)}</td>
+                      <td className="px-4 py-2 text-center">
+                        {reg.bijlage_url ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleViewBijlage(reg)}
+                              title="Bekijken"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
+                            >
+                              <EyeIcon className="w-3 h-3" /> Inzien
+                            </button>
+                            <button
+                              onClick={() => handleDownload(reg)}
+                              title="Downloaden"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-gray-50 text-gray-700 rounded hover:bg-gray-100"
+                            >
+                              <ArrowDownTrayIcon className="w-3 h-3" /> Download
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <button
+                          onClick={() => handleToggleStatus(reg)}
+                          disabled={togglingStatus === reg.id}
+                          title={reg.gefactureerd ? 'Klik om terug te zetten naar Ingediend' : 'Klik om te markeren als Gefactureerd'}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-opacity hover:opacity-75 disabled:opacity-50 ${
+                            reg.gefactureerd
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}
+                        >
+                          {togglingStatus === reg.id ? (
+                            <span aria-label="Status wordt gewijzigd" className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <ArrowPathIcon aria-hidden="true" className="w-3 h-3" />
+                          )}
+                          {reg.gefactureerd ? 'Gefactureerd' : 'Ingediend'}
+                        </button>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <button
+                          onClick={() => setDeleteTarget(reg)}
+                          className="p-1 text-gray-400 hover:text-red-600"
+                          title="Verwijderen"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {filtered.map(reg => (
+                <div key={reg.id} className="px-3 py-2 hover:bg-gray-50">
+                  {/* Row 1: chauffeur + bedrag */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{reg.user_naam || '—'}</span>
+                    <span className="text-sm font-semibold text-gray-900 shrink-0">{formatBedrag(reg.totaal_bedrag)}</span>
+                  </div>
+
+                  {/* Row 2: datum + kenteken */}
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
+                    <span>{formatDate(reg.datum)}</span>
+                    <span className="text-gray-300">·</span>
+                    <span className="font-mono">{reg.kenteken}</span>
+                  </div>
+
+                  {/* Row 3: status + actions */}
+                  <div className="flex items-center justify-between gap-2 mt-1 pt-1 border-t border-gray-100">
+                    <button
+                      onClick={() => handleToggleStatus(reg)}
+                      disabled={togglingStatus === reg.id}
+                      title={reg.gefactureerd ? 'Klik om terug te zetten naar Ingediend' : 'Klik om te markeren als Gefactureerd'}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-opacity hover:opacity-75 disabled:opacity-50 ${
+                        reg.gefactureerd
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {togglingStatus === reg.id ? (
+                        <span aria-label="Status wordt gewijzigd" className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <ArrowPathIcon aria-hidden="true" className="w-3 h-3" />
+                      )}
+                      {reg.gefactureerd ? 'Gefactureerd' : 'Ingediend'}
+                    </button>
+                    <div className="flex items-center gap-0.5">
+                      {reg.bijlage_url && (
+                        <>
                           <button
                             onClick={() => handleViewBijlage(reg)}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
                             title="Bekijken"
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
                           >
-                            <EyeIcon className="w-3 h-3" /> Inzien
+                            <EyeIcon className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDownload(reg)}
+                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
                             title="Downloaden"
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-gray-50 text-gray-700 rounded hover:bg-gray-100"
                           >
-                            <ArrowDownTrayIcon className="w-3 h-3" /> Download
+                            <ArrowDownTrayIcon className="w-4 h-4" />
                           </button>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 text-xs">—</span>
+                        </>
                       )}
-                    </td>
-                    <td className="px-4 py-2 text-center">
-                      <button
-                        onClick={() => handleToggleStatus(reg)}
-                        disabled={togglingStatus === reg.id}
-                        title={reg.gefactureerd ? 'Klik om terug te zetten naar Ingediend' : 'Klik om te markeren als Gefactureerd'}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-opacity hover:opacity-75 disabled:opacity-50 ${
-                          reg.gefactureerd
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-blue-100 text-blue-800'
-                        }`}
-                      >
-                        {togglingStatus === reg.id ? (
-                          <span aria-label="Status wordt gewijzigd" className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <ArrowPathIcon aria-hidden="true" className="w-3 h-3" />
-                        )}
-                        {reg.gefactureerd ? 'Gefactureerd' : 'Ingediend'}
-                      </button>
-                    </td>
-                    <td className="px-4 py-2 text-center">
                       <button
                         onClick={() => setDeleteTarget(reg)}
-                        className="p-1 text-gray-400 hover:text-red-600"
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
                         title="Verwijderen"
                       >
                         <TrashIcon className="w-4 h-4" />
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Pagination */}
