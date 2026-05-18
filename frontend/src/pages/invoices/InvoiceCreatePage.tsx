@@ -1751,7 +1751,7 @@ export default function InvoiceCreatePage() {
       const percentageToUse = dotPercentage !== null ? dotPercentage : defaults.dotPrijs
       const dotBedrag = entriesSubtotaal * (percentageToUse / 100)
       summaryLines.push(createSummaryLine(
-        `Totaal DOT (${percentageToUse}%)`,
+        `Totaal DOT (${Number(percentageToUse).toFixed(2)}%)`,
         1,
         dotBedrag
       ))
@@ -1875,7 +1875,7 @@ export default function InvoiceCreatePage() {
       // Use dotPercentage from form if available, otherwise use defaults.dotPrijs
       const percentageToUse = dotPercentage !== null ? dotPercentage : defaults.dotPrijs
       const dotBedrag = entriesSubtotaal * (percentageToUse / 100)
-      summaryLines.push(createSummaryLine(`Totaal DOT (${percentageToUse}%)`, 1, dotBedrag))
+      summaryLines.push(createSummaryLine(`Totaal DOT (${Number(percentageToUse).toFixed(2)}%)`, 1, dotBedrag))
     } else {
       if (totalKm > 0 && defaults.kmTarief > 0) {
         summaryLines.push(createSummaryLine('Totaal KM', totalKm, defaults.kmTarief))
