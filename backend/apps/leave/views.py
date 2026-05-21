@@ -813,6 +813,33 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         
         return Response({'message': 'Verlofaanvraag verwijderd.'})
     
+    @action(detail=True, methods=['post'], url_path='force_delete', url_name='force-delete')
+    def force_delete_entry(self, request, pk=None):
+        if not _is_admin_or_leave_manager(request.user):
+            return Response(
+                {'error': 'Je hebt geen rechten om verlofaanvragen te verwijderen.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        leave_request = self.get_object()
+        leave_info = {
+            'id': leave_request.id,
+            'leave_type': leave_request.leave_type,
+            'start_date': str(leave_request.start_date),
+            'end_date': str(leave_request.end_date),
+            'status_before_delete': leave_request.status,
+            'force_delete': True,
+        }
+        target_user = leave_request.user
+        leave_request.delete()
+        log_leave_action(
+            action=LeaveAuditAction.REQUEST_DELETED,
+            admin_user=request.user,
+            target_user=target_user,
+            details=leave_info,
+            ip_address=get_client_ip(request)
+        )
+        return Response({'message': 'Verlofaanvraag verwijderd (force).'})
+
     @action(detail=True, methods=['patch'])
     def admin_update(self, request, pk=None):
         """Admin or leave manager action to update a leave request (edit dates, hours, type)."""

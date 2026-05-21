@@ -147,15 +147,9 @@ export async function updateLeaveBalance(
   return response.data
 }
 
-export interface LeaveBalanceAdjustment {
-  vacation_delta?: number
-  overtime_delta?: number
-  reason?: string
-}
-
 export async function adjustLeaveBalance(
   id: string,
-  data: LeaveBalanceAdjustment
+  data: { vacation_delta: number; overtime_delta?: number; reason?: string }
 ): Promise<LeaveBalance> {
   const response = await api.post(`/leave/balances/${id}/adjust/`, data)
   return response.data
@@ -231,6 +225,11 @@ export async function adminActionLeaveRequest(
 
 // Alias for components that use different name
 export const adminLeaveAction = adminActionLeaveRequest
+
+export async function forceDeleteLeaveRequest(id: string): Promise<{ message: string }> {
+  const response = await api.post(`/leave/requests/${id}/force_delete/`)
+  return response.data
+}
 
 // ===== Calendar =====
 

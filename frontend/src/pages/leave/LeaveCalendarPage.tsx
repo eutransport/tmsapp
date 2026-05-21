@@ -12,12 +12,17 @@ import {
   ChevronRightIcon,
   ArrowLeftIcon,
   CalendarDaysIcon,
+  TrashIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import {
   getLeaveCalendar,
   getPublicHolidays,
+  adminActionLeaveRequest,
+  forceDeleteLeaveRequest,
   CalendarLeaveEntry,
 } from '@/api/leave'
+import { useAuthStore } from '@/stores/authStore'
 
 // Color palette for different leave types
 const LEAVE_TYPE_COLORS: Record<string, { bg: string; border: string; text: string }> = {
@@ -47,10 +52,18 @@ function parseLocalDate(s: string): Date {
 
 export default function LeaveCalendarPage() {
   const { t } = useTranslation()
+  const { user } = useAuthStore()
+  const canManageLeave = user?.rol === 'admin' || (user?.module_permissions || []).includes('can_manage_leave_for_all')
+
   const [entries, setEntries] = useState<CalendarLeaveEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [holidayMap, setHolidayMap] = useState<Map<string, string>>(new Map())
+
+  // Delete modal state
+  const [selectedEntry, setSelectedEntry] = useState<CalendarLeaveEntry | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -93,6 +106,13 @@ export default function LeaveCalendarPage() {
     fetchCalendar()
   }, [firstDayOfMonth, lastDayOfMonth])
 
+  const reloadCalendar = async () => {
+    const startDate = formatLocalDate(firstDayOfMonth)
+    const endDate = formatLocalDate(lastDayOfMonth)
+    const data = await getLeaveCalendar(startDate, endDate)
+    setEntries(data)
+  }
+
   const goToPreviousMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1))
   }
@@ -103,6 +123,31 @@ export default function LeaveCalendarPage() {
 
   const goToCurrentMonth = () => {
     setCurrentDate(new Date())
+  }
+
+  const handleDeleteClick = (entry: CalendarLeaveEntry) => {
+    setSelectedEntry(entry)
+    setDeleteError(null)
+  }
+
+  const handleDeleteConfirm = async (force: boolean) => {
+    if (!selectedEntry) return
+    setIsDeleting(true)
+    setDeleteError(null)
+    try {
+      if (force) {
+        await forceDeleteLeaveRequest(selectedEntry.id)
+      } else {
+        await adminActionLeaveRequest(selectedEntry.id, 'delete')
+      }
+      setSelectedEntry(null)
+      await reloadCalendar()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setDeleteError(msg || 'Er is een fout opgetreden bij het verwijderen.')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   // Group entries by user
@@ -158,6 +203,7 @@ export default function LeaveCalendarPage() {
   }
 
   return (
+    <>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -311,13 +357,17 @@ export default function LeaveCalendarPage() {
                         return (
                           <div
                             key={entry.id}
-                            className={`absolute top-2 h-8 ${colors.bg} ${colors.border} border rounded-md shadow-sm cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center overflow-hidden`}
+                            className={`absolute top-2 h-8 ${colors.bg} ${colors.border} border rounded-md shadow-sm cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center overflow-hidden group`}
                             style={{ left: style.left, width: style.width, minWidth: '24px' }}
                             title={`${entry.user_naam}: ${entry.leave_type_display}\n${parseLocalDate(entry.start_date).toLocaleDateString('nl-NL')} - ${parseLocalDate(entry.end_date).toLocaleDateString('nl-NL')}`}
+                            onClick={canManageLeave ? () => handleDeleteClick(entry) : undefined}
                           >
                             <span className={`text-xs font-medium ${colors.text} truncate px-1`}>
                               {entry.leave_type_display}
                             </span>
+                            {canManageLeave && (
+                              <TrashIcon className={`w-3 h-3 ${colors.text} opacity-0 group-hover:opacity-70 absolute right-1 flex-shrink-0`} />
+                            )}
                           </div>
                         )
                       })}
@@ -350,13 +400,22 @@ export default function LeaveCalendarPage() {
                       <p className="text-sm text-gray-500">{entry.leave_type_display}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-900">
+                  <div className="flex items-center gap-4">
+                    <p className="text-sm text-gray-900 text-right">
                       {parseLocalDate(entry.start_date).toLocaleDateString('nl-NL')}
                       {entry.start_date !== entry.end_date && (
                         <> - {parseLocalDate(entry.end_date).toLocaleDateString('nl-NL')}</>
                       )}
                     </p>
+                    {canManageLeave && (
+                      <button
+                        onClick={() => handleDeleteClick(entry)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Verlof verwijderen"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -365,5 +424,68 @@ export default function LeaveCalendarPage() {
         </div>
       )}
     </div>
+
+    {/* Delete confirmation modal */}
+    {selectedEntry && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="flex items-start gap-4 mb-4">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+              <ExclamationTriangleIcon className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Verlof verwijderen</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                <strong>{selectedEntry.user_naam}</strong> — {selectedEntry.leave_type_display}
+              </p>
+              <p className="text-sm text-gray-500">
+                {parseLocalDate(selectedEntry.start_date).toLocaleDateString('nl-NL')}
+                {selectedEntry.start_date !== selectedEntry.end_date && (
+                  <> – {parseLocalDate(selectedEntry.end_date).toLocaleDateString('nl-NL')}</>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <p className="text-sm text-gray-700 mb-2">
+            <strong>Verwijderen</strong> refundeert de verlofuren terug naar het saldo.
+          </p>
+          <p className="text-sm text-gray-700 mb-4">
+            <strong>Force verwijderen</strong> verwijdert het verlof zonder het saldo aan te passen
+            — gebruik dit als de uren al handmatig zijn gecorrigeerd of de aanvraag niet meer
+            gekoppeld is aan een normaal verlofverzoek.
+          </p>
+
+          {deleteError && (
+            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-4">{deleteError}</p>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={() => handleDeleteConfirm(false)}
+              disabled={isDeleting}
+              className="flex-1 btn btn-danger disabled:opacity-50"
+            >
+              {isDeleting ? 'Bezig...' : 'Verwijderen'}
+            </button>
+            <button
+              onClick={() => handleDeleteConfirm(true)}
+              disabled={isDeleting}
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-lg disabled:opacity-50 transition-colors"
+            >
+              {isDeleting ? 'Bezig...' : 'Force verwijderen'}
+            </button>
+            <button
+              onClick={() => { setSelectedEntry(null); setDeleteError(null) }}
+              disabled={isDeleting}
+              className="flex-1 btn btn-secondary disabled:opacity-50"
+            >
+              Annuleren
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   )
 }
