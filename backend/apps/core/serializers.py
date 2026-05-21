@@ -2,7 +2,7 @@
 Core app serializers.
 """
 from rest_framework import serializers
-from .models import AppSettings, CustomFont, ReminderJobLog
+from .models import AppSettings, CustomFont, ReminderJobLog, EmailProfile, Administratie
 
 
 def safe_str(value):
@@ -206,6 +206,68 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
 class EmailTestSerializer(serializers.Serializer):
     """Serializer for testing email configuration."""
     to_email = serializers.EmailField()
+    profile_id = serializers.UUIDField(required=False, allow_null=True)
+
+
+class EmailProfileSerializer(serializers.ModelSerializer):
+    """Serializer for EmailProfile – list and detail."""
+    created_by_name = serializers.SerializerMethodField()
+    allowed_users_info = serializers.SerializerMethodField()
+    has_smtp_password = serializers.SerializerMethodField()
+    has_oauth_secret = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EmailProfile
+        fields = [
+            'id', 'name', 'description', 'is_default',
+            'smtp_host', 'smtp_port', 'smtp_username', 'smtp_password',
+            'smtp_use_tls', 'smtp_from_email',
+            'oauth_enabled', 'oauth_client_id', 'oauth_client_secret', 'oauth_tenant_id',
+            'email_signature',
+            'allowed_users', 'allowed_users_info',
+            'has_smtp_password', 'has_oauth_secret',
+            'created_by_name', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'smtp_password': {'write_only': True, 'required': False, 'allow_blank': True},
+            'oauth_client_secret': {'write_only': True, 'required': False, 'allow_blank': True},
+        }
+
+    def get_created_by_name(self, obj) -> str:
+        if obj.created_by:
+            name = f"{getattr(obj.created_by, 'voornaam', '')} {getattr(obj.created_by, 'achternaam', '')}".strip()
+            return name or obj.created_by.email
+        return ''
+
+    def get_allowed_users_info(self, obj) -> list:
+        return [
+            {
+                'id': str(u.id),
+                'name': f"{getattr(u, 'voornaam', '')} {getattr(u, 'achternaam', '')}".strip() or u.email,
+                'email': u.email,
+            }
+            for u in obj.allowed_users.all()
+        ]
+
+    def get_has_smtp_password(self, obj) -> bool:
+        return bool(obj.smtp_password)
+
+    def get_has_oauth_secret(self, obj) -> bool:
+        return bool(obj.oauth_client_secret)
+
+    def validate(self, data):
+        for field in ('smtp_username', 'smtp_from_email'):
+            if data.get(field):
+                data[field] = safe_str(data[field])
+        return data
+
+    def update(self, instance, validated_data):
+        # Don't overwrite passwords when the client sends an empty string
+        for pw_field in ('smtp_password', 'oauth_client_secret'):
+            if pw_field in validated_data and not validated_data[pw_field]:
+                validated_data.pop(pw_field)
+        return super().update(instance, validated_data)
 
 
 class ReminderJobLogSerializer(serializers.ModelSerializer):
@@ -219,3 +281,52 @@ class ReminderJobLogSerializer(serializers.ModelSerializer):
             'reminders_sent', 'message',
         ]
         read_only_fields = fields
+
+
+class AdministratieSerializer(serializers.ModelSerializer):
+    """Serializer for Administratie – admin CRUD + user list view."""
+    bedrijven_info = serializers.SerializerMethodField()
+    allowed_users_info = serializers.SerializerMethodField()
+    bedrijf_count = serializers.SerializerMethodField()
+    user_count = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Administratie
+        fields = [
+            'id', 'naam', 'beschrijving',
+            'bedrijven', 'bedrijven_info',
+            'allowed_users', 'allowed_users_info',
+            'bedrijf_count', 'user_count',
+            'created_by_name', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_bedrijven_info(self, obj) -> list:
+        return [
+            {'id': str(c.id), 'naam': c.naam}
+            for c in obj.bedrijven.all()
+        ]
+
+    def get_allowed_users_info(self, obj) -> list:
+        return [
+            {
+                'id': str(u.id),
+                'name': f"{getattr(u, 'voornaam', '')} {getattr(u, 'achternaam', '')}".strip() or u.email,
+                'email': u.email,
+            }
+            for u in obj.allowed_users.all()
+        ]
+
+    def get_bedrijf_count(self, obj) -> int:
+        return obj.bedrijven.count()
+
+    def get_user_count(self, obj) -> int:
+        return obj.allowed_users.count()
+
+    def get_created_by_name(self, obj) -> str:
+        if obj.created_by:
+            name = f"{getattr(obj.created_by, 'voornaam', '')} {getattr(obj.created_by, 'achternaam', '')}".strip()
+            return name or obj.created_by.email
+        return ''
+

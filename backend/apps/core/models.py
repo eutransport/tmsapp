@@ -635,6 +635,80 @@ class ReminderJobLog(models.Model):
         return f'{self.started_at} - {self.status} ({self.reminders_sent} verstuurd)'
 
 
+class EmailProfile(models.Model):
+    """
+    Named outgoing email (SMTP) profile.
+    Multiple profiles can be configured; each can restrict access to specific users.
+    Empty allowed_users means every authenticated user may use this profile.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, verbose_name='Profielnaam')
+    description = models.TextField(blank=True, verbose_name='Beschrijving')
+    is_default = models.BooleanField(
+        default=False,
+        verbose_name='Standaard profiel',
+        help_text='Wordt gebruikt wanneer geen profiel is gekozen bij het versturen.',
+    )
+
+    # SMTP
+    smtp_host = models.CharField(max_length=255, blank=True, verbose_name='SMTP Host')
+    smtp_port = models.PositiveIntegerField(default=587, verbose_name='SMTP Poort')
+    smtp_username = models.CharField(max_length=255, blank=True, verbose_name='SMTP Gebruikersnaam')
+    smtp_password = EncryptedCharField(max_length=512, blank=True, verbose_name='SMTP Wachtwoord')
+    smtp_use_tls = models.BooleanField(default=True, verbose_name='Gebruik TLS')
+    smtp_from_email = models.EmailField(blank=True, verbose_name='Afzender E-mail')
+
+    # OAuth / Microsoft 365
+    oauth_enabled = models.BooleanField(default=False, verbose_name='OAuth Ingeschakeld')
+    oauth_client_id = models.CharField(max_length=255, blank=True, verbose_name='OAuth Client ID')
+    oauth_client_secret = EncryptedCharField(max_length=512, blank=True, verbose_name='OAuth Client Secret')
+    oauth_tenant_id = models.CharField(max_length=255, blank=True, verbose_name='OAuth Tenant ID')
+
+    # Email signature (overrides global signature when set)
+    email_signature = models.TextField(blank=True, verbose_name='E-mail Handtekening')
+
+    # Access control: empty = all users; populated = only listed users
+    allowed_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='accessible_email_profiles',
+        verbose_name='Toegestane gebruikers',
+        help_text='Leeg = alle gebruikers mogen dit profiel gebruiken.',
+    )
+
+    # Tracking
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_email_profiles',
+        verbose_name='Aangemaakt door',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'E-mail Profiel'
+        verbose_name_plural = 'E-mail Profielen'
+        ordering = ['-is_default', 'name']
+
+    def __str__(self):
+        return f"{self.name} ({self.smtp_from_email or self.smtp_username})"
+
+    def user_has_access(self, user) -> bool:
+        """Return True if the user is allowed to send with this profile."""
+        if not self.allowed_users.exists():
+            return True  # No restrictions – everyone may use it.
+        return self.allowed_users.filter(pk=user.pk).exists()
+
+    def save(self, *args, **kwargs):
+        # Ensure only one default at a time
+        if self.is_default:
+            EmailProfile.objects.exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+
+
 class ActivityType(models.TextChoices):
     """Types of activities that can be logged."""
     CREATED = 'created', 'Aangemaakt'
@@ -646,6 +720,61 @@ class ActivityType(models.TextChoices):
     SENT = 'sent', 'Verzonden'
     LOGIN = 'login', 'Ingelogd'
     LOGOUT = 'logout', 'Uitgelogd'
+
+
+class Administratie(models.Model):
+    """
+    Administratie groepeert bedrijven en verleent gebruikers toegang tot
+    de facturen van die bedrijven.
+
+    - Admins zien altijd alle facturen (Administratie bypass).
+    - Gewone gebruikers zien alleen facturen van bedrijven die zijn gekoppeld
+      aan minimaal één Administratie van waarop zij rechten hebben.
+    - allowed_users leeg = geen enkele niet-admin heeft toegang.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    naam = models.CharField(max_length=100, verbose_name='Naam')
+    beschrijving = models.TextField(blank=True, verbose_name='Beschrijving')
+
+    bedrijven = models.ManyToManyField(
+        'companies.Company',
+        blank=True,
+        related_name='administraties',
+        verbose_name='Bedrijven',
+    )
+
+    allowed_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='administraties',
+        verbose_name='Gebruikers met toegang',
+        help_text='Gebruikers die facturen van de gekoppelde bedrijven mogen inzien.',
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_administraties',
+        verbose_name='Aangemaakt door',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Administratie'
+        verbose_name_plural = 'Administraties'
+        ordering = ['naam']
+
+    def __str__(self):
+        return self.naam
+
+    def user_has_access(self, user) -> bool:
+        """Return True if user has access to this administration."""
+        if user.rol == 'admin' or user.is_staff:
+            return True
+        return self.allowed_users.filter(pk=user.pk).exists()
 
 
 class ActivityLog(models.Model):

@@ -285,9 +285,17 @@ class SpreadsheetViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Resolve email profile then fall back to AppSettings
+        profile_id = request.data.get('email_profile_id') or None
+        from apps.core.views import get_smtp_config
         try:
-            settings = AppSettings.objects.first()
-            if not settings or not settings.smtp_host:
+            smtp_host, smtp_port, smtp_username_raw, smtp_password, smtp_use_tls, smtp_from_email, _sig, _src = \
+                get_smtp_config(profile_id, request.user)
+        except (ValueError, PermissionError) as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if not smtp_host:
                 return Response(
                     {'error': 'SMTP instellingen niet geconfigureerd.'},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -299,11 +307,11 @@ class SpreadsheetViewSet(viewsets.ModelViewSet):
             from django.core.mail.backends.smtp import EmailBackend
 
             connection = EmailBackend(
-                host=safe_str(settings.smtp_host),
-                port=settings.smtp_port,
-                username=safe_str(settings.smtp_username),
-                password=settings.smtp_password,
-                use_tls=settings.smtp_use_tls,
+                host=safe_str(smtp_host),
+                port=smtp_port,
+                username=safe_str(smtp_username_raw),
+                password=smtp_password,
+                use_tls=smtp_use_tls,
                 fail_silently=False,
             )
 
@@ -319,7 +327,7 @@ class SpreadsheetViewSet(viewsets.ModelViewSet):
             msg = EmailMessage(
                 subject=subject,
                 body=body,
-                from_email=safe_str(settings.smtp_from_email),
+                from_email=safe_str(smtp_from_email),
                 to=emails,
                 connection=connection,
             )

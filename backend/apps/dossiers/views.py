@@ -310,24 +310,30 @@ class DossierViewSet(viewsets.ModelViewSet):
             except DossierType.DoesNotExist:
                 return Response({'error': 'Opgegeven type bestaat niet.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Resolve email profile then fall back to AppSettings
+        profile_id = request.data.get('email_profile_id') or None
+        from apps.core.views import get_smtp_config
         try:
-            app_settings = AppSettings.get_settings()
+            smtp_host, smtp_port, smtp_username_raw, smtp_password, smtp_use_tls, from_email, _signature, _src = \
+                get_smtp_config(profile_id, request.user)
+        except (ValueError, PermissionError) as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-            if not app_settings.smtp_host:
+        try:
+            if not smtp_host:
                 return Response(
                     {'error': 'SMTP instellingen zijn niet geconfigureerd. Ga naar Instellingen om e-mail te configureren.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            smtp_username = (app_settings.smtp_username or '').strip()
-            from_email = (app_settings.smtp_from_email or app_settings.smtp_username or '').strip()
+            smtp_username = (smtp_username_raw or '').strip()
 
             connection = get_connection(
-                host=app_settings.smtp_host,
-                port=app_settings.smtp_port,
+                host=smtp_host,
+                port=smtp_port,
                 username=smtp_username,
-                password=app_settings.smtp_password or '',
-                use_tls=app_settings.smtp_use_tls,
+                password=smtp_password or '',
+                use_tls=smtp_use_tls,
                 fail_silently=False,
             )
 

@@ -19,6 +19,7 @@ import { getDossier, addReactie, getDossierTypes, createDossierType, getDossierB
 import { stuurDossierMail } from '@/api/organisaties'
 import type { Contactpersoon } from '@/api/organisaties'
 import { parseEmailInput } from '@/utils/email'
+import EmailProfileSelector from '@/components/EmailProfileSelector'
 
 export default function DossierDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -49,6 +50,7 @@ export default function DossierDetailPage() {
   const [sendingMail, setSendingMail] = useState(false)
   const [mailError, setMailError] = useState<string | null>(null)
   const [mailSuccess, setMailSuccess] = useState<string | null>(null)
+  const [emailProfileId, setEmailProfileId] = useState('')
   const [selectedBijlageIds, setSelectedBijlageIds] = useState<string[]>([])
   const [extraMailBijlagen, setExtraMailBijlagen] = useState<File[]>([])
 
@@ -194,6 +196,7 @@ export default function DossierDetailPage() {
         type: mailType || null,
         bijlage_ids: selectedBijlageIds,
         extra_bijlagen: extraMailBijlagen,
+        email_profile_id: emailProfileId || undefined,
       })
       setMailSuccess(result.detail)
       // Reload to show maillog
@@ -665,6 +668,11 @@ export default function DossierDetailPage() {
                 {selectedContacts.length + handmatigAdressen.length} ontvanger(s) geselecteerd
               </p>
             )}
+
+            <EmailProfileSelector
+              value={emailProfileId}
+              onChange={setEmailProfileId}
+            />
 
             <div className="flex justify-end gap-3 pt-2">
               <button

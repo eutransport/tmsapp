@@ -70,8 +70,11 @@ export async function duplicateSpreadsheet(id: string): Promise<Spreadsheet> {
 export async function sendSpreadsheetEmail(
   id: string,
   emails: string[],
+  emailProfileId?: string,
 ): Promise<{ message: string }> {
-  const response = await api.post(`/spreadsheets/${id}/send_email/`, { emails })
+  const data: Record<string, unknown> = { emails }
+  if (emailProfileId) data.email_profile_id = emailProfileId
+  const response = await api.post(`/spreadsheets/${id}/send_email/`, data)
   return response.data
 }
 

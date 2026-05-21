@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.core.mail import send_mail, EmailMessage, get_connection
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from django.db import connection
 from django.core.cache import cache
 from django.utils import timezone
@@ -36,18 +36,61 @@ def safe_str(value):
         s = s.replace(char, replacement)
     return s.encode('ascii', 'replace').decode('ascii')
 
-from .models import AppSettings, CustomFont, ReminderJobLog
+from .models import AppSettings, CustomFont, ReminderJobLog, EmailProfile, Administratie
 from .permissions import IsAdminOrManager, IsAdminOnly, IsAdminOrManagerStrict
 from .serializers import (
-    AppSettingsSerializer, 
+    AppSettingsSerializer,
     AppSettingsAdminSerializer,
     EmailTestSerializer,
     CustomFontSerializer,
     FontFamilySerializer,
     ReminderJobLogSerializer,
+    EmailProfileSerializer,
+    AdministratieSerializer,
 )
 from .pagination import SafePageNumberPagination
 from .cron_utils import get_cron_status, sync_cron_job, remove_cron_job
+
+
+def get_smtp_config(profile_id=None, user=None):
+    """
+    Return (smtp_host, smtp_port, smtp_username, smtp_password, smtp_use_tls,
+            from_email, signature, profile_or_settings)
+    from an EmailProfile (when profile_id given and user authorised) or from
+    the global AppSettings as fallback.
+
+    Raises PermissionError when the user lacks access to the requested profile.
+    Raises ValueError when profile_id is provided but does not exist.
+    """
+    if profile_id:
+        try:
+            profile = EmailProfile.objects.get(pk=profile_id)
+        except EmailProfile.DoesNotExist:
+            raise ValueError(f'E-mail profiel niet gevonden.')
+        if user and not profile.user_has_access(user):
+            raise PermissionError('Geen toegang tot dit e-mail profiel.')
+        return (
+            profile.smtp_host,
+            profile.smtp_port,
+            profile.smtp_username,
+            profile.smtp_password,
+            profile.smtp_use_tls,
+            safe_str(profile.smtp_from_email or profile.smtp_username),
+            profile.email_signature,
+            profile,
+        )
+    # Fall back to global AppSettings
+    s = AppSettings.get_settings()
+    return (
+        s.smtp_host,
+        s.smtp_port,
+        s.smtp_username,
+        s.smtp_password,
+        s.smtp_use_tls,
+        safe_str(s.smtp_from_email or s.smtp_username),
+        s.email_signature,
+        s,
+    )
 
 
 class HealthCheckView(APIView):
@@ -1002,3 +1045,131 @@ class ReminderJobLogListView(generics.ListAPIView):
 
     def get_queryset(self):
         return ReminderJobLog.objects.all().order_by('-started_at')
+
+
+class EmailProfileViewSet(viewsets.ModelViewSet):
+    """
+    CRUD for outgoing email profiles.
+
+    Admins: full access (create, list, retrieve, update, destroy).
+    Other authenticated users: can list/retrieve only the profiles they are
+    authorised to use (either no access restriction or explicitly listed).
+    """
+    serializer_class = EmailProfileSerializer
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAdminOnly()]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = EmailProfile.objects.prefetch_related('allowed_users', 'created_by')
+        if user.rol == 'admin' or user.is_staff:
+            return qs.all()
+        # Regular users see only profiles with no restriction or where they are listed
+        return qs.filter(
+            Q(allowed_users__isnull=True) | Q(allowed_users=user)
+        ).distinct()
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def test_email(self, request, pk=None):
+        """Test the SMTP settings of a specific profile by sending a test e-mail."""
+        profile = self.get_object()
+        # Only admin may test
+        if request.user.rol != 'admin' and not request.user.is_staff:
+            return Response({'error': 'Geen toegang.'}, status=status.HTTP_403_FORBIDDEN)
+
+        to_email = request.data.get('to_email')
+        if not to_email:
+            return Response({'error': 'to_email is verplicht.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not profile.smtp_host:
+            return Response(
+                {'error': 'SMTP host is niet geconfigureerd in dit profiel.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            smtp_username = safe_str(profile.smtp_username) if profile.smtp_username else ''
+            from_email = safe_str(profile.smtp_from_email or profile.smtp_username)
+            conn = get_connection(
+                backend='django.core.mail.backends.smtp.EmailBackend',
+                host=profile.smtp_host,
+                port=profile.smtp_port,
+                username=smtp_username,
+                password=profile.smtp_password or '',
+                use_tls=profile.smtp_use_tls,
+                fail_silently=False,
+            )
+            msg = EmailMessage(
+                subject=f'TMS – Test e-mail ({profile.name})',
+                body='Dit is een testbericht om het e-mailprofiel te verifiëren.',
+                from_email=from_email,
+                to=[to_email],
+                connection=conn,
+            )
+            msg.send(fail_silently=False)
+            return Response({'message': f'Test e-mail verzonden naar {to_email}.'})
+        except smtplib.SMTPAuthenticationError:
+            return Response(
+                {'error': 'Authenticatie mislukt. Controleer gebruikersnaam en wachtwoord.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(f'EmailProfile test failed ({profile.name}): {exc}')
+            return Response(
+                {'error': 'E-mail verzenden mislukt. Controleer de instellingen.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class AdministratieViewSet(viewsets.ModelViewSet):
+    """
+    CRUD for Administraties.
+
+    Admins: full access (create, list, retrieve, update, destroy).
+    Other authenticated users: cannot access this viewset except via the
+    'mijn_bedrijven' action.
+    """
+    serializer_class = AdministratieSerializer
+
+    def get_permissions(self):
+        if self.action == 'mijn_bedrijven':
+            return [IsAuthenticated()]
+        return [IsAdminOnly()]
+
+    def get_queryset(self):
+        return Administratie.objects.prefetch_related(
+            'bedrijven', 'allowed_users', 'created_by'
+        ).all()
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=False, methods=['get'], url_path='mijn-bedrijven')
+    def mijn_bedrijven(self, request):
+        """
+        Return the companies the current user may access via Administraties.
+
+        Admins receive all companies.
+        Other users receive only companies linked to an Administratie where
+        they are listed in allowed_users.
+        """
+        from apps.companies.models import Company
+        from apps.companies.serializers import CompanySerializer
+
+        if request.user.rol == 'admin' or request.user.is_staff:
+            companies = Company.objects.all().order_by('naam')
+        else:
+            companies = Company.objects.filter(
+                administraties__allowed_users=request.user
+            ).distinct().order_by('naam')
+
+        serializer = CompanySerializer(companies, many=True, context={'request': request})
+        return Response(serializer.data)
+

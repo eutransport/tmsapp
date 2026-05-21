@@ -29,6 +29,7 @@ import {
 } from '@/api/spreadsheets'
 import type { AvailableWeek, SpreadsheetCreate } from '@/api/spreadsheets'
 import { getCompanies, getMailingContacts } from '@/api/companies'
+import EmailProfileSelector from '@/components/EmailProfileSelector'
 import { getSpreadsheetTemplates } from '@/api/spreadsheetTemplates'
 import type { MailingListContact } from '@/types'
 import {
@@ -156,6 +157,7 @@ export default function SpreadsheetEditorPage() {
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
   const [manualEmail, setManualEmail] = useState('')
   const [emailSending, setEmailSending] = useState(false)
+  const [emailProfileId, setEmailProfileId] = useState('')
 
   function getCurrentWeek(): number {
     const now = new Date()
@@ -937,7 +939,7 @@ export default function SpreadsheetEditorPage() {
     if (emails.length === 0 || !id) return
     try {
       setEmailSending(true)
-      await sendSpreadsheetEmail(id, emails)
+      await sendSpreadsheetEmail(id, emails, emailProfileId || undefined)
       showSuccessMsg(t('spreadsheets.emailSent'))
       setShowEmailModal(false)
     } catch (err: any) {
@@ -1366,6 +1368,12 @@ export default function SpreadsheetEditorPage() {
                 className="input text-sm"
               />
             </div>
+
+            <EmailProfileSelector
+              value={emailProfileId}
+              onChange={setEmailProfileId}
+              className="mb-4"
+            />
 
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowEmailModal(false)} className="btn-secondary text-sm" disabled={emailSending}>

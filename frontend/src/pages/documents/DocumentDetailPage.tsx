@@ -23,6 +23,7 @@ import {
   emailSignedDocument,
   SignedDocument,
 } from '../../api/documents';
+import EmailProfileSelector from '@/components/EmailProfileSelector';
 
 export default function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -42,6 +43,7 @@ export default function DocumentDetailPage() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
+  const [emailProfileId, setEmailProfileId] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -159,6 +161,7 @@ export default function DocumentDetailPage() {
         email: emailAddress,
         subject: emailSubject || undefined,
         message: emailMessage || undefined,
+        email_profile_id: emailProfileId || undefined,
       });
       
       setEmailSuccess(result.message);
@@ -410,6 +413,11 @@ export default function DocumentDetailPage() {
                   placeholder={t('documents.messagePlaceholder', 'Voeg een persoonlijk bericht toe...')}
                 />
               </div>
+
+              <EmailProfileSelector
+                value={emailProfileId}
+                onChange={setEmailProfileId}
+              />
               
               <div className="flex justify-end space-x-3 pt-4 border-t">
                 <button

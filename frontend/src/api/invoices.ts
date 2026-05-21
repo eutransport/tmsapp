@@ -280,12 +280,14 @@ export async function sendInvoiceEmail(
   id: string,
   email?: string,
   emails?: string[],
-  useMailingList?: boolean
+  useMailingList?: boolean,
+  emailProfileId?: string
 ): Promise<{ message: string }> {
   const data: Record<string, unknown> = {}
   if (email) data.email = email
   if (emails && emails.length > 0) data.emails = emails
   if (useMailingList) data.use_mailing_list = true
+  if (emailProfileId) data.email_profile_id = emailProfileId
   const response = await api.post(`/invoicing/invoices/${id}/send_email/`, data)
   return response.data
 }

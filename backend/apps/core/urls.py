@@ -20,11 +20,15 @@ from .views import (
     ServerContainerLogsView,
     ReminderCronView,
     ReminderJobLogListView,
+    EmailProfileViewSet,
+    AdministratieViewSet,
 )
 
 # Router for viewsets
 router = DefaultRouter()
 router.register(r'fonts', CustomFontViewSet, basename='fonts')
+router.register(r'email-profiles', EmailProfileViewSet, basename='email-profiles')
+router.register(r'administraties', AdministratieViewSet, basename='administraties')
 
 urlpatterns = [
     # Health check (no auth required)
@@ -51,7 +55,7 @@ urlpatterns = [
     # Image upload
     path('upload/image/', ImageUploadView.as_view(), name='upload-image'),
     
-    # Font management (via router)
+    # Fonts, Email profiles, Administraties (via router)
     path('', include(router.urls)),
     
     # Admin settings management

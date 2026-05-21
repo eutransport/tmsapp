@@ -183,16 +183,30 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     
     Chauffeurs: alleen lezen
     Gebruikers/Admins: volledige CRUD
+    Administratie-filter: niet-admins zien alleen facturen van bedrijven die
+    zijn gekoppeld aan een Administratie waar zij toegang toe hebben.
     """
-    queryset = Invoice.objects.select_related(
-        'bedrijf', 'template', 'created_by'
-    ).prefetch_related('lines').all()
     permission_classes = [IsAuthenticated, IsAdminOrManager, HasModulePermission]
     module_permission = 'view_invoices'
     filterset_fields = ['type', 'status', 'bedrijf', 'week_number', 'week_year', 'chauffeur']
     search_fields = ['factuurnummer', 'bedrijf__naam']
     ordering_fields = ['factuurdatum', 'factuurnummer', 'totaal', 'bedrijf__naam']
-    
+
+    def get_queryset(self):
+        from apps.core.models import Administratie
+        base_qs = Invoice.objects.select_related(
+            'bedrijf', 'template', 'created_by'
+        ).prefetch_related('lines')
+        user = self.request.user
+        # Admins always see everything
+        if user.rol == 'admin' or user.is_staff:
+            return base_qs.all()
+        # Non-admin: restrict to companies in the user's accessible Administraties
+        accessible_company_ids = Administratie.objects.filter(
+            allowed_users=user
+        ).values_list('bedrijven', flat=True)
+        return base_qs.filter(bedrijf__in=accessible_company_ids)
+
     @action(detail=False, methods=['get'])
     def next_number(self, request):
         """Get next invoice number for a given type."""
@@ -641,22 +655,29 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 unique_emails.append(e)
         recipient_emails = unique_emails
         
-        # Get app settings for SMTP and company info
+        # Resolve email profile (optional) then fall back to AppSettings
+        profile_id = request.data.get('email_profile_id') or None
+        from apps.core.views import get_smtp_config
+        try:
+            smtp_host, smtp_port, smtp_username_raw, smtp_password, smtp_use_tls, from_email, signature, src = \
+                get_smtp_config(profile_id, request.user)
+        except (ValueError, PermissionError) as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
         settings = AppSettings.get_settings()
-        
-        if not settings.smtp_host:
+
+        if not smtp_host:
             return Response(
                 {'error': 'SMTP instellingen zijn niet geconfigureerd. Ga naar Instellingen om e-mail te configureren.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # Build email - only show factuurnummer in subject, no company name
         subject = f"Factuur {invoice.factuurnummer}"
-        
+
         # Build email body with optional signature
-        signature = settings.email_signature or ''
         signature_block = f"\n\n{signature}" if signature else ''
-        
+
         body = f"""Geachte,
 
 Hierbij ontvangt u factuur {invoice.factuurnummer}.
@@ -671,22 +692,20 @@ Met vriendelijke groet,
 {settings.company_name or ''}
 {settings.company_email or ''}{signature_block}
 """
-        
+
         try:
-            # Create custom SMTP connection using database settings
+            # Create custom SMTP connection
             from django.core.mail import get_connection
-            
-            # Sanitize SMTP credentials for ASCII compatibility
-            smtp_username = safe_str(settings.smtp_username) if settings.smtp_username else ''
-            from_email = safe_str(settings.smtp_from_email or settings.smtp_username)
-            
+
+            smtp_username = safe_str(smtp_username_raw) if smtp_username_raw else ''
+
             connection = get_connection(
                 backend='django.core.mail.backends.smtp.EmailBackend',
-                host=settings.smtp_host,
-                port=settings.smtp_port,
+                host=smtp_host,
+                port=smtp_port,
                 username=smtp_username,
-                password=settings.smtp_password,
-                use_tls=settings.smtp_use_tls,
+                password=smtp_password,
+                use_tls=smtp_use_tls,
                 fail_silently=False,
             )
             

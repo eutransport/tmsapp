@@ -36,6 +36,7 @@ import {
 import { getDriverReport, DriverReport, downloadDriverReportPdf, getDriverReportYears } from '@/api/timetracking'
 import { getDrivers } from '@/api/drivers'
 import clsx from '@/utils/clsx'
+import EmailProfileSelector from '@/components/EmailProfileSelector'
 
 const DAYS = [
   { key: 'ma', labelKey: 'planning.mon', fullKey: 'planning.monday' },
@@ -295,6 +296,7 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
   const [emailSending, setEmailSending] = useState(false)
   const [emailSuccess, setEmailSuccess] = useState<string | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
+  const [emailProfileId, setEmailProfileId] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
@@ -436,7 +438,7 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
       setEmailError(null)
       setEmailSuccess(null)
       
-      const result = await sendPlanningEmail(planning.id, emailAddress)
+      const result = await sendPlanningEmail(planning.id, emailAddress, emailProfileId || undefined)
       setEmailSuccess(result.message)
       
       // Close modal after 2 seconds on success
@@ -1146,6 +1148,12 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
                           className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                         />
                       </div>
+
+                      <EmailProfileSelector
+                        value={emailProfileId}
+                        onChange={setEmailProfileId}
+                        className="mb-4"
+                      />
                     </>
                   )}
 

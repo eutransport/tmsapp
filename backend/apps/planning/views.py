@@ -266,30 +266,36 @@ class WeekPlanningViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Get SMTP settings
-        settings = AppSettings.get_settings()
-        if not settings.smtp_host:
+        # Resolve email profile then fall back to AppSettings
+        profile_id = request.data.get('email_profile_id') or None
+        from apps.core.views import get_smtp_config
+        try:
+            smtp_host, smtp_port, smtp_username_raw, smtp_password, smtp_use_tls, from_email, signature, src = \
+                get_smtp_config(profile_id, request.user)
+        except (ValueError, PermissionError) as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not smtp_host:
             return Response(
                 {'error': 'SMTP is niet geconfigureerd. Vul eerst de e-mail instellingen in.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         try:
             # Generate PDF
             pdf_buffer = self._generate_planning_pdf(planning)
-            
+
             # Sanitize SMTP credentials for ASCII compatibility
-            smtp_username = safe_str(settings.smtp_username) if settings.smtp_username else ''
-            from_email = safe_str(settings.smtp_from_email or settings.smtp_username)
-            
+            smtp_username = safe_str(smtp_username_raw) if smtp_username_raw else ''
+
             # Create email connection
             connection = get_connection(
                 backend='django.core.mail.backends.smtp.EmailBackend',
-                host=settings.smtp_host,
-                port=settings.smtp_port,
+                host=smtp_host,
+                port=smtp_port,
                 username=smtp_username,
-                password=settings.smtp_password or '',
-                use_tls=settings.smtp_use_tls,
+                password=smtp_password or '',
+                use_tls=smtp_use_tls,
                 fail_silently=False,
             )
             

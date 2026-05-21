@@ -199,6 +199,7 @@ export interface EmailDocumentRequest {
   email: string;
   subject?: string;
   message?: string;
+  email_profile_id?: string;
 }
 
 export async function emailSignedDocument(

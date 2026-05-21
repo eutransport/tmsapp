@@ -39,6 +39,8 @@ import LicenseStatusCard from '@/components/licensing/LicenseStatusCard'
 import FontManagementPage from '@/pages/settings/FontManagementPage'
 import LeaveSettingsPage from '@/pages/settings/LeaveSettingsPage'
 import ServerMonitoringPanel from '@/components/ServerMonitoringPanel'
+import EmailProfilesManager from '@/components/settings/EmailProfilesManager'
+import AdministratiesManager from '@/components/settings/AdministratiesManager'
 
 export default function SettingsPage() {
   const { t } = useTranslation()
@@ -59,6 +61,7 @@ export default function SettingsPage() {
     { id: 'server', name: t('settings.server', 'Server'), icon: ServerIcon },
     { id: 'leave', name: t('settings.leaveSettings', 'Verlof'), icon: CalendarDaysIcon, link: '/settings/leave' },
     { id: 'license', name: t('settings.license', 'Licentie'), icon: ShieldCheckIcon },
+    { id: 'administraties', name: 'Administraties', icon: BuildingOfficeIcon },
   ]
   
   // State
@@ -905,6 +908,11 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </div>
+
+              {/* Email Profiles */}
+              <div className="border-t pt-8">
+                <EmailProfilesManager />
+              </div>
             </div>
           )}
 
@@ -1417,6 +1425,21 @@ export default function SettingsPage() {
               <LicenseStatusCard />
             </div>
           )}
+
+          {/* Administraties Tab */}
+          {activeTab === 'administraties' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Administraties</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Groepeer bedrijven in administraties en geef gebruikers gerichte inzagerechten op facturen.
+                  Gebruikers zien alleen facturen van bedrijven die horen bij hun administraties.
+                  Admins hebben altijd toegang tot alle facturen.
+                </p>
+              </div>
+              <AdministratiesManager />
+            </div>
+          )}
     </>
   )
 
@@ -1464,81 +1487,50 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Desktop Tabs - hidden on mobile */}
-      <div className="hidden md:block border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8 overflow-x-auto">
-          {tabs.map((tab) => (
-            tab.link ? (
-              <Link
-                key={tab.id}
-                to={tab.link}
-                className="flex items-center gap-2 py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap"
-              >
-                <tab.icon className="h-5 w-5" />
-                {tab.name}
-              </Link>
-            ) : (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`
-                  flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap
-                  ${activeTab === tab.id
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-                `}
-              >
-                <tab.icon className="h-5 w-5" />
-                {tab.name}
-              </button>
-            )
-          ))}
-        </nav>
-      </div>
-
-      {/* Mobile Accordion Navigation with inline content */}
-      <div className="md:hidden space-y-2">
+      {/* Accordion Navigation for all screen sizes */}
+      <div className="space-y-2">
         {tabs.map((tab) => {
           const isOpen = activeTab === tab.id
           return (
             <div key={tab.id}>
-              <button
-                onClick={() => setActiveTab(isOpen ? '' : tab.id)}
-                className={`flex items-center gap-3 w-full p-4 bg-white rounded-xl border shadow-sm text-sm font-medium transition-colors ${
-                  isOpen
-                    ? 'border-primary-300 text-primary-600 bg-primary-50 rounded-b-none'
-                    : 'border-gray-200 text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <tab.icon className={`h-5 w-5 ${isOpen ? 'text-primary-600' : 'text-gray-400'}`} />
-                {tab.name}
-                <ChevronDownIcon className={`h-4 w-4 ml-auto transition-transform duration-200 ${isOpen ? 'rotate-180 text-primary-600' : 'text-gray-400'}`} />
-              </button>
-              {isOpen && (
-                <div className="bg-white rounded-b-xl border border-t-0 border-primary-300 shadow-sm p-4">
-                  {tab.id === 'fonts' ? (
-                    <FontManagementPage embedded />
-                  ) : tab.id === 'leave' ? (
-                    <LeaveSettingsPage embedded />
-                  ) : (
-                    renderTabContent()
+              {tab.link ? (
+                <Link
+                  to={tab.link}
+                  className="flex items-center gap-3 w-full p-4 bg-white rounded-xl border border-gray-200 shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <tab.icon className="h-5 w-5 text-gray-400" />
+                  {tab.name}
+                </Link>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setActiveTab(isOpen ? '' : tab.id)}
+                    className={`flex items-center gap-3 w-full p-4 bg-white rounded-xl border shadow-sm text-sm font-medium transition-colors ${
+                      isOpen
+                        ? 'border-primary-300 text-primary-600 bg-primary-50 rounded-b-none'
+                        : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <tab.icon className={`h-5 w-5 ${isOpen ? 'text-primary-600' : 'text-gray-400'}`} />
+                    {tab.name}
+                    <ChevronDownIcon className={`h-4 w-4 ml-auto transition-transform duration-200 ${isOpen ? 'rotate-180 text-primary-600' : 'text-gray-400'}`} />
+                  </button>
+                  {isOpen && (
+                    <div className="bg-white rounded-b-xl border border-t-0 border-primary-300 shadow-sm p-6">
+                      {tab.id === 'fonts' ? (
+                        <FontManagementPage embedded />
+                      ) : tab.id === 'leave' ? (
+                        <LeaveSettingsPage embedded />
+                      ) : (
+                        renderTabContent()
+                      )}
+                    </div>
                   )}
-                </div>
+                </>
               )}
             </div>
           )
         })}
-      </div>
-
-      {/* Desktop Tab Content */}
-      <div className="hidden md:block">
-        {activeTab && !tabs.find(t => t.id === activeTab)?.link && (
-        <div className="card">
-          <div className="p-6">
-            {renderTabContent()}
-          </div>
-        </div>
-        )}
       </div>
 
       {/* Save Button (sticky at bottom for mobile) */}

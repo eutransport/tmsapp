@@ -157,8 +157,10 @@ export async function getMyPlanning(weeknummer: number, jaar: number): Promise<M
 /**
  * Send planning as PDF via email
  */
-export async function sendPlanningEmail(id: string, email: string): Promise<{ message: string }> {
-  const response = await api.post(`/planning/weeks/${id}/send_email/`, { email })
+export async function sendPlanningEmail(id: string, email: string, emailProfileId?: string): Promise<{ message: string }> {
+  const data: Record<string, unknown> = { email }
+  if (emailProfileId) data.email_profile_id = emailProfileId
+  const response = await api.post(`/planning/weeks/${id}/send_email/`, data)
   return response.data
 }
 

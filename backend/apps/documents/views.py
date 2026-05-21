@@ -318,21 +318,26 @@ class SignedDocumentViewSet(viewsets.ModelViewSet):
         
         recipient_email = data['email']
         
-        # Get app settings for SMTP
-        settings = AppSettings.get_settings()
-        
-        if not settings.smtp_host:
+        # Resolve email profile then fall back to AppSettings
+        profile_id = request.data.get('email_profile_id') or None
+        from apps.core.views import get_smtp_config
+        try:
+            smtp_host, smtp_port, smtp_username_raw, smtp_password, smtp_use_tls, _from_email, signature, _src = \
+                get_smtp_config(profile_id, request.user)
+        except (ValueError, PermissionError) as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not smtp_host:
             return Response(
                 {'error': 'SMTP instellingen zijn niet geconfigureerd. Ga naar Instellingen om e-mail te configureren.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # Build subject
         subject = data.get('subject') or f'Ondertekend document: {document.title}'
-        
+
         # Build email body
         user_message = data.get('message', '').strip()
-        signature = settings.email_signature or ''
         signature_block = f"\n\n{signature}" if signature else ''
         
         body = f"""Geachte,
@@ -351,18 +356,18 @@ Met vriendelijke groet,
 """
         
         try:
-            # Create custom SMTP connection using database settings
+            # Create custom SMTP connection
             connection = get_connection(
                 backend='django.core.mail.backends.smtp.EmailBackend',
-                host=settings.smtp_host,
-                port=settings.smtp_port,
-                username=settings.smtp_username or '',
-                password=settings.smtp_password,
-                use_tls=settings.smtp_use_tls,
+                host=smtp_host,
+                port=smtp_port,
+                username=smtp_username_raw or '',
+                password=smtp_password,
+                use_tls=smtp_use_tls,
                 fail_silently=False,
             )
-            
-            from_email = settings.smtp_from_email or settings.smtp_username
+
+            from_email = _from_email
             
             email = EmailMessage(
                 subject=subject,

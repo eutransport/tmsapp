@@ -38,6 +38,8 @@ import {
   InvoiceFilters,
 } from '@/api/invoices'
 import { getCompanies, getMailingContacts } from '@/api/companies'
+import { getMijnBedrijven } from '@/api/administraties'
+import EmailProfileSelector from '@/components/EmailProfileSelector'
 import clsx from '@/utils/clsx'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -58,6 +60,7 @@ export default function InvoicesPage() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const isReadOnly = user?.rol === 'chauffeur'
+  const isAdmin = user?.rol === 'admin'
   
   // Data state
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -87,6 +90,7 @@ export default function InvoicesPage() {
   const [mailingContacts, setMailingContacts] = useState<MailingListContact[]>([])
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
   const [emailMode, setEmailMode] = useState<'mailing' | 'manual'>('mailing')
+  const [emailProfileId, setEmailProfileId] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -102,8 +106,14 @@ export default function InvoicesPage() {
 
   const loadInitialData = async () => {
     try {
-      const companiesRes = await getCompanies({ page_size: 100 })
-      setCompanies(companiesRes.results)
+      if (isAdmin) {
+        const companiesRes = await getCompanies({ page_size: 500 })
+        setCompanies(companiesRes.results)
+      } else {
+        // Non-admins only see companies from their Administraties
+        const accessible = await getMijnBedrijven()
+        setCompanies(accessible)
+      }
     } catch (err) {
       console.error('Failed to load initial data:', err)
     }
@@ -285,12 +295,13 @@ export default function InvoicesPage() {
       setEmailSending(true)
       setError(null)
       
-      const result = await sendInvoiceEmail(selectedInvoice.id, undefined, emails)
+      const result = await sendInvoiceEmail(selectedInvoice.id, undefined, emails, undefined, emailProfileId || undefined)
       
       setShowEmailModal(false)
       setEmailAddress('')
       setSelectedEmails(new Set())
       setMailingContacts([])
+      setEmailProfileId('')
       setSuccessMessage(result.message || t('invoices.invoiceSent'))
       loadInvoices()
       
@@ -511,33 +522,37 @@ export default function InvoicesPage() {
               ))}
             </div>
             
-            {/* Company filter */}
-            <div className="flex flex-wrap items-center gap-1">
-              <span className="text-xs font-medium text-gray-500 uppercase mr-0.5">{t('invoices.company')}:</span>
-              <button
-                onClick={() => handleFilterChange('bedrijf', '')}
-                className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${!filters.bedrijf ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-              >
-                {t('invoices.allCompanies')}
-              </button>
-              {(showMoreCompanies ? companies : companies.slice(0, 3)).map(company => (
-                <button
-                  key={company.id}
-                  onClick={() => handleFilterChange('bedrijf', company.id.toString())}
-                  className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${filters.bedrijf === company.id.toString() ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-                >
-                  {company.naam}
-                </button>
-              ))}
-              {companies.length > 3 && (
-                <button
-                  onClick={() => setShowMoreCompanies(!showMoreCompanies)}
-                  className="px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium text-primary-600 hover:bg-primary-50 transition-colors"
-                >
-                  {showMoreCompanies ? t('common.showLess') : t('common.showMore')}
-                </button>
-              )}
-            </div>
+            {/* Company filter – admins see all companies, non-admins see only their accessible companies */}
+            {companies.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-xs font-medium text-gray-500 uppercase mr-0.5">{t('invoices.company')}:</span>
+                {isAdmin && (
+                  <button
+                    onClick={() => handleFilterChange('bedrijf', '')}
+                    className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${!filters.bedrijf ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    {t('invoices.allCompanies')}
+                  </button>
+                )}
+                {(showMoreCompanies ? companies : companies.slice(0, isAdmin ? 3 : 10)).map(company => (
+                  <button
+                    key={company.id}
+                    onClick={() => handleFilterChange('bedrijf', company.id.toString())}
+                    className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${filters.bedrijf === company.id.toString() ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    {company.naam}
+                  </button>
+                ))}
+                {companies.length > (isAdmin ? 3 : 10) && (
+                  <button
+                    onClick={() => setShowMoreCompanies(!showMoreCompanies)}
+                    className="px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium text-primary-600 hover:bg-primary-50 transition-colors"
+                  >
+                    {showMoreCompanies ? t('common.showLess') : t('common.showMore')}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1400,6 +1415,12 @@ export default function InvoicesPage() {
                       <p className="mt-3 text-xs text-gray-500">
                         {t('invoices.smtpNote')}
                       </p>
+
+                      <EmailProfileSelector
+                        value={emailProfileId}
+                        onChange={setEmailProfileId}
+                        className="mt-3"
+                      />
 
                       {/* Bijlage indicator */}
                       {selectedInvoice?.bijlage && (
