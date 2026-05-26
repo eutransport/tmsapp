@@ -1083,7 +1083,8 @@ class EmailProfileViewSet(viewsets.ModelViewSet):
         if request.user.rol != 'admin' and not request.user.is_staff:
             return Response({'error': 'Geen toegang.'}, status=status.HTTP_403_FORBIDDEN)
 
-        to_email = request.data.get('to_email')
+        # Backward compatible: accept both the new key (`to_email`) and legacy key (`email`).
+        to_email = request.data.get('to_email') or request.data.get('email')
         if not to_email:
             return Response({'error': 'to_email is verplicht.'}, status=status.HTTP_400_BAD_REQUEST)
 

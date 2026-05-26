@@ -76,6 +76,6 @@ export async function deleteEmailProfile(id: string): Promise<void> {
 }
 
 export async function testEmailProfile(id: string, email: string): Promise<{ message: string }> {
-  const response = await api.post(`/core/email-profiles/${id}/test_email/`, { email })
+  const response = await api.post(`/core/email-profiles/${id}/test_email/`, { to_email: email })
   return response.data
 }

@@ -96,6 +96,27 @@ export default function EmailProfilesManager() {
     loadData()
   }, [])
 
+  const getErrorMessage = (err: unknown, fallback: string): string => {
+    const maybeError = err as {
+      response?: {
+        data?: {
+          error?: string
+          message?: string
+          detail?: string
+        }
+      }
+      message?: string
+    }
+
+    return (
+      maybeError?.response?.data?.error ||
+      maybeError?.response?.data?.message ||
+      maybeError?.response?.data?.detail ||
+      maybeError?.message ||
+      fallback
+    )
+  }
+
   const loadData = async () => {
     try {
       setLoading(true)
@@ -106,7 +127,7 @@ export default function EmailProfilesManager() {
       setProfiles(profileList)
       setAllUsers(usersResp.results ?? [])
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Fout bij laden')
+      setError(getErrorMessage(e, 'Fout bij laden'))
     } finally {
       setLoading(false)
     }
@@ -181,7 +202,7 @@ export default function EmailProfilesManager() {
       setModalOpen(false)
       await loadData()
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Opslaan mislukt')
+      setError(getErrorMessage(e, 'Opslaan mislukt'))
     } finally {
       setSaving(false)
     }
@@ -194,7 +215,7 @@ export default function EmailProfilesManager() {
       setSuccess('Profiel verwijderd')
       await loadData()
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Verwijderen mislukt')
+      setError(getErrorMessage(e, 'Verwijderen mislukt'))
     }
   }
 
@@ -205,7 +226,7 @@ export default function EmailProfilesManager() {
       const result = await testEmailProfile(id, testEmailAddr)
       setSuccess(result.message)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Test mislukt')
+      setError(getErrorMessage(e, 'Test mislukt'))
     } finally {
       setTestingId(null)
     }
