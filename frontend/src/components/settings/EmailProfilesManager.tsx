@@ -22,6 +22,8 @@ import {listEmailProfiles,
   updateEmailProfile,
   deleteEmailProfile,
   testEmailProfile,
+  uploadEmailProfileSignatureImage,
+  deleteEmailProfileSignatureImage,
   type EmailProfile,
   type EmailProfileWrite,
 } from '@/api/emailProfiles'
@@ -44,6 +46,7 @@ interface ProfileFormState {
   oauth_client_secret: string
   oauth_tenant_id: string
   email_signature: string
+  email_signature_image: string | null
   allowed_users: string[]
 }
 
@@ -62,6 +65,7 @@ const emptyForm = (): ProfileFormState => ({
   oauth_client_secret: '',
   oauth_tenant_id: '',
   email_signature: '',
+  email_signature_image: null,
   allowed_users: [],
 })
 
@@ -80,6 +84,7 @@ export default function EmailProfilesManager() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<ProfileFormState>(emptyForm())
   const [saving, setSaving] = useState(false)
+  const [uploadingSignatureImage, setUploadingSignatureImage] = useState(false)
 
   // Password visibility
   const [showSmtp, setShowSmtp] = useState(false)
@@ -158,6 +163,7 @@ export default function EmailProfilesManager() {
       oauth_client_secret: '',    // never pre-fill
       oauth_tenant_id: profile.oauth_tenant_id,
       email_signature: profile.email_signature,
+      email_signature_image: profile.email_signature_image,
       allowed_users: profile.allowed_users,
     })
     setShowSmtp(false)
@@ -229,6 +235,42 @@ export default function EmailProfilesManager() {
       setError(getErrorMessage(e, 'Test mislukt'))
     } finally {
       setTestingId(null)
+    }
+  }
+
+  const handleSignatureImageUpload = async (file: File) => {
+    if (!editingId) {
+      setError('Sla het profiel eerst op voordat je een handtekeningafbeelding uploadt.')
+      return
+    }
+
+    try {
+      setUploadingSignatureImage(true)
+      setError(null)
+      const result = await uploadEmailProfileSignatureImage(editingId, file)
+      setForm(f => ({ ...f, email_signature_image: result.email_signature_image }))
+      setSuccess('Handtekeningafbeelding opgeslagen')
+      await loadData()
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Uploaden van handtekeningafbeelding mislukt'))
+    } finally {
+      setUploadingSignatureImage(false)
+    }
+  }
+
+  const handleSignatureImageDelete = async () => {
+    if (!editingId) return
+    try {
+      setUploadingSignatureImage(true)
+      setError(null)
+      await deleteEmailProfileSignatureImage(editingId)
+      setForm(f => ({ ...f, email_signature_image: null }))
+      setSuccess('Handtekeningafbeelding verwijderd')
+      await loadData()
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Verwijderen van handtekeningafbeelding mislukt'))
+    } finally {
+      setUploadingSignatureImage(false)
     }
   }
 
@@ -563,6 +605,51 @@ export default function EmailProfilesManager() {
                   className="input-field"
                   placeholder="Met vriendelijke groet,&#10;&#10;Naam&#10;Functie"
                 />
+
+                <div className="mt-3 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="text-sm text-gray-700">Handtekeningafbeelding (PNG/JPG, max 2MB)</label>
+                    {editingId ? (
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                        disabled={uploadingSignatureImage}
+                        onChange={e => {
+                          const file = e.target.files?.[0]
+                          if (file) handleSignatureImageUpload(file)
+                          e.currentTarget.value = ''
+                        }}
+                        className="block text-sm text-gray-600"
+                      />
+                    ) : (
+                      <span className="text-xs text-gray-400">Beschikbaar na opslaan van het profiel</span>
+                    )}
+                    {form.email_signature_image && editingId && (
+                      <button
+                        type="button"
+                        onClick={handleSignatureImageDelete}
+                        disabled={uploadingSignatureImage}
+                        className="text-xs px-2 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50"
+                      >
+                        Afbeelding verwijderen
+                      </button>
+                    )}
+                    {uploadingSignatureImage && (
+                      <span className="text-xs text-gray-400">Bezig met uploaden...</span>
+                    )}
+                  </div>
+
+                  {form.email_signature_image && (
+                    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                      <p className="text-xs text-gray-500 mb-2">Voorbeeld handtekeningafbeelding</p>
+                      <img
+                        src={form.email_signature_image}
+                        alt="Handtekening afbeelding"
+                        className="max-h-24 max-w-xs object-contain"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Authorized users (admin only) */}

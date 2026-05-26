@@ -25,6 +25,7 @@ export interface EmailProfile {
   oauth_client_id: string
   oauth_tenant_id: string
   email_signature: string
+  email_signature_image: string | null
   allowed_users: string[]              // UUIDs (write)
   allowed_users_info: EmailProfileUserInfo[]  // (read)
   has_oauth_secret: boolean
@@ -77,5 +78,19 @@ export async function deleteEmailProfile(id: string): Promise<void> {
 
 export async function testEmailProfile(id: string, email: string): Promise<{ message: string }> {
   const response = await api.post(`/core/email-profiles/${id}/test_email/`, { to_email: email })
+  return response.data
+}
+
+export async function uploadEmailProfileSignatureImage(id: string, file: File): Promise<{ message: string; email_signature_image: string | null }> {
+  const formData = new FormData()
+  formData.append('image', file)
+  const response = await api.post(`/core/email-profiles/${id}/upload-signature-image/`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
+}
+
+export async function deleteEmailProfileSignatureImage(id: string): Promise<{ message: string }> {
+  const response = await api.delete(`/core/email-profiles/${id}/upload-signature-image/`)
   return response.data
 }

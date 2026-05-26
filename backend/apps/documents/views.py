@@ -320,7 +320,7 @@ class SignedDocumentViewSet(viewsets.ModelViewSet):
         
         # Resolve email profile then fall back to AppSettings
         profile_id = request.data.get('email_profile_id') or None
-        from apps.core.views import get_smtp_config
+        from apps.core.views import get_smtp_config, signature_to_blocks, plain_text_to_html
         try:
             smtp_host, smtp_port, smtp_username_raw, smtp_password, smtp_use_tls, _from_email, signature, _src = \
                 get_smtp_config(profile_id, request.user)
@@ -338,9 +338,9 @@ class SignedDocumentViewSet(viewsets.ModelViewSet):
 
         # Build email body
         user_message = data.get('message', '').strip()
-        signature_block = f"\n\n{signature}" if signature else ''
+        signature_text_block, signature_html_block = signature_to_blocks(signature, _src)
         
-        body = f"""Geachte,
+        base_body = f"""Geachte,
 
 Hierbij ontvangt u het ondertekende document "{document.title}".
 
@@ -352,8 +352,10 @@ Ondertekend op: {document.signed_at.strftime('%d-%m-%Y %H:%M') if document.signe
 
 Met vriendelijke groet,
 {settings.company_name or ''}
-{settings.company_email or ''}{signature_block}
-"""
+{settings.company_email or ''}"""
+
+        body = f"{base_body}{signature_text_block}"
+        body_html = f"{plain_text_to_html(base_body)}{signature_html_block}"
         
         try:
             # Create custom SMTP connection
@@ -371,11 +373,12 @@ Met vriendelijke groet,
             
             email = EmailMessage(
                 subject=subject,
-                body=body,
+                body=body_html,
                 from_email=from_email,
                 to=[recipient_email],
                 connection=connection,
             )
+            email.content_subtype = 'html'
             
             # Attach the signed PDF
             document.signed_file.seek(0)

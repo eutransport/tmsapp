@@ -657,7 +657,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         
         # Resolve email profile (optional) then fall back to AppSettings
         profile_id = request.data.get('email_profile_id') or None
-        from apps.core.views import get_smtp_config
+        from apps.core.views import get_smtp_config, signature_to_blocks, plain_text_to_html
         try:
             smtp_host, smtp_port, smtp_username_raw, smtp_password, smtp_use_tls, from_email, signature, src = \
                 get_smtp_config(profile_id, request.user)
@@ -675,10 +675,10 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         # Build email - only show factuurnummer in subject, no company name
         subject = f"Factuur {invoice.factuurnummer}"
 
-        # Build email body with optional signature
-        signature_block = f"\n\n{signature}" if signature else ''
+        # Build email body with optional signature (including inline image when configured)
+        signature_text_block, signature_html_block = signature_to_blocks(signature, src)
 
-        body = f"""Geachte,
+        base_body = f"""Geachte,
 
 Hierbij ontvangt u factuur {invoice.factuurnummer}.
 
@@ -690,8 +690,10 @@ Bedrag: € {invoice.totaal:.2f}
 
 Met vriendelijke groet,
 {settings.company_name or ''}
-{settings.company_email or ''}{signature_block}
-"""
+{settings.company_email or ''}"""
+
+        body = f"{base_body}{signature_text_block}"
+        body_html = f"{plain_text_to_html(base_body)}{signature_html_block}"
 
         try:
             # Create custom SMTP connection
@@ -711,11 +713,12 @@ Met vriendelijke groet,
             
             email = EmailMessage(
                 subject=subject,
-                body=body,
+                body=body_html,
                 from_email=from_email,
                 to=recipient_emails,
                 connection=connection,
             )
+            email.content_subtype = 'html'
             
             # Generate and attach PDF
             from .pdf_generator import generate_invoice_pdf

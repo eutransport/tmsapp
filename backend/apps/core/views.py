@@ -1,9 +1,12 @@
 """
 Core app views.
 """
+import base64
+import mimetypes
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from html import escape
 
 from rest_framework import status, viewsets, generics
 from rest_framework.decorators import action
@@ -91,6 +94,44 @@ def get_smtp_config(profile_id=None, user=None):
         s.email_signature,
         s,
     )
+
+
+def signature_to_blocks(signature_text='', source_obj=None):
+    """Return plain-text and HTML signature blocks, with optional inline image."""
+    text = (signature_text or '').strip()
+    text_block = f"\n\n{text}" if text else ''
+
+    html_parts = []
+    if text:
+        html_parts.append(escape(text).replace('\n', '<br>'))
+
+    image_field = getattr(source_obj, 'email_signature_image', None)
+    if image_field:
+        try:
+            with image_field.open('rb') as fh:
+                image_bytes = fh.read()
+            mime_type = mimetypes.guess_type(image_field.name or '')[0] or 'image/png'
+            encoded = base64.b64encode(image_bytes).decode('ascii')
+            html_parts.append(
+                (
+                    '<div style="margin-top:8px;">'
+                    f'<img src="data:{mime_type};base64,{encoded}" alt="Handtekening" '
+                    'style="max-width:320px;max-height:120px;" />'
+                    '</div>'
+                )
+            )
+            text_block = f"{text_block}\n\n[Handtekening afbeelding]"
+        except Exception:
+            # Signature image is optional; keep email flow running even when image decoding fails.
+            pass
+
+    html_block = f"<br><br>{''.join(html_parts)}" if html_parts else ''
+    return text_block, html_block
+
+
+def plain_text_to_html(text):
+    """Convert plain text to simple HTML while preserving line breaks."""
+    return escape(text).replace('\n', '<br>')
 
 
 class HealthCheckView(APIView):
@@ -1074,6 +1115,40 @@ class EmailProfileViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser], url_path='upload-signature-image')
+    def upload_signature_image(self, request, pk=None):
+        """Upload/replace an image used in the e-mail signature for this profile."""
+        profile = self.get_object()
+        image_file = request.FILES.get('image')
+        if not image_file:
+            return Response({'error': 'Bestand ontbreekt. Gebruik veldnaam: image.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if (image_file.size or 0) > 2 * 1024 * 1024:
+            return Response({'error': 'Afbeelding is te groot (max 2MB).'}, status=status.HTTP_400_BAD_REQUEST)
+
+        content_type = (getattr(image_file, 'content_type', '') or '').lower()
+        if not content_type.startswith('image/'):
+            return Response({'error': 'Alleen afbeeldingsbestanden zijn toegestaan.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile.email_signature_image = image_file
+        profile.save(update_fields=['email_signature_image', 'updated_at'])
+
+        image_url = profile.email_signature_image.url if profile.email_signature_image else None
+        return Response({
+            'message': 'Handtekeningafbeelding opgeslagen.',
+            'email_signature_image': image_url,
+        })
+
+    @action(detail=True, methods=['delete'], url_path='upload-signature-image')
+    def delete_signature_image(self, request, pk=None):
+        """Remove the signature image for this profile."""
+        profile = self.get_object()
+        if profile.email_signature_image:
+            profile.email_signature_image.delete(save=False)
+            profile.email_signature_image = None
+            profile.save(update_fields=['email_signature_image', 'updated_at'])
+        return Response({'message': 'Handtekeningafbeelding verwijderd.'}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
     def test_email(self, request, pk=None):

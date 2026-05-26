@@ -223,7 +223,7 @@ class EmailProfileSerializer(serializers.ModelSerializer):
             'smtp_host', 'smtp_port', 'smtp_username', 'smtp_password',
             'smtp_use_tls', 'smtp_from_email',
             'oauth_enabled', 'oauth_client_id', 'oauth_client_secret', 'oauth_tenant_id',
-            'email_signature',
+            'email_signature', 'email_signature_image',
             'allowed_users', 'allowed_users_info',
             'has_smtp_password', 'has_oauth_secret',
             'created_by_name', 'created_at', 'updated_at',

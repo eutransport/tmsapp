@@ -666,6 +666,12 @@ class EmailProfile(models.Model):
 
     # Email signature (overrides global signature when set)
     email_signature = models.TextField(blank=True, verbose_name='E-mail Handtekening')
+    email_signature_image = models.ImageField(
+        upload_to='signatures/email_profiles/',
+        blank=True,
+        null=True,
+        verbose_name='E-mail Handtekening Afbeelding',
+    )
 
     # Access control: empty = all users; populated = only listed users
     allowed_users = models.ManyToManyField(
