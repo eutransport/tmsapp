@@ -566,6 +566,8 @@ class InvoicePDFGenerator:
         data = [headers]
         
         for line in self.invoice.lines.order_by('volgorde', 'created_at'):
+            # Info-only regels (bv. werktijden): alleen omschrijving tonen, rest leeg
+            is_info_line = bool(line.extra_data and line.extra_data.get('info_line'))
             row = []
             for col in (self.columns or [{'id': 'omschrijving'}, {'id': 'aantal'}, {'id': 'prijs'}, {'id': 'totaal'}]):
                 col_id = col.get('id', '')
@@ -573,6 +575,8 @@ class InvoicePDFGenerator:
                 
                 if col_id == 'omschrijving' or col_type == 'text':
                     row.append(Paragraph(line.omschrijving, self.styles['Normal']))
+                elif is_info_line:
+                    row.append('')
                 elif col_id == 'aantal' or col_type == 'aantal':
                     val = line.aantal
                     row.append(f"{val:.2f}".rstrip('0').rstrip('.') if val else '0')

@@ -42,6 +42,7 @@ interface InvoiceLineData {
   id: string // Local temp id
   values: Record<string, number | string> // Column values by column id
   timeEntryId?: string // If imported from time entry
+  isInfoLine?: boolean // Info-only line (e.g. werktijden): no aantal/prijs/totaal rendered
 }
 
 interface ChauffeurWeekGroup {
@@ -1401,10 +1402,10 @@ export default function InvoiceCreatePage() {
       return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null
     }
 
-    // Helper: build a 'werktijden' info line (0 aantal/prijs, alleen omschrijving)
+    // Helper: build a 'werktijden' info line (alleen omschrijving, geen aantal/prijs/totaal)
     const buildWorkTimeLine = (begin: string | null, eind: string | null): InvoiceLineData => {
       const values: Record<string, number | string> = {}
-      const tekst = `   ↳ Werktijden: ${begin || '-'} - ${eind || '-'}`
+      const tekst = `Werktijden: ${begin || '-'} - ${eind || '-'}`
       columns.forEach(col => {
         if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
           values[col.id] = tekst
@@ -1412,12 +1413,7 @@ export default function InvoiceCreatePage() {
           values[col.id] = 0
         }
       })
-      columns.forEach(col => {
-        if (col.type === 'berekend' && col.formule) {
-          values[col.id] = evaluateFormula(col.formule, values, defaults)
-        }
-      })
-      return { id: generateId(), values }
+      return { id: generateId(), values, isInfoLine: true }
     }
 
     // Create lines for each time entry (day) — optioneel met werktijden-regel eronder
@@ -1577,10 +1573,10 @@ export default function InvoiceCreatePage() {
       return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null
     }
 
-    // Helper: build a 'werktijden' info line
+    // Helper: build a 'werktijden' info line (alleen omschrijving, geen aantal/prijs/totaal)
     const buildWorkTimeLine = (begin: string | null, eind: string | null): InvoiceLineData => {
       const values: Record<string, number | string> = {}
-      const tekst = `   ↳ Werktijden: ${begin || '-'} - ${eind || '-'}`
+      const tekst = `Werktijden: ${begin || '-'} - ${eind || '-'}`
       columns.forEach(col => {
         if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
           values[col.id] = tekst
@@ -1588,12 +1584,7 @@ export default function InvoiceCreatePage() {
           values[col.id] = 0
         }
       })
-      columns.forEach(col => {
-        if (col.type === 'berekend' && col.formule) {
-          values[col.id] = evaluateFormula(col.formule, values, defaults)
-        }
-      })
-      return { id: generateId(), values }
+      return { id: generateId(), values, isInfoLine: true }
     }
 
     // Create lines for each imported entry — optioneel met werktijden-regel eronder
@@ -1860,7 +1851,7 @@ export default function InvoiceCreatePage() {
       // Create invoice lines
       const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
       
-      for (const line of lines) {
+      for (const [index, line] of lines.entries()) {
         // Find omschrijving column
         const omschrijvingCol = columns.find(c => c.type === 'text' || c.id === 'omschrijving')
         const aantalCol = columns.find(c => c.type === 'aantal' || c.id === 'aantal')
@@ -1871,13 +1862,18 @@ export default function InvoiceCreatePage() {
         
         const lineData: any = {
           invoice: invoice.id,
+          volgorde: index,
           omschrijving: omschrijvingCol ? String(line.values[omschrijvingCol.id]) : 'Regel',
-          aantal: roundTo2(aantalCol ? Number(line.values[aantalCol.id]) || 1 : 1),
-          prijs_per_eenheid: roundTo2(prijsCol 
+          aantal: line.isInfoLine ? 0 : roundTo2(aantalCol ? Number(line.values[aantalCol.id]) || 1 : 1),
+          prijs_per_eenheid: line.isInfoLine ? 0 : roundTo2(prijsCol 
             ? Number(line.values[prijsCol.id]) || 0 
             : totaalColumn 
               ? Number(line.values[totaalColumn.id]) || 0 
               : 0),
+        }
+
+        if (line.isInfoLine) {
+          lineData.extra_data = { info_line: true }
         }
         
         // Only add time_entry if it exists
