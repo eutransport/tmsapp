@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, PlusIcon, TrashIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { 
   getInvoice, 
   updateInvoice, 
@@ -75,12 +75,12 @@ export default function InvoiceEditPage() {
 
   // Calculate totals
   const calculateTotals = () => {
-    let subtotaal = lines.reduce((sum, line) => sum + (line.totaal || 0), 0)
+    let subtotaal = lines.reduce((sum, line) => sum + (Number(line.totaal) || 0), 0)
     // Creditfacturen: bedragen negatief tonen
     if (invoice?.type === 'credit') {
       subtotaal = -Math.abs(subtotaal)
     }
-    const btw = subtotaal * (btwPercentage / 100)
+    const btw = subtotaal * ((Number(btwPercentage) || 0) / 100)
     const totaal = subtotaal + btw
     return { subtotaal, btw, totaal }
   }
@@ -129,6 +129,20 @@ export default function InvoiceEditPage() {
       await deleteInvoiceLine(lineId)
       setLines(lines.filter(l => l.id !== lineId))
       toast.success(t('invoices.lineDeleted'))
+    } catch (err) {
+      toast.error(t('timeEntries.deleteFailed'))
+    }
+  }
+
+  // Delete ALL lines
+  const handleDeleteAllLines = async () => {
+    if (lines.length === 0) return
+    if (!confirm(`Weet je zeker dat je alle ${lines.length} regels wilt verwijderen?`)) return
+
+    try {
+      await Promise.all(lines.map(l => deleteInvoiceLine(l.id)))
+      setLines([])
+      toast.success('Alle regels verwijderd')
     } catch (err) {
       toast.error(t('timeEntries.deleteFailed'))
     }
@@ -250,13 +264,36 @@ export default function InvoiceEditPage() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">{t('invoices.lines')}</h2>
-              <button
-                onClick={handleAddLine}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <PlusIcon className="h-4 w-4" />
-                {t('invoices.addLine')}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (!confirm('Hiermee ga je naar het importscherm waar je opnieuw uren of regels kunt toevoegen aan deze factuur. De bestaande regels blijven staan totdat je daar op opslaan klikt (dan worden ze vervangen). Doorgaan?')) return
+                    navigate(`/invoices/new?reimport=${id}`)
+                  }}
+                  className="btn-secondary flex items-center gap-2 text-primary-600"
+                  title="Open importscherm om uren of regels opnieuw te importeren"
+                >
+                  <ArrowPathIcon className="h-4 w-4" />
+                  Opnieuw importeren
+                </button>
+                {lines.length > 0 && (
+                  <button
+                    onClick={handleDeleteAllLines}
+                    className="btn-secondary flex items-center gap-2 text-red-600 hover:bg-red-50 border-red-200"
+                    title="Verwijder alle regels"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                    Alles verwijderen
+                  </button>
+                )}
+                <button
+                  onClick={handleAddLine}
+                  className="btn-secondary flex items-center gap-2"
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  {t('invoices.addLine')}
+                </button>
+              </div>
             </div>
 
             {lines.length === 0 ? (

@@ -7,7 +7,7 @@
  * - Import time entries by week
  */
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeftIcon,
@@ -20,7 +20,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
 } from '@heroicons/react/24/outline'
-import { getTemplates, createInvoice, createInvoiceLine, getNextInvoiceNumber } from '@/api/invoices'
+import { getTemplates, createInvoice, createInvoiceLine, getNextInvoiceNumber, getInvoice, getInvoiceLines, updateInvoice, deleteInvoiceLine } from '@/api/invoices'
 import { getCompanies } from '@/api/companies'
 import { getTimeEntries } from '@/api/timetracking'
 import { getSpreadsheets } from '@/api/spreadsheets'
@@ -1241,6 +1241,8 @@ function SpreadsheetImportModal({
 export default function InvoiceCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const reimportId = searchParams.get('reimport')
   
   // Data state
   const [templates, setTemplates] = useState<InvoiceTemplate[]>([])
@@ -1313,9 +1315,27 @@ export default function InvoiceCreatePage() {
         ])
         setTemplates(templatesRes.results)
         setCompanies(companiesRes.results)
-        
-        // Load initial invoice number
-        await loadNextInvoiceNumber('verkoop')
+
+        if (reimportId) {
+          // Reimport mode: prefill from existing invoice
+          try {
+            const existing = await getInvoice(reimportId)
+            setInvoiceType(existing.type as 'verkoop' | 'inkoop' | 'credit')
+            setFactuurnummer(existing.factuurnummer)
+            setFactuurdatum(existing.factuurdatum)
+            setVervaldatum(existing.vervaldatum)
+            setOpmerkingen(existing.opmerkingen || '')
+            setSelectedCompany(existing.bedrijf)
+            const tpl = templatesRes.results.find(t => t.id === existing.template)
+            if (tpl) setSelectedTemplate(tpl)
+          } catch (e) {
+            console.error('Could not load invoice to reimport:', e)
+            setError('Kon de factuur niet laden voor opnieuw importeren')
+          }
+        } else {
+          // Load initial invoice number
+          await loadNextInvoiceNumber('verkoop')
+        }
       } catch (err) {
         setError(t('errors.loadFailed'))
         console.error(err)
@@ -1324,7 +1344,7 @@ export default function InvoiceCreatePage() {
       }
     }
     loadData()
-  }, [])
+  }, [reimportId])
 
   // Create empty line with default values for all columns
   const createEmptyLine = useCallback((): InvoiceLineData => {
@@ -1510,12 +1530,14 @@ export default function InvoiceCreatePage() {
     if (defaults.dotIsPercentage) {
       // DOT is percentage mode: only add DOT line (no KM line)
       // DOT = percentage of subtotal of uren
-      const dotBedrag = entriesSubtotaal * (defaults.dotPrijs / 100)
-      summaryLines.push(createSummaryLine(
-        `Totaal DOT (${defaults.dotPrijs}%)`,
-        1,
-        dotBedrag
-      ))
+      if (defaults.dotPrijs > 0) {
+        const dotBedrag = entriesSubtotaal * (defaults.dotPrijs / 100)
+        summaryLines.push(createSummaryLine(
+          `Totaal DOT (${defaults.dotPrijs}%)`,
+          1,
+          dotBedrag
+        ))
+      }
     } else {
       // Fixed mode: add both KM and DOT lines
       
@@ -1663,8 +1685,10 @@ export default function InvoiceCreatePage() {
     const summaryLines: InvoiceLineData[] = []
 
     if (defaults.dotIsPercentage) {
-      const dotBedrag = entriesSubtotaal * (defaults.dotPrijs / 100)
-      summaryLines.push(createSummaryLine(`Totaal DOT (${defaults.dotPrijs}%)`, 1, dotBedrag))
+      if (defaults.dotPrijs > 0) {
+        const dotBedrag = entriesSubtotaal * (defaults.dotPrijs / 100)
+        summaryLines.push(createSummaryLine(`Totaal DOT (${defaults.dotPrijs}%)`, 1, dotBedrag))
+      }
     } else {
       if (totalKm > 0 && defaults.kmTarief > 0) {
         summaryLines.push(createSummaryLine('Totaal KM', totalKm, defaults.kmTarief))
@@ -1846,7 +1870,23 @@ export default function InvoiceCreatePage() {
         invoiceData.chauffeur = chauffeur
       }
       
-      const invoice = await createInvoice(invoiceData)
+      let invoiceId: string
+      if (reimportId) {
+        // Reimport: update fields that the backend allows on existing invoice + delete old lines.
+        // NOTE: template, bedrijf, factuurdatum, type kunnen niet meer worden gewijzigd op een
+        // bestaande factuur (backend InvoiceUpdateSerializer staat dit niet toe).
+        await updateInvoice(reimportId, {
+          vervaldatum,
+          btw_percentage: totalsConfig.btwPercentage,
+          opmerkingen,
+        } as any)
+        const existingLines = await getInvoiceLines(reimportId)
+        await Promise.all(existingLines.map(l => deleteInvoiceLine(l.id)))
+        invoiceId = reimportId
+      } else {
+        const invoice = await createInvoice(invoiceData)
+        invoiceId = invoice.id
+      }
 
       // Create invoice lines
       const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
@@ -1861,7 +1901,7 @@ export default function InvoiceCreatePage() {
         const roundTo2 = (n: number) => Math.round(n * 100) / 100
         
         const lineData: any = {
-          invoice: invoice.id,
+          invoice: invoiceId,
           volgorde: index,
           omschrijving: omschrijvingCol ? String(line.values[omschrijvingCol.id]) : 'Regel',
           aantal: line.isInfoLine ? 0 : roundTo2(aantalCol ? Number(line.values[aantalCol.id]) || 1 : 1),
@@ -1896,8 +1936,8 @@ export default function InvoiceCreatePage() {
         }
       }
 
-      // Navigate to invoice list
-      navigate('/invoices')
+      // Navigate back
+      navigate(reimportId ? `/invoices/${reimportId}/edit` : '/invoices')
     } catch (err: any) {
       // Parse error message from Error object or API response
       const errorMessage = err.message || err.response?.data?.detail || 
@@ -1932,8 +1972,14 @@ export default function InvoiceCreatePage() {
             <ArrowLeftIcon className="h-5 w-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t('invoices.newInvoice')}</h1>
-            <p className="text-sm text-gray-500">{t('invoices.createInvoiceDescription')}</p>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {reimportId ? `Opnieuw importeren: ${factuurnummer || ''}` : t('invoices.newInvoice')}
+            </h1>
+            <p className="text-sm text-gray-500">
+              {reimportId
+                ? 'Bestaande regels worden vervangen door de nieuwe import zodra je opslaat'
+                : t('invoices.createInvoiceDescription')}
+            </p>
           </div>
         </div>
         <button
