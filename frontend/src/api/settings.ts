@@ -216,6 +216,20 @@ export const settingsApi = {
     const response = await api.post('/core/admin/settings/delete-favicon/')
     return response.data
   },
+
+  uploadEmailSignatureImage: async (file: File): Promise<AppSettingsAdmin> => {
+    const formData = new FormData()
+    formData.append('image', file)
+    const response = await api.post('/core/admin/settings/upload-email-signature-image/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  },
+
+  deleteEmailSignatureImage: async (): Promise<AppSettingsAdmin> => {
+    const response = await api.post('/core/admin/settings/delete-email-signature-image/')
+    return response.data
+  },
   
   testEmail: async (toEmail: string): Promise<{ message: string }> => {
     const response = await api.post('/core/admin/settings/test-email/', { to_email: toEmail })

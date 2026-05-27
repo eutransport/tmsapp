@@ -82,6 +82,7 @@ export interface AppSettingsAdmin extends AppSettings {
   invoice_start_number_inkoop: number
   invoice_start_number_credit: number
   email_signature: string
+  email_signature_image?: string | null
   // AI Settings
   ai_provider: 'github' | 'openai' | 'azure' | 'none'
   ai_github_token?: string // Write-only

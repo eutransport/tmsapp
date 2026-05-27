@@ -19,14 +19,12 @@ import {
   XCircleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  ReceiptPercentIcon,
 } from '@heroicons/react/24/outline'
 import { getTemplates, createInvoice, createInvoiceLine, getNextInvoiceNumber } from '@/api/invoices'
 import { getCompanies } from '@/api/companies'
 import { getTimeEntries } from '@/api/timetracking'
 import { getSpreadsheets } from '@/api/spreadsheets'
 import { getImportedEntries, ImportedTimeEntry } from '@/api/urenImport'
-import { getTolRegistraties, markTolGefactureerd, TolRegistratie } from '@/api/tolregistratie'
 import { 
   InvoiceTemplate, 
   Company, 
@@ -180,7 +178,7 @@ function TemplateCard({
     <div
       onClick={onSelect}
       className={`
-        border-2 rounded-lg p-3 cursor-pointer transition-all
+        border-2 rounded-lg p-4 cursor-pointer transition-all
         ${selected 
           ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200' 
           : 'border-gray-200 hover:border-gray-300 bg-white'}
@@ -295,117 +293,21 @@ function InvoiceLineRow({
   )
 }
 
-// Invoice Line Card - mobile/responsive version of InvoiceLineRow
-function InvoiceLineCard({
-  line,
-  index,
-  columns,
-  defaults,
-  onUpdate,
-  onDelete,
-}: {
-  line: InvoiceLineData
-  index: number
-  columns: TemplateColumn[]
-  defaults: TemplateLayout['defaults']
-  onUpdate: (lineId: string, values: Record<string, number | string>) => void
-  onDelete: (lineId: string) => void
-}) {
-  const handleValueChange = (columnId: string, value: string) => {
-    const newValues = { ...line.values }
-
-    const column = columns.find(c => c.id === columnId)
-    if (column?.type === 'text') {
-      newValues[columnId] = value
-    } else {
-      newValues[columnId] = parseFloat(value) || 0
-    }
-
-    columns.forEach(col => {
-      if (col.type === 'berekend' && col.formule) {
-        newValues[col.id] = evaluateFormula(col.formule, newValues, defaults)
-      }
-    })
-
-    onUpdate(line.id, newValues)
-  }
-
-  return (
-    <div className="border border-gray-200 rounded-lg p-3 bg-white">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-          Regel {index + 1}
-        </span>
-        <button
-          type="button"
-          onClick={() => onDelete(line.id)}
-          className="p-1 text-gray-400 hover:text-red-500"
-          aria-label="Verwijder regel"
-        >
-          <TrashIcon className="h-4 w-4" />
-        </button>
-      </div>
-      <div className="space-y-2">
-        {columns.map((col) => (
-          <div key={col.id} className="flex flex-col">
-            <label className="text-xs font-medium text-gray-600 mb-1">
-              {col.naam}
-              {col.type === 'berekend' && (
-                <span className="ml-1 text-xs font-normal text-gray-400">(auto)</span>
-              )}
-            </label>
-            {col.type === 'berekend' ? (
-              <span className="font-medium text-gray-900 px-2 py-1 bg-gray-50 rounded">
-                {formatCurrency(line.values[col.id] as number || 0)}
-              </span>
-            ) : col.type === 'text' ? (
-              <input
-                type="text"
-                value={line.values[col.id] || ''}
-                onChange={(e) => handleValueChange(col.id, e.target.value)}
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
-                placeholder={col.naam}
-              />
-            ) : col.type === 'prijs' ? (
-              <div className="flex items-center">
-                <span className="text-gray-400 mr-1">€</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={line.values[col.id] || ''}
-                  onChange={(e) => handleValueChange(col.id, e.target.value)}
-                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-right"
-                  placeholder="0.00"
-                />
-              </div>
-            ) : (
-              <input
-                type="number"
-                step={col.type === 'km' ? '1' : col.type === 'uren' ? '0.25' : '0.01'}
-                value={line.values[col.id] || ''}
-                onChange={(e) => handleValueChange(col.id, e.target.value)}
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-right"
-                placeholder="0"
-              />
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // Time Entry Import Modal - Shows entries grouped by week + chauffeur + bedrijf
 function TimeEntryImportModal({
   isOpen,
   onClose,
   onImport,
   onImportImported,
+  showWorkTimes,
+  setShowWorkTimes,
 }: {
   isOpen: boolean
   onClose: () => void
   onImport: (entries: TimeEntry[]) => void
   onImportImported: (entries: ImportedTimeEntry[], chauffeurEntries: TimeEntry[]) => void
+  showWorkTimes: boolean
+  setShowWorkTimes: (v: boolean) => void
 }) {
   const [activeTab, setActiveTab] = useState<'chauffeur' | 'imported'>('chauffeur')
   const { t } = useTranslation()
@@ -805,10 +707,21 @@ function TimeEntryImportModal({
                   </>
                 )}
               </div>
-              <div className="px-6 py-4 border-t bg-gray-50 flex items-center justify-between">
-                <span className="text-sm text-gray-600">
-                  {selectedCount > 0 ? <>{t('invoices.groupsSelectedLines', { count: selectedCount, entries: totalEntries })}</> : t('invoices.selectDriverWeekCombinations')}
-                </span>
+              <div className="px-6 py-4 border-t bg-gray-50 flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-600">
+                    {selectedCount > 0 ? <>{t('invoices.groupsSelectedLines', { count: selectedCount, entries: totalEntries })}</> : t('invoices.selectDriverWeekCombinations')}
+                  </span>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer" title="Voegt onder elke rit/dag een extra regel toe met begin- en eindtijd">
+                    <input
+                      type="checkbox"
+                      checked={showWorkTimes}
+                      onChange={(e) => setShowWorkTimes(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    Toon werktijden op factuur
+                  </label>
+                </div>
                 <div className="flex gap-3">
                   <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">{t('common.cancel')}</button>
                   <button onClick={handleImport} disabled={totalEntries === 0} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -958,10 +871,21 @@ function TimeEntryImportModal({
                   </>
                 )}
               </div>
-              <div className="px-6 py-4 border-t bg-gray-50 flex items-center justify-between">
-                <span className="text-sm text-gray-600">
-                  {selectedImportedCount > 0 ? <>{t('invoices.groupsSelectedTrips', { count: selectedImportedCount, entries: totalImportedEntries })}</> : t('invoices.selectDriverWeekCombinations')}
-                </span>
+              <div className="px-6 py-4 border-t bg-gray-50 flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-600">
+                    {selectedImportedCount > 0 ? <>{t('invoices.groupsSelectedTrips', { count: selectedImportedCount, entries: totalImportedEntries })}</> : t('invoices.selectDriverWeekCombinations')}
+                  </span>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer" title="Voegt onder elke rit een extra regel toe met begin- en eindtijd">
+                    <input
+                      type="checkbox"
+                      checked={showWorkTimes}
+                      onChange={(e) => setShowWorkTimes(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    Toon werktijden op factuur
+                  </label>
+                </div>
                 <div className="flex gap-3">
                   <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">{t('common.cancel')}</button>
                   <button onClick={handleImportImported} disabled={totalImportedEntries === 0} className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -1310,197 +1234,6 @@ function SpreadsheetImportModal({
 }
 
 // ============================================
-// Tol Import Modal
-// ============================================
-
-function TolImportModal({
-  isOpen,
-  onClose,
-  onImport,
-}: {
-  isOpen: boolean
-  onClose: () => void
-  onImport: (registraties: TolRegistratie[]) => void
-}) {
-  const [allRegistraties, setAllRegistraties] = useState<TolRegistratie[]>([])
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [isLoading, setIsLoading] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
-
-  useEffect(() => {
-    if (isOpen) {
-      loadData()
-      setSelectedIds(new Set())
-      setSearchTerm('')
-    }
-  }, [isOpen])
-
-  const loadData = async () => {
-    setIsLoading(true)
-    try {
-      const response = await getTolRegistraties({ gefactureerd: false, page_size: 500, ordering: '-datum' })
-      setAllRegistraties(response.results)
-    } catch {
-      console.error('Failed to load toll registrations')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const filtered = allRegistraties.filter(r => {
-    if (!searchTerm) return true
-    const q = searchTerm.toLowerCase()
-    return (r.user_naam || '').toLowerCase().includes(q) || r.kenteken.toLowerCase().includes(q)
-  })
-
-  const toggleSelection = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const toggleAll = () => {
-    if (selectedIds.size === filtered.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(filtered.map(r => r.id)))
-    }
-  }
-
-  const handleImport = () => {
-    const toImport = allRegistraties.filter(r => selectedIds.has(r.id))
-    onImport(toImport)
-    onClose()
-  }
-
-  const formatBedrag = (value: string | number) => {
-    const num = typeof value === 'string' ? parseFloat(value) : value
-    return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(isNaN(num) ? 0 : num)
-  }
-
-  const totalSelected = selectedIds.size
-  const totalBedrag = allRegistraties
-    .filter(r => selectedIds.has(r.id))
-    .reduce((sum, r) => sum + parseFloat(r.totaal_bedrag), 0)
-
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="fixed inset-0 bg-gray-500/75" onClick={onClose} />
-        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
-          {/* Header */}
-          <div className="px-6 py-4 border-b flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Tol importeren</h3>
-            <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
-              <XCircleIcon className="h-5 w-5 text-gray-400" />
-            </button>
-          </div>
-
-          {/* Search */}
-          <div className="px-6 py-2 border-b bg-gray-50">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Zoek op chauffeur of kenteken..."
-              className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:ring-primary-500 focus:border-primary-500"
-            />
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto">
-            {isLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
-              </div>
-            ) : allRegistraties.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <p>Geen openstaande tolregistraties gevonden</p>
-                <p className="text-sm mt-1">Alleen niet-gefactureerde registraties worden getoond</p>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <p>Geen resultaten gevonden</p>
-              </div>
-            ) : (
-              <table className="w-full">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="px-4 py-3 w-12">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.size === filtered.length && filtered.length > 0}
-                        onChange={toggleAll}
-                        className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Chauffeur</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Wagen</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Bedrag</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {filtered.map(reg => (
-                    <tr
-                      key={reg.id}
-                      className={`hover:bg-gray-50 cursor-pointer ${selectedIds.has(reg.id) ? 'bg-primary-50' : ''}`}
-                      onClick={() => toggleSelection(reg.id)}
-                    >
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(reg.id)}
-                          onChange={() => toggleSelection(reg.id)}
-                          onClick={e => e.stopPropagation()}
-                          className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                        />
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm">
-                        {new Date(reg.datum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td className="px-4 py-3 text-sm">{reg.user_naam || '—'}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{reg.kenteken}</td>
-                      <td className="px-4 py-3 text-right font-medium text-sm">{formatBedrag(reg.totaal_bedrag)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="px-6 py-4 border-t bg-gray-50 flex items-center justify-between">
-            <span className="text-sm text-gray-600">
-              {totalSelected > 0
-                ? `${totalSelected} geselecteerd — totaal ${formatBedrag(totalBedrag)}`
-                : 'Selecteer tolregistraties om te importeren'}
-            </span>
-            <div className="flex gap-3">
-              <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
-                Annuleren
-              </button>
-              <button
-                onClick={handleImport}
-                disabled={totalSelected === 0}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Importeer {totalSelected > 0 ? `(${totalSelected})` : ''}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================
 // Main Component
 // ============================================
 
@@ -1525,8 +1258,7 @@ export default function InvoiceCreatePage() {
   })
   const [opmerkingen, setOpmerkingen] = useState('')
   const [lines, setLines] = useState<InvoiceLineData[]>([])
-  const [dotPercentage, setDotPercentage] = useState<number | null>(null)
-
+  
   // Week/Chauffeur tracking (from imported time entries)
   const [weekNumber, setWeekNumber] = useState<number | null>(null)
   const [weekYear, setWeekYear] = useState<number | null>(null)
@@ -1538,7 +1270,7 @@ export default function InvoiceCreatePage() {
   const [error, setError] = useState<string | null>(null)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showSpreadsheetImportModal, setShowSpreadsheetImportModal] = useState(false)
-  const [showTolImportModal, setShowTolImportModal] = useState(false)
+  const [showWorkTimes, setShowWorkTimes] = useState(false)
   
   // Get template layout
   const templateLayout = useMemo(() => {
@@ -1662,8 +1394,34 @@ export default function InvoiceCreatePage() {
     let totalKm = 0
     let totalUren = 0
     
-    // Create lines for each time entry (day)
-    const entryLines: InvoiceLineData[] = sortedEntries.map(entry => {
+    // Helper: extract HH:MM from a time string like '08:00:00' or '08:00'
+    const fmtTime = (t: string | null | undefined): string | null => {
+      if (!t) return null
+      const m = String(t).match(/^(\d{1,2}):(\d{2})/)
+      return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null
+    }
+
+    // Helper: build a 'werktijden' info line (0 aantal/prijs, alleen omschrijving)
+    const buildWorkTimeLine = (begin: string | null, eind: string | null): InvoiceLineData => {
+      const values: Record<string, number | string> = {}
+      const tekst = `   ↳ Werktijden: ${begin || '-'} - ${eind || '-'}`
+      columns.forEach(col => {
+        if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
+          values[col.id] = tekst
+        } else {
+          values[col.id] = 0
+        }
+      })
+      columns.forEach(col => {
+        if (col.type === 'berekend' && col.formule) {
+          values[col.id] = evaluateFormula(col.formule, values, defaults)
+        }
+      })
+      return { id: generateId(), values }
+    }
+
+    // Create lines for each time entry (day) — optioneel met werktijden-regel eronder
+    const entryLines: InvoiceLineData[] = sortedEntries.flatMap(entry => {
       const values: Record<string, number | string> = {}
       
       // Parse uren
@@ -1701,11 +1459,20 @@ export default function InvoiceCreatePage() {
         }
       })
       
-      return {
+      const mainLine: InvoiceLineData = {
         id: generateId(),
         values,
         timeEntryId: entry.id,
       }
+
+      if (showWorkTimes) {
+        const begin = fmtTime(entry.aanvang)
+        const eind = fmtTime(entry.eind)
+        if (begin || eind) {
+          return [mainLine, buildWorkTimeLine(begin, eind)]
+        }
+      }
+      return [mainLine]
     })
     
     // Calculate subtotal of entry lines (for percentage calculation)
@@ -1742,16 +1509,14 @@ export default function InvoiceCreatePage() {
     }
     
     const summaryLines: InvoiceLineData[] = []
-
+    
     // Check if KM should be percentage or fixed
     if (defaults.dotIsPercentage) {
       // DOT is percentage mode: only add DOT line (no KM line)
       // DOT = percentage of subtotal of uren
-      // Use dotPercentage from form if available, otherwise use defaults.dotPrijs
-      const percentageToUse = dotPercentage !== null ? dotPercentage : defaults.dotPrijs
-      const dotBedrag = entriesSubtotaal * (percentageToUse / 100)
+      const dotBedrag = entriesSubtotaal * (defaults.dotPrijs / 100)
       summaryLines.push(createSummaryLine(
-        `Totaal DOT (${Number(percentageToUse).toFixed(2)}%)`,
+        `Totaal DOT (${defaults.dotPrijs}%)`,
         1,
         dotBedrag
       ))
@@ -1805,8 +1570,34 @@ export default function InvoiceCreatePage() {
     let totalKm = 0
     let totalUren = 0
 
-    // Create lines for each imported entry
-    const entryLines: InvoiceLineData[] = sortedEntries.map(entry => {
+    // Helper: extract HH:MM from a time string
+    const fmtTime = (t: string | null | undefined): string | null => {
+      if (!t) return null
+      const m = String(t).match(/^(\d{1,2}):(\d{2})/)
+      return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null
+    }
+
+    // Helper: build a 'werktijden' info line
+    const buildWorkTimeLine = (begin: string | null, eind: string | null): InvoiceLineData => {
+      const values: Record<string, number | string> = {}
+      const tekst = `   ↳ Werktijden: ${begin || '-'} - ${eind || '-'}`
+      columns.forEach(col => {
+        if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
+          values[col.id] = tekst
+        } else {
+          values[col.id] = 0
+        }
+      })
+      columns.forEach(col => {
+        if (col.type === 'berekend' && col.formule) {
+          values[col.id] = evaluateFormula(col.formule, values, defaults)
+        }
+      })
+      return { id: generateId(), values }
+    }
+
+    // Create lines for each imported entry — optioneel met werktijden-regel eronder
+    const entryLines: InvoiceLineData[] = sortedEntries.flatMap(entry => {
       const values: Record<string, number | string> = {}
 
       const uren = entry.uren_factuur || 0
@@ -1838,7 +1629,16 @@ export default function InvoiceCreatePage() {
         }
       })
 
-      return { id: generateId(), values }
+      const mainLine: InvoiceLineData = { id: generateId(), values }
+
+      if (showWorkTimes) {
+        const begin = fmtTime(entry.begintijd_rit)
+        const eind = fmtTime(entry.eindtijd_rit)
+        if (begin || eind) {
+          return [mainLine, buildWorkTimeLine(begin, eind)]
+        }
+      }
+      return [mainLine]
     })
 
     // Calculate subtotal for percentage DOT
@@ -1872,10 +1672,8 @@ export default function InvoiceCreatePage() {
     const summaryLines: InvoiceLineData[] = []
 
     if (defaults.dotIsPercentage) {
-      // Use dotPercentage from form if available, otherwise use defaults.dotPrijs
-      const percentageToUse = dotPercentage !== null ? dotPercentage : defaults.dotPrijs
-      const dotBedrag = entriesSubtotaal * (percentageToUse / 100)
-      summaryLines.push(createSummaryLine(`Totaal DOT (${Number(percentageToUse).toFixed(2)}%)`, 1, dotBedrag))
+      const dotBedrag = entriesSubtotaal * (defaults.dotPrijs / 100)
+      summaryLines.push(createSummaryLine(`Totaal DOT (${defaults.dotPrijs}%)`, 1, dotBedrag))
     } else {
       if (totalKm > 0 && defaults.kmTarief > 0) {
         summaryLines.push(createSummaryLine('Totaal KM', totalKm, defaults.kmTarief))
@@ -2000,47 +1798,6 @@ export default function InvoiceCreatePage() {
     setLines(prev => [...prev, ...entryLines, ...summaryLines])
   }
 
-  // Import toll registrations as invoice lines
-  const handleImportTol = async (registraties: TolRegistratie[]) => {
-    if (registraties.length === 0) return
-
-    const tolLines: InvoiceLineData[] = registraties.map(reg => {
-      const values: Record<string, number | string> = {}
-      const bedrag = parseFloat(reg.totaal_bedrag) || 0
-
-      columns.forEach(col => {
-        if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
-          values[col.id] = `Tol - ${reg.kenteken} - ${new Date(reg.datum).toLocaleDateString('nl-NL')}`
-        } else if (col.type === 'aantal' || col.id === 'aantal' || col.id.includes('aantal')) {
-          values[col.id] = 1
-        } else if (col.type === 'prijs' || col.id === 'prijs' || col.id.includes('prijs') || col.id.includes('tarief')) {
-          values[col.id] = bedrag
-        } else if (col.type === 'berekend') {
-          values[col.id] = 0
-        } else {
-          values[col.id] = 0
-        }
-      })
-
-      // Calculate computed columns
-      columns.forEach(col => {
-        if (col.type === 'berekend' && col.formule) {
-          values[col.id] = evaluateFormula(col.formule, values, defaults)
-        }
-      })
-
-      return { id: generateId(), values }
-    })
-
-    setLines(prev => [...prev, ...tolLines])
-
-    try {
-      await markTolGefactureerd(registraties.map(r => r.id))
-    } catch {
-      console.error('Failed to mark toll registrations as gefactureerd')
-    }
-  }
-
   // Calculate totals
   const calculateTotals = useMemo(() => {
     // Find the totaal/berekend column
@@ -2086,12 +1843,7 @@ export default function InvoiceCreatePage() {
         btw_percentage: totalsConfig.btwPercentage,
         opmerkingen,
       }
-
-      // Add DOT percentage if set
-      if (dotPercentage !== null) {
-        invoiceData.dot_percentage = dotPercentage
-      }
-
+      
       // Add week/chauffeur if available (from imported time entries)
       if (weekNumber !== null) {
         invoiceData.week_number = weekNumber
@@ -2108,8 +1860,7 @@ export default function InvoiceCreatePage() {
       // Create invoice lines
       const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
       
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]
+      for (const line of lines) {
         // Find omschrijving column
         const omschrijvingCol = columns.find(c => c.type === 'text' || c.id === 'omschrijving')
         const aantalCol = columns.find(c => c.type === 'aantal' || c.id === 'aantal')
@@ -2127,7 +1878,6 @@ export default function InvoiceCreatePage() {
             : totaalColumn 
               ? Number(line.values[totaalColumn.id]) || 0 
               : 0),
-          volgorde: i,
         }
         
         // Only add time_entry if it exists
@@ -2209,8 +1959,8 @@ export default function InvoiceCreatePage() {
       )}
 
       {/* Step 1: Select Template */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <h2 className="text-lg font-semibold mb-3">1. {t('invoices.selectTemplate')}</h2>
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-lg font-semibold mb-4">1. {t('invoices.selectTemplate')}</h2>
         {templates.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <p>{t('templates.noTemplates')}</p>
@@ -2222,7 +1972,7 @@ export default function InvoiceCreatePage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {templates.map((template) => (
               <TemplateCard
                 key={template.id}
@@ -2231,11 +1981,6 @@ export default function InvoiceCreatePage() {
                 onSelect={() => {
                   setSelectedTemplate(template)
                   setLines([]) // Reset lines when changing template
-                  // Initialize DOT percentage from template defaults
-                  const layout = template.layout as TemplateLayout
-                  if (layout?.defaults?.dotIsPercentage && layout?.defaults?.dotPrijs) {
-                    setDotPercentage(layout.defaults.dotPrijs)
-                  }
                 }}
               />
             ))}
@@ -2316,60 +2061,41 @@ export default function InvoiceCreatePage() {
               placeholder={t('invoices.optionalNotes')}
             />
           </div>
-          {defaults.dotIsPercentage && (
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                <div className="flex items-center gap-2">
-                  <ReceiptPercentIcon className="h-4 w-4" />
-                  DOT Percentage (%)
-                </div>
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={dotPercentage !== null ? dotPercentage : ''}
-                onChange={(e) => setDotPercentage(e.target.value ? parseFloat(e.target.value) : null)}
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                placeholder="Bijv. 21 voor 21%"
-              />
-              <p className="mt-1 text-sm text-gray-500">
-                Dit percentage wordt gebruikt bij het berekenen van DOT bij het importeren van uren
-              </p>
-            </div>
-          )}
         </div>
       )}
 
       {/* Step 3: Invoice Lines */}
       {selectedTemplate && columns.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">3. {t('invoices.lines')}</h2>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex gap-2 items-center">
+              <label className="flex items-center gap-2 text-sm text-gray-700 mr-2 select-none cursor-pointer" title="Voegt onder elke rit/dag een extra regel toe met begin- en eindtijd">
+                <input
+                  type="checkbox"
+                  checked={showWorkTimes}
+                  onChange={(e) => setShowWorkTimes(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                Toon werktijden op factuur
+              </label>
               <button
                 onClick={() => setShowImportModal(true)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2"
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
               >
                 <ClockIcon className="h-4 w-4" />
                 {t('invoices.importHours')}
               </button>
               <button
                 onClick={() => setShowSpreadsheetImportModal(true)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2"
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
               >
                 <CalculatorIcon className="h-4 w-4" />
                 {t('invoices.importSpreadsheet')}
               </button>
               <button
-                onClick={() => setShowTolImportModal(true)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2"
-              >
-                <ReceiptPercentIcon className="h-4 w-4" />
-                Tol importeren
-              </button>
-              <button
                 onClick={addLine}
-                className="px-3 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 flex items-center justify-center gap-2"
+                className="px-3 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 flex items-center gap-2"
               >
                 <PlusIcon className="h-4 w-4" />
                 {t('invoices.addLine')}
@@ -2379,12 +2105,12 @@ export default function InvoiceCreatePage() {
 
           {/* Invoice Header Preview */}
           <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+            <div className="flex justify-between items-start">
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Factuurnummer</p>
                 <p className="text-lg font-bold font-mono text-gray-900">{factuurnummer || '-'}</p>
               </div>
-              <div className="sm:text-right">
+              <div className="text-right">
                 <div className="mb-2">
                   <p className="text-xs text-gray-500 uppercase tracking-wide">Factuurdatum</p>
                   <p className="font-medium text-gray-900">
@@ -2419,7 +2145,7 @@ export default function InvoiceCreatePage() {
 
           {/* Template columns info */}
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex flex-wrap items-center gap-2 text-blue-800 text-sm">
+            <div className="flex items-center gap-2 text-blue-800 text-sm">
               <CalculatorIcon className="h-4 w-4" />
               <span className="font-medium">Template kolommen:</span>
               {columns.map((col, i) => (
@@ -2441,63 +2167,45 @@ export default function InvoiceCreatePage() {
               <p className="text-sm">{t('invoices.clickToAddLines')}</p>
             </div>
           ) : (
-            <>
-              {/* Table layout for md+ screens */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b-2 border-gray-200">
-                      {columns.map((col) => (
-                        <th
-                          key={col.id}
-                          className="px-3 py-2 text-left font-semibold text-gray-700"
-                          style={{ width: `${col.breedte}%` }}
-                        >
-                          {col.naam}
-                          {col.type === 'berekend' && (
-                            <span className="ml-1 text-xs font-normal text-gray-400">(auto)</span>
-                          )}
-                        </th>
-                      ))}
-                      <th className="w-10"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lines.map((line) => (
-                      <InvoiceLineRow
-                        key={line.id}
-                        line={line}
-                        columns={columns}
-                        defaults={defaults}
-                        onUpdate={updateLine}
-                        onDelete={deleteLine}
-                      />
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b-2 border-gray-200">
+                    {columns.map((col) => (
+                      <th
+                        key={col.id}
+                        className="px-3 py-2 text-left font-semibold text-gray-700"
+                        style={{ width: `${col.breedte}%` }}
+                      >
+                        {col.naam}
+                        {col.type === 'berekend' && (
+                          <span className="ml-1 text-xs font-normal text-gray-400">(auto)</span>
+                        )}
+                      </th>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Card layout for small screens */}
-              <div className="md:hidden space-y-3">
-                {lines.map((line, index) => (
-                  <InvoiceLineCard
-                    key={line.id}
-                    line={line}
-                    index={index}
-                    columns={columns}
-                    defaults={defaults}
-                    onUpdate={updateLine}
-                    onDelete={deleteLine}
-                  />
-                ))}
-              </div>
-            </>
+                    <th className="w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((line) => (
+                    <InvoiceLineRow
+                      key={line.id}
+                      line={line}
+                      columns={columns}
+                      defaults={defaults}
+                      onUpdate={updateLine}
+                      onDelete={deleteLine}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
           {/* Totals */}
           {lines.length > 0 && (
             <div className="mt-6 flex justify-end">
-              <div className="w-full sm:w-72 bg-gray-50 rounded-lg p-4">
+              <div className="w-72 bg-gray-50 rounded-lg p-4">
                 {totalsConfig.showSubtotaal && (
                   <div className="flex justify-between py-1">
                     <span className="text-gray-600">{t('invoices.subtotalExclVat')}:</span>
@@ -2528,6 +2236,8 @@ export default function InvoiceCreatePage() {
         onClose={() => setShowImportModal(false)}
         onImport={handleImportEntries}
         onImportImported={handleImportImportedEntries}
+        showWorkTimes={showWorkTimes}
+        setShowWorkTimes={setShowWorkTimes}
       />
 
       {/* Spreadsheet Import Modal */}
@@ -2535,13 +2245,6 @@ export default function InvoiceCreatePage() {
         isOpen={showSpreadsheetImportModal}
         onClose={() => setShowSpreadsheetImportModal(false)}
         onImport={handleImportSpreadsheet}
-      />
-
-      {/* Tol Import Modal */}
-      <TolImportModal
-        isOpen={showTolImportModal}
-        onClose={() => setShowTolImportModal(false)}
-        onImport={handleImportTol}
       />
     </div>
   )

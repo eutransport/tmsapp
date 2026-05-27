@@ -87,6 +87,7 @@ export default function SettingsPage() {
   // Email test
   const [testEmail, setTestEmail] = useState('')
   const [testingEmail, setTestingEmail] = useState(false)
+  const [uploadingSignatureImage, setUploadingSignatureImage] = useState(false)
 
   // Load settings on mount
   useEffect(() => {
@@ -265,6 +266,41 @@ export default function SettingsPage() {
       setError(err.response?.data?.error || t('errors.saveFailed'))
     } finally {
       setTestingEmail(false)
+    }
+  }
+
+  const handleUploadSignatureImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      setUploadingSignatureImage(true)
+      const updated = await settingsApi.uploadEmailSignatureImage(file)
+      setSettings(updated)
+      setSuccess('Handtekeningafbeelding geüpload')
+      fetchSettings()
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      setError('Uploaden van handtekeningafbeelding mislukt')
+    } finally {
+      setUploadingSignatureImage(false)
+      e.currentTarget.value = ''
+    }
+  }
+
+  const handleDeleteSignatureImage = async () => {
+    if (!confirm('Handtekeningafbeelding verwijderen?')) return
+    try {
+      setUploadingSignatureImage(true)
+      const updated = await settingsApi.deleteEmailSignatureImage()
+      setSettings(updated)
+      setSuccess('Handtekeningafbeelding verwijderd')
+      fetchSettings()
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      setError('Verwijderen van handtekeningafbeelding mislukt')
+    } finally {
+      setUploadingSignatureImage(false)
     }
   }
 
@@ -876,6 +912,37 @@ export default function SettingsPage() {
                     className="input-field"
                     placeholder="Met vriendelijke groet,&#10;&#10;Jan Jansen&#10;Functie&#10;Bedrijfsnaam&#10;Tel: 012-3456789"
                   />
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  <label className="block text-sm font-medium text-gray-700">Handtekeningafbeelding (PNG/JPG/GIF/WEBP, max 2MB)</label>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                    onChange={handleUploadSignatureImage}
+                    disabled={uploadingSignatureImage}
+                    className="input-field"
+                  />
+
+                  {settings?.email_signature_image && (
+                    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                      <p className="text-xs text-gray-500 mb-2">Voorbeeld handtekeningafbeelding</p>
+                      <img
+                        src={settings.email_signature_image}
+                        alt="Handtekening afbeelding"
+                        className="max-h-24 max-w-sm object-contain"
+                      />
+                      <div className="mt-2">
+                        <button
+                          onClick={handleDeleteSignatureImage}
+                          disabled={uploadingSignatureImage}
+                          className="btn-secondary"
+                        >
+                          Afbeelding verwijderen
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

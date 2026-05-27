@@ -75,6 +75,12 @@ urlpatterns = [
     path('admin/settings/delete-favicon/', AdminSettingsViewSet.as_view({
         'post': 'delete_favicon',
     }), name='admin-settings-delete-favicon'),
+    path('admin/settings/upload-email-signature-image/', AdminSettingsViewSet.as_view({
+        'post': 'upload_email_signature_image',
+    }), name='admin-settings-upload-email-signature-image'),
+    path('admin/settings/delete-email-signature-image/', AdminSettingsViewSet.as_view({
+        'post': 'delete_email_signature_image',
+    }), name='admin-settings-delete-email-signature-image'),
     path('admin/settings/test-email/', AdminSettingsViewSet.as_view({
         'post': 'test_email',
     }), name='admin-settings-test-email'),

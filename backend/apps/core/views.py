@@ -361,6 +361,44 @@ class AdminSettingsViewSet(ViewSet):
             settings.save()
         serializer = AppSettingsAdminSerializer(settings, context={'request': request})
         return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def upload_email_signature_image(self, request):
+        """Upload image used in global email signature."""
+        settings = AppSettings.get_settings()
+        if 'image' not in request.FILES:
+            return Response({'error': 'Geen bestand geüpload'}, status=status.HTTP_400_BAD_REQUEST)
+
+        uploaded_file = request.FILES['image']
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+        if uploaded_file.content_type not in allowed_types:
+            return Response(
+                {'error': 'Ongeldig bestandstype. Alleen JPEG, PNG, GIF en WEBP zijn toegestaan.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        max_size = 2 * 1024 * 1024
+        if uploaded_file.size > max_size:
+            return Response(
+                {'error': 'Bestand is te groot. Maximum grootte is 2MB.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        settings.email_signature_image = uploaded_file
+        settings.save()
+        serializer = AppSettingsAdminSerializer(settings, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def delete_email_signature_image(self, request):
+        """Delete image used in global email signature."""
+        settings = AppSettings.get_settings()
+        if settings.email_signature_image:
+            settings.email_signature_image.delete(save=False)
+            settings.email_signature_image = None
+            settings.save()
+        serializer = AppSettingsAdminSerializer(settings, context={'request': request})
+        return Response(serializer.data)
     
     @action(detail=False, methods=['post'])
     def test_email(self, request):

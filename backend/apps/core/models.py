@@ -474,6 +474,12 @@ class AppSettings(models.Model):
         verbose_name='E-mail Handtekening',
         help_text='Handtekening die onderaan alle uitgaande e-mails wordt toegevoegd.'
     )
+    email_signature_image = models.ImageField(
+        upload_to='signatures/email_settings/',
+        null=True,
+        blank=True,
+        verbose_name='E-mail Handtekening Afbeelding',
+    )
     
     # Reminder settings for driver document expiry
     reminder_enabled = models.BooleanField(
