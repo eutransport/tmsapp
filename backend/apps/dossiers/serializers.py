@@ -67,10 +67,12 @@ class DossierBijlageSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'uploaded_at', 'bestand_url']
 
     def get_bestand_url(self, obj):
+        from apps.core.file_signing import sign_file_field
+        url = sign_file_field(obj.bestand)
+        if not url:
+            return None
         request = self.context.get('request')
-        if obj.bestand and request:
-            return request.build_absolute_uri(obj.bestand.url)
-        return None
+        return request.build_absolute_uri(url) if request else url
 
 
 class DossierReactieSerializer(serializers.ModelSerializer):

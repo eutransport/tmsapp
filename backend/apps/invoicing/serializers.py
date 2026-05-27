@@ -92,6 +92,16 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
+        # Replace direct /media/ URLs with HMAC-signed /files/ URLs so the
+        # PDF / bijlage can't be loaded anonymously.
+        from apps.core.file_signing import sign_file_field
+        request = self.context.get('request')
+        for fname in ('pdf_file', 'bijlage'):
+            ffield = getattr(instance, fname, None)
+            signed = sign_file_field(ffield)
+            if signed and request:
+                signed = request.build_absolute_uri(signed)
+            data[fname] = signed
         # Creditfacturen: bedragen altijd negatief tonen
         if instance.type == 'credit':
             for field in ('subtotaal', 'btw_bedrag', 'totaal'):
@@ -187,6 +197,16 @@ class ExpenseSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        from apps.core.file_signing import sign_file_field
+        request = self.context.get('request')
+        signed = sign_file_field(getattr(instance, 'bijlage', None))
+        if signed and request:
+            signed = request.build_absolute_uri(signed)
+        data['bijlage'] = signed
+        return data
     
     def create(self, validated_data):
         # Calculate total if not provided

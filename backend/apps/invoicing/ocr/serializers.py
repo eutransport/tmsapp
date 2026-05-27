@@ -77,12 +77,12 @@ class InvoiceImportDetailSerializer(serializers.ModelSerializer):
         return None
     
     def get_original_file_url(self, obj):
-        if obj.original_file:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.original_file.url)
-            return obj.original_file.url
-        return None
+        from apps.core.file_signing import sign_file_field
+        url = sign_file_field(obj.original_file)
+        if not url:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
 
 
 class InvoiceImportUploadSerializer(serializers.Serializer):

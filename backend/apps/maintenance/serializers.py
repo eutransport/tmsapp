@@ -115,6 +115,16 @@ class APKRecordSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        from apps.core.file_signing import sign_file_field
+        request = self.context.get('request')
+        signed = sign_file_field(getattr(instance, 'certificate_file', None))
+        if signed and request:
+            signed = request.build_absolute_uri(signed)
+        data['certificate_file'] = signed
+        return data
+
     def get_created_by_name(self, obj):
         if obj.created_by:
             return obj.created_by.get_full_name() or obj.created_by.email
@@ -183,6 +193,16 @@ class MaintenanceTaskSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'total_cost', 'created_at', 'updated_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        from apps.core.file_signing import sign_file_field
+        request = self.context.get('request')
+        signed = sign_file_field(getattr(instance, 'invoice_file', None))
+        if signed and request:
+            signed = request.build_absolute_uri(signed)
+        data['invoice_file'] = signed
+        return data
 
     def get_assigned_to_name(self, obj):
         if obj.assigned_to:

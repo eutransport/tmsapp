@@ -10,6 +10,8 @@ from django.views.static import serve
 from django.views.decorators.clickjacking import xframe_options_exempt
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from apps.core.file_signing import serve_signed_media, PUBLIC_MEDIA_PREFIXES
+
 
 def health_check(request):
     """Simple health check endpoint for Docker/monitoring."""
@@ -19,7 +21,11 @@ def health_check(request):
 # Custom media serve view that allows iframe embedding
 @xframe_options_exempt
 def serve_media(request, path, document_root=None):
-    """Serve media files without X-Frame-Options restriction."""
+    """Serve media files without X-Frame-Options restriction (public paths only)."""
+    # In dev we still want only public paths to be openly reachable via /media/.
+    if not any(path.startswith(p) for p in PUBLIC_MEDIA_PREFIXES):
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden('Dit bestand is alleen via een ondertekende URL beschikbaar')
     return serve(request, path, document_root=document_root)
 
 
@@ -53,12 +59,14 @@ urlpatterns = [
     path('api/banking/', include('apps.banking.urls')),
     path('api/reports/', include('apps.reports.urls')),
     path('api/chat/', include('apps.chatbot.urls')),
-    path('api/dossiers/', include('apps.dossiers.urls')),
+
+    # Signed media files (HMAC-protected, valid in dev and prod)
+    re_path(r'^files/(?P<path>.+)$', serve_signed_media, name='signed-media'),
 ]
 
 # Serve media files in development
 if settings.DEBUG:
-    # Use custom serve_media view that allows iframe embedding for PDFs
+    # Public-only fallback: branding/fonts via /media/, everything else 403.
     urlpatterns += [
         re_path(r'^media/(?P<path>.*)$', serve_media, {'document_root': settings.MEDIA_ROOT}),
     ]

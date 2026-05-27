@@ -3,6 +3,7 @@ Serializers voor documenten en handtekeningen.
 """
 from rest_framework import serializers
 from .models import SignedDocument, SavedSignature
+from apps.core.file_signing import sign_file_field
 
 
 class SavedSignatureSerializer(serializers.ModelSerializer):
@@ -15,6 +16,15 @@ class SavedSignatureSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        signed = sign_file_field(getattr(instance, 'signature_image', None))
+        if signed and request:
+            signed = request.build_absolute_uri(signed)
+        data['signature_image'] = signed
+        return data
 
 
 class SignedDocumentListSerializer(serializers.ModelSerializer):
@@ -85,20 +95,31 @@ class SignedDocumentDetailSerializer(serializers.ModelSerializer):
         return None
     
     def get_original_file_url(self, obj):
-        if obj.original_file:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.original_file.url)
-            return obj.original_file.url
-        return None
+        url = sign_file_field(obj.original_file)
+        if not url:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
     
     def get_signed_file_url(self, obj):
-        if obj.signed_file:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.signed_file.url)
-            return obj.signed_file.url
-        return None
+        url = sign_file_field(obj.signed_file)
+        if not url:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
+
+    def to_representation(self, instance):
+        # Replace the raw FileField URLs (original_file / signed_file) with
+        # signed equivalents so the underlying /media/ path isn't leaked.
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        for fname in ('original_file', 'signed_file'):
+            ffield = getattr(instance, fname, None)
+            signed = sign_file_field(ffield)
+            if signed and request:
+                signed = request.build_absolute_uri(signed)
+            data[fname] = signed
+        return data
 
 
 class DocumentUploadSerializer(serializers.Serializer):

@@ -3,6 +3,7 @@ Core app serializers.
 """
 from rest_framework import serializers
 from .models import AppSettings, CustomFont, ReminderJobLog, EmailProfile, Administratie
+from .file_signing import sign_file_field
 
 
 def safe_str(value):
@@ -43,12 +44,11 @@ class CustomFontSerializer(serializers.ModelSerializer):
         }
     
     def get_font_url(self, obj):
-        if obj.font_file:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.font_file.url)
-            return obj.font_file.url
-        return None
+        url = sign_file_field(obj.font_file)
+        if not url:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
 
 
 class FontFamilySerializer(serializers.Serializer):
@@ -89,20 +89,18 @@ class AppSettingsSerializer(serializers.ModelSerializer):
         ]
     
     def get_logo_url(self, obj):
-        if obj.logo:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.logo.url)
-            return obj.logo.url
-        return None
+        url = sign_file_field(obj.logo)
+        if not url:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
     
     def get_favicon_url(self, obj):
-        if obj.favicon:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.favicon.url)
-            return obj.favicon.url
-        return None
+        url = sign_file_field(obj.favicon)
+        if not url:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
 
 
 class AppSettingsAdminSerializer(serializers.ModelSerializer):
@@ -152,7 +150,16 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
             'ai_azure_api_key': {'write_only': True},
             'linqo_api_key': {'write_only': True},
         }
-    
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        signed = sign_file_field(getattr(instance, 'email_signature_image', None))
+        if signed and request:
+            signed = request.build_absolute_uri(signed)
+        data['email_signature_image'] = signed
+        return data
+
     def get_has_linqo_api_key(self, obj):
         """Return whether a Linqo API key is configured."""
         return bool(obj.linqo_api_key)
@@ -176,20 +183,18 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
             return {'configured': False, 'message': 'API key ontbreekt'}
     
     def get_logo_url(self, obj):
-        if obj.logo:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.logo.url)
-            return obj.logo.url
-        return None
+        url = sign_file_field(obj.logo)
+        if not url:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
     
     def get_favicon_url(self, obj):
-        if obj.favicon:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.favicon.url)
-            return obj.favicon.url
-        return None
+        url = sign_file_field(obj.favicon)
+        if not url:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
     
     def validate(self, data):
         """Sanitize SMTP fields to remove Turkish/Unicode characters."""
@@ -233,6 +238,15 @@ class EmailProfileSerializer(serializers.ModelSerializer):
             'smtp_password': {'write_only': True, 'required': False, 'allow_blank': True},
             'oauth_client_secret': {'write_only': True, 'required': False, 'allow_blank': True},
         }
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        signed = sign_file_field(getattr(instance, 'email_signature_image', None))
+        if signed and request:
+            signed = request.build_absolute_uri(signed)
+        data['email_signature_image'] = signed
+        return data
 
     def get_created_by_name(self, obj) -> str:
         if obj.created_by:

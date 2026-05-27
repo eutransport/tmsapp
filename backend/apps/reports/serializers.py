@@ -1,6 +1,7 @@
 """Serializers for report requests."""
 from rest_framework import serializers
 from .models import ReportRequest, ReportType, ReportOutputFormat, ReportStatus
+from apps.core.file_signing import sign_file_field
 
 
 class ReportRequestSerializer(serializers.ModelSerializer):
@@ -50,20 +51,29 @@ class ReportRequestSerializer(serializers.ModelSerializer):
         return str(user)
 
     def get_excel_url(self, obj):
-        if obj.excel_file:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.excel_file.url)
-            return obj.excel_file.url
-        return None
+        url = sign_file_field(obj.excel_file)
+        if not url:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
 
     def get_pdf_url(self, obj):
-        if obj.pdf_file:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.pdf_file.url)
-            return obj.pdf_file.url
-        return None
+        url = sign_file_field(obj.pdf_file)
+        if not url:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        for fname in ('excel_file', 'pdf_file'):
+            ffield = getattr(instance, fname, None)
+            signed = sign_file_field(ffield)
+            if signed and request:
+                signed = request.build_absolute_uri(signed)
+            data[fname] = signed
+        return data
 
 
 class ReportRequestCreateSerializer(serializers.ModelSerializer):
