@@ -52,6 +52,7 @@ urlpatterns = [
     path('api/leave/', include('apps.leave.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/documents/', include('apps.documents.urls')),
+    path('api/dossiers/', include('apps.dossiers.urls')),
     path('api/spreadsheets/', include('apps.spreadsheets.urls')),
     path('api/maintenance/', include('apps.maintenance.urls')),
     path('api/licensing/', include('apps.licensing.urls')),

@@ -5,7 +5,6 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
-from celery.schedules import crontab
 from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -48,14 +47,10 @@ LOCAL_APPS = [
     'apps.leave',
     'apps.notifications',
     'apps.documents',
+    'apps.dossiers',
     'apps.spreadsheets',
     'apps.maintenance',
     'apps.licensing',
-    'apps.tracking',
-    'apps.banking',
-    'apps.reports',
-    'apps.chatbot',
-    'apps.dossiers',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -157,8 +152,6 @@ REST_FRAMEWORK = {
         'document_email': '20/hour', # Document email: 20 per hour
         'document_sign': '60/hour',  # Document signing: 60 per hour
         'email_import': '30/hour',   # Email import fetch: 30 per hour
-        'tracking_submit': '120/minute',  # GPS location submissions: 2/sec
-        'tracking_read': '60/minute',     # Map polling: 1/sec
     },
 }
 
@@ -260,32 +253,3 @@ LOGGING = {
 # Create logs directory if it doesn't exist
 LOGS_DIR = BASE_DIR / 'logs'
 LOGS_DIR.mkdir(exist_ok=True)
-
-# Celery Configuration
-CELERY_BROKER_URL = config('CELERY_BROKER_URL', default=config('REDIS_URL', default='redis://localhost:6379/0'))
-CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default=config('REDIS_URL', default='redis://localhost:6379/0'))
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
-CELERY_ENABLE_UTC = True
-
-# Celery Beat Schedule
-CELERY_BEAT_SCHEDULE = {
-    'process-scheduled-notifications': {
-        'task': 'apps.notifications.tasks.process_scheduled_notifications',
-        'schedule': crontab(minute='*'),  # Every minute
-    },
-    'update-next-send-times': {
-        'task': 'apps.notifications.tasks.update_next_send_times',
-        'schedule': crontab(hour=0, minute=0),  # Daily at midnight
-    },
-    'send-driver-expiry-reminders': {
-        'task': 'apps.drivers.tasks.send_driver_expiry_reminders',
-        'schedule': crontab(hour=8, minute=0),  # Daily at 08:00 -- command checks reminder_enabled & frequency
-    },
-    'sync-tachograph-hours': {
-        'task': 'apps.tracking.tasks.sync_tachograph_hours',
-        'schedule': crontab(hour=23, minute=0),  # Daily at 23:00 -- syncs today's data
-    },
-}
