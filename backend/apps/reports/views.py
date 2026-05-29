@@ -279,6 +279,25 @@ REPORT_TYPE_METADATA = [
             {'name': 'bedrijf_id', 'label': 'Bedrijf', 'type': 'company', 'required': False},
         ],
     },
+    {
+        'value': ReportType.VEHICLE_TRIPS_BY_DATE,
+        'label': 'Ritnummers per voertuig per dag',
+        'description': (
+            'Alle ritnummers voor een voertuig op een datum of datumbereik, '
+            'inclusief chauffeur en gereden uren.'
+        ),
+        'parameters': [
+            {'name': 'kenteken', 'label': 'Kenteken', 'type': 'vehicle', 'required': True},
+            {'name': 'date_from', 'label': 'Datum van', 'type': 'date', 'required': False},
+            {'name': 'date_to', 'label': 'Datum t/m', 'type': 'date', 'required': False},
+            {
+                'name': 'specific_dates',
+                'label': 'Specifieke datums (komma-gescheiden, bv. 2026-04-16,2026-04-17)',
+                'type': 'text',
+                'required': False,
+            },
+        ],
+    },
 ]
 
 

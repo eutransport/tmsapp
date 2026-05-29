@@ -645,6 +645,49 @@ def _execute_spreadsheet_overview(params):
     return columns, rows, 'Ritregistratie overzicht'
 
 
+def _execute_vehicle_trips_by_date(params):
+    """Ritnummers per voertuig per dag met chauffeur en gereden uren."""
+    from apps.timetracking.models import TimeEntry
+
+    kenteken = params.get('kenteken')
+    date_from = params.get('date_from')
+    date_to = params.get('date_to')
+    # Optional: comma-separated specific dates, e.g. "2026-04-16,2026-04-17"
+    specific_dates = params.get('specific_dates')
+
+    qs = TimeEntry.objects.select_related('user').all()
+    if kenteken:
+        qs = qs.filter(kenteken__icontains=kenteken)
+    if specific_dates:
+        date_list = [d.strip() for d in specific_dates.split(',') if d.strip()]
+        qs = qs.filter(datum__in=date_list)
+    else:
+        if date_from:
+            qs = qs.filter(datum__gte=date_from)
+        if date_to:
+            qs = qs.filter(datum__lte=date_to)
+
+    columns = [
+        'Datum', 'Kenteken', 'Ritnummer', 'Chauffeur',
+        'Aanvang', 'Eind', 'Totaal Uren', 'Totaal KM',
+    ]
+    rows = []
+    for entry in qs.order_by('datum', 'ritnummer', 'aanvang'):
+        naam = entry.user.get_full_name() if hasattr(entry.user, 'get_full_name') else str(entry.user)
+        rows.append([
+            str(entry.datum),
+            entry.kenteken,
+            entry.ritnummer,
+            naam,
+            str(entry.aanvang),
+            str(entry.eind),
+            _format_duration(entry.totaal_uren),
+            entry.totaal_km,
+        ])
+    label = kenteken or 'alle voertuigen'
+    return columns, rows, f'Ritnummers per dag – {label}'
+
+
 # ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
@@ -672,6 +715,7 @@ EXECUTOR_MAP = {
     'planning_overview': _execute_planning_overview,
     'banking_transactions': _execute_banking_transactions,
     'spreadsheet_overview': _execute_spreadsheet_overview,
+    'vehicle_trips_by_date': _execute_vehicle_trips_by_date,
 }
 
 

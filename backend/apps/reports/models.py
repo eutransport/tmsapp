@@ -57,6 +57,9 @@ class ReportType(models.TextChoices):
     # Spreadsheet reports
     SPREADSHEET_OVERVIEW = 'spreadsheet_overview', 'Ritregistratie overzicht'
 
+    # Vehicle trips by date
+    VEHICLE_TRIPS_BY_DATE = 'vehicle_trips_by_date', 'Ritnummers per voertuig per dag'
+
 
 class ReportOutputFormat(models.TextChoices):
     SCREEN = 'screen', 'Scherm'
