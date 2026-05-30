@@ -1,4 +1,5 @@
 """Views for leave management."""
+import logging
 from decimal import Decimal, InvalidOperation
 from datetime import date, timedelta
 from rest_framework import viewsets, status
@@ -8,6 +9,10 @@ from rest_framework.response import Response
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+
+from apps.core.models import AppSettings
+
+logger = logging.getLogger(__name__)
 
 from .audit import log_leave_action, get_client_ip, LeaveAuditAction
 from .models import (
@@ -112,6 +117,175 @@ class GlobalLeaveSettingsViewSet(viewsets.ModelViewSet):
         )
         
         return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def test_reminder(self, request):
+        """
+        Test / simulate leave reminders for a given date.
+
+        Accepts ``simulate_date`` (YYYY-MM-DD) and pretends *today* is that
+        date, then checks which approved leave requests would trigger a
+        reminder at the configured intervals (1/2/3/4 weeks later).
+
+        Two modes:
+        - ``send: false`` (default) → dry-run: returns found leaves without
+          sending email.
+        - ``send: true`` → actually sends the reminder email(s) so the admin
+          can verify the full email flow.
+        """
+        if not (request.user.is_superuser or request.user.rol == 'admin'):
+            return Response(
+                {'error': 'Alleen admins kunnen verlofherinneringen testen.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        simulate_date_str = request.data.get('simulate_date')
+        if not simulate_date_str:
+            return Response(
+                {'error': 'simulate_date is verplicht (YYYY-MM-DD).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            simulate_date = date.fromisoformat(simulate_date_str)
+        except (ValueError, TypeError):
+            return Response(
+                {'error': 'Ongeldig datumformaat. Gebruik YYYY-MM-DD.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        should_send = request.data.get('send', False)
+
+        leave_settings = GlobalLeaveSettings.get_settings()
+        weeks_before = leave_settings.leave_reminder_weeks_before
+        if not weeks_before or not isinstance(weeks_before, list) or len(weeks_before) == 0:
+            weeks_before = [4, 3, 2, 1]
+
+        # Build target dates relative to the simulated "today"
+        reminder_targets = {}
+        for weeks in weeks_before:
+            target = simulate_date + timedelta(weeks=int(weeks))
+            reminder_targets[int(weeks)] = target
+
+        target_dates = list(reminder_targets.values())
+
+        upcoming_leaves = LeaveRequest.objects.filter(
+            status=LeaveRequestStatus.APPROVED,
+            start_date__in=target_dates,
+        ).select_related('user')
+
+        # Group by weeks-before interval
+        results = []
+        for weeks in sorted(reminder_targets.keys(), reverse=True):
+            target = reminder_targets[weeks]
+            leaves_at_target = [
+                lv for lv in upcoming_leaves if lv.start_date == target
+            ]
+            time_label = f'{weeks} weken' if weeks > 1 else '1 week'
+            entry = {
+                'weeks_before': weeks,
+                'time_label': time_label,
+                'target_date': target.isoformat(),
+                'leaves': [
+                    {
+                        'user_naam': lv.user.full_name,
+                        'leave_type': lv.get_leave_type_display(),
+                        'start_date': lv.start_date.isoformat(),
+                        'end_date': lv.end_date.isoformat(),
+                        'hours_requested': str(lv.hours_requested),
+                    }
+                    for lv in leaves_at_target
+                ],
+            }
+            results.append(entry)
+
+        total_leaves_found = sum(len(r['leaves']) for r in results)
+
+        # Optionally send the actual emails
+        emails_sent = 0
+        send_errors = []
+        if should_send and total_leaves_found > 0:
+            app_settings = AppSettings.get_settings()
+
+            if not app_settings.smtp_host:
+                return Response(
+                    {'error': 'SMTP is niet geconfigureerd. Vul eerst de e-mail instellingen in.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            to_email = leave_settings.leave_reminder_email or (
+                app_settings.company_email
+                or app_settings.smtp_from_email
+                or app_settings.smtp_username
+            )
+            if not to_email:
+                return Response(
+                    {'error': 'Geen e-mailadres geconfigureerd voor verlofherinneringen.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            from django.core.mail import EmailMessage, get_connection
+
+            def _safe(val):
+                if val is None:
+                    return ''
+                return str(val)
+
+            for entry in results:
+                if not entry['leaves']:
+                    continue
+                try:
+                    time_label = entry['time_label']
+                    subject = f'[TEST] Verlofherinnering: medewerker(s) met verlof over {time_label}'
+                    lines = []
+                    for lv in entry['leaves']:
+                        lines.append(
+                            f"  \u2022 {lv['user_naam']} \u2014 {lv['leave_type']}\n"
+                            f"    Van {lv['start_date']} t/m {lv['end_date']} "
+                            f"({lv['hours_requested']} uur)"
+                        )
+                    body = (
+                        f"Dit is een TEST-herinnering (simulatiedatum: {simulate_date_str}).\n\n"
+                        f"Over {time_label} begint het verlof van de volgende medewerker(s):\n\n"
+                        f"{''.join(lines)}\n\n"
+                        f"Gelieve hier rekening mee te houden in de planning.\n\n"
+                        f"Met vriendelijke groet,\n"
+                        f"{app_settings.company_name or 'TMS'}"
+                    )
+
+                    smtp_username = _safe(app_settings.smtp_username)
+                    from_email = _safe(app_settings.smtp_from_email or app_settings.smtp_username)
+
+                    connection = get_connection(
+                        backend='django.core.mail.backends.smtp.EmailBackend',
+                        host=app_settings.smtp_host,
+                        port=app_settings.smtp_port,
+                        username=smtp_username,
+                        password=app_settings.smtp_password or '',
+                        use_tls=app_settings.smtp_use_tls,
+                        fail_silently=False,
+                    )
+                    email = EmailMessage(
+                        subject=subject,
+                        body=body,
+                        from_email=from_email,
+                        to=[to_email],
+                        connection=connection,
+                    )
+                    email.send(fail_silently=False)
+                    emails_sent += 1
+                except Exception as exc:
+                    logger.error('Test leave reminder send error (%s weeks): %s', entry['weeks_before'], exc)
+                    send_errors.append(f"{entry['time_label']}: {exc}")
+
+        return Response({
+            'simulate_date': simulate_date_str,
+            'weeks_checked': weeks_before,
+            'total_leaves_found': total_leaves_found,
+            'results': results,
+            'emails_sent': emails_sent,
+            'send_errors': send_errors,
+        })
 
 
 def _can_view_all_leave_balances(user) -> bool:
