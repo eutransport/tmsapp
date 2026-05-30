@@ -182,7 +182,7 @@ class Command(BaseCommand):
                 host=app_settings.smtp_host,
                 port=app_settings.smtp_port,
                 username=smtp_username,
-                ****** or '',
+                password=app_settings.smtp_password or '',
                 use_tls=app_settings.smtp_use_tls,
                 fail_silently=False,
             )
