@@ -25,7 +25,7 @@ import {
 const HOURS_PER_DAY = 8
 
 /** Leave types that should not deduct hours from balance */
-const NO_DEDUCT_TYPES = ['ziekteverzuim', 'bijzonder_tandarts', 'bijzonder_huisarts']
+const NO_DEDUCT_TYPES = ['ziekteverzuim', 'bijzonder_tandarts', 'bijzonder_huisarts', 'onbetaald']
 
 /**
  * Calculate the number of work days between two dates (inclusive)
@@ -382,6 +382,10 @@ export default function LeaveRequestPage() {
           {formData.leave_type === 'bijzonder_tandarts' || formData.leave_type === 'bijzonder_huisarts' ? (
             <p className="text-xs text-gray-500 mt-1">
               {t('leave.specialLeaveNote')}
+            </p>
+          ) : formData.leave_type === 'onbetaald' ? (
+            <p className="text-xs text-gray-500 mt-1">
+              Onbetaald verlof wordt niet afgetrokken van uw verlofsaldo.
             </p>
           ) : null}
         </div>

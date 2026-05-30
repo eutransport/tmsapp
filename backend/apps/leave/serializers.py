@@ -144,7 +144,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
             })
         
         # Validate hours
-        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS]
+        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS, LeaveType.ONBETAALD]
         if leave_type not in no_deduct_types:
             if hours_requested and hours_requested <= 0:
                 raise serializers.ValidationError({
@@ -170,7 +170,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
                     'hours_requested': f'Onvoldoende overuren beschikbaar voor verlof. Beschikbaar: {available}u'
                 })
         
-        # Bijzonder verlof and ziekteverzuim: no balance check needed
+        # Bijzonder verlof, ziekteverzuim, and onbetaald verlof: no balance check needed
         
         return data
 
@@ -202,8 +202,8 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
             })
         
         # Recalculate hours based on actual work days (excluding holidays)
-        # Ziekteverzuim and bijzonder verlof: set hours to 0 (no deduction)
-        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS]
+        # Ziekteverzuim, bijzonder verlof, and onbetaald verlof: set hours to 0 (no deduction)
+        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS, LeaveType.ONBETAALD]
         if leave_type in no_deduct_types:
             hours_requested = Decimal('0')
             data['hours_requested'] = hours_requested
@@ -237,7 +237,7 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
                     'hours_requested': f'Onvoldoende overuren beschikbaar voor verlof. Beschikbaar: {available}u'
                 })
         
-        # Bijzonder verlof and ziekteverzuim: no balance check needed
+        # Bijzonder verlof, ziekteverzuim, and onbetaald verlof: no balance check needed
         
         return data
     
@@ -263,7 +263,7 @@ class LeaveRequestAdminCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({
                 'end_date': 'Einddatum moet na startdatum liggen.'
             })
-        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS]
+        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS, LeaveType.ONBETAALD]
         if data['leave_type'] in no_deduct_types:
             data['hours_requested'] = Decimal('0')
         elif data['hours_requested'] <= 0:
