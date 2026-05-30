@@ -260,6 +260,41 @@ export async function checkConcurrentLeave(
   return response.data
 }
 
+// ===== Leave Reminder Test =====
+
+export interface LeaveReminderTestResult {
+  weeks_before: number
+  time_label: string
+  target_date: string
+  leaves: {
+    user_naam: string
+    leave_type: string
+    start_date: string
+    end_date: string
+    hours_requested: string
+  }[]
+}
+
+export interface LeaveReminderTestResponse {
+  simulate_date: string
+  weeks_checked: number[]
+  total_leaves_found: number
+  results: LeaveReminderTestResult[]
+  emails_sent: number
+  send_errors: string[]
+}
+
+export async function testLeaveReminder(
+  simulateDate: string,
+  send: boolean = false
+): Promise<LeaveReminderTestResponse> {
+  const response = await api.post('/leave/settings/test_reminder/', {
+    simulate_date: simulateDate,
+    send,
+  })
+  return response.data
+}
+
 // ===== Public Holidays =====
 
 export interface PublicHoliday {

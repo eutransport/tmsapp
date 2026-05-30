@@ -12,11 +12,14 @@ import {
   ArrowLeftIcon,
   Cog6ToothIcon,
   EnvelopeIcon,
+  BeakerIcon,
 } from '@heroicons/react/24/outline'
 import {
   getGlobalSettings,
   updateGlobalSettings,
   GlobalLeaveSettings,
+  testLeaveReminder,
+  LeaveReminderTestResponse,
 } from '@/api/leave'
 
 const DEFAULT_REMINDER_WEEKS = [1, 2, 3, 4]
@@ -46,6 +49,15 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  // Test reminder state
+  const [testDate, setTestDate] = useState(() => {
+    const today = new Date()
+    return today.toISOString().split('T')[0]
+  })
+  const [isTesting, setIsTesting] = useState(false)
+  const [isSending, setIsSending] = useState(false)
+  const [testResult, setTestResult] = useState<LeaveReminderTestResponse | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -138,6 +150,28 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
     if (!weeks || weeks.length === 0) return 'Geen'
     const sorted = [...weeks].sort((a, b) => b - a)
     return sorted.map(w => w === 1 ? '1 week' : `${w} weken`).join(', ')
+  }
+
+  const handleTestReminder = async (send: boolean = false) => {
+    if (send) {
+      setIsSending(true)
+    } else {
+      setIsTesting(true)
+    }
+    setError(null)
+    setTestResult(null)
+    try {
+      const result = await testLeaveReminder(testDate, send)
+      setTestResult(result)
+      if (send && result.emails_sent > 0) {
+        showSuccess(`${result.emails_sent} test e-mail(s) verstuurd!`)
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err.message || t('common.error'))
+    } finally {
+      setIsTesting(false)
+      setIsSending(false)
+    }
   }
 
   if (isLoading) {
@@ -473,6 +507,120 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
               )}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Test Leave Reminder */}
+      <div className="card">
+        <div className="px-4 py-3 sm:px-6 sm:py-4 border-b flex items-center gap-2 sm:gap-3">
+          <BeakerIcon className="w-5 h-5 text-gray-400" />
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Verlofherinnering testen</h2>
+            <p className="text-xs sm:text-sm text-gray-500">
+              Controleer of er verlof is op de geconfigureerde herinneringsmomenten
+            </p>
+          </div>
+        </div>
+        <div className="p-4 sm:p-6">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Simulatiedatum
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Kies een datum om te simuleren als "vandaag". Het systeem kijkt dan of er verlof is over {getWeeksLabel(globalSettings?.leave_reminder_weeks_before || [])}.
+              </p>
+              <input
+                type="date"
+                value={testDate}
+                onChange={(e) => {
+                  setTestDate(e.target.value)
+                  setTestResult(null)
+                }}
+                className="input max-w-xs"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => handleTestReminder(false)}
+                className="btn btn-secondary"
+                disabled={isTesting || isSending || !testDate}
+              >
+                {isTesting ? 'Controleren...' : 'Controleer verlof'}
+              </button>
+              <button
+                onClick={() => handleTestReminder(true)}
+                className="btn btn-primary"
+                disabled={isTesting || isSending || !testDate}
+              >
+                {isSending ? 'Versturen...' : 'Verstuur test e-mail'}
+              </button>
+            </div>
+
+            {/* Test Results */}
+            {testResult && (
+              <div className="mt-4 space-y-3">
+                <div className={`px-4 py-3 rounded-lg text-sm ${
+                  testResult.total_leaves_found > 0
+                    ? 'bg-blue-50 border border-blue-200 text-blue-800'
+                    : 'bg-gray-50 border border-gray-200 text-gray-600'
+                }`}>
+                  <strong>Resultaat voor {testResult.simulate_date}:</strong>{' '}
+                  {testResult.total_leaves_found > 0
+                    ? `${testResult.total_leaves_found} verlofaanvragen gevonden`
+                    : 'Geen goedgekeurd verlof gevonden op de geconfigureerde herinneringsmomenten'}
+                  {testResult.emails_sent > 0 && (
+                    <span className="ml-2 text-green-700">
+                      — {testResult.emails_sent} e-mail(s) verstuurd ✓
+                    </span>
+                  )}
+                </div>
+
+                {testResult.send_errors.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    <strong>Fouten bij versturen:</strong>
+                    <ul className="list-disc list-inside mt-1">
+                      {testResult.send_errors.map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {testResult.results.map((group) => (
+                  <div key={group.weeks_before} className="border rounded-lg overflow-hidden">
+                    <div className={`px-4 py-2 text-sm font-medium ${
+                      group.leaves.length > 0
+                        ? 'bg-orange-50 text-orange-800 border-b border-orange-200'
+                        : 'bg-gray-50 text-gray-600 border-b border-gray-200'
+                    }`}>
+                      Over {group.time_label} → {group.target_date}
+                      <span className="ml-2 font-normal">
+                        ({group.leaves.length === 0
+                          ? 'geen verlof'
+                          : `${group.leaves.length} medewerker(s)`})
+                      </span>
+                    </div>
+                    {group.leaves.length > 0 && (
+                      <div className="divide-y">
+                        {group.leaves.map((leave, idx) => (
+                          <div key={idx} className="px-4 py-2 text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                            <div>
+                              <span className="font-medium text-gray-900">{leave.user_naam}</span>
+                              <span className="text-gray-500 ml-2">— {leave.leave_type}</span>
+                            </div>
+                            <div className="text-gray-500 text-xs sm:text-sm">
+                              {leave.start_date} t/m {leave.end_date} ({leave.hours_requested} uur)
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
