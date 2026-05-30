@@ -385,7 +385,7 @@ export default function LeaveRequestPage() {
             </p>
           ) : formData.leave_type === 'onbetaald' ? (
             <p className="text-xs text-gray-500 mt-1">
-              Onbetaald verlof wordt niet afgetrokken van uw verlofsaldo.
+              {t('leave.unpaidLeaveNote')}
             </p>
           ) : null}
         </div>

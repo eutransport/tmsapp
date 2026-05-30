@@ -693,6 +693,7 @@
     "insufficientVacationHours": "Onvoldoende verlofuren (beschikbaar: {{available}}u)",
     "insufficientOvertimeHours": "Onvoldoende overuren (beschikbaar: {{available}}u)",
     "specialLeaveNote": "Je krijgt 1 uur gratis per maand. Extra uren gaan van je verlofuren af.",
+    "unpaidLeaveNote": "Onbetaald verlof wordt niet afgetrokken van uw verlofsaldo.",
     "hoursCalculationNote": "Uren worden automatisch berekend op basis van werkdagen (8 uur/dag). Je kunt dit aanpassen voor gedeeltelijk verlof.",
     "concurrentWarning": "Let op: {{count}} collega's hebben al verlof in deze periode",
     "concurrentWarningNote": "Het kan zijn dat je aanvraag niet goedgekeurd wordt vanwege bezetting.",
