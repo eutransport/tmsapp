@@ -35,7 +35,7 @@ import { getUsers } from '@/api/users'
 const HOURS_PER_DAY = 8
 
 /** Leave types that should not deduct hours from balance */
-const NO_DEDUCT_TYPES = ['ziekteverzuim', 'bijzonder_tandarts', 'bijzonder_huisarts']
+const NO_DEDUCT_TYPES = ['ziekteverzuim', 'bijzonder_tandarts', 'bijzonder_huisarts', 'onbetaald']
 
 function calculateWorkDays(startDate: string, endDate: string, holidayDates: Set<string>): number {
   if (!startDate || !endDate) return 0

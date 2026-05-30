@@ -30,6 +30,8 @@ const LEAVE_TYPE_COLORS: Record<string, { bg: string; border: string; text: stri
   overuren: { bg: 'bg-green-400', border: 'border-green-500', text: 'text-green-900' },
   bijzonder_tandarts: { bg: 'bg-purple-400', border: 'border-purple-500', text: 'text-purple-900' },
   bijzonder_huisarts: { bg: 'bg-orange-400', border: 'border-orange-500', text: 'text-orange-900' },
+  ziekteverzuim: { bg: 'bg-red-400', border: 'border-red-500', text: 'text-red-900' },
+  onbetaald: { bg: 'bg-yellow-400', border: 'border-yellow-500', text: 'text-yellow-900' },
 }
 
 function getLeaveTypeColor(type: string) {

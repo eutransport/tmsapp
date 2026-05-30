@@ -693,6 +693,7 @@
     "insufficientVacationHours": "Insufficient vacation hours (available: {{available}}h)",
     "insufficientOvertimeHours": "Insufficient overtime hours (available: {{available}}h)",
     "specialLeaveNote": "You get 1 hour free per month. Extra hours will be deducted from your vacation hours.",
+    "unpaidLeaveNote": "Unpaid leave will not be deducted from your leave balance.",
     "hoursCalculationNote": "Hours are automatically calculated based on work days (8 hours/day). You can adjust this for partial leave.",
     "concurrentWarning": "Note: {{count}} colleagues already have leave during this period",
     "concurrentWarningNote": "Your request may not be approved due to staffing requirements.",

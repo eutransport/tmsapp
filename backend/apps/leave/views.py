@@ -715,8 +715,8 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             )
 
         # Recalculate hours based on actual work days (excluding holidays)
-        # Ziekteverzuim and bijzonder verlof: no hours deducted
-        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS]
+        # Ziekteverzuim, bijzonder verlof, and onbetaald verlof: no hours deducted
+        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS, LeaveType.ONBETAALD]
         if data['leave_type'] in no_deduct_types:
             hours_requested = Decimal('0')
         else:
@@ -849,8 +849,8 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             )
         
         # Recalculate hours based on actual work days (excluding holidays)
-        # Ziekteverzuim and bijzonder verlof: no hours deducted
-        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS]
+        # Ziekteverzuim, bijzonder verlof, and onbetaald verlof: no hours deducted
+        no_deduct_types = [LeaveType.ZIEKTEVERZUIM, LeaveType.BIJZONDER_TANDARTS, LeaveType.BIJZONDER_HUISARTS, LeaveType.ONBETAALD]
         if leave_request.leave_type in no_deduct_types:
             recalculated_hours = Decimal('0')
         else:

@@ -17,6 +17,7 @@ class LeaveType(models.TextChoices):
     BIJZONDER_TANDARTS = 'bijzonder_tandarts', 'Bijzonder verlof tandarts'
     BIJZONDER_HUISARTS = 'bijzonder_huisarts', 'Bijzonder verlof huisarts'
     ZIEKTEVERZUIM = 'ziekteverzuim', 'Ziekteverzuim'
+    ONBETAALD = 'onbetaald', 'Onbetaald verlof'
 
 
 class LeaveRequestStatus(models.TextChoices):
@@ -298,8 +299,8 @@ class LeaveRequest(models.Model):
         Calculate how hours should be deducted based on leave type.
         Returns dict with 'vacation_deduct', 'overtime_deduct', 'special_free'
         
-        Bijzonder verlof (tandarts/huisarts) and ziekteverzuim do NOT deduct
-        hours from the employee's balance.
+        Bijzonder verlof (tandarts/huisarts), ziekteverzuim, and onbetaald verlof
+        do NOT deduct hours from the employee's balance.
         """
         result = {
             'vacation_deduct': Decimal('0'),
@@ -317,7 +318,7 @@ class LeaveRequest(models.Model):
             # Bijzonder verlof: no deduction from balance
             result['special_free'] = self.hours_requested
         
-        # Ziekteverzuim: no deductions (result stays all zeros)
+        # Ziekteverzuim and onbetaald verlof: no deductions (result stays all zeros)
         
         return result
 
