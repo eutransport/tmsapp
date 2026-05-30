@@ -71,6 +71,24 @@ class GlobalLeaveSettings(models.Model):
         verbose_name='Gratis bijzonder verlof uren per maand'
     )
     
+    # Leave reminder settings
+    leave_reminder_enabled = models.BooleanField(
+        default=False,
+        verbose_name='Verlofherinneringen inschakelen'
+    )
+    leave_reminder_email = models.EmailField(
+        max_length=254,
+        blank=True,
+        default='',
+        verbose_name='E-mailadres voor verlofherinneringen'
+    )
+    leave_reminder_weeks_before = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Weken van tevoren herinneren',
+        help_text='Lijst van weken vóór verlof om herinneringen te sturen, bijv. [1, 2, 3, 4]'
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

@@ -79,6 +79,9 @@ class GlobalLeaveSettingsViewSet(viewsets.ModelViewSet):
             'max_concurrent_leave': settings_obj.max_concurrent_leave,
             'overtime_leave_percentage': settings_obj.overtime_leave_percentage,
             'free_special_leave_hours_per_month': str(settings_obj.free_special_leave_hours_per_month),
+            'leave_reminder_enabled': settings_obj.leave_reminder_enabled,
+            'leave_reminder_email': settings_obj.leave_reminder_email,
+            'leave_reminder_weeks_before': settings_obj.leave_reminder_weeks_before,
         }
         
         serializer = self.get_serializer(settings_obj, data=request.data, partial=True)
@@ -99,6 +102,9 @@ class GlobalLeaveSettingsViewSet(viewsets.ModelViewSet):
                     'max_concurrent_leave': settings_obj.max_concurrent_leave,
                     'overtime_leave_percentage': settings_obj.overtime_leave_percentage,
                     'free_special_leave_hours_per_month': str(settings_obj.free_special_leave_hours_per_month),
+                    'leave_reminder_enabled': settings_obj.leave_reminder_enabled,
+                    'leave_reminder_email': settings_obj.leave_reminder_email,
+                    'leave_reminder_weeks_before': settings_obj.leave_reminder_weeks_before,
                 },
                 'update_data': request.data,
             },
