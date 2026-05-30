@@ -31,6 +31,9 @@ class GlobalLeaveSettingsSerializer(serializers.ModelSerializer):
             'max_concurrent_leave',
             'free_special_leave_hours_per_month',
             'free_special_leave_hours',  # alias
+            'leave_reminder_enabled',
+            'leave_reminder_email',
+            'leave_reminder_weeks_before',
             'updated_at',
         ]
         read_only_fields = ['id', 'updated_at']

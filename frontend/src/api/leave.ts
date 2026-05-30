@@ -15,6 +15,9 @@ export interface GlobalLeaveSettings {
   max_concurrent_leave: number
   free_special_leave_hours_per_month: string
   free_special_leave_hours: number  // Alias for free_special_leave_hours_per_month (as number)
+  leave_reminder_enabled: boolean
+  leave_reminder_email: string
+  leave_reminder_weeks_before: number[]
   updated_at: string
 }
 

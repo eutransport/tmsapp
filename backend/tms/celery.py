@@ -7,6 +7,7 @@ installed Django apps, and defines the beat schedule.
 import os
 
 from celery import Celery
+from celery.schedules import crontab
 
 # Set the default Django settings module
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tms.settings.production')
@@ -18,3 +19,15 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Auto-discover tasks in all installed apps
 app.autodiscover_tasks()
+
+# Beat schedule: periodic tasks
+app.conf.beat_schedule = {
+    'send-driver-expiry-reminders': {
+        'task': 'apps.drivers.tasks.send_driver_expiry_reminders',
+        'schedule': crontab(hour=8, minute=0),
+    },
+    'send-leave-reminders': {
+        'task': 'apps.leave.tasks.send_leave_reminders',
+        'schedule': crontab(hour=8, minute=15),
+    },
+}
