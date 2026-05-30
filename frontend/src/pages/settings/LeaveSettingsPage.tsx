@@ -567,7 +567,7 @@ export default function LeaveSettingsPage({ embedded = false }: { embedded?: boo
                 }`}>
                   <strong>Resultaat voor {testResult.simulate_date}:</strong>{' '}
                   {testResult.total_leaves_found > 0
-                    ? `${testResult.total_leaves_found} verlofaanvra(a)g(en) gevonden`
+                    ? `${testResult.total_leaves_found} verlofaanvragen gevonden`
                     : 'Geen goedgekeurd verlof gevonden op de geconfigureerde herinneringsmomenten'}
                   {testResult.emails_sent > 0 && (
                     <span className="ml-2 text-green-700">

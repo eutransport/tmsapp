@@ -240,14 +240,15 @@ class GlobalLeaveSettingsViewSet(viewsets.ModelViewSet):
                     lines = []
                     for lv in entry['leaves']:
                         lines.append(
-                            f"  \u2022 {lv['user_naam']} \u2014 {lv['leave_type']}\n"
+                            f"  • {lv['user_naam']} — {lv['leave_type']}\n"
                             f"    Van {lv['start_date']} t/m {lv['end_date']} "
                             f"({lv['hours_requested']} uur)"
                         )
+                    employees_list = '\n'.join(lines)
                     body = (
                         f"Dit is een TEST-herinnering (simulatiedatum: {simulate_date_str}).\n\n"
                         f"Over {time_label} begint het verlof van de volgende medewerker(s):\n\n"
-                        f"{''.join(lines)}\n\n"
+                        f"{employees_list}\n\n"
                         f"Gelieve hier rekening mee te houden in de planning.\n\n"
                         f"Met vriendelijke groet,\n"
                         f"{app_settings.company_name or 'TMS'}"
@@ -276,7 +277,7 @@ class GlobalLeaveSettingsViewSet(viewsets.ModelViewSet):
                     emails_sent += 1
                 except Exception as exc:
                     logger.error('Test leave reminder send error (%s weeks): %s', entry['weeks_before'], exc)
-                    send_errors.append(f"{entry['time_label']}: {exc}")
+                    send_errors.append(f"{entry['time_label']}: Verzenden mislukt")
 
         return Response({
             'simulate_date': simulate_date_str,
