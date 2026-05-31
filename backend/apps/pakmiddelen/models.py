@@ -102,6 +102,15 @@ class PakmiddelenConfig(models.Model):
         verbose_name='Tijdstip dagelijkse controle',
         help_text='Tijdstip waarop de mailbox dagelijks wordt uitgelezen en de rapportmail wordt verstuurd.',
     )
+    schedule_weekdays = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Actieve dagen',
+        help_text=(
+            'Lijst met weekdagen waarop de geplande controle mag draaien '
+            '(0=maandag t/m 6=zondag). Leeg = elke dag.'
+        ),
+    )
     period_days = models.PositiveIntegerField(
         default=1,
         verbose_name='Periode (dagen)',

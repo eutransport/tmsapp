@@ -28,6 +28,16 @@ def run_scheduled_check():
     if sched is None:
         return 'no schedule'
 
+    # Weekday gating: 0=Monday..6=Sunday (matches Python's weekday()).
+    weekdays = config.schedule_weekdays or []
+    if weekdays:
+        try:
+            allowed = {int(d) for d in weekdays if 0 <= int(d) <= 6}
+        except (TypeError, ValueError):
+            allowed = set()
+        if allowed and now_local.weekday() not in allowed:
+            return 'not scheduled today'
+
     # Run when current time is within [sched, sched + 5 min] AND not already done today.
     today = now_local.date()
     sched_dt = datetime.combine(today, sched, tzinfo=now_local.tzinfo)
@@ -36,7 +46,12 @@ def run_scheduled_check():
 
     if config.last_run_at:
         last_local = timezone.localtime(config.last_run_at)
-        if last_local.date() == today and (config.last_run_status or '') == 'ok':
+        # Only dedupe when the previous successful run already covered
+        # today's scheduled slot (i.e. ran at or after sched_dt). This way,
+        # moving the schedule_time later in the day allows a new run.
+        if (last_local.date() == today
+                and last_local >= sched_dt
+                and (config.last_run_status or '') == 'ok'):
             return 'already ran'
 
     logger.info('Running scheduled pakmiddelen check')

@@ -526,6 +526,7 @@ function ConfigTab() {
         mark_as_read: config.mark_as_read,
         enabled: config.enabled,
         schedule_time: config.schedule_time,
+        schedule_weekdays: config.schedule_weekdays || [],
         period_days: config.period_days,
         period_from_date: config.period_from_date || null,
         notification_recipients: recipients,
@@ -736,13 +737,68 @@ function ConfigTab() {
           <input type="time" value={(config.schedule_time || '').slice(0, 5)}
             onChange={e => update({ schedule_time: e.target.value + ':00' })} className={inputCls} />
         </Field>
+        <Field label="Actieve dagen" full>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { idx: 0, label: 'Ma' },
+              { idx: 1, label: 'Di' },
+              { idx: 2, label: 'Wo' },
+              { idx: 3, label: 'Do' },
+              { idx: 4, label: 'Vr' },
+              { idx: 5, label: 'Za' },
+              { idx: 6, label: 'Zo' },
+            ].map(d => {
+              const days = config.schedule_weekdays || []
+              const active = days.includes(d.idx)
+              return (
+                <button
+                  key={d.idx}
+                  type="button"
+                  onClick={() => {
+                    const next = active
+                      ? days.filter(x => x !== d.idx)
+                      : [...days, d.idx].sort((a, b) => a - b)
+                    update({ schedule_weekdays: next })
+                  }}
+                  className={
+                    'px-3 py-1.5 text-sm rounded-md border ' +
+                    (active
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50')
+                  }
+                >
+                  {d.label}
+                </button>
+              )
+            })}
+            <button
+              type="button"
+              onClick={() => update({ schedule_weekdays: [] })}
+              className="px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50"
+            >
+              Elke dag
+            </button>
+            <button
+              type="button"
+              onClick={() => update({ schedule_weekdays: [0, 1, 2, 3, 4] })}
+              className="px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50"
+            >
+              Ma–Vr
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            {(config.schedule_weekdays || []).length === 0
+              ? 'De controle draait elke dag op het ingestelde tijdstip.'
+              : 'De controle draait alleen op de geselecteerde dagen.'}
+          </p>
+        </Field>
         <Field label="SMTP profiel (verzender)" full>
           <select
             value={config.notification_email_profile || ''}
             onChange={e => update({ notification_email_profile: e.target.value || null })}
             className={inputCls}
           >
-            <option value="">— Standaard profiel —</option>
+            <option value="">— Hoofd e-mailinstellingen (algemeen) —</option>
             {emailProfiles.map(p => (
               <option key={p.id} value={p.id}>
                 {p.name}{p.is_default ? ' (standaard)' : ''} — {p.smtp_from_email || p.smtp_username || p.smtp_host}
@@ -750,12 +806,18 @@ function ConfigTab() {
             ))}
           </select>
           <p className="text-xs text-gray-500 mt-1">
-            Beheer profielen onder Instellingen → E-mailprofielen. Eerst opslaan voordat je een testmail verstuurt.
+            Kies "Hoofd e-mailinstellingen" om de algemene SMTP-configuratie (Instellingen → E-mail) te gebruiken,
+            of selecteer een specifiek e-mailprofiel. Eerst opslaan voordat je een testmail verstuurt.
           </p>
         </Field>
         <Field label="Ontvangers (komma-gescheiden)" full>
           <textarea rows={2} value={recipientsInput} onChange={e => setRecipientsInput(e.target.value)}
             className={inputCls} placeholder="naam1@bedrijf.nl, naam2@bedrijf.nl" />
+          {config.enabled && recipientsInput.trim() === '' && (
+            <p className="text-sm text-red-600 mt-1">
+              Let op: er zijn geen ontvangers ingesteld. De geplande dagelijkse mail wordt daardoor <b>niet</b> verstuurd.
+            </p>
+          )}
         </Field>
         <div className="col-span-full flex flex-wrap gap-2">
           <input type="email" value={testRecipient} onChange={e => setTestRecipient(e.target.value)}

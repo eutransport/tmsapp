@@ -21,6 +21,11 @@ class PakmiddelenConfigSerializer(serializers.ModelSerializer):
         required=False,
         allow_empty=True,
     )
+    schedule_weekdays = serializers.ListField(
+        child=serializers.IntegerField(min_value=0, max_value=6),
+        required=False,
+        allow_empty=True,
+    )
 
     class Meta:
         model = PakmiddelenConfig
@@ -36,7 +41,7 @@ class PakmiddelenConfigSerializer(serializers.ModelSerializer):
             'graph_mailbox', 'graph_folder',
             'subject_template',
             'mark_as_read',
-            'enabled', 'schedule_time',
+            'enabled', 'schedule_time', 'schedule_weekdays',
             'period_days', 'period_from_date',
             'notification_recipients', 'notification_email_profile',
             'last_run_at', 'last_run_status', 'last_run_message',

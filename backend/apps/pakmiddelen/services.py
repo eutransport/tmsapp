@@ -146,17 +146,30 @@ def run_check(*, config: PakmiddelenConfig | None = None, target_date: date | No
     report = {'success': True, 'matched': matched, 'missing': missing,
               'date': str(target_date), 'message': config.last_run_message}
 
-    if send_report and config.notification_recipients:
-        from .notifier import send_daily_report
-        try:
-            send_daily_report(config, target_date, missing, user=user)
-            PakmiddelenCheckResult.objects.filter(
-                check_date=target_date, ritnummer__in=missing
-            ).update(notification_sent=True)
-            report['notification_sent'] = True
-        except Exception as exc:
-            logger.exception('send_daily_report failed: %s', exc)
+    if send_report:
+        recipients = [r.strip() for r in (config.notification_recipients or []) if r and r.strip()]
+        if not recipients:
+            warn = 'Geen ontvangers geconfigureerd — geen mail verstuurd.'
+            logger.warning('Pakmiddelen: %s', warn)
+            config.last_run_status = 'warning'
+            config.last_run_message = f'{config.last_run_message} {warn}'
+            config.save(update_fields=['last_run_status', 'last_run_message', 'updated_at'])
             report['notification_sent'] = False
-            report['notification_error'] = str(exc)
+            report['notification_error'] = warn
+        else:
+            from .notifier import send_daily_report
+            try:
+                send_daily_report(config, target_date, missing, user=user)
+                PakmiddelenCheckResult.objects.filter(
+                    check_date=target_date, ritnummer__in=missing
+                ).update(notification_sent=True)
+                report['notification_sent'] = True
+            except Exception as exc:
+                logger.exception('send_daily_report failed: %s', exc)
+                config.last_run_status = 'error'
+                config.last_run_message = f'{config.last_run_message} Mailfout: {exc}'
+                config.save(update_fields=['last_run_status', 'last_run_message', 'updated_at'])
+                report['notification_sent'] = False
+                report['notification_error'] = str(exc)
 
     return report

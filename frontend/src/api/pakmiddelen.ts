@@ -25,6 +25,7 @@ export interface PakmiddelenConfig {
   mark_as_read: boolean
   enabled: boolean
   schedule_time: string  // "HH:MM:SS"
+  schedule_weekdays: number[]  // 0=Mon..6=Sun, empty = every day
   period_days: number
   period_from_date: string | null
   notification_recipients: string[]
