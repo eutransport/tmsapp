@@ -30,4 +30,12 @@ app.conf.beat_schedule = {
         'task': 'apps.leave.tasks.send_leave_reminders',
         'schedule': crontab(hour=8, minute=15),
     },
+    'pakmiddelen-scheduled-check': {
+        'task': 'apps.pakmiddelen.tasks.run_scheduled_check',
+        'schedule': crontab(minute='*'),
+    },
+    'pakmiddelen-secret-expiry-check': {
+        'task': 'apps.pakmiddelen.tasks.check_secret_expiry',
+        'schedule': crontab(hour=8, minute=30),
+    },
 }

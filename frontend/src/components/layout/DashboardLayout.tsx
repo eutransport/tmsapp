@@ -30,9 +30,7 @@ import {
   ChartBarSquareIcon,
   MapPinIcon,
   DocumentChartBarIcon,
-  ScaleIcon,
-  ReceiptPercentIcon,
-  FolderOpenIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/24/outline'
 import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
@@ -63,12 +61,9 @@ const navigation: NavItem[] = [
   { name: 'nav.myHours', href: '/my-hours', icon: ClipboardDocumentListIcon, roles: ['chauffeur'] },
   { name: 'nav.submittedHours', href: '/submitted-hours', icon: ClipboardDocumentListIcon, roles: ['admin', 'gebruiker'], permission: 'view_submitted_hours' },
   { name: 'nav.urenImport', href: '/uren-import', icon: ArrowUpTrayIcon, roles: ['admin'], permission: 'view_uren_import' },
-  { name: 'nav.tolRegistratie', href: '/tol-registratie', icon: ReceiptPercentIcon, roles: ['chauffeur'] },
-  { name: 'nav.ingediendeTol', href: '/tol-registratie/admin', icon: ClipboardDocumentListIcon, roles: ['admin'] },
   { name: 'nav.planning', href: '/planning', icon: CalendarIcon },  // All roles (filtered by backend)
   { name: 'nav.leave', href: '/leave', icon: CalendarDaysIcon },  // All roles
   { name: 'nav.leaveRequests', href: '/leave/admin', icon: ClipboardDocumentCheckIcon, roles: ['admin'], permission: 'can_manage_leave_for_all' },
-  { name: 'nav.leaveBalance', href: '/leave/balances', icon: ScaleIcon },  // All roles - data filtered by backend based on view_leave_balances permission
   { name: 'nav.documents', href: '/documents', icon: PencilSquareIcon },  // All roles - PDF signing
   { name: 'nav.notifications', href: '/notifications', icon: BellIcon, roles: ['admin'], permission: 'view_notifications' },
   { name: 'nav.invoices', href: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'gebruiker'], permission: 'view_invoices' },
@@ -82,9 +77,7 @@ const navigation: NavItem[] = [
   { name: 'nav.tachograph', href: '/tachograph', icon: ChartBarSquareIcon, roles: ['admin'] },
   { name: 'nav.tachographComparison', href: '/tachograph/comparison', icon: ChartBarSquareIcon, roles: ['admin'] },
   { name: 'nav.reports', href: '/reports', icon: DocumentChartBarIcon, roles: ['admin', 'gebruiker', 'chauffeur'], permission: 'view_reports' },
-  { name: 'nav.dossiers', href: '/dossiers', icon: FolderOpenIcon, roles: ['admin', 'gebruiker'], permission: 'manage_dossiers' },
-  { name: 'nav.dossierOrganisaties', href: '/dossiers/organisaties', icon: BuildingOfficeIcon, roles: ['admin', 'gebruiker'], permission: 'manage_dossiers' },
-  { name: 'nav.dossiersMijn', href: '/dossiers', icon: FolderOpenIcon, roles: ['chauffeur'] },
+  { name: 'nav.pakmiddelen', href: '/pakmiddelen', icon: EnvelopeIcon, roles: ['admin', 'gebruiker'], permission: 'view_pakmiddelen' },
 ]
 
 const adminNavigation: NavItem[] = [
@@ -185,7 +178,7 @@ export default function DashboardLayout() {
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-64 flex flex-col flex-1 min-w-0">
+      <div className="lg:pl-64 flex flex-col flex-1">
         {/* Top bar */}
         <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-2 sm:gap-x-4 border-b border-gray-200 bg-white px-3 sm:px-4 shadow-sm lg:gap-x-6 lg:px-8">
           <button

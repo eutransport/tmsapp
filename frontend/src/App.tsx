@@ -66,7 +66,9 @@ import LeaveRequestPage from '@/pages/leave/LeaveRequestPage'
 import LeaveCalendarPage from '@/pages/leave/LeaveCalendarPage'
 import LeaveSettingsPage from '@/pages/settings/LeaveSettingsPage'
 import LeaveRequestsAdminPage from '@/pages/leave/LeaveRequestsAdminPage'
-import LeaveBalancePage from '@/pages/leave/LeaveBalancePage'
+
+// Pakmiddelen Teruggavebonnen
+import PakmiddelenPage from '@/pages/pakmiddelen/PakmiddelenPage'
 
 // Notifications
 import NotificationsPage from '@/pages/notifications/NotificationsPage'
@@ -78,17 +80,6 @@ import {
   DocumentDetailPage,
   DocumentSignPage,
 } from '@/pages/documents'
-
-// Dossiers (case management)
-import {
-  DossierListPage,
-  DossierCreatePage,
-  DossierDetailPage,
-  DossierTypesPage,
-} from '@/pages/dossiers'
-
-// Organisaties (leveranciersbeheer)
-import { OrganisatiesPage, OrganisatieDetailPage } from '@/pages/organisaties'
 
 // Spreadsheets (Ritregistratie)
 import SpreadsheetListPage from '@/pages/spreadsheets/SpreadsheetListPage'
@@ -109,10 +100,6 @@ import MaintenanceSettingsPage from '@/pages/maintenance/MaintenanceSettingsPage
 // Tachograph
 import TachographPage from '@/pages/tachograph/TachographPage'
 import TachographComparisonPage from '@/pages/tachograph/TachographComparisonPage'
-
-// Toll Registration
-import TolRegistratiePage from '@/pages/toll/TolRegistratiePage'
-import AdminTolRegistratiePage from '@/pages/toll/AdminTolRegistratiePage'
 
 // Reports
 import ReportsPage from '@/pages/reports/ReportsPage'
@@ -210,14 +197,6 @@ function PermissionRoute({ children, permission }: { children: React.ReactNode; 
   if (user?.rol === 'admin') return <>{children}</>
   if (user?.module_permissions?.includes(permission)) return <>{children}</>
   
-  return <Navigate to="/" replace />
-}
-
-function DossierRoute({ children }: { children: React.ReactNode }) {
-  const { user } = useAuthStore()
-  if (user?.rol === 'admin') return <>{children}</>
-  if (user?.module_permissions?.includes('manage_dossiers')) return <>{children}</>
-  if (user?.rol === 'chauffeur') return <>{children}</>
   return <Navigate to="/" replace />
 }
 
@@ -335,10 +314,6 @@ function App() {
         <Route path="/my-hours" element={<MyHoursPage />} />
         <Route path="/submitted-hours" element={<SubmittedHoursPage />} />
         <Route path="/uren-import" element={<AdminRoute><UrenImportPage /></AdminRoute>} />
-
-        {/* Toll Registration */}
-        <Route path="/tol-registratie" element={<TolRegistratiePage />} />
-        <Route path="/tol-registratie/admin" element={<AdminRoute><AdminTolRegistratiePage /></AdminRoute>} />
         
         {/* Planning */}
         <Route path="/planning" element={<PlanningPage />} />
@@ -376,8 +351,10 @@ function App() {
         <Route path="/leave/request" element={<LeaveRequestPage />} />
         <Route path="/leave/calendar" element={<LeaveCalendarPage />} />
         <Route path="/leave/admin" element={<PermissionRoute permission="can_manage_leave_for_all"><LeaveRequestsAdminPage /></PermissionRoute>} />
-        <Route path="/leave/balances" element={<LeaveBalancePage />} />
         <Route path="/settings/leave" element={<AdminRoute><LeaveSettingsPage /></AdminRoute>} />
+
+        {/* Pakmiddelen Teruggavebonnen */}
+        <Route path="/pakmiddelen" element={<PermissionRoute permission="view_pakmiddelen"><PakmiddelenPage /></PermissionRoute>} />
 
         {/* Spreadsheets (Ritregistratie) */}
         <Route path="/spreadsheets" element={<AdminRoute><SpreadsheetListPage /></AdminRoute>} />
@@ -395,14 +372,6 @@ function App() {
         <Route path="/documents/upload" element={<DocumentUploadPage />} />
         <Route path="/documents/:id" element={<DocumentDetailPage />} />
         <Route path="/documents/:id/sign" element={<DocumentSignPage />} />
-
-        {/* Dossiers (case management) */}
-        <Route path="/dossiers" element={<DossierRoute><DossierListPage /></DossierRoute>} />
-        <Route path="/dossiers/new" element={<PermissionRoute permission="manage_dossiers"><DossierCreatePage /></PermissionRoute>} />
-        <Route path="/dossiers/types" element={<PermissionRoute permission="manage_dossiers"><DossierTypesPage /></PermissionRoute>} />
-        <Route path="/dossiers/organisaties" element={<PermissionRoute permission="manage_dossiers"><OrganisatiesPage /></PermissionRoute>} />
-        <Route path="/dossiers/organisaties/:id" element={<PermissionRoute permission="manage_dossiers"><OrganisatieDetailPage /></PermissionRoute>} />
-        <Route path="/dossiers/:id" element={<DossierRoute><DossierDetailPage /></DossierRoute>} />
       </Route>
       
       {/* Catch all - redirect to home */}

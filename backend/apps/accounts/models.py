@@ -37,6 +37,8 @@ AVAILABLE_MODULE_PERMISSIONS = [
     ('view_reports', 'Rapport Agent'),
     ('view_leave_balances', 'Verlofsaldo'),
     ('manage_dossiers', 'Dossiers beheren'),
+    ('view_pakmiddelen', 'Pakmiddelen Teruggavebonnen (alleen lezen)'),
+    ('manage_pakmiddelen', 'Pakmiddelen Teruggavebonnen beheren'),
 ]
 
 # Dependencies: enabling a permission also requires these permissions
@@ -48,6 +50,7 @@ MODULE_PERMISSION_DEPENDENCIES = {
     'view_spreadsheet_templates': ['view_spreadsheets'],
     'manage_all_planning': ['view_all_planning'],
     'manage_submitted_hours': ['view_submitted_hours'],
+    'manage_pakmiddelen': ['view_pakmiddelen'],
 }
 
 VALID_MODULE_PERMISSIONS = {code for code, _ in AVAILABLE_MODULE_PERMISSIONS}
