@@ -16,6 +16,7 @@ import {
   TableCellsIcon,
   PlusIcon,
   TrashIcon,
+  ClockIcon,
 } from '@heroicons/react/24/outline'
 import { useAuthStore } from '@/stores/authStore'
 import {
@@ -24,10 +25,12 @@ import {
   RitnummerSelection,
   AvailableVehicle,
   CheckResult,
+  MailLog,
+  MailLogType,
 } from '@/api/pakmiddelen'
 import { listEmailProfiles, EmailProfile } from '@/api/emailProfiles'
 
-type Tab = 'overview' | 'config' | 'ritnummers'
+type Tab = 'overview' | 'config' | 'ritnummers' | 'mailhistory'
 
 export default function PakmiddelenPage() {
   const { t } = useTranslation()
@@ -65,12 +68,18 @@ export default function PakmiddelenPage() {
               {t('pakmiddelen.tab.ritnummers', 'Ritnummers')}
             </TabButton>
           )}
+          {canManage && (
+            <TabButton active={tab === 'mailhistory'} onClick={() => setTab('mailhistory')} icon={<ClockIcon className="w-4 h-4" />}>
+              {t('pakmiddelen.tab.mailhistory', 'Mailhistorie')}
+            </TabButton>
+          )}
         </nav>
       </div>
 
       {tab === 'overview' && <OverviewTab canManage={canManage} />}
       {tab === 'config' && canManage && <ConfigTab />}
       {tab === 'ritnummers' && canManage && <RitnummersTab />}
+      {tab === 'mailhistory' && canManage && <MailHistoryTab />}
     </div>
   )
 }
@@ -907,6 +916,197 @@ function RitnummersTab() {
         className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50">
         {saving ? 'Opslaan...' : 'Selectie opslaan'}
       </button>
+    </div>
+  )
+}
+
+/* -------------------- Mail History -------------------- */
+
+function MailHistoryTab() {
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [mailType, setMailType] = useState<MailLogType | ''>('')
+  const [successFilter, setSuccessFilter] = useState<'true' | 'false' | ''>('')
+  const [from, setFrom] = useState<string>('')
+  const [to, setTo] = useState<string>('')
+  const [logs, setLogs] = useState<MailLog[]>([])
+  const [count, setCount] = useState(0)
+  const [hasNext, setHasNext] = useState(false)
+  const [hasPrev, setHasPrev] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = async (targetPage = page) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await pakmiddelenApi.listMailLogs({
+        page: targetPage,
+        page_size: pageSize,
+        mail_type: mailType || undefined,
+        success: successFilter || undefined,
+        from: from || undefined,
+        to: to || undefined,
+      })
+      setLogs(data.results || [])
+      setCount(data.count || 0)
+      setHasNext(!!data.next)
+      setHasPrev(!!data.previous)
+      setPage(targetPage)
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Kon mailhistorie niet laden.')
+      setLogs([])
+      setCount(0)
+      setHasNext(false)
+      setHasPrev(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Reset to page 1 when filters change
+  useEffect(() => { load(1) }, [pageSize, mailType, successFilter, from, to])
+  // Initial load
+  useEffect(() => { load(1) /* eslint-disable-line react-hooks/exhaustive-deps */ }, [])
+
+  const totalPages = Math.max(1, Math.ceil(count / pageSize))
+
+  const fmtDateTime = (iso: string) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return iso
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="block">
+          <span className="text-sm font-medium text-gray-700 block mb-1">Type</span>
+          <select value={mailType} onChange={e => setMailType(e.target.value as MailLogType | '')}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm">
+            <option value="">Alle</option>
+            <option value="daily_report">Dagelijks rapport</option>
+            <option value="overview">Overzicht</option>
+            <option value="test">Testmail</option>
+            <option value="secret_expiry">Secret-expiratie</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium text-gray-700 block mb-1">Resultaat</span>
+          <select value={successFilter} onChange={e => setSuccessFilter(e.target.value as 'true' | 'false' | '')}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm">
+            <option value="">Alle</option>
+            <option value="true">Succesvol</option>
+            <option value="false">Mislukt</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium text-gray-700 block mb-1">Van</span>
+          <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm" />
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium text-gray-700 block mb-1">Tot en met</span>
+          <input type="date" value={to} onChange={e => setTo(e.target.value)}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm" />
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium text-gray-700 block mb-1">Per pagina</span>
+          <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm">
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </label>
+        <button onClick={() => load(page)}
+          className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
+          Vernieuwen
+        </button>
+        <div className="ml-auto text-sm text-gray-600">
+          Totaal: <b>{count}</b>
+        </div>
+      </div>
+
+      {error && (
+        <div className="px-3 py-2 text-sm bg-red-50 border border-red-200 text-red-800 rounded">
+          {error}
+        </div>
+      )}
+
+      <div className="overflow-x-auto bg-white border border-gray-200 rounded-md">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Verzonden op</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Onderwerp</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ontvangers</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Resultaat</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Melding</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {loading && (
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">Laden…</td></tr>
+            )}
+            {!loading && logs.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">Geen mails gevonden.</td></tr>
+            )}
+            {!loading && logs.map(log => (
+              <tr key={log.id} className="hover:bg-gray-50 align-top">
+                <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">{fmtDateTime(log.sent_at)}</td>
+                <td className="px-4 py-2 text-sm text-gray-700 whitespace-nowrap">{log.mail_type_display}</td>
+                <td className="px-4 py-2 text-sm text-gray-900">{log.subject || '—'}</td>
+                <td className="px-4 py-2 text-sm text-gray-700">
+                  {log.recipients && log.recipients.length > 0
+                    ? <span className="break-all">{log.recipients.join(', ')}</span>
+                    : <span className="text-gray-400">—</span>}
+                </td>
+                <td className="px-4 py-2 text-sm whitespace-nowrap">
+                  {log.success
+                    ? <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-medium">
+                        <CheckCircleIcon className="w-3.5 h-3.5" /> Succesvol
+                      </span>
+                    : <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs font-medium">
+                        <XCircleIcon className="w-3.5 h-3.5" /> Mislukt
+                      </span>}
+                </td>
+                <td className="px-4 py-2 text-sm text-gray-700 max-w-md">
+                  <span className="break-words">{log.message || '—'}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm text-gray-600">
+          Pagina <b>{page}</b> van <b>{totalPages}</b>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => load(1)} disabled={!hasPrev || loading}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+            « Eerste
+          </button>
+          <button onClick={() => load(page - 1)} disabled={!hasPrev || loading}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+            ‹ Vorige
+          </button>
+          <button onClick={() => load(page + 1)} disabled={!hasNext || loading}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+            Volgende ›
+          </button>
+          <button onClick={() => load(totalPages)} disabled={!hasNext || loading}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+            Laatste »
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
