@@ -281,7 +281,7 @@ function OverviewTab({ canManage }: { canManage: boolean }) {
           <button onClick={prevMonth} className={navBtn} title="Vorige maand">← Maand</button>
           <button onClick={nextMonth} disabled={!canGoNextMonth} className={navBtn} title="Volgende maand">Maand →</button>
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-wrap gap-2 xl:w-auto">
           <button onClick={load} className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
             Vernieuwen
           </button>
@@ -308,7 +308,7 @@ function OverviewTab({ canManage }: { canManage: boolean }) {
             </button>
           )}
         </div>
-        <div className="ml-auto flex gap-3 text-sm">
+        <div className="flex w-full flex-wrap gap-3 text-sm xl:ml-auto xl:w-auto">
           <span className="px-3 py-1 bg-gray-100 rounded">Totaal: <b>{stats.total}</b></span>
           <span className="px-3 py-1 bg-green-100 text-green-800 rounded">Ja: <b>{stats.ja}</b></span>
           <span className="px-3 py-1 bg-red-100 text-red-800 rounded">Nee: <b>{stats.nee}</b></span>
@@ -321,53 +321,93 @@ function OverviewTab({ canManage }: { canManage: boolean }) {
         </div>
       )}
 
-      <div className="overflow-x-auto bg-white border border-gray-200 rounded-md">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              {showDate && <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>}
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ritnummer</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Onderwerp</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Pakmiddelen teruggavebon</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ontvangen op</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {loading && (
-              <tr><td colSpan={showDate ? 5 : 4} className="px-4 py-8 text-center text-gray-500">Laden...</td></tr>
-            )}
-            {!loading && results.length === 0 && (
-              <tr><td colSpan={showDate ? 5 : 4} className="px-4 py-8 text-center text-gray-500">
-                Geen resultaten in deze periode.
-              </td></tr>
-            )}
-            {!loading && results.map(r => (
-              <tr key={r.id}>
-                {showDate && <td className="px-4 py-2 text-sm text-gray-700">{fmtDate(r.check_date)}</td>}
-                <td className="px-4 py-2 text-sm font-medium text-gray-900">{r.ritnummer}</td>
-                <td className="px-4 py-2 text-sm text-gray-700">{r.matched_subject || <span className="text-gray-400">—</span>}</td>
-                <td className="px-4 py-2 text-sm">
-                  {r.has_bon ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-semibold">
-                      <CheckCircleIcon className="w-4 h-4" /> Ja
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-semibold">
-                      <XCircleIcon className="w-4 h-4" /> Nee
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-2 text-sm text-gray-500">
-                  {r.mail_received_at ? new Date(r.mail_received_at).toLocaleString('nl-NL') : '—'}
-                </td>
+      <div className="bg-white border border-gray-200 rounded-md">
+        <div className="space-y-3 p-4 md:hidden">
+          {loading && <div className="rounded-md border border-gray-200 px-4 py-6 text-center text-sm text-gray-500">Laden...</div>}
+          {!loading && results.length === 0 && (
+            <div className="rounded-md border border-gray-200 px-4 py-6 text-center text-sm text-gray-500">
+              Geen resultaten in deze periode.
+            </div>
+          )}
+          {!loading && results.map(r => (
+            <article key={r.id} className="space-y-2 rounded-md border border-gray-200 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{r.ritnummer}</p>
+                  {showDate && <p className="text-xs text-gray-500">{fmtDate(r.check_date)}</p>}
+                </div>
+                {r.has_bon ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-semibold">
+                    <CheckCircleIcon className="w-4 h-4" /> Ja
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-semibold">
+                    <XCircleIcon className="w-4 h-4" /> Nee
+                  </span>
+                )}
+              </div>
+              <dl className="space-y-2 text-xs">
+                <div>
+                  <dt className="text-gray-500">Onderwerp</dt>
+                  <dd className="text-gray-700 break-words">{r.matched_subject || <span className="text-gray-400">—</span>}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Ontvangen op</dt>
+                  <dd className="text-gray-700">{r.mail_received_at ? new Date(r.mail_received_at).toLocaleString('nl-NL') : '—'}</dd>
+                </div>
+              </dl>
+            </article>
+          ))}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                {showDate && <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>}
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ritnummer</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Onderwerp</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Pakmiddelen teruggavebon</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ontvangen op</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {loading && (
+                <tr><td colSpan={showDate ? 5 : 4} className="px-4 py-8 text-center text-gray-500">Laden...</td></tr>
+              )}
+              {!loading && results.length === 0 && (
+                <tr><td colSpan={showDate ? 5 : 4} className="px-4 py-8 text-center text-gray-500">
+                  Geen resultaten in deze periode.
+                </td></tr>
+              )}
+              {!loading && results.map(r => (
+                <tr key={r.id}>
+                  {showDate && <td className="px-4 py-2 text-sm text-gray-700">{fmtDate(r.check_date)}</td>}
+                  <td className="px-4 py-2 text-sm font-medium text-gray-900">{r.ritnummer}</td>
+                  <td className="px-4 py-2 text-sm text-gray-700">{r.matched_subject || <span className="text-gray-400">—</span>}</td>
+                  <td className="px-4 py-2 text-sm">
+                    {r.has_bon ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-semibold">
+                        <CheckCircleIcon className="w-4 h-4" /> Ja
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-semibold">
+                        <XCircleIcon className="w-4 h-4" /> Nee
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-sm text-gray-500">
+                    {r.mail_received_at ? new Date(r.mail_received_at).toLocaleString('nl-NL') : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {mailOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !mailSending && setMailOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6" onClick={() => !mailSending && setMailOpen(false)}>
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Mail overzicht versturen</h3>
@@ -408,13 +448,13 @@ function OverviewTab({ canManage }: { canManage: boolean }) {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
               <button onClick={() => setMailOpen(false)} disabled={mailSending}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 sm:w-auto">
                 Annuleren
               </button>
               <button onClick={sendMail} disabled={mailSending}
-                className="px-3 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 inline-flex items-center gap-2">
+                className="w-full px-3 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 inline-flex items-center justify-center gap-2 sm:w-auto">
                 <EnvelopeIcon className="w-4 h-4" />
                 {mailSending ? 'Versturen...' : 'Verstuur'}
               </button>
@@ -1026,7 +1066,7 @@ function MailHistoryTab() {
           className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
           Vernieuwen
         </button>
-        <div className="ml-auto text-sm text-gray-600">
+        <div className="w-full text-sm text-gray-600 sm:ml-auto sm:w-auto">
           Totaal: <b>{count}</b>
         </div>
       </div>
@@ -1037,51 +1077,93 @@ function MailHistoryTab() {
         </div>
       )}
 
-      <div className="overflow-x-auto bg-white border border-gray-200 rounded-md">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Verzonden op</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Onderwerp</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ontvangers</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Resultaat</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Melding</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {loading && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">Laden…</td></tr>
-            )}
-            {!loading && logs.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">Geen mails gevonden.</td></tr>
-            )}
-            {!loading && logs.map(log => (
-              <tr key={log.id} className="hover:bg-gray-50 align-top">
-                <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">{fmtDateTime(log.sent_at)}</td>
-                <td className="px-4 py-2 text-sm text-gray-700 whitespace-nowrap">{log.mail_type_display}</td>
-                <td className="px-4 py-2 text-sm text-gray-900">{log.subject || '—'}</td>
-                <td className="px-4 py-2 text-sm text-gray-700">
-                  {log.recipients && log.recipients.length > 0
-                    ? <span className="break-all">{log.recipients.join(', ')}</span>
-                    : <span className="text-gray-400">—</span>}
-                </td>
-                <td className="px-4 py-2 text-sm whitespace-nowrap">
-                  {log.success
-                    ? <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-medium">
-                        <CheckCircleIcon className="w-3.5 h-3.5" /> Succesvol
-                      </span>
-                    : <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs font-medium">
-                        <XCircleIcon className="w-3.5 h-3.5" /> Mislukt
-                      </span>}
-                </td>
-                <td className="px-4 py-2 text-sm text-gray-700 max-w-md">
-                  <span className="break-words">{log.message || '—'}</span>
-                </td>
+      <div className="bg-white border border-gray-200 rounded-md">
+        <div className="space-y-3 p-4 md:hidden">
+          {loading && <div className="rounded-md border border-gray-200 px-4 py-6 text-center text-sm text-gray-500">Laden…</div>}
+          {!loading && logs.length === 0 && (
+            <div className="rounded-md border border-gray-200 px-4 py-6 text-center text-sm text-gray-500">Geen mails gevonden.</div>
+          )}
+          {!loading && logs.map(log => (
+            <article key={log.id} className="space-y-2 rounded-md border border-gray-200 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{log.mail_type_display}</p>
+                  <p className="text-xs text-gray-500">{fmtDateTime(log.sent_at)}</p>
+                </div>
+                {log.success
+                  ? <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-medium">
+                      <CheckCircleIcon className="w-3.5 h-3.5" /> Succesvol
+                    </span>
+                  : <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs font-medium">
+                      <XCircleIcon className="w-3.5 h-3.5" /> Mislukt
+                    </span>}
+              </div>
+              <dl className="space-y-2 text-xs">
+                <div>
+                  <dt className="text-gray-500">Onderwerp</dt>
+                  <dd className="text-gray-700 break-words">{log.subject || '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Ontvangers</dt>
+                  <dd className="text-gray-700 break-all">
+                    {log.recipients && log.recipients.length > 0 ? log.recipients.join(', ') : <span className="text-gray-400">—</span>}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Melding</dt>
+                  <dd className="text-gray-700 break-words">{log.message || '—'}</dd>
+                </div>
+              </dl>
+            </article>
+          ))}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Verzonden op</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Onderwerp</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ontvangers</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Resultaat</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Melding</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {loading && (
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">Laden…</td></tr>
+              )}
+              {!loading && logs.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">Geen mails gevonden.</td></tr>
+              )}
+              {!loading && logs.map(log => (
+                <tr key={log.id} className="hover:bg-gray-50 align-top">
+                  <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">{fmtDateTime(log.sent_at)}</td>
+                  <td className="px-4 py-2 text-sm text-gray-700 whitespace-nowrap">{log.mail_type_display}</td>
+                  <td className="px-4 py-2 text-sm text-gray-900">{log.subject || '—'}</td>
+                  <td className="px-4 py-2 text-sm text-gray-700">
+                    {log.recipients && log.recipients.length > 0
+                      ? <span className="break-all">{log.recipients.join(', ')}</span>
+                      : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-4 py-2 text-sm whitespace-nowrap">
+                    {log.success
+                      ? <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-medium">
+                          <CheckCircleIcon className="w-3.5 h-3.5" /> Succesvol
+                        </span>
+                      : <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs font-medium">
+                          <XCircleIcon className="w-3.5 h-3.5" /> Mislukt
+                        </span>}
+                  </td>
+                  <td className="px-4 py-2 text-sm text-gray-700 max-w-md">
+                    <span className="break-words">{log.message || '—'}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
