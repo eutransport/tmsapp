@@ -17,8 +17,31 @@ def _resolve_smtp(config):
     return get_smtp_config(profile_id=profile_id, user=None)
 
 
-def send_daily_report(config, target_date: date, missing_ritnummers: list[str]) -> None:
-    """Send the daily report listing ritnummers without a teruggavebon."""
+def _log_mail(*, mail_type: str, recipients: list[str], subject: str,
+              success: bool, message: str = '', related_date=None, user=None) -> None:
+    """Persist a record of an outgoing mail attempt for the history UI."""
+    try:
+        from .models import PakmiddelenMailLog
+        PakmiddelenMailLog.objects.create(
+            mail_type=mail_type,
+            recipients=list(recipients or []),
+            subject=subject or '',
+            success=success,
+            message=message or '',
+            related_date=related_date,
+            user=user,
+        )
+    except Exception:  # noqa: BLE001 - logging must never break sending
+        logger.exception('Failed to write PakmiddelenMailLog entry')
+
+
+def send_daily_report(config, target_date: date, missing_ritnummers: list[str],
+                      *, user=None) -> None:
+    """Send the daily report listing ritnummers without a teruggavebon.
+
+    When `missing_ritnummers` is empty the mail is still sent as a positive
+    confirmation that the scheduled check ran and everything is in order.
+    """
     recipients = [r.strip() for r in (config.notification_recipients or []) if r and r.strip()]
     if not recipients:
         raise ValueError('Geen ontvangers geconfigureerd.')
@@ -27,18 +50,29 @@ def send_daily_report(config, target_date: date, missing_ritnummers: list[str]) 
     if not smtp_host:
         raise ValueError('SMTP is niet geconfigureerd.')
 
-    subject = f'Pakmiddelen teruggavebonnen ontbrekend - {target_date.isoformat()}'
-
-    items_text = '\n'.join(f'- {r}' for r in missing_ritnummers)
-    body_text = (
-        f'Voor {target_date.isoformat()} ontbreken de volgende '
-        f'pakmiddelen teruggavebonnen:\n\n{items_text}\n'
-    )
-    items_html = ''.join(f'<li>{escape(r)}</li>' for r in missing_ritnummers)
-    body_html = (
-        f'<p>Voor <strong>{target_date.isoformat()}</strong> ontbreken de volgende '
-        f'pakmiddelen teruggavebonnen:</p><ul>{items_html}</ul>'
-    )
+    if missing_ritnummers:
+        subject = f'Pakmiddelen teruggavebonnen ontbrekend - {target_date.isoformat()}'
+        items_text = '\n'.join(f'- {r}' for r in missing_ritnummers)
+        body_text = (
+            f'Voor {target_date.isoformat()} ontbreken de volgende '
+            f'pakmiddelen teruggavebonnen:\n\n{items_text}\n'
+        )
+        items_html = ''.join(f'<li>{escape(r)}</li>' for r in missing_ritnummers)
+        body_html = (
+            f'<p>Voor <strong>{target_date.isoformat()}</strong> ontbreken de volgende '
+            f'pakmiddelen teruggavebonnen:</p><ul>{items_html}</ul>'
+        )
+    else:
+        subject = f'Pakmiddelen teruggavebonnen compleet - {target_date.isoformat()}'
+        body_text = (
+            f'Voor {target_date.isoformat()} zijn alle pakmiddelen '
+            f'teruggavebonnen ontvangen. Er ontbreken geen ritnummers.\n'
+        )
+        body_html = (
+            f'<p>Voor <strong>{target_date.isoformat()}</strong> zijn '
+            f'<strong>alle</strong> pakmiddelen teruggavebonnen ontvangen.</p>'
+            f'<p>Er ontbreken geen ritnummers.</p>'
+        )
 
     connection = get_connection(
         backend='django.core.mail.backends.smtp.EmailBackend',
@@ -57,16 +91,30 @@ def send_daily_report(config, target_date: date, missing_ritnummers: list[str]) 
         connection=connection,
     )
     msg.attach_alternative(body_html, 'text/html')
-    msg.send(fail_silently=False)
+    try:
+        msg.send(fail_silently=False)
+    except Exception as exc:  # noqa: BLE001
+        _log_mail(
+            mail_type='daily_report', recipients=recipients, subject=subject,
+            success=False, message=str(exc), related_date=target_date, user=user,
+        )
+        raise
+    summary = (f'{len(missing_ritnummers)} ontbrekend.' if missing_ritnummers
+               else 'Alle bonnen ontvangen.')
+    _log_mail(
+        mail_type='daily_report', recipients=recipients, subject=subject,
+        success=True, message=summary, related_date=target_date, user=user,
+    )
     logger.info('Pakmiddelen rapport verstuurd naar %s', recipients)
 
 
-def send_test_email(config, recipient: str) -> None:
+def send_test_email(config, recipient: str, *, user=None) -> None:
     """Send a small test e-mail to verify SMTP."""
     smtp_host, smtp_port, smtp_username, smtp_password, smtp_use_tls, from_email, _signature, _src = _resolve_smtp(config)
     if not smtp_host:
         raise ValueError('SMTP is niet geconfigureerd.')
 
+    subject = 'Pakmiddelen testmail'
     connection = get_connection(
         backend='django.core.mail.backends.smtp.EmailBackend',
         host=smtp_host,
@@ -77,18 +125,30 @@ def send_test_email(config, recipient: str) -> None:
         fail_silently=False,
     )
     msg = EmailMultiAlternatives(
-        subject='Pakmiddelen testmail',
+        subject=subject,
         body='Dit is een testmail van de pakmiddelen module.',
         from_email=from_email or smtp_username,
         to=[recipient],
         connection=connection,
     )
-    msg.send(fail_silently=False)
+    try:
+        msg.send(fail_silently=False)
+    except Exception as exc:  # noqa: BLE001
+        _log_mail(
+            mail_type='test', recipients=[recipient], subject=subject,
+            success=False, message=str(exc), user=user,
+        )
+        raise
+    _log_mail(
+        mail_type='test', recipients=[recipient], subject=subject,
+        success=True, message='Testmail verstuurd.', user=user,
+    )
 
 
 def send_overview_report(config, *, recipients: list[str], date_from: date, date_to: date,
                           xlsx_bytes: bytes | None = None,
-                          pdf_bytes: bytes | None = None) -> None:
+                          pdf_bytes: bytes | None = None,
+                          user=None) -> None:
     """Send the overview report to the given recipients with optional attachments."""
     recipients = [r.strip() for r in recipients if r and r.strip()]
     if not recipients:
@@ -167,11 +227,23 @@ def send_overview_report(config, *, recipients: list[str], date_from: date, date
                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     if pdf_bytes:
         msg.attach(f'{fname}.pdf', pdf_bytes, 'application/pdf')
-    msg.send(fail_silently=False)
+    try:
+        msg.send(fail_silently=False)
+    except Exception as exc:  # noqa: BLE001
+        _log_mail(
+            mail_type='overview', recipients=recipients, subject=subject,
+            success=False, message=str(exc), related_date=date_from, user=user,
+        )
+        raise
+    _log_mail(
+        mail_type='overview', recipients=recipients, subject=subject,
+        success=True, message=f'Periode {period} ({total} regels).',
+        related_date=date_from, user=user,
+    )
     logger.info('Pakmiddelen overzicht (%s) verstuurd naar %s', period, recipients)
 
 
-def send_secret_expiry_reminder(config, days_left: int, expires_on) -> None:
+def send_secret_expiry_reminder(config, days_left: int, expires_on, *, user=None) -> None:
     """Notify configured recipients that the Graph client secret is about to expire."""
     recipients = [r.strip() for r in (config.notification_recipients or []) if r and r.strip()]
     if not recipients:
@@ -212,5 +284,16 @@ def send_secret_expiry_reminder(config, days_left: int, expires_on) -> None:
         connection=connection,
     )
     msg.attach_alternative(body_html, 'text/html')
-    msg.send(fail_silently=False)
+    try:
+        msg.send(fail_silently=False)
+    except Exception as exc:  # noqa: BLE001
+        _log_mail(
+            mail_type='secret_expiry', recipients=recipients, subject=subject,
+            success=False, message=str(exc), user=user,
+        )
+        raise
+    _log_mail(
+        mail_type='secret_expiry', recipients=recipients, subject=subject,
+        success=True, message=f'Nog {days_left} dag(en) tot expiratie.', user=user,
+    )
     logger.info('Pakmiddelen secret expiry herinnering (%s dagen) verstuurd naar %s', days_left, recipients)

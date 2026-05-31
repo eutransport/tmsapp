@@ -22,12 +22,14 @@ from .models import (
     PakmiddelenAuditLog,
     PakmiddelenCheckResult,
     PakmiddelenConfig,
+    PakmiddelenMailLog,
     PakmiddelenRitnummerSelection,
 )
 from .notifier import send_test_email
 from .serializers import (
     PakmiddelenCheckResultSerializer,
     PakmiddelenConfigSerializer,
+    PakmiddelenMailLogSerializer,
     PakmiddelenRitnummerSelectionSerializer,
     VehicleRitnummerSerializer,
 )
@@ -127,7 +129,7 @@ class PakmiddelenConfigViewSet(viewsets.ViewSet):
             return Response({'success': False, 'message': 'Ontvanger is verplicht.'},
                             status=status.HTTP_400_BAD_REQUEST)
         try:
-            send_test_email(cfg, recipient)
+            send_test_email(cfg, recipient, user=request.user)
         except Exception as exc:
             logger.warning('test_email failed: %s', exc)
             PakmiddelenAuditLog.objects.create(
@@ -502,7 +504,7 @@ class PakmiddelenCheckResultViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             send_overview_report(
                 cfg, recipients=recipients, date_from=date_from, date_to=date_to,
-                xlsx_bytes=xlsx_bytes, pdf_bytes=pdf_bytes,
+                xlsx_bytes=xlsx_bytes, pdf_bytes=pdf_bytes, user=request.user,
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception('mail_overview failed: %s', exc)
@@ -514,3 +516,37 @@ class PakmiddelenCheckResultViewSet(viewsets.ReadOnlyModelViewSet):
             'message': f'Overzicht verstuurd naar {len(recipients)} ontvanger(s).',
             'recipients': recipients,
         })
+
+
+class PakmiddelenMailLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """Read-only paginated history of all e-mails sent by the pakmiddelen module."""
+
+    queryset = PakmiddelenMailLog.objects.all().select_related('user')
+    serializer_class = PakmiddelenMailLogSerializer
+    permission_classes = [IsAuthenticated, _ManagePerm]
+    # Uses the default SafePageNumberPagination (page_size=25, ?page=&page_size=)
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        params = self.request.query_params
+        mail_type = params.get('mail_type')
+        success = params.get('success')
+        from_str = params.get('from')
+        to_str = params.get('to')
+        if mail_type:
+            qs = qs.filter(mail_type=mail_type)
+        if success in ('true', '1', 'yes'):
+            qs = qs.filter(success=True)
+        elif success in ('false', '0', 'no'):
+            qs = qs.filter(success=False)
+        if from_str:
+            try:
+                qs = qs.filter(sent_at__date__gte=datetime.fromisoformat(from_str).date())
+            except ValueError:
+                pass
+        if to_str:
+            try:
+                qs = qs.filter(sent_at__date__lte=datetime.fromisoformat(to_str).date())
+            except ValueError:
+                pass
+        return qs.order_by('-sent_at')

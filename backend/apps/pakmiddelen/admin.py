@@ -4,6 +4,7 @@ from .models import (
     PakmiddelenAuditLog,
     PakmiddelenCheckResult,
     PakmiddelenConfig,
+    PakmiddelenMailLog,
     PakmiddelenRitnummerSelection,
 )
 
@@ -35,3 +36,12 @@ class PakmiddelenAuditLogAdmin(admin.ModelAdmin):
     list_filter = ('action',)
     readonly_fields = ('created_at',)
     search_fields = ('action', 'user__email')
+
+
+@admin.register(PakmiddelenMailLog)
+class PakmiddelenMailLogAdmin(admin.ModelAdmin):
+    list_display = ('sent_at', 'mail_type', 'subject', 'success', 'user')
+    list_filter = ('mail_type', 'success', 'sent_at')
+    search_fields = ('subject', 'message', 'user__email')
+    readonly_fields = ('sent_at',)
+    date_hierarchy = 'sent_at'
