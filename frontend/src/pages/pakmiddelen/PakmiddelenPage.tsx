@@ -257,6 +257,80 @@ function OverviewTab({ canManage }: { canManage: boolean }) {
   }
   const navBtn = 'px-2.5 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed'
 
+  /* ---- week/month matrix ---- */
+  const daySpan = useMemo(() => {
+    const a = parse(from)
+    const b = parse(to)
+    return Math.round((b.getTime() - a.getTime()) / 86400000) + 1
+  }, [from, to])
+  const viewMode: 'day' | 'week' | 'month' =
+    daySpan <= 1 ? 'day' : daySpan <= 14 ? 'week' : 'month'
+
+  const byRit = useMemo(() => {
+    const map = new Map<string, Map<string, CheckResult>>()
+    for (const r of results) {
+      if (!map.has(r.ritnummer)) map.set(r.ritnummer, new Map())
+      map.get(r.ritnummer)!.set(r.check_date, r)
+    }
+    return map
+  }, [results])
+
+  const allRits = useMemo(
+    () => Array.from(new Set(results.map(r => r.ritnummer))).sort(
+      (a, b) => a.localeCompare(b, undefined, { numeric: true })
+    ),
+    [results]
+  )
+
+  const weekDays = useMemo(() => {
+    const mon = startOfWeek(parse(from))
+    return [0, 1, 2, 3, 4].map(i => addDays(mon, i))
+  }, [from])
+
+  const monthWeeks = useMemo(() => {
+    const first = startOfWeek(parse(from))
+    const last = startOfWeek(parse(to))
+    const weeks: Date[][] = []
+    let cursor = first
+    while (cursor <= last) {
+      weeks.push([0, 1, 2, 3, 4].map(i => addDays(cursor, i)))
+      cursor = addDays(cursor, 7)
+    }
+    return weeks
+  }, [from, to])
+
+  const [openRits, setOpenRits] = useState<Set<string>>(new Set())
+  const toggleRit = (r: string) => setOpenRits(prev => {
+    const next = new Set(prev)
+    if (next.has(r)) next.delete(r); else next.add(r)
+    return next
+  })
+  const allOpen = () => setOpenRits(new Set(allRits))
+  const allClosed = () => setOpenRits(new Set())
+
+  const weekdayNames = ['Ma', 'Di', 'Wo', 'Do', 'Vr']
+  const fmtDM = (d: Date) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  const isoWeekNumber = (d: Date) => {
+    const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+    const day = x.getUTCDay() || 7
+    x.setUTCDate(x.getUTCDate() + 4 - day)
+    const yearStart = new Date(Date.UTC(x.getUTCFullYear(), 0, 1))
+    return Math.ceil((((x.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+  }
+
+  const Cell = ({ rit, day }: { rit: string; day: Date }) => {
+    const r = byRit.get(rit)?.get(fmt(day))
+    if (!r) {
+      return <span className="inline-block w-7 text-center text-gray-300">–</span>
+    }
+    const tip = r.matched_subject
+      ? `${r.matched_subject}${r.mail_received_at ? ' — ' + new Date(r.mail_received_at).toLocaleString('nl-NL') : ''}`
+      : (r.has_bon ? 'Bon ontvangen' : 'Ontbreekt')
+    return r.has_bon
+      ? <span title={tip} className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-green-100 text-green-700 font-bold">✓</span>
+      : <span title={tip} className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-red-100 text-red-700 font-bold">✕</span>
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
@@ -322,6 +396,7 @@ function OverviewTab({ canManage }: { canManage: boolean }) {
       )}
 
       <div className="bg-white border border-gray-200 rounded-md">
+        {viewMode === 'day' && (<>
         <div className="space-y-3 p-4 md:hidden">
           {loading && <div className="rounded-md border border-gray-200 px-4 py-6 text-center text-sm text-gray-500">Laden...</div>}
           {!loading && results.length === 0 && (
@@ -404,6 +479,128 @@ function OverviewTab({ canManage }: { canManage: boolean }) {
             </tbody>
           </table>
         </div>
+        </>)}
+
+        {viewMode === 'week' && (
+          <div className="p-4 overflow-x-auto">
+            {loading && <div className="text-center text-sm text-gray-500 py-6">Laden...</div>}
+            {!loading && allRits.length === 0 && (
+              <div className="text-center text-sm text-gray-500 py-6">Geen resultaten in deze periode.</div>
+            )}
+            {!loading && allRits.length > 0 && (
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-600">
+                    <th className="px-3 py-2 text-left font-medium">Ritnummer</th>
+                    {weekDays.map((d, i) => (
+                      <th key={i} className="px-3 py-2 text-center font-medium whitespace-nowrap">
+                        <div>{weekdayNames[i]}</div>
+                        <div className="text-xs text-gray-400">{fmtDM(d)}</div>
+                      </th>
+                    ))}
+                    <th className="px-3 py-2 text-center font-medium">Totaal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {allRits.map(rit => {
+                    const ja = weekDays.filter(d => byRit.get(rit)?.get(fmt(d))?.has_bon).length
+                    const nee = weekDays.filter(d => {
+                      const r = byRit.get(rit)?.get(fmt(d))
+                      return r && !r.has_bon
+                    }).length
+                    return (
+                      <tr key={rit}>
+                        <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{rit}</td>
+                        {weekDays.map((d, i) => (
+                          <td key={i} className="px-3 py-2 text-center">
+                            <Cell rit={rit} day={d} />
+                          </td>
+                        ))}
+                        <td className="px-3 py-2 text-center text-xs text-gray-600 whitespace-nowrap">
+                          <span className="text-green-700 font-semibold">{ja}</span>
+                          <span className="text-gray-400"> / </span>
+                          <span className="text-red-700 font-semibold">{nee}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {viewMode === 'month' && (
+          <div className="p-4 space-y-3">
+            {loading && <div className="text-center text-sm text-gray-500 py-6">Laden...</div>}
+            {!loading && allRits.length === 0 && (
+              <div className="text-center text-sm text-gray-500 py-6">Geen resultaten in deze periode.</div>
+            )}
+            {!loading && allRits.length > 0 && (
+              <>
+                <div className="flex justify-end gap-2 mb-2">
+                  <button onClick={allOpen} className={navBtn}>Alles uitklappen</button>
+                  <button onClick={allClosed} className={navBtn}>Alles inklappen</button>
+                </div>
+                {allRits.map(rit => {
+                  const isOpen = openRits.has(rit)
+                  const ja = monthWeeks.flat().filter(d => byRit.get(rit)?.get(fmt(d))?.has_bon).length
+                  const nee = monthWeeks.flat().filter(d => {
+                    const r = byRit.get(rit)?.get(fmt(d))
+                    return r && !r.has_bon
+                  }).length
+                  return (
+                    <div key={rit} className="border border-gray-200 rounded-md">
+                      <button
+                        type="button"
+                        onClick={() => toggleRit(rit)}
+                        className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-gray-50"
+                      >
+                        <span className="flex items-center gap-3">
+                          <span className={`inline-block w-4 transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                          <span className="font-medium text-gray-900">Ritnummer {rit}</span>
+                        </span>
+                        <span className="text-xs text-gray-600 whitespace-nowrap">
+                          <span className="text-green-700 font-semibold">{ja}</span> ja
+                          <span className="text-gray-400"> · </span>
+                          <span className="text-red-700 font-semibold">{nee}</span> nee
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <div className="px-4 pb-3 overflow-x-auto">
+                          <table className="min-w-full text-sm">
+                            <thead>
+                              <tr className="text-gray-600">
+                                <th className="px-2 py-1.5 text-left font-medium">Week</th>
+                                {weekdayNames.map((n, i) => (
+                                  <th key={i} className="px-2 py-1.5 text-center font-medium">{n}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {monthWeeks.map((week, wi) => (
+                                <tr key={wi}>
+                                  <td className="px-2 py-1.5 text-xs text-gray-500 whitespace-nowrap">
+                                    wk {isoWeekNumber(week[0])} <span className="text-gray-400">({fmtDM(week[0])}–{fmtDM(week[4])})</span>
+                                  </td>
+                                  {week.map((d, i) => (
+                                    <td key={i} className="px-2 py-1.5 text-center">
+                                      <Cell rit={rit} day={d} />
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {mailOpen && (
