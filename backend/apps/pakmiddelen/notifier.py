@@ -91,6 +91,36 @@ def send_daily_report(config, target_date: date, missing_ritnummers: list[str],
         connection=connection,
     )
     msg.attach_alternative(body_html, 'text/html')
+
+    # Attach xlsx + pdf overview of the day so the recipient gets the full report.
+    try:
+        from .models import PakmiddelenCheckResult
+        from .exports import build_xlsx_bytes, build_pdf_bytes
+        rows = list(
+            PakmiddelenCheckResult.objects
+            .filter(check_date=target_date)
+            .order_by('ritnummer')
+            .values_list('check_date', 'ritnummer', 'has_bon',
+                         'matched_subject', 'mail_received_at')
+        )
+        label = target_date.isoformat()
+        try:
+            xlsx_bytes = build_xlsx_bytes(rows, label)
+            msg.attach(
+                f'pakmiddelen_{label}.xlsx',
+                xlsx_bytes,
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('XLSX-bijlage genereren mislukt: %s', exc)
+        try:
+            pdf_bytes = build_pdf_bytes(rows, label)
+            msg.attach(f'pakmiddelen_{label}.pdf', pdf_bytes, 'application/pdf')
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('PDF-bijlage genereren mislukt: %s', exc)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('Bijlagen voor dagelijks rapport overgeslagen: %s', exc)
+
     try:
         msg.send(fail_silently=False)
     except Exception as exc:  # noqa: BLE001
