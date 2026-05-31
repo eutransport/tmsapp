@@ -151,4 +151,38 @@ export const pakmiddelenApi = {
     api.post<{ success: boolean; message: string; recipients?: string[] }>(
       `${BASE}/results/mail/`, params,
     ).then(r => r.data),
+
+  // Mail history
+  listMailLogs: (params?: {
+    page?: number; page_size?: number;
+    mail_type?: MailLogType | '';
+    success?: 'true' | 'false' | '';
+    from?: string; to?: string;
+  }) =>
+    api.get<PaginatedResponse<MailLog>>(`${BASE}/mail-logs/`, {
+      params: params || undefined,
+    }).then(r => r.data),
+}
+
+export type MailLogType = 'daily_report' | 'overview' | 'test' | 'secret_expiry'
+
+export interface MailLog {
+  id: string
+  sent_at: string
+  mail_type: MailLogType
+  mail_type_display: string
+  recipients: string[]
+  subject: string
+  success: boolean
+  message: string
+  related_date: string | null
+  user: string | null
+  user_email: string | null
+}
+
+export interface PaginatedResponse<T> {
+  count: number
+  next: string | null
+  previous: string | null
+  results: T[]
 }

@@ -5,6 +5,7 @@ from apps.fleet.models import Vehicle
 from .models import (
     PakmiddelenCheckResult,
     PakmiddelenConfig,
+    PakmiddelenMailLog,
     PakmiddelenRitnummerSelection,
 )
 
@@ -137,4 +138,16 @@ class PakmiddelenCheckResultSerializer(serializers.ModelSerializer):
         fields = ['id', 'check_date', 'ritnummer', 'has_bon',
                   'matched_subject', 'mail_message_id', 'mail_received_at',
                   'notification_sent', 'created_at', 'updated_at']
+        read_only_fields = fields
+
+
+class PakmiddelenMailLogSerializer(serializers.ModelSerializer):
+    mail_type_display = serializers.CharField(source='get_mail_type_display', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True, default=None)
+
+    class Meta:
+        model = PakmiddelenMailLog
+        fields = ['id', 'sent_at', 'mail_type', 'mail_type_display',
+                  'recipients', 'subject', 'success', 'message',
+                  'related_date', 'user', 'user_email']
         read_only_fields = fields

@@ -250,3 +250,52 @@ class PakmiddelenAuditLog(models.Model):
 
     def __str__(self):
         return f'{self.created_at:%Y-%m-%d %H:%M} {self.action}'
+
+
+class PakmiddelenMailLog(models.Model):
+    """Audit log of every e-mail sent from the pakmiddelen module.
+
+    Captures the recipients, subject, type of mail (daily report, overview,
+    secret-expiry, test, ...) and whether the send call succeeded so the
+    user can review the history of outgoing mails.
+    """
+
+    TYPE_DAILY_REPORT = 'daily_report'
+    TYPE_OVERVIEW = 'overview'
+    TYPE_TEST = 'test'
+    TYPE_SECRET_EXPIRY = 'secret_expiry'
+    TYPE_CHOICES = [
+        (TYPE_DAILY_REPORT, 'Dagelijks rapport'),
+        (TYPE_OVERVIEW, 'Overzicht'),
+        (TYPE_TEST, 'Testmail'),
+        (TYPE_SECRET_EXPIRY, 'Secret-expiratie herinnering'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sent_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='Verzonden op')
+    mail_type = models.CharField(
+        max_length=32, choices=TYPE_CHOICES, default=TYPE_DAILY_REPORT,
+        db_index=True, verbose_name='Type mail',
+    )
+    recipients = models.JSONField(default=list, blank=True, verbose_name='Ontvangers')
+    subject = models.CharField(max_length=500, blank=True, verbose_name='Onderwerp')
+    success = models.BooleanField(default=False, db_index=True, verbose_name='Succesvol')
+    message = models.TextField(blank=True, verbose_name='Melding / fout')
+    related_date = models.DateField(null=True, blank=True, verbose_name='Gerelateerde datum')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+        verbose_name='Gestart door',
+    )
+
+    class Meta:
+        verbose_name = 'Pakmiddelen Mail Log'
+        verbose_name_plural = 'Pakmiddelen Mail Logs'
+        ordering = ['-sent_at']
+
+    def __str__(self):
+        marker = 'OK' if self.success else 'FAIL'
+        return f'{self.sent_at:%Y-%m-%d %H:%M} {self.mail_type} [{marker}]'

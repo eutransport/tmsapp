@@ -146,10 +146,10 @@ def run_check(*, config: PakmiddelenConfig | None = None, target_date: date | No
     report = {'success': True, 'matched': matched, 'missing': missing,
               'date': str(target_date), 'message': config.last_run_message}
 
-    if send_report and missing and config.notification_recipients:
+    if send_report and config.notification_recipients:
         from .notifier import send_daily_report
         try:
-            send_daily_report(config, target_date, missing)
+            send_daily_report(config, target_date, missing, user=user)
             PakmiddelenCheckResult.objects.filter(
                 check_date=target_date, ritnummer__in=missing
             ).update(notification_sent=True)
