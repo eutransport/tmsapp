@@ -24,6 +24,7 @@ import autoTable from 'jspdf-autotable'
 import WeeklyHoursTab from './WeeklyHoursTab'
 import MonthlyHoursTab from './MonthlyHoursTab'
 import VehicleWeeksTab from './VehicleWeeksTab'
+import VehicleAveragesTab from './VehicleAveragesTab'
 import AutoImportTab from './AutoImportTab'
 import { TimeEntry } from '@/types'
 import {
@@ -65,7 +66,7 @@ export default function SubmittedHoursPage() {
   const canManage = user?.rol === 'admin' || (user?.module_permissions || []).includes('manage_submitted_hours')
   
   // Tab state
-  const [activeTab, setActiveTab] = useState<'submitted' | 'weekly' | 'monthly' | 'vehicleWeeks' | 'autoImport'>('submitted')
+  const [activeTab, setActiveTab] = useState<'submitted' | 'weekly' | 'monthly' | 'vehicleWeeks' | 'vehicleAverages' | 'autoImport'>('submitted')
   
   // State
   const [loading, setLoading] = useState(true)
@@ -655,6 +656,17 @@ export default function SubmittedHoursPage() {
             {t('vehicleWeeks.title')}
           </button>
           <button
+            onClick={() => setActiveTab('vehicleAverages')}
+            className={`flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+              activeTab === 'vehicleAverages'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <ChartBarIcon className="h-5 w-5" />
+            Gemiddeld km / uren
+          </button>
+          <button
             onClick={() => setActiveTab('autoImport')}
             className={`flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
               activeTab === 'autoImport'
@@ -677,6 +689,7 @@ export default function SubmittedHoursPage() {
           { id: 'weekly' as const, name: t('weeklyHours.title'), icon: ChartBarIcon },
           { id: 'monthly' as const, name: t('monthlyHours.title'), icon: CalendarDaysIcon },
           { id: 'vehicleWeeks' as const, name: t('vehicleWeeks.title'), icon: TruckIcon },
+          { id: 'vehicleAverages' as const, name: 'Gemiddeld km / uren', icon: ChartBarIcon },
           { id: 'autoImport' as const, name: 'Tachograaf Import', icon: ClockIcon },
         ].map((tab) => {
           const isOpen = activeTab === tab.id
@@ -699,6 +712,7 @@ export default function SubmittedHoursPage() {
                   {tab.id === 'weekly' && <WeeklyHoursTab />}
                   {tab.id === 'monthly' && <MonthlyHoursTab />}
                   {tab.id === 'vehicleWeeks' && <VehicleWeeksTab />}
+                  {tab.id === 'vehicleAverages' && <VehicleAveragesTab />}
                   {tab.id === 'autoImport' && <AutoImportTab />}
                 </div>
               )}
@@ -714,6 +728,7 @@ export default function SubmittedHoursPage() {
         {activeTab === 'weekly' && <WeeklyHoursTab />}
         {activeTab === 'monthly' && <MonthlyHoursTab />}
         {activeTab === 'vehicleWeeks' && <VehicleWeeksTab />}
+        {activeTab === 'vehicleAverages' && <VehicleAveragesTab />}
         {activeTab === 'autoImport' && <AutoImportTab />}
       </div>
       )}
@@ -765,22 +780,22 @@ export default function SubmittedHoursPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('common.week')}
                     </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('common.year')}
                     </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('drivers.title')}
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('timeEntries.trips')}
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('timeEntries.totalKm')}
                     </th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('common.actions')}
                     </th>
                   </tr>
@@ -788,26 +803,26 @@ export default function SubmittedHoursPage() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {paginatedWeeks.map((week) => (
                     <tr key={`${week.user_id}-${week.jaar}-${week.weeknummer}`} className="hover:bg-gray-50">
-                      <td className="px-4 py-2.5 whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-primary-100 text-primary-700 font-bold">
                           {week.weeknummer}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {week.jaar}
                       </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
                           {week.user__voornaam} {week.user__achternaam}
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-sm text-right">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                         {week.ingediend_count}
                       </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-sm text-right font-medium">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
                         {week.totaal_km} km
                       </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-right">
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
                         <button
                           onClick={() => handleViewWeek(week)}
                           className="btn-secondary text-sm"

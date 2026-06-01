@@ -2005,18 +2005,18 @@ export default function InvoiceCreatePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-4 min-w-0">
           <button
             onClick={() => navigate('/invoices')}
-            className="p-2 text-gray-400 hover:text-gray-600"
+            className="p-2 text-gray-400 hover:text-gray-600 flex-shrink-0"
           >
             <ArrowLeftIcon className="h-5 w-5" />
           </button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 break-words">
               {reimportId ? `Opnieuw importeren: ${factuurnummer || ''}` : t('invoices.newInvoice')}
             </h1>
             <p className="text-sm text-gray-500">
@@ -2029,7 +2029,7 @@ export default function InvoiceCreatePage() {
         <button
           onClick={handleSave}
           disabled={isSaving || !selectedTemplate || !selectedCompany}
-          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2 flex-shrink-0"
         >
           {isSaving && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
           {t('invoices.saveInvoice')}
@@ -2045,7 +2045,7 @@ export default function InvoiceCreatePage() {
       )}
 
       {/* Step 1: Select Template */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6 min-w-0">
         <h2 className="text-lg font-semibold mb-4">1. {t('invoices.selectTemplate')}</h2>
         {templates.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
@@ -2076,7 +2076,7 @@ export default function InvoiceCreatePage() {
 
       {/* Step 2: Invoice Details */}
       {selectedTemplate && (
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6 min-w-0">
           <h2 className="text-lg font-semibold mb-4">2. {t('invoices.invoiceDetails')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
@@ -2152,10 +2152,10 @@ export default function InvoiceCreatePage() {
 
       {/* Step 3: Invoice Lines */}
       {selectedTemplate && columns.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6 min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h2 className="text-lg font-semibold">3. {t('invoices.lines')}</h2>
-            <div className="flex gap-2 items-center">
+            <div className="flex flex-wrap gap-2 items-center">
               <label className="flex items-center gap-2 text-sm text-gray-700 mr-2 select-none cursor-pointer" title="Voegt onder elke rit/dag een extra regel toe met begin- en eindtijd">
                 <input
                   type="checkbox"
@@ -2291,7 +2291,7 @@ export default function InvoiceCreatePage() {
           {/* Totals */}
           {lines.length > 0 && (
             <div className="mt-6 flex justify-end">
-              <div className="w-72 bg-gray-50 rounded-lg p-4">
+              <div className="w-full sm:w-72 bg-gray-50 rounded-lg p-4">
                 {totalsConfig.showSubtotaal && (
                   <div className="flex justify-between py-1">
                     <span className="text-gray-600">{t('invoices.subtotalExclVat')}:</span>

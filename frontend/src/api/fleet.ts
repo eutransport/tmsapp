@@ -38,6 +38,59 @@ export async function getVehicleWeeksOverview(jaar?: number): Promise<VehicleWee
   return response.data
 }
 
+// Vehicle averages (km/uren) per kenteken
+export interface VehicleWeekAverage {
+  year: number
+  week: number
+  total_km: number
+  total_hours: number
+  days_worked: number
+  avg_km_per_day: number
+  avg_hours_per_day: number
+}
+
+export interface VehicleMonthAverage {
+  year: number
+  month: number
+  total_km: number
+  total_hours: number
+  days_worked: number
+  avg_km_per_day: number
+  avg_hours_per_day: number
+}
+
+export interface VehicleAverages {
+  kenteken: string
+  type_wagen: string
+  ritnummer: string
+  bedrijf_naam: string
+  jaar: number
+  totals: {
+    total_km: number
+    total_hours: number
+    days_worked: number
+    weeks_worked: number
+    months_worked: number
+  }
+  averages: {
+    avg_km_per_day: number
+    avg_hours_per_day: number
+    avg_km_per_week: number
+    avg_hours_per_week: number
+    avg_km_per_month: number
+    avg_hours_per_month: number
+  }
+  weekly: VehicleWeekAverage[]
+  monthly: VehicleMonthAverage[]
+}
+
+export async function getVehicleAverages(jaar?: number): Promise<VehicleAverages[]> {
+  const params = new URLSearchParams()
+  if (jaar) params.append('jaar', jaar.toString())
+  const response = await api.get(`/fleet/vehicle_averages/?${params.toString()}`)
+  return response.data
+}
+
 export interface VehiclesResponse {
   count: number
   next: string | null
