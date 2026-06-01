@@ -159,6 +159,7 @@ services:
         condition: service_healthy
     networks:
       - tms_internal
+      - tms_external
 
   # =========================================
   # Celery Beat - Periodic task scheduler
@@ -195,6 +196,7 @@ services:
         condition: service_healthy
     networks:
       - tms_internal
+      - tms_external
 
   # =========================================
   # Maintenance pagina
