@@ -60,5 +60,20 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/api/health/ || exit 1
 
-# Run entrypoint (collectstatic + gunicorn)
+# Run entrypoint (setup + exec passed command)
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
+# Default command for the web server; overridden in docker-compose for celery
+CMD ["gunicorn", \
+    "--bind", "0.0.0.0:8000", \
+    "--workers", "4", \
+    "--threads", "2", \
+    "--worker-class", "gthread", \
+    "--worker-tmp-dir", "/dev/shm", \
+    "--access-logfile", "-", \
+    "--error-logfile", "-", \
+    "--capture-output", \
+    "--limit-request-line", "8190", \
+    "--limit-request-fields", "100", \
+    "--limit-request-field_size", "8190", \
+    "tms.wsgi:application"]

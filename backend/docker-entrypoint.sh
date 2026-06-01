@@ -26,25 +26,15 @@ python manage.py migrate --noinput
 echo "Seeding maintenance data..."
 python manage.py seed_maintenance || echo "Warning: seed_maintenance failed, continuing..."
 
-# Collect static files — handle permission issues from volume ownership changes
-echo "Collecting static files..."
-if ! python manage.py collectstatic --noinput 2>/dev/null; then
-    echo "Warning: collectstatic had permission issues, retrying with --clear..."
-    rm -rf /app/staticfiles/* 2>/dev/null || true
-    python manage.py collectstatic --noinput || echo "Warning: collectstatic failed, continuing..."
+# Collect static files only when starting the web server (not for celery workers)
+if [ "${1:-gunicorn}" = "gunicorn" ]; then
+    echo "Collecting static files..."
+    if ! python manage.py collectstatic --noinput 2>/dev/null; then
+        echo "Warning: collectstatic had permission issues, retrying with --clear..."
+        rm -rf /app/staticfiles/* 2>/dev/null || true
+        python manage.py collectstatic --noinput || echo "Warning: collectstatic failed, continuing..."
+    fi
 fi
 
-echo "Starting Gunicorn..."
-exec gunicorn \
-    --bind 0.0.0.0:8000 \
-    --workers ${GUNICORN_WORKERS:-4} \
-    --threads 2 \
-    --worker-class gthread \
-    --worker-tmp-dir /dev/shm \
-    --access-logfile - \
-    --error-logfile - \
-    --capture-output \
-    --limit-request-line 8190 \
-    --limit-request-fields 100 \
-    --limit-request-field_size 8190 \
-    tms.wsgi:application
+echo "=== Starting: $@ ==="
+exec "$@"
