@@ -78,6 +78,8 @@ const navigation: NavItem[] = [
   { name: 'nav.tachographComparison', href: '/tachograph/comparison', icon: ChartBarSquareIcon, roles: ['admin'] },
   { name: 'nav.reports', href: '/reports', icon: DocumentChartBarIcon, roles: ['admin', 'gebruiker', 'chauffeur'], permission: 'view_reports' },
   { name: 'nav.pakmiddelen', href: '/pakmiddelen', icon: EnvelopeIcon, roles: ['admin', 'gebruiker'], permission: 'view_pakmiddelen' },
+  { name: 'nav.tolregistratie', href: '/toll', icon: CurrencyEuroIcon },
+  { name: 'nav.tolregistratieAdmin', href: '/toll/admin', icon: DocumentTextIcon, roles: ['admin'] },
 ]
 
 const adminNavigation: NavItem[] = [

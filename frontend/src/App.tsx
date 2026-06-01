@@ -70,6 +70,10 @@ import LeaveRequestsAdminPage from '@/pages/leave/LeaveRequestsAdminPage'
 // Pakmiddelen Teruggavebonnen
 import PakmiddelenPage from '@/pages/pakmiddelen/PakmiddelenPage'
 
+// Tolregistratie
+import TolRegistratiePage from '@/pages/toll/TolRegistratiePage'
+import AdminTolRegistratiePage from '@/pages/toll/AdminTolRegistratiePage'
+
 // Notifications
 import NotificationsPage from '@/pages/notifications/NotificationsPage'
 
@@ -355,6 +359,10 @@ function App() {
 
         {/* Pakmiddelen Teruggavebonnen */}
         <Route path="/pakmiddelen" element={<PermissionRoute permission="view_pakmiddelen"><PakmiddelenPage /></PermissionRoute>} />
+
+        {/* Tolregistratie */}
+        <Route path="/toll" element={<TolRegistratiePage />} />
+        <Route path="/toll/admin" element={<AdminRoute><AdminTolRegistratiePage /></AdminRoute>} />
 
         {/* Spreadsheets (Ritregistratie) */}
         <Route path="/spreadsheets" element={<AdminRoute><SpreadsheetListPage /></AdminRoute>} />
