@@ -36,9 +36,18 @@ export default function VehicleAveragesTab() {
   const [data, setData] = useState<VehicleAverages[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedYear, setSelectedYear] = useState(getCurrentYear())
+  const [selectedWeek, setSelectedWeek] = useState<number | 'all'>('all')
   const [expanded, setExpanded] = useState<Record<string, 'week' | 'month' | null>>({})
 
   const years = Array.from({ length: 5 }, (_, i) => getCurrentYear() - i).filter(y => y >= 2026)
+
+  const availableWeeks = useMemo(() => {
+    const set = new Set<number>()
+    data.forEach(v => v.weekly.forEach(w => {
+      if (w.year === selectedYear) set.add(w.week)
+    }))
+    return Array.from(set).sort((a, b) => a - b)
+  }, [data, selectedYear])
 
   useEffect(() => {
     loadData()
@@ -58,15 +67,21 @@ export default function VehicleAveragesTab() {
   }
 
   const filtered = useMemo(() => {
-    if (!searchTerm) return data
-    const lower = searchTerm.toLowerCase()
-    return data.filter(v =>
-      v.kenteken.toLowerCase().includes(lower) ||
-      (v.ritnummer || '').toLowerCase().includes(lower) ||
-      (v.type_wagen || '').toLowerCase().includes(lower) ||
-      (v.bedrijf_naam || '').toLowerCase().includes(lower)
-    )
-  }, [data, searchTerm])
+    let list = data
+    if (selectedWeek !== 'all') {
+      list = list.filter(v => v.weekly.some(w => w.year === selectedYear && w.week === selectedWeek))
+    }
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase()
+      list = list.filter(v =>
+        v.kenteken.toLowerCase().includes(lower) ||
+        (v.ritnummer || '').toLowerCase().includes(lower) ||
+        (v.type_wagen || '').toLowerCase().includes(lower) ||
+        (v.bedrijf_naam || '').toLowerCase().includes(lower)
+      )
+    }
+    return list
+  }, [data, searchTerm, selectedWeek, selectedYear])
 
   const toggle = (kenteken: string, view: 'week' | 'month') => {
     setExpanded(prev => ({
@@ -92,11 +107,21 @@ export default function VehicleAveragesTab() {
           </div>
           <select
             value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            onChange={(e) => { setSelectedYear(parseInt(e.target.value)); setSelectedWeek('all') }}
             className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           >
             {years.map(y => (
               <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <select
+            value={selectedWeek}
+            onChange={(e) => setSelectedWeek(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          >
+            <option value="all">Alle weken</option>
+            {availableWeeks.map(w => (
+              <option key={w} value={w}>Week {w}</option>
             ))}
           </select>
         </div>
@@ -116,6 +141,9 @@ export default function VehicleAveragesTab() {
         <div className="space-y-3">
           {filtered.map(v => {
             const view = expanded[v.kenteken]
+            const weekRow = selectedWeek !== 'all'
+              ? v.weekly.find(w => w.year === selectedYear && w.week === selectedWeek)
+              : undefined
             return (
               <div key={v.kenteken} className="card overflow-hidden">
                 {/* Header */}
@@ -163,14 +191,23 @@ export default function VehicleAveragesTab() {
                 </div>
 
                 {/* Summary cards */}
-                <div className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                  <SummaryCard label="Totaal km" value={formatKm(v.totals.total_km)} sub={`${v.totals.days_worked} dagen`} />
-                  <SummaryCard label="Totaal uren" value={formatHours(v.totals.total_hours)} sub={`${v.totals.weeks_worked} weken`} />
-                  <SummaryCard label="Ø km / dag" value={formatKm(v.averages.avg_km_per_day)} highlight />
-                  <SummaryCard label="Ø uren / dag" value={formatHours(v.averages.avg_hours_per_day)} highlight />
-                  <SummaryCard label="Ø km / week" value={formatKm(v.averages.avg_km_per_week)} highlight />
-                  <SummaryCard label="Ø uren / week" value={formatHours(v.averages.avg_hours_per_week)} highlight />
-                </div>
+                {weekRow ? (
+                  <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <SummaryCard label={`Week ${weekRow.week} • km`} value={formatKm(weekRow.total_km)} sub={`${weekRow.days_worked} dagen`} />
+                    <SummaryCard label={`Week ${weekRow.week} • uren`} value={formatHours(weekRow.total_hours)} sub={`${weekRow.days_worked} dagen`} />
+                    <SummaryCard label="Ø km / dag" value={formatKm(weekRow.avg_km_per_day)} highlight />
+                    <SummaryCard label="Ø uren / dag" value={formatHours(weekRow.avg_hours_per_day)} highlight />
+                  </div>
+                ) : (
+                  <div className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <SummaryCard label="Totaal km" value={formatKm(v.totals.total_km)} sub={`${v.totals.days_worked} dagen`} />
+                    <SummaryCard label="Totaal uren" value={formatHours(v.totals.total_hours)} sub={`${v.totals.weeks_worked} weken`} />
+                    <SummaryCard label="Ø km / dag" value={formatKm(v.averages.avg_km_per_day)} highlight />
+                    <SummaryCard label="Ø uren / dag" value={formatHours(v.averages.avg_hours_per_day)} highlight />
+                    <SummaryCard label="Ø km / week" value={formatKm(v.averages.avg_km_per_week)} highlight />
+                    <SummaryCard label="Ø uren / week" value={formatHours(v.averages.avg_hours_per_week)} highlight />
+                  </div>
+                )}
 
                 {/* Weekly breakdown */}
                 {view === 'week' && (
