@@ -108,7 +108,7 @@ function TabButton({ active, onClick, icon, children }: {
 /* -------------------- Overview -------------------- */
 
 function OverviewTab({ canManage }: { canManage: boolean }) {
-  const todayISO = () => new Date().toISOString().slice(0, 10)
+  const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
   const [from, setFrom] = useState<string>(todayISO())
   const [to, setTo] = useState<string>(todayISO())
   const [results, setResults] = useState<CheckResult[]>([])
@@ -194,7 +194,7 @@ function OverviewTab({ canManage }: { canManage: boolean }) {
     const [y, m, d] = s.split('-').map(Number)
     return new Date(y, m - 1, d)
   }
-  const fmt = (d: Date) => d.toISOString().slice(0, 10)
+  const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
   const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
   const startOfWeek = (d: Date) => {
     const x = new Date(d)
