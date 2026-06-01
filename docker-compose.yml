@@ -243,6 +243,11 @@ services:
     networks:
       - tms_internal
       - tms_external
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:81/"]
       interval: 30s
