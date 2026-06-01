@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+﻿import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { 
   PlusIcon, 
@@ -174,6 +174,8 @@ function TimeEntryForm({
     aanvang: string
     eind: string
     pauze_minuten: number
+    heeft_kilometerheffing: boolean
+    kilometerheffing_bedrag: string
   }>>([{
     ritnummer: entry?.ritnummer || '',
     km_start: entry?.km_start?.toString() || '',
@@ -181,9 +183,13 @@ function TimeEntryForm({
     aanvang: entry?.aanvang || '07:00',
     eind: entry?.eind || '16:00',
     pauze_minuten: entry?.pauze ? Math.floor(parsePauze(entry.pauze) / 60) : 30,
+    heeft_kilometerheffing: entry?.kilometerheffing_bedrag != null,
+    kilometerheffing_bedrag: entry?.kilometerheffing_bedrag != null
+      ? String(entry.kilometerheffing_bedrag).replace('.', ',')
+      : '',
   }])
 
-  const updateTrip = (index: number, field: string, value: string | number) => {
+  const updateTrip = (index: number, field: string, value: string | number | boolean) => {
     setTrips(prev => prev.map((trip, i) =>
       i === index ? { ...trip, [field]: value } : trip
     ))
@@ -199,6 +205,8 @@ function TimeEntryForm({
       aanvang: lastTrip.eind,
       eind: '',
       pauze_minuten: 30,
+      heeft_kilometerheffing: false,
+      kilometerheffing_bedrag: '',
     }])
   }
 
@@ -226,6 +234,16 @@ function TimeEntryForm({
       if (!isNaN(kmStart) && !isNaN(kmEind) && kmEind < kmStart) {
         newErrors[`${prefix}km_eind`] = t('timeEntries.errors.kmEndGreater')
       }
+      if (trip.heeft_kilometerheffing) {
+        const norm = trip.kilometerheffing_bedrag.replace(',', '.').trim()
+        if (!norm) {
+          newErrors[`${prefix}kilometerheffing_bedrag`] = 'Bedrag is verplicht.'
+        } else if (!/^\d+(\.\d{1,2})?$/.test(norm)) {
+          newErrors[`${prefix}kilometerheffing_bedrag`] = 'Ongeldig bedrag (max 2 decimalen).'
+        } else if (parseFloat(norm) <= 0) {
+          newErrors[`${prefix}kilometerheffing_bedrag`] = 'Bedrag moet groter dan 0 zijn.'
+        }
+      }
     })
     
     setErrors(newErrors)
@@ -247,6 +265,9 @@ function TimeEntryForm({
         aanvang: trip.aanvang,
         eind: trip.eind,
         pauze: formatMinutesToDuration(trip.pauze_minuten),
+        kilometerheffing_bedrag: trip.heeft_kilometerheffing
+          ? trip.kilometerheffing_bedrag.replace(',', '.').trim()
+          : null,
       }
       onSave(saveData)
     } else {
@@ -259,6 +280,9 @@ function TimeEntryForm({
         aanvang: trip.aanvang,
         eind: trip.eind,
         pauze: formatMinutesToDuration(trip.pauze_minuten),
+        kilometerheffing_bedrag: trip.heeft_kilometerheffing
+          ? trip.kilometerheffing_bedrag.replace(',', '.').trim()
+          : null,
       }))
       onSave(entries)
     }
@@ -452,6 +476,45 @@ function TimeEntryForm({
                   <option value={90}>1,5 {t('timeEntries.hour')}</option>
                 </select>
               </div>
+            </div>
+
+            {/* Kilometerheffing */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={trip.heeft_kilometerheffing}
+                  onChange={(e) => {
+                    updateTrip(idx, 'heeft_kilometerheffing', e.target.checked)
+                    if (!e.target.checked) {
+                      updateTrip(idx, 'kilometerheffing_bedrag', '')
+                    }
+                  }}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                Kilometerheffing
+              </label>
+              {trip.heeft_kilometerheffing && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bedrag (€)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={trip.kilometerheffing_bedrag}
+                    onChange={(e) => {
+                      const v = e.target.value.replace('.', ',').replace(/[^0-9,]/g, '')
+                      const parts = v.split(',')
+                      const limited = parts.length === 2 ? `${parts[0]},${parts[1].slice(0, 2)}` : v
+                      updateTrip(idx, 'kilometerheffing_bedrag', limited)
+                    }}
+                    placeholder="0,00"
+                    className="input"
+                  />
+                  {errors[`${prefix}kilometerheffing_bedrag`] && (
+                    <p className="text-red-500 text-xs mt-1">{errors[`${prefix}kilometerheffing_bedrag`]}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Calculated values */}
@@ -1097,7 +1160,7 @@ export default function TimeEntriesPage() {
                 {[
                   debouncedSearch ? `"${debouncedSearch}"` : null,
                   searchWeek !== null ? `${t('common.week')} ${searchWeek}` : null
-                ].filter(Boolean).join(' • ')}
+                ].filter(Boolean).join(' â€¢ ')}
               </span>
             )}
           </div>

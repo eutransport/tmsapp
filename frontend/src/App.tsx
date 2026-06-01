@@ -73,6 +73,8 @@ import PakmiddelenPage from '@/pages/pakmiddelen/PakmiddelenPage'
 // Tolregistratie
 import TolRegistratiePage from '@/pages/toll/TolRegistratiePage'
 import AdminTolRegistratiePage from '@/pages/toll/AdminTolRegistratiePage'
+// Kilometerheffing
+import KilometerheffingPage from '@/pages/kilometerheffing/KilometerheffingPage'
 
 // Notifications
 import NotificationsPage from '@/pages/notifications/NotificationsPage'
@@ -363,6 +365,9 @@ function App() {
         {/* Tolregistratie */}
         <Route path="/toll" element={<TolRegistratiePage />} />
         <Route path="/toll/admin" element={<AdminRoute><AdminTolRegistratiePage /></AdminRoute>} />
+
+        {/* Kilometerheffing */}
+        <Route path="/kilometerheffing" element={<KilometerheffingPage />} />
 
         {/* Spreadsheets (Ritregistratie) */}
         <Route path="/spreadsheets" element={<AdminRoute><SpreadsheetListPage /></AdminRoute>} />

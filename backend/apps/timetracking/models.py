@@ -51,7 +51,16 @@ class TimeEntry(models.Model):
         default=TimeEntryBron.HANDMATIG,
         verbose_name='Bron'
     )
-    
+
+    kilometerheffing_bedrag = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name='Kilometerheffing bedrag'
+    )
+    kilometerheffing_gefactureerd_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Kilometerheffing gefactureerd op'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

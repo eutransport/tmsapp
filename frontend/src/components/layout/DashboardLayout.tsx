@@ -80,6 +80,7 @@ const navigation: NavItem[] = [
   { name: 'nav.pakmiddelen', href: '/pakmiddelen', icon: EnvelopeIcon, roles: ['admin', 'gebruiker'], permission: 'view_pakmiddelen' },
   { name: 'nav.tolregistratie', href: '/toll', icon: CurrencyEuroIcon },
   { name: 'nav.tolregistratieAdmin', href: '/toll/admin', icon: DocumentTextIcon, roles: ['admin'] },
+  { name: 'nav.kilometerheffing', href: '/kilometerheffing', icon: CurrencyEuroIcon },
 ]
 
 const adminNavigation: NavItem[] = [

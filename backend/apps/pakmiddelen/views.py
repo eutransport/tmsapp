@@ -239,7 +239,17 @@ class PakmiddelenRitnummerSelectionViewSet(viewsets.ModelViewSet):
                 ritnummer=ritnummer, defaults=defaults,
             )
         if seen:
-            PakmiddelenRitnummerSelection.objects.exclude(ritnummer__in=seen).update(actief=False)
+            # Hard-delete rit selections that are no longer in the list,
+            # plus their historical check results (so the overview/PDF stop
+            # showing removed ritnummers).
+            removed = list(
+                PakmiddelenRitnummerSelection.objects
+                .exclude(ritnummer__in=seen)
+                .values_list('ritnummer', flat=True)
+            )
+            if removed:
+                PakmiddelenRitnummerSelection.objects.filter(ritnummer__in=removed).delete()
+                PakmiddelenCheckResult.objects.filter(ritnummer__in=removed).delete()
         PakmiddelenAuditLog.objects.create(
             action='bulk_set_ritnummers', user=request.user, ip_address=_client_ip(request),
             details={'count': len(seen)},

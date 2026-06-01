@@ -22,7 +22,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { getTemplates, createInvoice, createInvoiceLine, getNextInvoiceNumber, getInvoice, getInvoiceLines, updateInvoice, deleteInvoiceLine } from '@/api/invoices'
 import { getCompanies } from '@/api/companies'
-import { getTimeEntries } from '@/api/timetracking'
+import { getTimeEntries, markKilometerheffingGefactureerd } from '@/api/timetracking'
 import { getSpreadsheets } from '@/api/spreadsheets'
 import { getImportedEntries, ImportedTimeEntry } from '@/api/urenImport'
 import { 
@@ -43,6 +43,7 @@ interface InvoiceLineData {
   values: Record<string, number | string> // Column values by column id
   timeEntryId?: string // If imported from time entry
   isInfoLine?: boolean // Info-only line (e.g. werktijden): no aantal/prijs/totaal rendered
+  kilometerheffingTimeEntryId?: string // If this line represents a kilometerheffing for a TimeEntry
 }
 
 interface ChauffeurWeekGroup {
@@ -1559,9 +1560,36 @@ export default function InvoiceCreatePage() {
         ))
       }
     }
-    
+
+    // Kilometerheffing-regels per rit
+    const kilometerheffingLines: InvoiceLineData[] = sortedEntries
+      .filter(entry => entry.kilometerheffing_bedrag != null && String(entry.kilometerheffing_bedrag).trim() !== '')
+      .map(entry => {
+        const bedrag = parseFloat(String(entry.kilometerheffing_bedrag)) || 0
+        const datumStr = new Date(entry.datum).toLocaleDateString('nl-NL')
+        const omschrijving = `Kilometerheffing rit ${entry.ritnummer} - ${datumStr}`
+        const values: Record<string, number | string> = {}
+        columns.forEach(col => {
+          if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
+            values[col.id] = omschrijving
+          } else if (col.type === 'aantal' || col.id === 'aantal' || col.id.includes('aantal')) {
+            values[col.id] = 1
+          } else if (col.type === 'prijs' || col.id === 'prijs' || col.id.includes('prijs') || col.id.includes('tarief')) {
+            values[col.id] = bedrag
+          } else {
+            values[col.id] = 0
+          }
+        })
+        columns.forEach(col => {
+          if (col.type === 'berekend' && col.formule) {
+            values[col.id] = evaluateFormula(col.formule, values, defaults)
+          }
+        })
+        return { id: generateId(), values, kilometerheffingTimeEntryId: entry.id }
+      })
+
     // Combine all lines
-    setLines(prev => [...prev, ...entryLines, ...summaryLines])
+    setLines(prev => [...prev, ...entryLines, ...summaryLines, ...kilometerheffingLines])
   }
 
   // Import imported (Excel) entries with ritnummers from import, km from chauffeur, uren from import
@@ -1920,7 +1948,11 @@ export default function InvoiceCreatePage() {
         if (line.timeEntryId) {
           lineData.time_entry = line.timeEntryId
         }
-        
+
+        if (line.kilometerheffingTimeEntryId) {
+          lineData.extra_data = { ...(lineData.extra_data || {}), kind: 'kilometerheffing', time_entry: line.kilometerheffingTimeEntryId }
+        }
+
         try {
           await createInvoiceLine(lineData)
         } catch (lineErr: any) {
@@ -1933,6 +1965,18 @@ export default function InvoiceCreatePage() {
               .join('; ')
           }
           throw new Error(errorMsg || t('errors.saveFailed'))
+        }
+      }
+
+      // Mark TimeEntries as kilometerheffing-invoiced
+      const heffingIds = Array.from(new Set(
+        lines.map(l => l.kilometerheffingTimeEntryId).filter((x): x is string => !!x)
+      ))
+      if (heffingIds.length > 0) {
+        try {
+          await markKilometerheffingGefactureerd(heffingIds)
+        } catch {
+          // niet-fataal: factuur is opgeslagen
         }
       }
 

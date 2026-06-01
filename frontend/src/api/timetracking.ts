@@ -30,6 +30,7 @@ export interface TimeEntryCreate {
   aanvang: string
   eind: string
   pauze?: string
+  kilometerheffing_bedrag?: string | null
 }
 
 export interface TimeEntryUpdate extends Partial<TimeEntryCreate> {
@@ -124,6 +125,38 @@ export async function updateTimeEntry(id: string, data: TimeEntryUpdate): Promis
  */
 export async function deleteTimeEntry(id: string): Promise<void> {
   await api.delete(`/time-entries/${id}/`)
+}
+
+export interface KilometerheffingFilters {
+  jaar?: number
+  datum__gte?: string
+  datum__lte?: string
+  user?: string
+  ingediend?: 'all' | 'ja' | 'nee'
+  gefactureerd?: 'all' | 'ja' | 'nee'
+}
+
+/**
+ * Get all time entries with kilometerheffing recorded
+ */
+export async function getKilometerheffingen(filters?: KilometerheffingFilters): Promise<TimeEntry[]> {
+  const params = new URLSearchParams()
+  if (filters?.jaar) params.append('jaar', filters.jaar.toString())
+  if (filters?.datum__gte) params.append('datum__gte', filters.datum__gte)
+  if (filters?.datum__lte) params.append('datum__lte', filters.datum__lte)
+  if (filters?.user) params.append('user', filters.user)
+  if (filters?.ingediend && filters.ingediend !== 'all') params.append('ingediend', filters.ingediend)
+  if (filters?.gefactureerd && filters.gefactureerd !== 'all') params.append('gefactureerd', filters.gefactureerd)
+  const response = await api.get(`/time-entries/kilometerheffingen/?${params.toString()}`)
+  return response.data
+}
+
+/**
+ * Mark TimeEntries as kilometerheffing-invoiced.
+ */
+export async function markKilometerheffingGefactureerd(ids: string[]): Promise<{ updated: number }> {
+  const response = await api.post('/time-entries/mark_kilometerheffing_gefactureerd/', { ids })
+  return response.data
 }
 
 /**

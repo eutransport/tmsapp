@@ -21,8 +21,9 @@ class TimeEntrySerializer(serializers.ModelSerializer):
             'totaal_uren', 'totaal_uren_display',
             'status', 'bron', 'created_at', 'updated_at',
             'overtime_info',
+            'kilometerheffing_bedrag', 'kilometerheffing_gefactureerd_at',
         ]
-        read_only_fields = ['id', 'user', 'weeknummer', 'totaal_km', 'totaal_uren', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'weeknummer', 'totaal_km', 'totaal_uren', 'created_at', 'updated_at', 'kilometerheffing_gefactureerd_at']
     
     def get_totaal_uren_display(self, obj):
         if obj.totaal_uren:

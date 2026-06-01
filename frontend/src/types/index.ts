@@ -196,6 +196,8 @@ export interface TimeEntry {
   totaal_uren_display: string
   status: 'concept' | 'ingediend'
   bron: 'handmatig' | 'auto_import'
+  kilometerheffing_bedrag?: string | number | null
+  kilometerheffing_gefactureerd_at?: string | null
   overtime_info?: {
     start_time: string | null
     end_time: string | null
