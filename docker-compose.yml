@@ -133,6 +133,9 @@ services:
     container_name: tms_celery_worker
     restart: always
     command: celery -A tms worker --loglevel=info --concurrency=2 --max-tasks-per-child=50
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       - DJANGO_SETTINGS_MODULE=tms.settings.production
       - SECRET_KEY=${SECRET_KEY:?Secret key is verplicht}
@@ -167,6 +170,9 @@ services:
     container_name: tms_celery_beat
     restart: always
     command: celery -A tms beat --loglevel=info
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       - DJANGO_SETTINGS_MODULE=tms.settings.production
       - SECRET_KEY=${SECRET_KEY:?Secret key is verplicht}
