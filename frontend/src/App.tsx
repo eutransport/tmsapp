@@ -66,16 +66,9 @@ import LeaveRequestPage from '@/pages/leave/LeaveRequestPage'
 import LeaveCalendarPage from '@/pages/leave/LeaveCalendarPage'
 import LeaveSettingsPage from '@/pages/settings/LeaveSettingsPage'
 import LeaveRequestsAdminPage from '@/pages/leave/LeaveRequestsAdminPage'
-import LeaveBalancePage from '@/pages/leave/LeaveBalancePage'
 
 // Pakmiddelen Teruggavebonnen
 import PakmiddelenPage from '@/pages/pakmiddelen/PakmiddelenPage'
-
-// Tolregistratie
-import TolRegistratiePage from '@/pages/toll/TolRegistratiePage'
-import AdminTolRegistratiePage from '@/pages/toll/AdminTolRegistratiePage'
-// Kilometerheffing
-import KilometerheffingPage from '@/pages/kilometerheffing/KilometerheffingPage'
 
 // Notifications
 import NotificationsPage from '@/pages/notifications/NotificationsPage'
@@ -121,14 +114,7 @@ import { useLicenseStore } from '@/stores/licenseStore'
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, pendingMfaSetup } = useAuthStore()
-  const { isConfigured } = useServerConfigStore()
   const { isLicensed, isLoading: licenseLoading } = useLicenseStore()
-  
-  // Check server config FIRST — if not configured, redirect immediately
-  // (license check never runs when !isConfigured, so licenseLoading stays true)
-  if (!isConfigured) {
-    return <Navigate to="/setup" replace />
-  }
   
   if (isLoading || licenseLoading) {
     return (
@@ -170,13 +156,7 @@ function SetupRoute({ children }: { children: React.ReactNode }) {
 
 // Auth Route wrapper - requires server config
 function AuthRoute({ children }: { children: React.ReactNode }) {
-  const { isConfigured } = useServerConfigStore()
   const { isAuthenticated } = useAuthStore()
-  
-  // Redirect to server setup if not configured
-  if (!isConfigured) {
-    return <Navigate to="/setup" replace />
-  }
   
   // Redirect to dashboard if already authenticated
   if (isAuthenticated) {
@@ -358,18 +338,10 @@ function App() {
         <Route path="/leave/request" element={<LeaveRequestPage />} />
         <Route path="/leave/calendar" element={<LeaveCalendarPage />} />
         <Route path="/leave/admin" element={<PermissionRoute permission="can_manage_leave_for_all"><LeaveRequestsAdminPage /></PermissionRoute>} />
-        <Route path="/leave/balances" element={<LeaveBalancePage />} />
         <Route path="/settings/leave" element={<AdminRoute><LeaveSettingsPage /></AdminRoute>} />
 
         {/* Pakmiddelen Teruggavebonnen */}
         <Route path="/pakmiddelen" element={<PermissionRoute permission="view_pakmiddelen"><PakmiddelenPage /></PermissionRoute>} />
-
-        {/* Tolregistratie */}
-        <Route path="/toll" element={<TolRegistratiePage />} />
-        <Route path="/toll/admin" element={<AdminRoute><AdminTolRegistratiePage /></AdminRoute>} />
-
-        {/* Kilometerheffing */}
-        <Route path="/kilometerheffing" element={<KilometerheffingPage />} />
 
         {/* Spreadsheets (Ritregistratie) */}
         <Route path="/spreadsheets" element={<AdminRoute><SpreadsheetListPage /></AdminRoute>} />

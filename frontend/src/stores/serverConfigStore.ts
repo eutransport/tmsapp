@@ -67,9 +67,9 @@ interface ServerConfigStore extends ServerConfig {
 export const useServerConfigStore = create<ServerConfigStore>()(
   persist(
     (set, get) => ({
-      serverUrl: null,
-      serverName: null,
-      isConfigured: false,
+      serverUrl: '',
+      serverName: 'TMS Server',
+      isConfigured: true,
 
       setServerUrl: (url: string, name?: string) => {
         // Empty URL means development mode (use Vite proxy)
