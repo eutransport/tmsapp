@@ -995,10 +995,11 @@ class RevenueView(APIView):
         
         for period_date in all_periods:
             income = income_dict.get(period_date, 0)
+            # Creditfacturen zijn negatief opgeslagen en verlagen de inkomsten (geen "negatieve uitgave")
             credit = credit_exp_dict.get(period_date, 0)
-            expenses = invoice_exp_dict.get(period_date, 0) + credit + direct_exp_dict.get(period_date, 0)
-            profit = income - expenses
-            
+            expenses = invoice_exp_dict.get(period_date, 0) + direct_exp_dict.get(period_date, 0)
+            profit = income + credit - expenses
+
             total_income += income
             total_expenses += expenses
             total_credit += credit
@@ -1024,7 +1025,7 @@ class RevenueView(APIView):
             })
         
         # Calculate totals and summary
-        total_profit = total_income - total_expenses
+        total_profit = total_income + total_credit - total_expenses
         
         # Totaal gevorderd: verkoop facturen die betaald zijn
         collected_agg = Invoice.objects.filter(
