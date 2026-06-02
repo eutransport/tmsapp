@@ -22,6 +22,7 @@ import {
   CurrencyEuroIcon,
   ArrowUpTrayIcon,
   CalendarDaysIcon,
+  ScaleIcon,
   BellIcon,
   PencilSquareIcon,
   TableCellsIcon,
@@ -64,6 +65,7 @@ const navigation: NavItem[] = [
   { name: 'nav.planning', href: '/planning', icon: CalendarIcon },  // All roles (filtered by backend)
   { name: 'nav.leave', href: '/leave', icon: CalendarDaysIcon },  // All roles
   { name: 'nav.leaveRequests', href: '/leave/admin', icon: ClipboardDocumentCheckIcon, roles: ['admin'], permission: 'can_manage_leave_for_all' },
+  { name: 'nav.leaveBalance', href: '/leave/balances', icon: ScaleIcon },  // All roles - data filtered by backend based on view_leave_balances permission
   { name: 'nav.documents', href: '/documents', icon: PencilSquareIcon },  // All roles - PDF signing
   { name: 'nav.notifications', href: '/notifications', icon: BellIcon, roles: ['admin'], permission: 'view_notifications' },
   { name: 'nav.invoices', href: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'gebruiker'], permission: 'view_invoices' },
