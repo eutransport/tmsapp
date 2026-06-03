@@ -32,6 +32,7 @@ import {
   MapPinIcon,
   DocumentChartBarIcon,
   EnvelopeIcon,
+  ReceiptPercentIcon,
 } from '@heroicons/react/24/outline'
 import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
@@ -62,8 +63,12 @@ const navigation: NavItem[] = [
   { name: 'nav.myHours', href: '/my-hours', icon: ClipboardDocumentListIcon, roles: ['chauffeur'] },
   { name: 'nav.submittedHours', href: '/submitted-hours', icon: ClipboardDocumentListIcon, roles: ['admin', 'gebruiker'], permission: 'view_submitted_hours' },
   { name: 'nav.urenImport', href: '/uren-import', icon: ArrowUpTrayIcon, roles: ['admin'], permission: 'view_uren_import' },
+  { name: 'nav.tolregistratie', href: '/toll', icon: ReceiptPercentIcon, roles: ['chauffeur'] },
+  { name: 'nav.tolregistratieAdmin', href: '/toll/admin', icon: ClipboardDocumentListIcon, roles: ['admin'] },
+  { name: 'nav.kilometerheffing', href: '/kilometerheffing', icon: CurrencyEuroIcon, roles: ['admin', 'gebruiker'] },
   { name: 'nav.planning', href: '/planning', icon: CalendarIcon },  // All roles (filtered by backend)
   { name: 'nav.leave', href: '/leave', icon: CalendarDaysIcon },  // All roles
+  { name: 'nav.leaveBalance', href: '/leave/balances', icon: ScaleIcon, roles: ['admin', 'gebruiker', 'chauffeur'], permission: 'view_leave_balances' },
   { name: 'nav.leaveRequests', href: '/leave/admin', icon: ClipboardDocumentCheckIcon, roles: ['admin'], permission: 'can_manage_leave_for_all' },
   { name: 'nav.leaveBalance', href: '/leave/balances', icon: ScaleIcon },  // All roles - data filtered by backend based on view_leave_balances permission
   { name: 'nav.documents', href: '/documents', icon: PencilSquareIcon },  // All roles - PDF signing
