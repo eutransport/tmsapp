@@ -347,6 +347,8 @@ export interface Invoice {
   template_naam: string
   bedrijf: string
   bedrijf_naam: string
+  administratie: string | null
+  administratie_naam: string | null
   factuurdatum: string
   vervaldatum: string
   subtotaal: number

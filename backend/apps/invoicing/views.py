@@ -188,24 +188,51 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     """
     permission_classes = [IsAuthenticated, IsAdminOrManager, HasModulePermission]
     module_permission = 'view_invoices'
-    filterset_fields = ['type', 'status', 'bedrijf', 'week_number', 'week_year', 'chauffeur']
+    filterset_fields = ['type', 'status', 'bedrijf', 'administratie', 'week_number', 'week_year', 'chauffeur']
     search_fields = ['factuurnummer', 'bedrijf__naam']
     ordering_fields = ['factuurdatum', 'factuurnummer', 'totaal', 'bedrijf__naam']
 
     def get_queryset(self):
         from apps.core.models import Administratie
         base_qs = Invoice.objects.select_related(
-            'bedrijf', 'template', 'created_by'
+            'bedrijf', 'template', 'created_by', 'administratie'
         ).prefetch_related('lines')
         user = self.request.user
         # Admins always see everything
         if user.rol == 'admin' or user.is_staff:
             return base_qs.all()
-        # Non-admin: restrict to companies in the user's accessible Administraties
-        accessible_company_ids = Administratie.objects.filter(
+        # Non-admin: restrict to invoices linked to an Administratie the user has access to
+        accessible_admin_ids = Administratie.objects.filter(
             allowed_users=user
-        ).values_list('bedrijven', flat=True)
-        return base_qs.filter(bedrijf__in=accessible_company_ids)
+        ).values_list('id', flat=True)
+        return base_qs.filter(administratie__in=accessible_admin_ids)
+
+    @action(detail=False, methods=['post'], url_path='bulk_assign_administratie')
+    def bulk_assign_administratie(self, request):
+        """Bulk-koppel facturen aan een administratie."""
+        from apps.core.models import Administratie
+        ids = request.data.get('ids') or []
+        administratie_id = request.data.get('administratie')
+        if not ids or not administratie_id:
+            return Response(
+                {'error': "Geef 'ids' (lijst) en 'administratie' (id) op."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            administratie = Administratie.objects.get(pk=administratie_id)
+        except Administratie.DoesNotExist:
+            return Response({'error': 'Administratie niet gevonden.'}, status=status.HTTP_404_NOT_FOUND)
+        user = request.user
+        if not (user.is_superuser or getattr(user, 'rol', None) == 'admin'):
+            if not administratie.allowed_users.filter(pk=user.pk).exists():
+                return Response(
+                    {'error': 'Geen rechten op deze administratie.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        # Restrict update to invoices the user can see
+        qs = self.get_queryset().filter(pk__in=ids)
+        updated = qs.update(administratie=administratie)
+        return Response({'updated': updated})
 
     @action(detail=False, methods=['get'])
     def next_number(self, request):

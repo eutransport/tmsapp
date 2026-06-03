@@ -22,6 +22,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { getTemplates, createInvoice, createInvoiceLine, getNextInvoiceNumber, getInvoice, getInvoiceLines, updateInvoice, deleteInvoiceLine } from '@/api/invoices'
 import { getCompanies } from '@/api/companies'
+import { getMijnAdministraties, Administratie } from '@/api/administraties'
 import { getTimeEntries, markKilometerheffingGefactureerd } from '@/api/timetracking'
 import { getSpreadsheets } from '@/api/spreadsheets'
 import { getImportedEntries, ImportedTimeEntry } from '@/api/urenImport'
@@ -1248,10 +1249,12 @@ export default function InvoiceCreatePage() {
   // Data state
   const [templates, setTemplates] = useState<InvoiceTemplate[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [administraties, setAdministraties] = useState<Administratie[]>([])
   
   // Form state
   const [selectedTemplate, setSelectedTemplate] = useState<InvoiceTemplate | null>(null)
   const [selectedCompany, setSelectedCompany] = useState<string>('')
+  const [selectedAdministratie, setSelectedAdministratie] = useState<string>('')
   const [invoiceType, setInvoiceType] = useState<'verkoop' | 'inkoop' | 'credit'>('verkoop')
   const [factuurnummer, setFactuurnummer] = useState<string>('')
   const [factuurdatum, setFactuurdatum] = useState(new Date().toISOString().split('T')[0])
@@ -1310,12 +1313,14 @@ export default function InvoiceCreatePage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [templatesRes, companiesRes] = await Promise.all([
+        const [templatesRes, companiesRes, administratiesRes] = await Promise.all([
           getTemplates(true),
           getCompanies({ page_size: 1000 }),
+          getMijnAdministraties(),
         ])
         setTemplates(templatesRes.results)
         setCompanies(companiesRes.results)
+        setAdministraties(administratiesRes)
 
         if (reimportId) {
           // Reimport mode: prefill from existing invoice
@@ -1327,6 +1332,7 @@ export default function InvoiceCreatePage() {
             setVervaldatum(existing.vervaldatum)
             setOpmerkingen(existing.opmerkingen || '')
             setSelectedCompany(existing.bedrijf)
+            setSelectedAdministratie(existing.administratie || '')
             const tpl = templatesRes.results.find(t => t.id === existing.template)
             if (tpl) setSelectedTemplate(tpl)
           } catch (e) {
@@ -1867,6 +1873,10 @@ export default function InvoiceCreatePage() {
       setError(t('invoices.selectCompanyError'))
       return
     }
+    if (!selectedAdministratie) {
+      setError(t('invoices.selectAdministratieError', 'Selecteer een administratie'))
+      return
+    }
     if (lines.length === 0) {
       setError(t('invoices.addLineError'))
       return
@@ -1880,6 +1890,7 @@ export default function InvoiceCreatePage() {
       const invoiceData: any = {
         template: selectedTemplate.id,
         bedrijf: selectedCompany,
+        administratie: selectedAdministratie,
         type: invoiceType,
         factuurdatum,
         vervaldatum,
@@ -1907,6 +1918,7 @@ export default function InvoiceCreatePage() {
           vervaldatum,
           btw_percentage: totalsConfig.btwPercentage,
           opmerkingen,
+          administratie: selectedAdministratie,
         } as any)
         const existingLines = await getInvoiceLines(reimportId)
         await Promise.all(existingLines.map(l => deleteInvoiceLine(l.id)))
@@ -2028,7 +2040,7 @@ export default function InvoiceCreatePage() {
         </div>
         <button
           onClick={handleSave}
-          disabled={isSaving || !selectedTemplate || !selectedCompany}
+          disabled={isSaving || !selectedTemplate || !selectedCompany || !selectedAdministratie}
           className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2 flex-shrink-0"
         >
           {isSaving && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
@@ -2089,6 +2101,19 @@ export default function InvoiceCreatePage() {
                 <option value="">{t('invoices.selectCompany')}...</option>
                 {companies.map((company) => (
                   <option key={company.id} value={company.id}>{company.naam}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoices.administratie', 'Administratie')} *</label>
+              <select
+                value={selectedAdministratie}
+                onChange={(e) => setSelectedAdministratie(e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+              >
+                <option value="">{t('invoices.selectAdministratie', 'Selecteer administratie')}...</option>
+                {administraties.map((adm) => (
+                  <option key={adm.id} value={adm.id}>{adm.naam}</option>
                 ))}
               </select>
             </div>

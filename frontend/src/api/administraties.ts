@@ -75,3 +75,12 @@ export async function getMijnBedrijven(): Promise<Company[]> {
   const response = await api.get('/core/administraties/mijn-bedrijven/')
   return response.data.results ?? response.data
 }
+
+/**
+ * Any authenticated user: returns the administraties they may access
+ * (admins get all administraties).
+ */
+export async function getMijnAdministraties(): Promise<Administratie[]> {
+  const response = await api.get('/core/administraties/mijn-administraties/')
+  return response.data.results ?? response.data
+}

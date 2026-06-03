@@ -19,6 +19,7 @@ import {
   ChevronUpIcon,
   ChevronDownIcon,
   PaperClipIcon,
+  BuildingOfficeIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/stores/authStore'
@@ -29,6 +30,7 @@ import {
   deleteInvoice,
   bulkDeleteInvoices,
   bulkStatusChange,
+  bulkAssignAdministratie,
   markDefinitief,
   markVerzonden,
   markBetaald,
@@ -38,7 +40,7 @@ import {
   InvoiceFilters,
 } from '@/api/invoices'
 import { getCompanies, getMailingContacts } from '@/api/companies'
-import { getMijnBedrijven } from '@/api/administraties'
+import { getMijnBedrijven, getMijnAdministraties, Administratie } from '@/api/administraties'
 import EmailProfileSelector from '@/components/EmailProfileSelector'
 import clsx from '@/utils/clsx'
 
@@ -65,6 +67,7 @@ export default function InvoicesPage() {
   // Data state
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [administraties, setAdministraties] = useState<Administratie[]>([])
   const [loading, setLoading] = useState(true)
   const [totalCount, setTotalCount] = useState(0)
   
@@ -81,6 +84,8 @@ export default function InvoicesPage() {
   // Modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
+  const [showBulkAssignAdminModal, setShowBulkAssignAdminModal] = useState(false)
+  const [bulkAssignAdminId, setBulkAssignAdminId] = useState<string>('')
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
@@ -114,6 +119,8 @@ export default function InvoicesPage() {
         const accessible = await getMijnBedrijven()
         setCompanies(accessible)
       }
+      const adms = await getMijnAdministraties()
+      setAdministraties(adms)
     } catch (err) {
       console.error('Failed to load initial data:', err)
     }
@@ -234,6 +241,27 @@ export default function InvoicesPage() {
       loadInvoices()
     } catch (err: any) {
       setError(err.response?.data?.error || t('errors.saveFailed'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleBulkAssignAdministratie = async () => {
+    if (selectedIds.size === 0 || !bulkAssignAdminId) return
+    try {
+      setSaving(true)
+      setError(null)
+      const result = await bulkAssignAdministratie(Array.from(selectedIds), bulkAssignAdminId)
+      if (result.updated > 0) {
+        setSuccessMessage(t('invoices.administratieAssigned', { count: result.updated, defaultValue: `${result.updated} facturen gekoppeld` }))
+        setTimeout(() => setSuccessMessage(null), 5000)
+      }
+      setShowBulkAssignAdminModal(false)
+      setBulkAssignAdminId('')
+      setSelectedIds(new Set())
+      loadInvoices()
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.response?.data?.detail || t('errors.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -398,6 +426,14 @@ export default function InvoicesPage() {
               >
                 <CurrencyEuroIcon className="h-4 w-4" />
                 {t('invoices.paid')}
+              </button>
+              <button
+                onClick={() => { setBulkAssignAdminId(''); setShowBulkAssignAdminModal(true) }}
+                className="btn-secondary flex items-center gap-1.5 text-sm"
+                disabled={saving}
+              >
+                <BuildingOfficeIcon className="h-4 w-4" />
+                {t('invoices.assignAdministratie', 'Koppel administratie')}
               </button>
               <button 
                 onClick={() => setShowBulkDeleteModal(true)} 
@@ -1280,6 +1316,50 @@ export default function InvoicesPage() {
                     </button>
                     <button onClick={handleBulkDelete} disabled={saving} className="btn-danger">
                       {saving ? t('common.deleting') : `${selectedIds.size} ${t('common.delete').toLowerCase()}`}
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Bulk Assign Administratie Modal */}
+      <Transition appear show={showBulkAssignAdminModal} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setShowBulkAssignAdminModal(false)}>
+          <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 shadow-xl transition-all">
+                  <Dialog.Title className="text-lg font-semibold text-gray-900">
+                    {t('invoices.assignAdministratie', 'Koppel administratie')}
+                  </Dialog.Title>
+                  <p className="mt-2 text-sm text-gray-500">
+                    {t('invoices.assignAdministratieDesc', { count: selectedIds.size, defaultValue: `Selecteer een administratie voor ${selectedIds.size} facturen.` })}
+                  </p>
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('invoices.administratie', 'Administratie')} *</label>
+                    <select
+                      value={bulkAssignAdminId}
+                      onChange={(e) => setBulkAssignAdminId(e.target.value)}
+                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                    >
+                      <option value="">{t('invoices.selectAdministratie', 'Selecteer administratie')}...</option>
+                      {administraties.map((a) => (
+                        <option key={a.id} value={a.id}>{a.naam}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button type="button" onClick={() => setShowBulkAssignAdminModal(false)} className="btn-secondary">
+                      {t('common.cancel')}
+                    </button>
+                    <button onClick={handleBulkAssignAdministratie} disabled={saving || !bulkAssignAdminId} className="btn-primary">
+                      {saving ? t('common.saving') : t('common.save')}
                     </button>
                   </div>
                 </Dialog.Panel>

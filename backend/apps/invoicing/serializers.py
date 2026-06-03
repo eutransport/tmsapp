@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import InvoiceTemplate, Invoice, InvoiceLine, InvoiceStatus, Expense, ExpenseCategory
+from apps.core.models import Administratie
 
 
 class InvoiceTemplateSerializer(serializers.ModelSerializer):
@@ -69,6 +70,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
     template_naam = serializers.CharField(source='template.naam', read_only=True)
     created_by_naam = serializers.CharField(source='created_by.full_name', read_only=True)
     chauffeur_naam = serializers.CharField(source='chauffeur.full_name', read_only=True, allow_null=True)
+    administratie_naam = serializers.CharField(source='administratie.naam', read_only=True, allow_null=True)
     type_display = serializers.CharField(source='get_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     
@@ -77,6 +79,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'factuurnummer', 'type', 'type_display', 'status', 'status_display',
             'template', 'template_naam', 'bedrijf', 'bedrijf_naam',
+            'administratie', 'administratie_naam',
             'factuurdatum', 'vervaldatum',
             'subtotaal', 'btw_percentage', 'btw_bedrag', 'totaal',
             'opmerkingen', 'pdf_file', 'bijlage',
@@ -112,10 +115,23 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
 
 class InvoiceCreateSerializer(serializers.ModelSerializer):
+    administratie = serializers.PrimaryKeyRelatedField(
+        queryset=Administratie.objects.all(), required=True, allow_null=False
+    )
+
     class Meta:
         model = Invoice
-        fields = ['template', 'bedrijf', 'type', 'factuurdatum', 'vervaldatum', 'btw_percentage', 'opmerkingen', 'week_number', 'week_year', 'chauffeur', 'dot_percentage']
-    
+        fields = ['template', 'bedrijf', 'administratie', 'type', 'factuurdatum', 'vervaldatum', 'btw_percentage', 'opmerkingen', 'week_number', 'week_year', 'chauffeur', 'dot_percentage']
+
+    def validate_administratie(self, value):
+        request = self.context.get('request')
+        if request and not (request.user.is_superuser or getattr(request.user, 'rol', None) == 'admin'):
+            if not value.allowed_users.filter(pk=request.user.pk).exists():
+                raise serializers.ValidationError(
+                    'Je hebt geen rechten om facturen aan deze administratie te koppelen.'
+                )
+        return value
+
     def validate_factuurdatum(self, value):
         from datetime import date, timedelta
         # Factuurdatum mag niet te ver in het verleden liggen
@@ -144,7 +160,7 @@ class InvoiceUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Invoice
-        fields = ['status', 'btw_percentage', 'opmerkingen', 'vervaldatum', 'bijlage']
+        fields = ['status', 'btw_percentage', 'opmerkingen', 'vervaldatum', 'bijlage', 'administratie']
     
     def validate_status(self, value):
         if self.instance:
@@ -167,7 +183,7 @@ class InvoiceUpdateSerializer(serializers.ModelSerializer):
         # Concept facturen mogen alles wijzigen
         if self.instance and self.instance.status != InvoiceStatus.CONCEPT:
             # Niet-concept facturen mogen alleen status, opmerkingen en bijlage wijzigen
-            allowed_fields = {'status', 'opmerkingen', 'bijlage'}
+            allowed_fields = {'status', 'opmerkingen', 'bijlage', 'administratie'}
             for field in data.keys():
                 if field not in allowed_fields:
                     raise serializers.ValidationError(

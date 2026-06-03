@@ -9,6 +9,7 @@ import { Invoice, InvoiceTemplate, InvoiceLine } from '@/types'
 export interface InvoiceCreate {
   template: string
   bedrijf: string
+  administratie: string
   type: 'inkoop' | 'verkoop' | 'credit'
   factuurdatum: string
   vervaldatum: string
@@ -21,6 +22,7 @@ export interface InvoiceUpdate {
   btw_percentage?: number
   opmerkingen?: string
   vervaldatum?: string
+  administratie?: string
 }
 
 export interface InvoiceLineCreate {
@@ -51,6 +53,7 @@ export interface InvoiceFilters {
   type?: 'inkoop' | 'verkoop' | 'credit'
   status?: 'concept' | 'definitief' | 'verzonden' | 'betaald'
   bedrijf?: string
+  administratie?: string
   search?: string
   page?: number
   page_size?: number
@@ -214,6 +217,14 @@ export async function bulkStatusChange(
   status: 'concept' | 'definitief' | 'verzonden' | 'betaald'
 ): Promise<{ updated: number; errors: string[]; message: string }> {
   const response = await api.post('/invoicing/invoices/bulk_status/', { ids, status })
+  return response.data
+}
+
+export async function bulkAssignAdministratie(
+  ids: string[],
+  administratie: string
+): Promise<{ updated: number }> {
+  const response = await api.post('/invoicing/invoices/bulk_assign_administratie/', { ids, administratie })
   return response.data
 }
 

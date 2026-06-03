@@ -63,14 +63,13 @@ const navigation: NavItem[] = [
   { name: 'nav.myHours', href: '/my-hours', icon: ClipboardDocumentListIcon, roles: ['chauffeur'] },
   { name: 'nav.submittedHours', href: '/submitted-hours', icon: ClipboardDocumentListIcon, roles: ['admin', 'gebruiker'], permission: 'view_submitted_hours' },
   { name: 'nav.urenImport', href: '/uren-import', icon: ArrowUpTrayIcon, roles: ['admin'], permission: 'view_uren_import' },
-  { name: 'nav.tolregistratie', href: '/toll', icon: ReceiptPercentIcon, roles: ['chauffeur'] },
+  { name: 'nav.tolregistratie', href: '/toll', icon: ReceiptPercentIcon, roles: ['admin', 'chauffeur'] },
   { name: 'nav.tolregistratieAdmin', href: '/toll/admin', icon: ClipboardDocumentListIcon, roles: ['admin'] },
   { name: 'nav.kilometerheffing', href: '/kilometerheffing', icon: CurrencyEuroIcon, roles: ['admin', 'gebruiker'] },
   { name: 'nav.planning', href: '/planning', icon: CalendarIcon },  // All roles (filtered by backend)
   { name: 'nav.leave', href: '/leave', icon: CalendarDaysIcon },  // All roles
   { name: 'nav.leaveBalance', href: '/leave/balances', icon: ScaleIcon, roles: ['admin', 'gebruiker', 'chauffeur'], permission: 'view_leave_balances' },
   { name: 'nav.leaveRequests', href: '/leave/admin', icon: ClipboardDocumentCheckIcon, roles: ['admin'], permission: 'can_manage_leave_for_all' },
-  { name: 'nav.leaveBalance', href: '/leave/balances', icon: ScaleIcon },  // All roles - data filtered by backend based on view_leave_balances permission
   { name: 'nav.documents', href: '/documents', icon: PencilSquareIcon },  // All roles - PDF signing
   { name: 'nav.notifications', href: '/notifications', icon: BellIcon, roles: ['admin'], permission: 'view_notifications' },
   { name: 'nav.invoices', href: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'gebruiker'], permission: 'view_invoices' },
@@ -85,9 +84,6 @@ const navigation: NavItem[] = [
   { name: 'nav.tachographComparison', href: '/tachograph/comparison', icon: ChartBarSquareIcon, roles: ['admin'] },
   { name: 'nav.reports', href: '/reports', icon: DocumentChartBarIcon, roles: ['admin', 'gebruiker', 'chauffeur'], permission: 'view_reports' },
   { name: 'nav.pakmiddelen', href: '/pakmiddelen', icon: EnvelopeIcon, roles: ['admin', 'gebruiker'], permission: 'view_pakmiddelen' },
-  { name: 'nav.tolregistratie', href: '/toll', icon: CurrencyEuroIcon },
-  { name: 'nav.tolregistratieAdmin', href: '/toll/admin', icon: DocumentTextIcon, roles: ['admin'] },
-  { name: 'nav.kilometerheffing', href: '/kilometerheffing', icon: CurrencyEuroIcon },
 ]
 
 const adminNavigation: NavItem[] = [
@@ -122,8 +118,11 @@ export default function DashboardLayout() {
   // Filter navigation items based on user role and module permissions
   const filterByRole = (items: NavItem[]) => 
     items.filter(item => {
-      // Admins bypass all checks
-      if (userRole === 'admin') return true
+      // Admins see items without role restriction, or items where 'admin' is listed
+      if (userRole === 'admin') {
+        if (!item.roles) return true
+        return item.roles.includes('admin')
+      }
       // If user has the required module permission, show regardless of role
       if (item.permission && userPermissions.includes(item.permission)) return true
       // Otherwise check role restriction

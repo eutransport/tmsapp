@@ -1253,7 +1253,7 @@ class AdministratieViewSet(viewsets.ModelViewSet):
     serializer_class = AdministratieSerializer
 
     def get_permissions(self):
-        if self.action == 'mijn_bedrijven':
+        if self.action in ('mijn_bedrijven', 'mijn_administraties'):
             return [IsAuthenticated()]
         return [IsAdminOnly()]
 
@@ -1285,5 +1285,15 @@ class AdministratieViewSet(viewsets.ModelViewSet):
             ).distinct().order_by('naam')
 
         serializer = CompanySerializer(companies, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='mijn-administraties')
+    def mijn_administraties(self, request):
+        """Return the administraties the current user has access to (or all for admins)."""
+        if request.user.rol == 'admin' or request.user.is_staff:
+            qs = self.get_queryset().order_by('naam')
+        else:
+            qs = self.get_queryset().filter(allowed_users=request.user).order_by('naam')
+        serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 

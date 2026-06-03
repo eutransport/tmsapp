@@ -78,7 +78,16 @@ class Invoice(models.Model):
         related_name='invoices',
         verbose_name='Bedrijf'
     )
-    
+    administratie = models.ForeignKey(
+        'core.Administratie',
+        on_delete=models.PROTECT,
+        related_name='invoices',
+        verbose_name='Administratie',
+        null=True,
+        blank=True,
+        help_text='Administratie waaronder deze factuur valt. Bepaalt welke gebruikers (niet-admins) de factuur kunnen inzien.',
+    )
+
     # Dates
     factuurdatum = models.DateField(verbose_name='Factuurdatum')
     vervaldatum = models.DateField(verbose_name='Vervaldatum')
