@@ -228,14 +228,17 @@ export interface WeekPlanning {
 export interface PlanningEntry {
   id: string
   planning: string
-  vehicle: string
+  vehicle: string | null
+  vehicle_key: string
   vehicle_kenteken: string
   vehicle_type: string
+  vehicle_type_wagen?: string
   vehicle_ritnummer: string
   dag: 'ma' | 'di' | 'wo' | 'do' | 'vr'
   dag_display: string
   chauffeur: string | null
   chauffeur_naam: string | null
+  ritnummer?: string
   telefoon: string
   adr: boolean
   created_at: string

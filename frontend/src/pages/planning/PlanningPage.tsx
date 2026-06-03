@@ -569,7 +569,8 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
     doc.save(`planning-week-${currentWeek}-${currentYear}-${companyName.replace(/\s+/g, '-')}.pdf`)
   }
 
-  // Group entries by vehicle
+  // Group entries by vehicle (gebruik vehicle_key zodat verwijderde voertuigen
+  // hun historische rij behouden via snapshot kenteken/ritnummer)
   const getEntriesByVehicle = useCallback(() => {
     if (!planning?.entries) return []
     
@@ -581,15 +582,16 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
     }>()
     
     for (const entry of planning.entries) {
-      if (!vehicleMap.has(entry.vehicle)) {
-        vehicleMap.set(entry.vehicle, {
+      const key = entry.vehicle_key || entry.vehicle || `snapshot:${entry.vehicle_kenteken}:${entry.vehicle_ritnummer}`
+      if (!vehicleMap.has(key)) {
+        vehicleMap.set(key, {
           kenteken: entry.vehicle_kenteken,
           type: entry.vehicle_type,
           ritnummer: entry.vehicle_ritnummer,
           entries: new Map()
         })
       }
-      vehicleMap.get(entry.vehicle)!.entries.set(entry.dag, entry)
+      vehicleMap.get(key)!.entries.set(entry.dag, entry)
     }
     
     // Sort by ritnummer (numeric sort, lowest first)

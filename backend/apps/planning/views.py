@@ -183,10 +183,10 @@ class WeekPlanningViewSet(viewsets.ModelViewSet):
                 'dag': entry.dag,
                 'dag_naam': day_names.get(entry.dag, entry.dag),
                 'dag_order': day_order.get(entry.dag, 99),
-                'kenteken': entry.vehicle.kenteken if entry.vehicle else '',
-                'voertuig_type': entry.vehicle.type_wagen if entry.vehicle else '',
-                'bedrijf': entry.planning.bedrijf.naam if entry.planning.bedrijf else '',
-                'ritnummer': entry.ritnummer or (entry.vehicle.ritnummer if entry.vehicle else ''),
+                'kenteken': entry.vehicle_kenteken or (entry.vehicle.kenteken if entry.vehicle else ''),
+                'voertuig_type': entry.vehicle_type_wagen or (entry.vehicle.type_wagen if entry.vehicle else ''),
+                'bedrijf': entry.planning.bedrijf_naam or (entry.planning.bedrijf.naam if entry.planning.bedrijf else ''),
+                'ritnummer': entry.ritnummer or entry.vehicle_ritnummer or (entry.vehicle.ritnummer if entry.vehicle else ''),
                 'weeknummer': entry.planning.weeknummer,
                 'jaar': entry.planning.jaar,
             })
@@ -361,7 +361,7 @@ TMS
             fontSize=16,
             spaceAfter=12
         )
-        bedrijf_naam = safe_str(planning.bedrijf.naam)
+        bedrijf_naam = safe_str(planning.bedrijf_naam or (planning.bedrijf.naam if planning.bedrijf else ''))
         title = Paragraph(
             f"Planning Week {planning.weeknummer} - {planning.jaar}<br/>{bedrijf_naam}",
             title_style
@@ -376,26 +376,26 @@ TMS
         }
         day_order = {'ma': 1, 'di': 2, 'wo': 3, 'do': 4, 'vr': 5}
         
-        # Get entries sorted by ritnummer and day
+        # Get entries sorted by ritnummer (snapshot) and day
         entries = planning.entries.select_related('vehicle', 'chauffeur').all()
         sorted_entries = sorted(entries, key=lambda e: (
-            int(e.vehicle.ritnummer) if e.vehicle.ritnummer and e.vehicle.ritnummer.isdigit() else 9999,
-            e.vehicle.ritnummer or '',
+            int(e.vehicle_ritnummer) if e.vehicle_ritnummer and e.vehicle_ritnummer.isdigit() else 9999,
+            e.vehicle_ritnummer or '',
             day_order.get(e.dag, 99)
         ))
-        
+
         # Table header
         table_data = [['Ritnummer', 'Dag', 'Kenteken', 'Type', 'Chauffeur', 'Telefoon', 'ADR']]
-        
-        # Table rows
+
+        # Table rows - gebruik snapshots zodat historie altijd correct is
         for entry in sorted_entries:
             table_data.append([
-                safe_str(entry.vehicle.ritnummer) if entry.vehicle else '-',
+                safe_str(entry.vehicle_ritnummer or '-'),
                 day_names.get(entry.dag, entry.dag),
-                safe_str(entry.vehicle.kenteken) if entry.vehicle else '-',
-                safe_str(entry.vehicle.type_wagen) if entry.vehicle else '-',
-                safe_str(entry.chauffeur.naam) if entry.chauffeur else '-',
-                safe_str(entry.telefoon) if entry.telefoon else '-',
+                safe_str(entry.vehicle_kenteken or '-'),
+                safe_str(entry.vehicle_type_wagen or '-'),
+                safe_str(entry.chauffeur_naam or '-'),
+                safe_str(entry.telefoon or '-'),
                 'Ja' if entry.adr else 'Nee'
             ])
         
@@ -456,20 +456,13 @@ class PlanningEntryViewSet(viewsets.ModelViewSet):
     filterset_fields = ['planning', 'dag', 'chauffeur', 'vehicle']
     
     def perform_update(self, serializer):
+        # Het Entry-model handelt zelf de chauffeur-snapshot af in save()
         entry = serializer.save()
-        
-        # Auto-fill telefoon and adr from chauffeur
-        if entry.chauffeur:
-            entry.telefoon = entry.chauffeur.telefoon or ''
-            entry.adr = entry.chauffeur.adr
-            entry.save(update_fields=['telefoon', 'adr'])
-        else:
-            entry.telefoon = ''
-            entry.adr = False
-            entry.save(update_fields=['telefoon', 'adr'])
-        
+
+        kenteken_display = entry.vehicle_kenteken or (entry.vehicle.kenteken if entry.vehicle else '?')
+        chauffeur_display = entry.chauffeur_naam or (entry.chauffeur.naam if entry.chauffeur else 'leeg')
         logger.info(
-            f"PlanningEntry updated: {entry.vehicle.kenteken} {entry.get_dag_display()} "
-            f"-> {entry.chauffeur.naam if entry.chauffeur else 'leeg'} "
+            f"PlanningEntry updated: {kenteken_display} {entry.get_dag_display()} "
+            f"-> {chauffeur_display} "
             f"by user {self.request.user.email}"
         )
