@@ -58,34 +58,52 @@ class VehicleViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='vehicle_weeks_overview')
     def vehicle_weeks_overview(self, request):
         """
-        Overview of worked days per vehicle vs minimum days.
+        Overview of worked days per ritnummer vs minimum days.
+        Ritnummer is leading: totals are summed across all kentekens that
+        ever ran under the same ritnummer, and the current kenteken is shown.
         Minimum days = minimum_weken_per_jaar * 5 (working days per week).
         Only vehicles with minimum_weken_per_jaar set are included.
         """
         from apps.timetracking.models import TimeEntry, TimeEntryStatus
-        
+
         jaar = int(request.query_params.get('jaar', date.today().year))
-        
+
         # Get vehicles that have minimum weeks configured
         vehicles = Vehicle.objects.select_related('bedrijf').filter(
             minimum_weken_per_jaar__isnull=False
         ).order_by('kenteken')
-        
+
         results = []
+        seen_ritnummers = set()
         for vehicle in vehicles:
-            # Count distinct days where this vehicle's kenteken has time entries
+            ritnummer = (vehicle.ritnummer or '').strip()
+            # Skip duplicates: if multiple current vehicles share a ritnummer,
+            # only report once (totals are per ritnummer).
+            rit_key = ritnummer.upper()
+            if rit_key and rit_key in seen_ritnummers:
+                continue
+            if rit_key:
+                seen_ritnummers.add(rit_key)
+
+            # Aggregate by ritnummer so kenteken changes don't break history.
+            # Fall back to kenteken match only when ritnummer is empty.
+            if ritnummer:
+                entry_filter = {'ritnummer__iexact': ritnummer}
+            else:
+                entry_filter = {'kenteken__iexact': vehicle.kenteken}
+
             worked_days = TimeEntry.objects.filter(
-                kenteken__iexact=vehicle.kenteken,
                 datum__year=jaar,
                 status=TimeEntryStatus.INGEDIEND,
+                **entry_filter,
             ).values('datum').distinct().count()
-            
+
             minimum_weken = vehicle.minimum_weken_per_jaar
             minimum_dagen = minimum_weken * 5
             gemiste_dagen = max(0, minimum_dagen - worked_days)
             gewerkte_weken_decimal = round(worked_days / 5, 1)
             percentage = round((worked_days / minimum_dagen) * 100, 1) if minimum_dagen > 0 else 100
-            
+
             results.append({
                 'vehicle_id': str(vehicle.id),
                 'kenteken': vehicle.kenteken,
@@ -99,16 +117,18 @@ class VehicleViewSet(viewsets.ModelViewSet):
                 'gewerkte_weken_decimal': gewerkte_weken_decimal,
                 'percentage': min(percentage, 100),
             })
-        
+
         return Response(results)
 
     @action(detail=False, methods=['get'], url_path='vehicle_averages')
     def vehicle_averages(self, request):
         """
-        Gemiddelden per kenteken (op basis van ingediende urenregistraties):
+        Gemiddelden per ritnummer (op basis van ingediende urenregistraties):
         - totalen (km/uren/dagen)
         - gemiddelden per dag/week/maand
         - weekoverzicht en maandoverzicht
+        Ritnummer is leidend; bij kentekenwijziging blijven totalen oplopen
+        en wordt het huidige kenteken (uit Vehicle) getoond.
         Filter optioneel met ?jaar=YYYY (default huidig jaar).
         """
         from collections import defaultdict
@@ -119,26 +139,30 @@ class VehicleViewSet(viewsets.ModelViewSet):
         entries = TimeEntry.objects.filter(
             datum__year=jaar,
             status=TimeEntryStatus.INGEDIEND,
-        ).values('kenteken', 'datum', 'totaal_km', 'totaal_uren')
+        ).values('ritnummer', 'kenteken', 'datum', 'totaal_km', 'totaal_uren')
 
-        # Vehicles dict for metadata lookup
-        vehicles_by_kenteken = {
-            v.kenteken.upper(): v
-            for v in Vehicle.objects.select_related('bedrijf').all()
-        }
+        # Current Vehicle per ritnummer (for metadata + current kenteken)
+        vehicles_by_ritnummer = {}
+        for v in Vehicle.objects.select_related('bedrijf').all():
+            rit = (v.ritnummer or '').strip().upper()
+            if rit:
+                # Last write wins; usually one vehicle per ritnummer
+                vehicles_by_ritnummer[rit] = v
 
-        # Group: kenteken -> aggregates
-        per_kenteken = defaultdict(lambda: {
+        # Group: ritnummer -> aggregates
+        per_ritnummer = defaultdict(lambda: {
             'total_km': 0,
             'total_hours': 0.0,
             'days': set(),
+            'latest_kenteken': '',
+            'latest_datum': None,
             'weekly': defaultdict(lambda: {'km': 0, 'hours': 0.0, 'days': set()}),
             'monthly': defaultdict(lambda: {'km': 0, 'hours': 0.0, 'days': set()}),
         })
 
         for e in entries:
-            kenteken = (e['kenteken'] or '').strip().upper()
-            if not kenteken:
+            ritnummer = (e['ritnummer'] or '').strip().upper()
+            if not ritnummer:
                 continue
             datum = e['datum']
             uren = e['totaal_uren'].total_seconds() / 3600.0 if e['totaal_uren'] else 0.0
@@ -148,10 +172,15 @@ class VehicleViewSet(viewsets.ModelViewSet):
             week_key = (iso_year, iso_week)
             month_key = (datum.year, datum.month)
 
-            bucket = per_kenteken[kenteken]
+            bucket = per_ritnummer[ritnummer]
             bucket['total_km'] += km
             bucket['total_hours'] += uren
             bucket['days'].add(datum)
+
+            # Track most recent kenteken seen for this ritnummer as fallback
+            if bucket['latest_datum'] is None or datum >= bucket['latest_datum']:
+                bucket['latest_datum'] = datum
+                bucket['latest_kenteken'] = (e['kenteken'] or '').strip().upper()
 
             w = bucket['weekly'][week_key]
             w['km'] += km
@@ -164,8 +193,10 @@ class VehicleViewSet(viewsets.ModelViewSet):
             m['days'].add(datum)
 
         results = []
-        for kenteken, bucket in per_kenteken.items():
-            v = vehicles_by_kenteken.get(kenteken)
+        for ritnummer, bucket in per_ritnummer.items():
+            v = vehicles_by_ritnummer.get(ritnummer)
+            # Prefer current Vehicle kenteken; fall back to most recent entry
+            display_kenteken = v.kenteken if v else bucket['latest_kenteken']
             days_worked = len(bucket['days'])
             weeks_worked = len(bucket['weekly'])
             months_worked = len(bucket['monthly'])
@@ -199,9 +230,9 @@ class VehicleViewSet(viewsets.ModelViewSet):
                 })
 
             results.append({
-                'kenteken': kenteken,
+                'kenteken': display_kenteken,
                 'type_wagen': v.type_wagen if v else '',
-                'ritnummer': v.ritnummer if v else '',
+                'ritnummer': v.ritnummer if v else ritnummer,
                 'bedrijf_naam': v.bedrijf.naam if v and v.bedrijf else '',
                 'jaar': jaar,
                 'totals': {
@@ -223,5 +254,5 @@ class VehicleViewSet(viewsets.ModelViewSet):
                 'monthly': monthly_list,
             })
 
-        results.sort(key=lambda r: r['kenteken'])
+        results.sort(key=lambda r: (r['ritnummer'], r['kenteken']))
         return Response(results)
