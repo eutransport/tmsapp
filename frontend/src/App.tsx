@@ -66,14 +66,6 @@ import LeaveRequestPage from '@/pages/leave/LeaveRequestPage'
 import LeaveCalendarPage from '@/pages/leave/LeaveCalendarPage'
 import LeaveSettingsPage from '@/pages/settings/LeaveSettingsPage'
 import LeaveRequestsAdminPage from '@/pages/leave/LeaveRequestsAdminPage'
-import LeaveBalancePage from '@/pages/leave/LeaveBalancePage'
-
-// Tolregistratie
-import TolRegistratiePage from '@/pages/toll/TolRegistratiePage'
-import AdminTolRegistratiePage from '@/pages/toll/AdminTolRegistratiePage'
-
-// Kilometerheffing
-import KilometerheffingPage from '@/pages/kilometerheffing/KilometerheffingPage'
 
 // Pakmiddelen Teruggavebonnen
 import PakmiddelenPage from '@/pages/pakmiddelen/PakmiddelenPage'
@@ -346,15 +338,7 @@ function App() {
         <Route path="/leave/request" element={<LeaveRequestPage />} />
         <Route path="/leave/calendar" element={<LeaveCalendarPage />} />
         <Route path="/leave/admin" element={<PermissionRoute permission="can_manage_leave_for_all"><LeaveRequestsAdminPage /></PermissionRoute>} />
-        <Route path="/leave/balances" element={<LeaveBalancePage />} />
         <Route path="/settings/leave" element={<AdminRoute><LeaveSettingsPage /></AdminRoute>} />
-
-        {/* Tolregistratie */}
-        <Route path="/toll" element={<TolRegistratiePage />} />
-        <Route path="/toll/admin" element={<AdminRoute><AdminTolRegistratiePage /></AdminRoute>} />
-
-        {/* Kilometerheffing */}
-        <Route path="/kilometerheffing" element={<KilometerheffingPage />} />
 
         {/* Pakmiddelen Teruggavebonnen */}
         <Route path="/pakmiddelen" element={<PermissionRoute permission="view_pakmiddelen"><PakmiddelenPage /></PermissionRoute>} />
