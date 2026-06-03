@@ -22,7 +22,6 @@ import {
   CurrencyEuroIcon,
   ArrowUpTrayIcon,
   CalendarDaysIcon,
-  ScaleIcon,
   BellIcon,
   PencilSquareIcon,
   TableCellsIcon,
@@ -32,6 +31,8 @@ import {
   MapPinIcon,
   DocumentChartBarIcon,
   EnvelopeIcon,
+  ReceiptPercentIcon,
+  ScaleIcon,
 } from '@heroicons/react/24/outline'
 import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
@@ -62,10 +63,13 @@ const navigation: NavItem[] = [
   { name: 'nav.myHours', href: '/my-hours', icon: ClipboardDocumentListIcon, roles: ['chauffeur'] },
   { name: 'nav.submittedHours', href: '/submitted-hours', icon: ClipboardDocumentListIcon, roles: ['admin', 'gebruiker'], permission: 'view_submitted_hours' },
   { name: 'nav.urenImport', href: '/uren-import', icon: ArrowUpTrayIcon, roles: ['admin'], permission: 'view_uren_import' },
+  { name: 'nav.tolRegistratie', href: '/toll', icon: ReceiptPercentIcon, roles: ['chauffeur'] },
+  { name: 'nav.ingediendeTol', href: '/toll/admin', icon: ClipboardDocumentListIcon, roles: ['admin'] },
+  { name: 'nav.kilometerheffing', href: '/kilometerheffing', icon: CurrencyEuroIcon, roles: ['admin', 'gebruiker'] },
   { name: 'nav.planning', href: '/planning', icon: CalendarIcon },  // All roles (filtered by backend)
   { name: 'nav.leave', href: '/leave', icon: CalendarDaysIcon },  // All roles
+  { name: 'nav.leaveBalance', href: '/leave/balances', icon: ScaleIcon, roles: ['admin', 'gebruiker', 'chauffeur'], permission: 'view_leave_balances' },
   { name: 'nav.leaveRequests', href: '/leave/admin', icon: ClipboardDocumentCheckIcon, roles: ['admin'], permission: 'can_manage_leave_for_all' },
-  { name: 'nav.leaveBalance', href: '/leave/balances', icon: ScaleIcon },  // All roles - data filtered by backend based on view_leave_balances permission
   { name: 'nav.documents', href: '/documents', icon: PencilSquareIcon },  // All roles - PDF signing
   { name: 'nav.notifications', href: '/notifications', icon: BellIcon, roles: ['admin'], permission: 'view_notifications' },
   { name: 'nav.invoices', href: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'gebruiker'], permission: 'view_invoices' },
@@ -80,9 +84,6 @@ const navigation: NavItem[] = [
   { name: 'nav.tachographComparison', href: '/tachograph/comparison', icon: ChartBarSquareIcon, roles: ['admin'] },
   { name: 'nav.reports', href: '/reports', icon: DocumentChartBarIcon, roles: ['admin', 'gebruiker', 'chauffeur'], permission: 'view_reports' },
   { name: 'nav.pakmiddelen', href: '/pakmiddelen', icon: EnvelopeIcon, roles: ['admin', 'gebruiker'], permission: 'view_pakmiddelen' },
-  { name: 'nav.tolregistratie', href: '/toll', icon: CurrencyEuroIcon },
-  { name: 'nav.tolregistratieAdmin', href: '/toll/admin', icon: DocumentTextIcon, roles: ['admin'] },
-  { name: 'nav.kilometerheffing', href: '/kilometerheffing', icon: CurrencyEuroIcon },
 ]
 
 const adminNavigation: NavItem[] = [
@@ -183,7 +184,7 @@ export default function DashboardLayout() {
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-64 flex flex-col flex-1 min-w-0">
+      <div className="lg:pl-64 flex flex-col flex-1">
         {/* Top bar */}
         <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-2 sm:gap-x-4 border-b border-gray-200 bg-white px-3 sm:px-4 shadow-sm lg:gap-x-6 lg:px-8">
           <button
@@ -269,8 +270,8 @@ export default function DashboardLayout() {
         <LicenseExpiryBanner />
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto min-w-0">
-          <div className="px-4 py-6 sm:px-6 lg:px-8 min-w-0">
+        <main className="flex-1 overflow-auto">
+          <div className="px-4 py-6 sm:px-6 lg:px-8">
             <Outlet />
           </div>
         </main>
