@@ -152,6 +152,14 @@ export default function InvoicesPage() {
     setFilters(prev => ({ ...prev, search: searchInput, page: 1 }))
   }
 
+  // Live search: debounce so we don't refetch on every keystroke
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setFilters(prev => (prev.search === searchInput ? prev : { ...prev, search: searchInput, page: 1 }))
+    }, 350)
+    return () => clearTimeout(handle)
+  }, [searchInput])
+
   const handleSort = (field: string) => {
     setFilters(prev => {
       const currentOrdering = prev.ordering || ''
