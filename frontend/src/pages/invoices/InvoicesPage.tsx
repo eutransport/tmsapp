@@ -1549,10 +1549,9 @@ export default function InvoicesPage() {
       {/* Selection summary overlay */}
       {selectedIds.size > 0 && (() => {
         const selected = invoices.filter(inv => selectedIds.has(inv.id))
-        const total = selected.reduce(
-          (sum, inv) => sum + (inv.type === 'credit' ? -Number(inv.totaal || 0) : Number(inv.totaal || 0)),
-          0,
-        )
+        // Credit invoices are stored with a negative `totaal` in the backend,
+        // so summing the raw values already subtracts them from the total.
+        const total = selected.reduce((sum, inv) => sum + Number(inv.totaal || 0), 0)
         const creditCount = selected.filter(inv => inv.type === 'credit').length
         return (
           <div className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none px-3 pb-3 sm:px-6 sm:pb-6">
