@@ -2050,6 +2050,7 @@
     "archive": {
       "tab": "Archive",
       "syncDay": "Sync day",
+      "syncConfirm": "Are you sure you want to re-sync the tachograph data for {{date}}? Existing archive data for this day will be overwritten.",
       "syncError": "Synchronization failed",
       "noData": "No archive data found",
       "noDataHint": "Select a period with tachograph data.",

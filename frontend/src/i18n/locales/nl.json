@@ -2050,6 +2050,7 @@
     "archive": {
       "tab": "Archief",
       "syncDay": "Dag synchroniseren",
+      "syncConfirm": "Weet je zeker dat je de tachograafgegevens voor {{date}} opnieuw wilt synchroniseren? Bestaande archiefgegevens voor deze dag worden overschreven.",
       "syncError": "Synchronisatie mislukt",
       "noData": "Geen archiefgegevens gevonden",
       "noDataHint": "Selecteer een periode met tachograafgegevens.",

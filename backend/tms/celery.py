@@ -38,4 +38,9 @@ app.conf.beat_schedule = {
         'task': 'apps.pakmiddelen.tasks.check_secret_expiry',
         'schedule': crontab(hour=8, minute=30),
     },
+    'sync-tachograph-hours': {
+        'task': 'apps.tracking.tasks.sync_tachograph_hours',
+        # Run daily at 03:00 — yesterday's tachograph data is then complete
+        'schedule': crontab(hour=3, minute=0),
+    },
 }
