@@ -1700,8 +1700,24 @@ export default function InvoiceCreatePage() {
 
   // Import imported (Excel) entries with ritnummers from import, km from chauffeur, uren from import
   const handleImportImportedEntries = (entries: ImportedTimeEntry[], chauffeurEntries: TimeEntry[]) => {
+    // Filter out "niet gereden" rows — these are non-valid trips and must not be invoiced
+    const isNietGereden = (e: ImportedTimeEntry) => {
+      const haystack = [
+        e.ritlijst,
+        e.periode,
+        e.dot,
+        e.kenteken_import,
+      ].map(v => String(v ?? '').toLowerCase()).join(' ')
+      return haystack.includes('niet gereden')
+    }
+    const validEntries = entries.filter(e => !isNietGereden(e))
+    const skipped = entries.length - validEntries.length
+    if (skipped > 0) {
+      console.info(`[invoice import] ${skipped} 'niet gereden' regel(s) overgeslagen`)
+    }
+
     // Sort entries by date ascending
-    const sortedEntries = [...entries].sort((a, b) =>
+    const sortedEntries = [...validEntries].sort((a, b) =>
       new Date(a.datum).getTime() - new Date(b.datum).getTime()
     )
 
