@@ -30,6 +30,7 @@ from .imap_service import (
     FetchedMail,
     ImapServiceError,
     build_subject_pattern,
+    build_subject_patterns,
 )
 
 logger = logging.getLogger(__name__)
@@ -263,6 +264,8 @@ def scan_mailbox_graph(
         return []
 
     pattern = build_subject_pattern(config.subject_template)
+    extra_patterns = build_subject_patterns(getattr(config, 'subject_templates_extra', []) or [])
+    all_patterns = [pattern, *extra_patterns]
     token = get_access_token(config)
 
     # ISO 8601 UTC midnight
@@ -295,7 +298,11 @@ def scan_mailbox_graph(
         payload = _graph_get(next_url, token, params=next_params)
         for msg in payload.get('value', []):
             subject = msg.get('subject') or ''
-            m = pattern.search(subject)
+            m = None
+            for p in all_patterns:
+                m = p.search(subject)
+                if m:
+                    break
             if not m:
                 continue
             rit = m.group('ritnummer').strip()

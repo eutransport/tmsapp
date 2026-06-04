@@ -22,6 +22,7 @@ export interface PakmiddelenConfig {
   graph_mailbox: string
   graph_folder: string
   subject_template: string
+  subject_templates_extra: string[]
   mark_as_read: boolean
   enabled: boolean
   schedule_time: string  // "HH:MM:SS"

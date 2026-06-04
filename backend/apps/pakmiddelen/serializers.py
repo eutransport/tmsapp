@@ -21,6 +21,11 @@ class PakmiddelenConfigSerializer(serializers.ModelSerializer):
         required=False,
         allow_empty=True,
     )
+    subject_templates_extra = serializers.ListField(
+        child=serializers.CharField(max_length=500, allow_blank=False),
+        required=False,
+        allow_empty=True,
+    )
     schedule_weekdays = serializers.ListField(
         child=serializers.IntegerField(min_value=0, max_value=6),
         required=False,
@@ -40,6 +45,7 @@ class PakmiddelenConfigSerializer(serializers.ModelSerializer):
             'graph_client_secret_expires_at', 'graph_client_secret_days_left',
             'graph_mailbox', 'graph_folder',
             'subject_template',
+            'subject_templates_extra',
             'mark_as_read',
             'enabled', 'schedule_time', 'schedule_weekdays',
             'period_days', 'period_from_date',
@@ -86,6 +92,23 @@ class PakmiddelenConfigSerializer(serializers.ModelSerializer):
         if '{ritnummer}' not in (value or ''):
             raise serializers.ValidationError("Onderwerp template moet '{ritnummer}' bevatten.")
         return value
+
+    def validate_subject_templates_extra(self, value):
+        cleaned = []
+        seen = set()
+        for raw in value or []:
+            t = (raw or '').strip()
+            if not t:
+                continue
+            if '{ritnummer}' not in t:
+                raise serializers.ValidationError(
+                    "Elk extra onderwerp moet '{ritnummer}' bevatten."
+                )
+            if t in seen:
+                continue
+            seen.add(t)
+            cleaned.append(t)
+        return cleaned
 
     def update(self, instance, validated_data):
         # Don't overwrite stored secrets with blank string.

@@ -78,6 +78,20 @@ def build_subject_pattern(template: str) -> re.Pattern:
     return re.compile(escaped, re.IGNORECASE)
 
 
+def build_subject_patterns(templates: list[str]) -> list[re.Pattern]:
+    """Compile a list of subject templates into regex patterns."""
+    return [build_subject_pattern(t) for t in templates if (t or '').strip()]
+
+
+def _match_any(patterns: list[re.Pattern], subject: str):
+    """Return the first pattern Match against subject, or None."""
+    for p in patterns:
+        m = p.search(subject)
+        if m:
+            return m
+    return None
+
+
 def _imap_date(d: date) -> str:
     return d.strftime('%d-%b-%Y')
 
@@ -242,6 +256,8 @@ def scan_mailbox(
         return []
 
     pattern = build_subject_pattern(config.subject_template)
+    extra_patterns = build_subject_patterns(getattr(config, 'subject_templates_extra', []) or [])
+    all_patterns = [pattern, *extra_patterns]
     folder = _validate_folder(config.imap_folder)
     results: list[FetchedMail] = []
 
@@ -263,7 +279,7 @@ def scan_mailbox(
                 continue
             if not subject:
                 continue
-            m = pattern.search(subject)
+            m = _match_any(all_patterns, subject)
             if not m:
                 continue
             ritnummer = (m.groupdict().get('ritnummer') or '').strip()

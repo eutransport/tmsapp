@@ -87,6 +87,16 @@ class PakmiddelenConfig(models.Model):
         verbose_name='Onderwerp template',
         help_text='Gebruik {ritnummer} als placeholder voor het ritnummer.',
     )
+    subject_templates_extra = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Extra onderwerp templates',
+        help_text=(
+            'Extra onderwerp-templates die ook gelden. Een mail wordt als '
+            'ingediend gemarkeerd als minimaal één van de templates matcht. '
+            'Elke template moet {ritnummer} bevatten.'
+        ),
+    )
 
     # Mark mails as seen after successful processing
     mark_as_read = models.BooleanField(
@@ -162,6 +172,17 @@ class PakmiddelenConfig(models.Model):
 
     def __str__(self):
         return 'Pakmiddelen Configuratie'
+
+    def get_all_subject_templates(self) -> list[str]:
+        """Return the primary template plus any extra templates, deduplicated."""
+        templates: list[str] = []
+        seen: set[str] = set()
+        for t in [self.subject_template, *(self.subject_templates_extra or [])]:
+            t = (t or '').strip()
+            if t and t not in seen:
+                seen.add(t)
+                templates.append(t)
+        return templates
 
     @classmethod
     def get_solo(cls):

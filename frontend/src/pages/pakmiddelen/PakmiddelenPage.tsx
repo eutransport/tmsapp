@@ -720,6 +720,7 @@ function ConfigTab() {
         graph_mailbox: config.graph_mailbox,
         graph_folder: config.graph_folder,
         subject_template: config.subject_template,
+        subject_templates_extra: (config.subject_templates_extra || []).map(s => s.trim()).filter(Boolean),
         mark_as_read: config.mark_as_read,
         enabled: config.enabled,
         schedule_time: config.schedule_time,
@@ -907,6 +908,48 @@ function ConfigTab() {
             onChange={e => update({ subject_template: e.target.value })} className={inputCls}
             placeholder="Pakmiddelen teruggavebon {ritnummer}" />
           <p className="text-xs text-gray-500 mt-1">Gebruik {'{ritnummer}'} als placeholder.</p>
+        </Field>
+        <Field label="Extra onderwerpen (OR)" full>
+          <div className="space-y-2">
+            {(config.subject_templates_extra || []).map((tpl, idx) => (
+              <div key={idx} className="flex gap-2">
+                <input
+                  type="text"
+                  value={tpl}
+                  onChange={e => {
+                    const list = [...(config.subject_templates_extra || [])]
+                    list[idx] = e.target.value
+                    update({ subject_templates_extra: list })
+                  }}
+                  className={inputCls}
+                  placeholder="Bijv: Bon teruggave rit {ritnummer}"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const list = (config.subject_templates_extra || []).filter((_, i) => i !== idx)
+                    update({ subject_templates_extra: list })
+                  }}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+                  aria-label="Verwijder onderwerp"
+                  title="Verwijder onderwerp"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => update({ subject_templates_extra: [...(config.subject_templates_extra || []), ''] })}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 inline-flex items-center gap-1"
+            >
+              <span className="text-base leading-none">+</span> Extra onderwerp toevoegen
+            </button>
+            <p className="text-xs text-gray-500">
+              Een mail wordt als ingediend gemarkeerd als minstens één van de
+              onderwerpen matcht (OR-logica). Elke regel moet {'{ritnummer}'} bevatten.
+            </p>
+          </div>
         </Field>
         <Field label="Mails als gelezen markeren">
           <input type="checkbox" checked={config.mark_as_read}
