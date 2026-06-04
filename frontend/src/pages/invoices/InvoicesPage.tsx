@@ -90,6 +90,14 @@ export default function InvoicesPage() {
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // Cache of full invoice records for selected ids, so we keep totals/types
+  // when the user paginates away from the page where the invoice was selected.
+  const [selectedCache, setSelectedCache] = useState<Map<string, Invoice>>(new Map())
+
+  const clearSelection = () => {
+    setSelectedIds(new Set())
+    setSelectedCache(new Map())
+  }
   const [emailAddress, setEmailAddress] = useState('')
   const [emailSending, setEmailSending] = useState(false)
   const [mailingContacts, setMailingContacts] = useState<MailingListContact[]>([])
@@ -200,7 +208,7 @@ export default function InvoicesPage() {
       }
       
       setShowBulkDeleteModal(false)
-      setSelectedIds(new Set())
+      clearSelection()
       loadInvoices()
     } catch (err: any) {
       setError(err.response?.data?.error || t('errors.deleteFailed'))
@@ -237,7 +245,7 @@ export default function InvoicesPage() {
         setError(result.errors.join(', '))
       }
       
-      setSelectedIds(new Set())
+      clearSelection()
       loadInvoices()
     } catch (err: any) {
       setError(err.response?.data?.error || t('errors.saveFailed'))
@@ -258,7 +266,7 @@ export default function InvoicesPage() {
       }
       setShowBulkAssignAdminModal(false)
       setBulkAssignAdminId('')
-      setSelectedIds(new Set())
+      clearSelection()
       loadInvoices()
     } catch (err: any) {
       setError(err.response?.data?.error || err.response?.data?.detail || t('errors.saveFailed'))
@@ -268,21 +276,43 @@ export default function InvoicesPage() {
   }
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === invoices.length) {
-      setSelectedIds(new Set())
+    const allOnPageSelected = invoices.length > 0 && invoices.every(inv => selectedIds.has(inv.id))
+    if (allOnPageSelected) {
+      // Deselect only the invoices that are visible on this page
+      const newSelected = new Set(selectedIds)
+      const newCache = new Map(selectedCache)
+      invoices.forEach(inv => {
+        newSelected.delete(inv.id)
+        newCache.delete(inv.id)
+      })
+      setSelectedIds(newSelected)
+      setSelectedCache(newCache)
     } else {
-      setSelectedIds(new Set(invoices.map(inv => inv.id)))
+      // Add all visible invoices to the existing selection
+      const newSelected = new Set(selectedIds)
+      const newCache = new Map(selectedCache)
+      invoices.forEach(inv => {
+        newSelected.add(inv.id)
+        newCache.set(inv.id, inv)
+      })
+      setSelectedIds(newSelected)
+      setSelectedCache(newCache)
     }
   }
 
   const toggleSelect = (id: string) => {
     const newSelected = new Set(selectedIds)
+    const newCache = new Map(selectedCache)
     if (newSelected.has(id)) {
       newSelected.delete(id)
+      newCache.delete(id)
     } else {
       newSelected.add(id)
+      const inv = invoices.find(i => i.id === id)
+      if (inv) newCache.set(id, inv)
     }
     setSelectedIds(newSelected)
+    setSelectedCache(newCache)
   }
 
   const handleStatusAction = async (invoice: Invoice, action: 'definitief' | 'verzonden' | 'betaald') => {
@@ -604,7 +634,7 @@ export default function InvoicesPage() {
                   <th className="px-2 py-2 text-left w-8">
                     <input
                       type="checkbox"
-                      checked={invoices.length > 0 && selectedIds.size === invoices.length}
+                      checked={invoices.length > 0 && invoices.every(inv => selectedIds.has(inv.id))}
                       onChange={toggleSelectAll}
                       className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                     />
@@ -859,7 +889,7 @@ export default function InvoicesPage() {
             <div className="px-3 py-2 bg-gray-50 flex items-center gap-2">
               <input
                 type="checkbox"
-                checked={invoices.length > 0 && selectedIds.size === invoices.length}
+                checked={invoices.length > 0 && invoices.every(inv => selectedIds.has(inv.id))}
                 onChange={toggleSelectAll}
                 className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
@@ -1548,7 +1578,8 @@ export default function InvoicesPage() {
 
       {/* Selection summary overlay */}
       {selectedIds.size > 0 && (() => {
-        const selected = invoices.filter(inv => selectedIds.has(inv.id))
+        // Use the persisted cache so totals stay correct across pagination.
+        const selected = Array.from(selectedCache.values())
         // Credit invoices are stored with a negative `totaal` in the backend,
         // so summing the raw values already subtracts them from the total.
         const total = selected.reduce((sum, inv) => sum + Number(inv.totaal || 0), 0)
@@ -1579,7 +1610,7 @@ export default function InvoicesPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setSelectedIds(new Set())}
+                    onClick={clearSelection}
                     className="text-xs sm:text-sm text-gray-300 hover:text-white underline underline-offset-2"
                   >
                     Wis selectie
