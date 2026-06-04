@@ -296,6 +296,106 @@ function InvoiceLineRow({
   )
 }
 
+// Invoice Line Card - mobile/responsive version of InvoiceLineRow
+function InvoiceLineCard({
+  line,
+  index,
+  columns,
+  defaults,
+  onUpdate,
+  onDelete,
+}: {
+  line: InvoiceLineData
+  index: number
+  columns: TemplateColumn[]
+  defaults: TemplateLayout['defaults']
+  onUpdate: (lineId: string, values: Record<string, number | string>) => void
+  onDelete: (lineId: string) => void
+}) {
+  const handleValueChange = (columnId: string, value: string) => {
+    const newValues = { ...line.values }
+
+    const column = columns.find(c => c.id === columnId)
+    if (column?.type === 'text') {
+      newValues[columnId] = value
+    } else {
+      newValues[columnId] = parseFloat(value) || 0
+    }
+
+    columns.forEach(col => {
+      if (col.type === 'berekend' && col.formule) {
+        newValues[col.id] = evaluateFormula(col.formule, newValues, defaults)
+      }
+    })
+
+    onUpdate(line.id, newValues)
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-3 bg-white">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          Regel {index + 1}
+        </span>
+        <button
+          type="button"
+          onClick={() => onDelete(line.id)}
+          className="p-1 text-gray-400 hover:text-red-500"
+          aria-label="Verwijder regel"
+        >
+          <TrashIcon className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="space-y-2">
+        {columns.map((col) => (
+          <div key={col.id} className="flex flex-col">
+            <label className="text-xs font-medium text-gray-600 mb-1">
+              {col.naam}
+              {col.type === 'berekend' && (
+                <span className="ml-1 text-xs font-normal text-gray-400">(auto)</span>
+              )}
+            </label>
+            {col.type === 'berekend' ? (
+              <span className="font-medium text-gray-900 px-2 py-1 bg-gray-50 rounded">
+                {formatCurrency(line.values[col.id] as number || 0)}
+              </span>
+            ) : col.type === 'text' ? (
+              <input
+                type="text"
+                value={line.values[col.id] || ''}
+                onChange={(e) => handleValueChange(col.id, e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
+                placeholder={col.naam}
+              />
+            ) : col.type === 'prijs' ? (
+              <div className="flex items-center">
+                <span className="text-gray-400 mr-1">€</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={line.values[col.id] || ''}
+                  onChange={(e) => handleValueChange(col.id, e.target.value)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-right"
+                  placeholder="0.00"
+                />
+              </div>
+            ) : (
+              <input
+                type="number"
+                step={col.type === 'km' ? '1' : col.type === 'uren' ? '0.25' : '0.01'}
+                value={line.values[col.id] || ''}
+                onChange={(e) => handleValueChange(col.id, e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-right"
+                placeholder="0"
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Time Entry Import Modal - Shows entries grouped by week + chauffeur + bedrijf
 function TimeEntryImportModal({
   isOpen,
@@ -2256,8 +2356,8 @@ export default function InvoiceCreatePage() {
 
           {/* Template columns info */}
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center gap-2 text-blue-800 text-sm">
-              <CalculatorIcon className="h-4 w-4" />
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-blue-800 text-sm">
+              <CalculatorIcon className="h-4 w-4 flex-shrink-0" />
               <span className="font-medium">Template kolommen:</span>
               {columns.map((col, i) => (
                 <span key={col.id} className="inline-flex items-center">
@@ -2278,39 +2378,57 @@ export default function InvoiceCreatePage() {
               <p className="text-sm">{t('invoices.clickToAddLines')}</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b-2 border-gray-200">
-                    {columns.map((col) => (
-                      <th
-                        key={col.id}
-                        className="px-3 py-2 text-left font-semibold text-gray-700"
-                        style={{ width: `${col.breedte}%` }}
-                      >
-                        {col.naam}
-                        {col.type === 'berekend' && (
-                          <span className="ml-1 text-xs font-normal text-gray-400">(auto)</span>
-                        )}
-                      </th>
+            <>
+              {/* Table layout for md+ screens */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b-2 border-gray-200">
+                      {columns.map((col) => (
+                        <th
+                          key={col.id}
+                          className="px-3 py-2 text-left font-semibold text-gray-700"
+                          style={{ width: `${col.breedte}%` }}
+                        >
+                          {col.naam}
+                          {col.type === 'berekend' && (
+                            <span className="ml-1 text-xs font-normal text-gray-400">(auto)</span>
+                          )}
+                        </th>
+                      ))}
+                      <th className="w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((line) => (
+                      <InvoiceLineRow
+                        key={line.id}
+                        line={line}
+                        columns={columns}
+                        defaults={defaults}
+                        onUpdate={updateLine}
+                        onDelete={deleteLine}
+                      />
                     ))}
-                    <th className="w-10"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((line) => (
-                    <InvoiceLineRow
-                      key={line.id}
-                      line={line}
-                      columns={columns}
-                      defaults={defaults}
-                      onUpdate={updateLine}
-                      onDelete={deleteLine}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Card layout for small screens */}
+              <div className="md:hidden space-y-3">
+                {lines.map((line, index) => (
+                  <InvoiceLineCard
+                    key={line.id}
+                    line={line}
+                    index={index}
+                    columns={columns}
+                    defaults={defaults}
+                    onUpdate={updateLine}
+                    onDelete={deleteLine}
+                  />
+                ))}
+              </div>
+            </>
           )}
 
           {/* Totals */}
