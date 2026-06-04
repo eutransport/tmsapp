@@ -1545,6 +1545,52 @@ export default function InvoicesPage() {
           </div>
         </Dialog>
       </Transition>
+
+      {/* Selection summary overlay */}
+      {selectedIds.size > 0 && (() => {
+        const selected = invoices.filter(inv => selectedIds.has(inv.id))
+        const total = selected.reduce(
+          (sum, inv) => sum + (inv.type === 'credit' ? -Number(inv.totaal || 0) : Number(inv.totaal || 0)),
+          0,
+        )
+        const creditCount = selected.filter(inv => inv.type === 'credit').length
+        return (
+          <div className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none px-3 pb-3 sm:px-6 sm:pb-6">
+            <div className="pointer-events-auto mx-auto max-w-3xl rounded-xl bg-gray-900 text-white shadow-2xl ring-1 ring-black/10 px-4 py-3 sm:px-5 sm:py-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="inline-flex items-center justify-center min-w-[1.75rem] h-7 px-2 rounded-full bg-primary-600 text-sm font-semibold">
+                    {selectedIds.size}
+                  </span>
+                  <div className="text-sm leading-tight min-w-0">
+                    <div className="font-medium truncate">
+                      {selectedIds.size} {t('common.selected').toLowerCase()}
+                      {creditCount > 0 && (
+                        <span className="text-orange-300 ml-1">
+                          ({creditCount} credit)
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-300">Totaal van geselecteerde facturen</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className={`text-lg sm:text-xl font-bold tabular-nums ${total < 0 ? 'text-orange-300' : 'text-white'}`}>
+                    {formatCurrency(total)}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds(new Set())}
+                    className="text-xs sm:text-sm text-gray-300 hover:text-white underline underline-offset-2"
+                  >
+                    Wis selectie
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
