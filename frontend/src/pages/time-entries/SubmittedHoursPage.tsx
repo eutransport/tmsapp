@@ -305,17 +305,19 @@ export default function SubmittedHoursPage() {
       doc.setFontSize(10)
       doc.text('Ingediende Uren (Chauffeur)', 14, 36)
       autoTable(doc, {
-        head: [['Datum', 'Ritnr', 'Kenteken', 'Begin', 'Eind', 'Uren', 'KM']],
+        head: [['Datum', 'Ritnr', 'Kenteken', 'Begin', 'Eind', 'Begin KM', 'Eind KM', 'Uren', 'KM']],
         body: weekEntries.map(e => [
           formatDate(e.datum),
           String(e.ritnummer),
           e.kenteken || '-',
           e.aanvang || '-',
           e.eind || '-',
+          `${e.km_start ?? ''}`,
+          `${e.km_eind ?? ''}`,
           formatDuration(e.totaal_uren),
           `${e.totaal_km}`,
         ]),
-        foot: [['Totaal', '', '', '', '', `${chauffeurTotalHours}u ${chauffeurTotalMins}m`, `${chauffeurTotalKm}`]],
+        foot: [['Totaal', '', '', '', '', '', '', `${chauffeurTotalHours}u ${chauffeurTotalMins}m`, `${chauffeurTotalKm}`]],
         startY: 39,
         styles: { fontSize: 9, cellPadding: 2.5 },
         headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
@@ -430,13 +432,13 @@ export default function SubmittedHoursPage() {
       }
 
       // Title
-      sheet.mergeCells('A1:G1')
+      sheet.mergeCells('A1:I1')
       const titleCell = sheet.getCell('A1')
       titleCell.value = `Weekoverzicht Uren - Week ${selectedWeek.weeknummer} / ${selectedWeek.jaar}`
       titleCell.font = { size: 14, bold: true }
       sheet.getRow(1).height = 28
 
-      sheet.mergeCells('A2:G2')
+      sheet.mergeCells('A2:I2')
       sheet.getCell('A2').value = userName
       sheet.getCell('A2').font = { size: 11, color: { argb: '666666' } }
 
@@ -447,7 +449,7 @@ export default function SubmittedHoursPage() {
         sheet.getCell(`A${rowNum}`).font = { size: 11, bold: true }
         rowNum++
 
-        const hdr = sheet.addRow(['Datum', 'Ritnr', 'Kenteken', 'Begin', 'Eind', 'Uren', 'KM'])
+        const hdr = sheet.addRow(['Datum', 'Ritnr', 'Kenteken', 'Begin', 'Eind', 'Begin KM', 'Eind KM', 'Uren', 'KM'])
         hdr.eachCell(cell => {
           headerStyle(cell)
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '3B82F6' } }
@@ -462,6 +464,8 @@ export default function SubmittedHoursPage() {
             e.kenteken || '-',
             e.aanvang || '-',
             e.eind || '-',
+            e.km_start ?? '',
+            e.km_eind ?? '',
             formatDuration(e.totaal_uren),
             e.totaal_km,
           ])
@@ -473,7 +477,7 @@ export default function SubmittedHoursPage() {
           rowNum++
         })
 
-        const totRow = sheet.addRow(['Totaal', '', '', '', '', `${chauffeurTotalHours}u ${chauffeurTotalMins}m`, chauffeurTotalKm])
+        const totRow = sheet.addRow(['Totaal', '', '', '', '', '', '', `${chauffeurTotalHours}u ${chauffeurTotalMins}m`, chauffeurTotalKm])
         totRow.eachCell(cell => {
           cell.font = { bold: true, size: 10 }
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F3F4F6' } }
@@ -572,7 +576,7 @@ export default function SubmittedHoursPage() {
       }
 
       sheet.columns = [
-        { width: 20 }, { width: 14 }, { width: 14 }, { width: 12 }, { width: 12 }, { width: 14 }, { width: 10 },
+        { width: 20 }, { width: 14 }, { width: 14 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 14 }, { width: 10 },
       ]
 
       const buffer = await workbook.xlsx.writeBuffer()
@@ -954,6 +958,12 @@ export default function SubmittedHoursPage() {
                                   {t('timeEntries.times')}
                                 </th>
                                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                                  {t('timeEntries.kmStart')}
+                                </th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                                  {t('timeEntries.kmEnd')}
+                                </th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                                   {t('timeEntries.hours')}
                                 </th>
                                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
@@ -976,6 +986,12 @@ export default function SubmittedHoursPage() {
                                   </td>
                                   <td className="px-4 py-3 text-sm">
                                     {entry.aanvang} - {entry.eind}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-right">
+                                    {entry.km_start}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-right">
+                                    {entry.km_eind}
                                   </td>
                                   <td className="px-4 py-3 text-sm text-right">
                                     {formatDuration(entry.totaal_uren)}
@@ -1008,7 +1024,7 @@ export default function SubmittedHoursPage() {
                             </tbody>
                             <tfoot className="bg-gray-50">
                               <tr>
-                                <td colSpan={4} className="px-4 py-3 text-sm font-semibold text-right">Totaal:</td>
+                                <td colSpan={6} className="px-4 py-3 text-sm font-semibold text-right">Totaal:</td>
                                 <td className="px-4 py-3 text-sm text-right font-bold">{chauffeurTotalHours}u {chauffeurTotalMins}m</td>
                                 <td className="px-4 py-3 text-sm text-right font-bold">{chauffeurTotalKm}</td>
                                 <td></td>
@@ -1056,6 +1072,14 @@ export default function SubmittedHoursPage() {
                                 <div>
                                   <span className="text-gray-500">{t('timeEntries.hours')}: </span>
                                   <span className="font-bold text-primary-600">{formatDuration(entry.totaal_uren)}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">{t('timeEntries.kmStart')}: </span>
+                                  <span className="font-medium">{entry.km_start}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">{t('timeEntries.kmEnd')}: </span>
+                                  <span className="font-medium">{entry.km_eind}</span>
                                 </div>
                                 <div>
                                   <span className="text-gray-500">{t('timeEntries.km')}: </span>
