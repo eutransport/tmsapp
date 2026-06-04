@@ -416,10 +416,15 @@ def _process_date(date_str, process_date, driver_lookup, plate_lookup):
         pauze_minutes = tms_driver.standaard_pauze or 30
         pauze = timedelta(minutes=pauze_minutes)
 
-        # Get ritnummer from vehicle if linked
+        # Derive ritnummer from the truck actually driven (kenteken), not from
+        # the driver's fixed voertuig — drivers can swap trucks day to day.
+        from apps.fleet.models import Vehicle
         ritnummer = ''
-        if tms_driver.voertuig:
-            ritnummer = tms_driver.voertuig.ritnummer or ''
+        truck = Vehicle.objects.filter(kenteken__iexact=kenteken).first()
+        if truck:
+            ritnummer = (truck.ritnummer or '').strip()
+        if not ritnummer and tms_driver.voertuig:
+            ritnummer = (tms_driver.voertuig.ritnummer or '').strip()
         if not ritnummer:
             ritnummer = kenteken
 

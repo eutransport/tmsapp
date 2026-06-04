@@ -86,16 +86,18 @@ class VehicleViewSet(viewsets.ModelViewSet):
                 seen_ritnummers.add(rit_key)
 
             # Aggregate by ritnummer so kenteken changes don't break history.
-            # Fall back to kenteken match only when ritnummer is empty.
+            # Also accept the current kenteken as a fallback, so entries where
+            # ritnummer was empty or mistyped (e.g. tachograph fallback to
+            # kenteken) still count for this vehicle.
             if ritnummer:
-                entry_filter = {'ritnummer__iexact': ritnummer}
+                entry_q = Q(ritnummer__iexact=ritnummer) | Q(kenteken__iexact=vehicle.kenteken)
             else:
-                entry_filter = {'kenteken__iexact': vehicle.kenteken}
+                entry_q = Q(kenteken__iexact=vehicle.kenteken)
 
             worked_days = TimeEntry.objects.filter(
+                entry_q,
                 datum__year=jaar,
                 status=TimeEntryStatus.INGEDIEND,
-                **entry_filter,
             ).values('datum').distinct().count()
 
             minimum_weken = vehicle.minimum_weken_per_jaar
