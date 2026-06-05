@@ -85,10 +85,20 @@ class WeekPlanningViewSet(viewsets.ModelViewSet):
         entries = []
         for vehicle in vehicles:
             for day in days:
+                # Snapshot-velden hier expliciet vullen, want bulk_create roept
+                # PlanningEntry.save() niet aan. Zonder deze snapshots blijven
+                # vehicle_ritnummer/kenteken/type leeg in de DB, wat zorgt voor
+                # (1) ontbrekende ritnummers naast het wagenicoon in de UI en
+                # (2) onstabiele sortering (Meta.ordering = ['vehicle_ritnummer','dag'])
+                # waardoor rijen na een PATCH op chauffeur naar onderen kunnen
+                # verspringen.
                 entries.append(PlanningEntry(
                     planning=planning,
                     vehicle=vehicle,
-                    dag=day
+                    dag=day,
+                    vehicle_kenteken=vehicle.kenteken or '',
+                    vehicle_type_wagen=vehicle.type_wagen or '',
+                    vehicle_ritnummer=vehicle.ritnummer or '',
                 ))
         
         PlanningEntry.objects.bulk_create(entries)
