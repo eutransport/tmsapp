@@ -14,6 +14,7 @@ class Company(models.Model):
     adres = models.CharField(max_length=255, blank=True, verbose_name='Adres')
     postcode = models.CharField(max_length=10, blank=True, verbose_name='Postcode')
     stad = models.CharField(max_length=100, blank=True, verbose_name='Stad')
+    land = models.CharField(max_length=100, blank=True, verbose_name='Land')
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

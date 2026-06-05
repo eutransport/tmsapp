@@ -122,6 +122,7 @@ export interface Company {
   adres: string
   postcode: string
   stad: string
+  land: string
   mailing_contacts: MailingListContact[]
   mailing_contacts_count: number
   created_at: string

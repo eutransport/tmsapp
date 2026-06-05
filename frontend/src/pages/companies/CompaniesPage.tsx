@@ -142,6 +142,7 @@ function CompanyForm({
     adres: company?.adres || '',
     postcode: company?.postcode || '',
     stad: company?.stad || '',
+    land: company?.land || '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -276,6 +277,19 @@ function CompanyForm({
             className="input min-h-[44px]"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {t('common.country')}
+        </label>
+        <input
+          type="text"
+          name="land"
+          value={formData.land}
+          onChange={handleChange}
+          className="input min-h-[44px]"
+        />
       </div>
 
       <div className="flex justify-end gap-3 pt-4 border-t">

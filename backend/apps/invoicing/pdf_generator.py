@@ -1,6 +1,7 @@
 """PDF generator service voor facturen - gebruikt template layout."""
 import io
 import os
+import re
 import requests
 from datetime import date
 from decimal import Decimal
@@ -117,30 +118,50 @@ class InvoicePDFGenerator:
             return self._apply_text_style(str(value), style)
         
         elif field_type == 'text':
-            return self._apply_text_style(content, style)
+            return self._apply_text_style(self._substitute_placeholders(content), style)
         
         elif field_type == 'amount':
-            return self._apply_text_style(content, style)
+            return self._apply_text_style(self._substitute_placeholders(content), style)
         
         elif field_type == 'date':
-            return self._apply_text_style(content, style)
+            return self._apply_text_style(self._substitute_placeholders(content), style)
         
         return content
     
     def _replace_variable(self, var_name):
         """Replace a variable name with actual value."""
+        klant = self.invoice.bedrijf
+        postcode = (klant.postcode or '').strip()
+        stad = (klant.stad or '').strip()
+        postcode_plaats = ' '.join(p for p in [postcode, stad] if p)
         var_map = {
             'factuurnummer': self.invoice.factuurnummer,
             'factuurdatum': self.invoice.factuurdatum.strftime('%d-%m-%Y'),
             'vervaldatum': self.invoice.vervaldatum.strftime('%d-%m-%Y'),
-            'klant.naam': self.invoice.bedrijf.naam,
-            'klant.adres': self.invoice.bedrijf.adres or '',
+            'klant.naam': klant.naam,
+            'klant.adres': klant.adres or '',
+            'klant.postcode': postcode,
+            'klant.stad': stad,
+            'klant.postcode_plaats': postcode_plaats,
+            'klant.land': getattr(klant, 'land', '') or '',
+            'klant.kvk': klant.kvk or '',
+            'klant.telefoon': klant.telefoon or '',
+            'klant.email': klant.email or '',
+            'klant.contactpersoon': klant.contactpersoon or '',
             'bedrijf.naam': self.app_settings.company_name or '',
             'bedrijf.adres': self.app_settings.company_address or '',
             'bedrijf.kvk': self.app_settings.company_kvk or '',
             'bedrijf.btw': self.app_settings.company_btw or '',
         }
         return var_map.get(var_name, f'{{{var_name}}}')
+
+    def _substitute_placeholders(self, text):
+        """Replace all {{var.name}} placeholders inside arbitrary text."""
+        if not text:
+            return text
+        def _sub(match):
+            return str(self._replace_variable(match.group(1).strip()))
+        return re.sub(r'\{\{\s*([\w.]+)\s*\}\}', _sub, str(text))
     
     def _apply_text_style(self, text, style):
         """Apply template style to text and return styled HTML for Paragraph."""
@@ -245,6 +266,8 @@ class InvoicePDFGenerator:
             content = field.get('content', '')
             if field.get('type') == 'variable':
                 content = self._replace_variable(content)
+            else:
+                content = self._substitute_placeholders(content)
             return [line.strip() for line in str(content).split('\n') if line.strip()]
         
         left_lines = get_lines(left_field)

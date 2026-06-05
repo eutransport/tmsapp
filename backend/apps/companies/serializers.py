@@ -20,7 +20,7 @@ class CompanySerializer(serializers.ModelSerializer):
         model = Company
         fields = [
             'id', 'naam', 'kvk', 'telefoon', 'contactpersoon',
-            'email', 'adres', 'postcode', 'stad',
+            'email', 'adres', 'postcode', 'stad', 'land',
             'mailing_contacts', 'mailing_contacts_count',
             'created_at', 'updated_at'
         ]

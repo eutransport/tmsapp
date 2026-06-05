@@ -6,7 +6,7 @@
  * - Styling options (font, color, alignment)
  * - PDF preview
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -119,6 +119,14 @@ const getAvailableVariables = (t: (key: string) => string) => [
   { name: 'vervaldatum', label: t('templates.editor.dueDate') },
   { name: 'klant.naam', label: t('templates.editor.customerName') },
   { name: 'klant.adres', label: t('templates.editor.customerAddress') },
+  { name: 'klant.postcode', label: t('templates.editor.customerZip') },
+  { name: 'klant.stad', label: t('templates.editor.customerCity') },
+  { name: 'klant.postcode_plaats', label: t('templates.editor.customerZipCity') },
+  { name: 'klant.land', label: t('templates.editor.customerCountry') },
+  { name: 'klant.kvk', label: t('templates.editor.customerKvk') },
+  { name: 'klant.telefoon', label: t('templates.editor.customerPhone') },
+  { name: 'klant.email', label: t('templates.editor.customerEmail') },
+  { name: 'klant.contactpersoon', label: t('templates.editor.customerContact') },
 ]
 
 // ============================================
@@ -144,6 +152,27 @@ function FieldEditor({ field, position, onSave, onClose }: FieldEditorProps) {
   )
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+
+  const insertVariableAtCursor = (varName: string) => {
+    if (!varName) return
+    const placeholder = `{{${varName}}}`
+    const el = textareaRef.current
+    const current = localField.content || ''
+    if (el && typeof el.selectionStart === 'number') {
+      const start = el.selectionStart
+      const end = el.selectionEnd ?? start
+      const next = current.slice(0, start) + placeholder + current.slice(end)
+      setLocalField({ ...localField, content: next })
+      requestAnimationFrame(() => {
+        el.focus()
+        const pos = start + placeholder.length
+        el.setSelectionRange(pos, pos)
+      })
+    } else {
+      setLocalField({ ...localField, content: current + placeholder })
+    }
+  }
 
   const handleStyleChange = (key: keyof TemplateFieldStyle, value: unknown) => {
     setLocalField({
@@ -208,14 +237,33 @@ function FieldEditor({ field, position, onSave, onClose }: FieldEditorProps) {
             {/* Content based on type */}
             {localField.type === 'text' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700">{t('templates.editor.text')}</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">{t('templates.editor.text')}</label>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      insertVariableAtCursor(e.target.value)
+                      e.target.value = ''
+                    }}
+                    className="text-xs rounded border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  >
+                    <option value="">{t('templates.editor.insertVariable')}</option>
+                    {availableVariables.map((v) => (
+                      <option key={v.name} value={v.name}>
+                        {v.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <textarea
+                  ref={textareaRef}
                   value={localField.content}
                   onChange={(e) => setLocalField({ ...localField, content: e.target.value })}
-                  rows={3}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  rows={5}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 font-mono text-sm"
                   placeholder={t('templates.editor.enterText')}
                 />
+                <p className="mt-1 text-xs text-gray-500">{t('templates.editor.multilineHint')}</p>
               </div>
             )}
 
