@@ -105,7 +105,12 @@ class PlanningEntry(models.Model):
     class Meta:
         verbose_name = 'Planningsregel'
         verbose_name_plural = 'Planningsregels'
-        ordering = ['vehicle_ritnummer', 'dag']
+        # Sorteer op ritnummer, dan op een stabiele voertuig-key, dan op dag.
+        # Zonder de tiebreaker op vehicle_id/kenteken kunnen rijen met gelijke
+        # (of lege) vehicle_ritnummer tussen queries van plek wisselen,
+        # waardoor de UI de actieve rij na een PATCH naar onderen lijkt te
+        # verplaatsen.
+        ordering = ['vehicle_ritnummer', 'vehicle_kenteken', 'vehicle_id', 'dag']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -119,16 +124,20 @@ class PlanningEntry(models.Model):
     def save(self, *args, **kwargs):
         is_new = self._state.adding
 
-        # Vehicle-snapshot eenmalig vastleggen bij aanmaken
-        if is_new and self.vehicle_id:
+        # Vehicle-snapshot vastleggen bij aanmaken, en bij updates lege
+        # snapshotvelden alsnog vullen voor entries die historisch via
+        # bulk_create (zonder save()) zijn aangemaakt. Zonder deze backfill
+        # blijft Meta.ordering=['vehicle_ritnummer','dag'] onstabiel en
+        # toont de UI geen ritnummer naast het wagenicoon.
+        if self.vehicle_id:
             try:
                 veh = self.vehicle
                 if not self.vehicle_kenteken:
-                    self.vehicle_kenteken = veh.kenteken
+                    self.vehicle_kenteken = veh.kenteken or ''
                 if not self.vehicle_type_wagen:
-                    self.vehicle_type_wagen = veh.type_wagen
+                    self.vehicle_type_wagen = veh.type_wagen or ''
                 if not self.vehicle_ritnummer:
-                    self.vehicle_ritnummer = veh.ritnummer
+                    self.vehicle_ritnummer = veh.ritnummer or ''
             except Exception:
                 pass
 
