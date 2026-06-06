@@ -366,6 +366,7 @@ export interface Invoice {
   week_year: number | null
   chauffeur: string | null
   chauffeur_naam: string | null
+  dot_percentage: number | null
   lines: InvoiceLine[]
   created_at: string
   updated_at: string
