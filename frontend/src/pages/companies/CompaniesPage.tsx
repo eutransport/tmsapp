@@ -900,7 +900,7 @@ export default function CompaniesPage() {
                 </tr>
               ) : (
                 companies.map(company => (
-                  <tr key={company.id} className="hover:bg-gray-50">
+                  <tr key={company.id} className="hover:bg-primary-50 transition-colors cursor-pointer">
                     <td className="px-2 py-1.5">
                       <div className="font-medium text-gray-900">{company.naam}</div>
                     </td>
