@@ -15,6 +15,7 @@ export interface InvoiceCreate {
   vervaldatum: string
   btw_percentage?: number
   opmerkingen?: string
+  dot_percentage?: number | null
 }
 
 export interface InvoiceUpdate {
@@ -303,12 +304,18 @@ export async function sendInvoiceEmail(
   return response.data
 }
 
-export async function getNextInvoiceNumber(type: 'verkoop' | 'inkoop' | 'credit'): Promise<{
+export async function getNextInvoiceNumber(
+  type: 'verkoop' | 'inkoop' | 'credit',
+  administratie?: string | null,
+): Promise<{
   factuurnummer: string
   type: string
   jaar: number
+  administratie?: string | null
 }> {
-  const response = await api.get(`/invoicing/invoices/next_number/?type=${type}`)
+  const params = new URLSearchParams({ type })
+  if (administratie) params.set('administratie', administratie)
+  const response = await api.get(`/invoicing/invoices/next_number/?${params.toString()}`)
   return response.data
 }
 

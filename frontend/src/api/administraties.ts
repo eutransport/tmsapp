@@ -26,6 +26,11 @@ export interface Administratie {
   allowed_users_info: AdministratieUserInfo[]  // (read)
   bedrijf_count: number
   user_count: number
+  gebruik_eigen_facturatie: boolean
+  invoice_prefix: string
+  invoice_start_number_verkoop: number
+  invoice_start_number_inkoop: number
+  invoice_start_number_credit: number
   created_by_name: string
   created_at: string
   updated_at: string
@@ -36,6 +41,11 @@ export interface AdministratieWrite {
   beschrijving?: string
   bedrijven?: string[]      // Company UUIDs
   allowed_users?: string[]  // User UUIDs
+  gebruik_eigen_facturatie?: boolean
+  invoice_prefix?: string
+  invoice_start_number_verkoop?: number
+  invoice_start_number_inkoop?: number
+  invoice_start_number_credit?: number
 }
 
 /** Admin: list all administraties */

@@ -763,6 +763,36 @@ class Administratie(models.Model):
         help_text='Gebruikers die facturen van de gekoppelde bedrijven mogen inzien.',
     )
 
+    # Eigen factuurnummering (optioneel)
+    # Bij False: gebruik de algemene AppSettings nummering (F-YYYY-XXXX etc.)
+    # Bij True: gebruik onderstaande eigen prefix + start-nummers (PREFIX-F-YYYY-XXXX)
+    gebruik_eigen_facturatie = models.BooleanField(
+        default=False,
+        verbose_name='Eigen factuurnummering gebruiken',
+        help_text='Indien aangevinkt worden onderstaande prefix en startnummers gebruikt '
+                  'in plaats van de algemene instellingen.'
+    )
+    invoice_prefix = models.CharField(
+        max_length=10,
+        blank=True,
+        default='',
+        verbose_name='Factuur Prefix',
+        help_text='Korte code die voor het factuurnummer komt (bijv. "MV"). '
+                  'Verplicht als eigen nummering aan staat. Voorbeeld: MV-F-2026-0001.'
+    )
+    invoice_start_number_verkoop = models.PositiveIntegerField(
+        default=1,
+        verbose_name='Startnummer Verkoopfacturen',
+    )
+    invoice_start_number_inkoop = models.PositiveIntegerField(
+        default=1,
+        verbose_name='Startnummer Inkoopfacturen',
+    )
+    invoice_start_number_credit = models.PositiveIntegerField(
+        default=1,
+        verbose_name='Startnummer Creditfacturen',
+    )
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -787,6 +817,39 @@ class Administratie(models.Model):
         if user.rol == 'admin' or user.is_staff:
             return True
         return self.allowed_users.filter(pk=user.pk).exists()
+
+    def get_invoice_number_config(self, invoice_type: str):
+        """
+        Return a (lookup_prefix, start_number) tuple voor het genereren van
+        een factuurnummer voor deze administratie + type.
+
+        lookup_prefix wordt gebruikt om bestaande nummers te zoeken
+        (Invoice.factuurnummer__startswith=lookup_prefix) en als basis
+        voor het nieuwe nummer: "{lookup_prefix}-{NNNN}".
+
+        Bij eigen nummering: "{prefix}-{type_char}-{year}".
+        Anders (algemene instellingen): "{type_char}-{year}".
+        """
+        from datetime import date
+        type_chars = {'verkoop': 'F', 'credit': 'C', 'inkoop': 'I'}
+        type_char = type_chars.get(invoice_type, 'F')
+        year = date.today().year
+
+        if self.gebruik_eigen_facturatie and (self.invoice_prefix or '').strip():
+            prefix = self.invoice_prefix.strip()
+            lookup_prefix = f"{prefix}-{type_char}-{year}"
+            start_attr = f"invoice_start_number_{invoice_type}"
+            start_number = getattr(self, start_attr, 1) or 1
+            return lookup_prefix, start_number
+
+        # Fall back to AppSettings
+        app_settings = AppSettings.objects.first()
+        start_attr = f"invoice_start_number_{invoice_type}"
+        start_number = (
+            getattr(app_settings, start_attr, 1) if app_settings else 1
+        ) or 1
+        lookup_prefix = f"{type_char}-{year}"
+        return lookup_prefix, start_number
 
 
 class ActivityLog(models.Model):

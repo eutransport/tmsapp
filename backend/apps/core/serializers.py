@@ -312,9 +312,30 @@ class AdministratieSerializer(serializers.ModelSerializer):
             'bedrijven', 'bedrijven_info',
             'allowed_users', 'allowed_users_info',
             'bedrijf_count', 'user_count',
+            'gebruik_eigen_facturatie', 'invoice_prefix',
+            'invoice_start_number_verkoop',
+            'invoice_start_number_inkoop',
+            'invoice_start_number_credit',
             'created_by_name', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate(self, data):
+        """Eigen nummering vereist een prefix om collisions met algemene of
+        andere administraties te voorkomen."""
+        eigen = data.get(
+            'gebruik_eigen_facturatie',
+            getattr(self.instance, 'gebruik_eigen_facturatie', False),
+        )
+        prefix = data.get(
+            'invoice_prefix',
+            getattr(self.instance, 'invoice_prefix', ''),
+        )
+        if eigen and not (prefix or '').strip():
+            raise serializers.ValidationError({
+                'invoice_prefix': 'Vul een prefix in als eigen factuurnummering aan staat.'
+            })
+        return data
 
     def get_bedrijven_info(self, obj) -> list:
         return [

@@ -1365,6 +1365,8 @@ export default function InvoiceCreatePage() {
   })
   const [opmerkingen, setOpmerkingen] = useState('')
   const [lines, setLines] = useState<InvoiceLineData[]>([])
+  // Override DOT percentage from template (empty string = use template default)
+  const [dotPercentageOverride, setDotPercentageOverride] = useState<string>('')
   
   // Week/Chauffeur tracking (from imported time entries)
   const [weekNumber, setWeekNumber] = useState<number | null>(null)
@@ -1386,12 +1388,22 @@ export default function InvoiceCreatePage() {
   }, [selectedTemplate])
 
   const columns = useMemo(() => templateLayout?.columns || [], [templateLayout])
-  const defaults = useMemo(() => templateLayout?.defaults || {
-    uurtarief: 45,
-    dotPrijs: 21,
-    dotIsPercentage: true,
-    kmTarief: 0.23,
-  }, [templateLayout])
+  const defaults = useMemo(() => {
+    const base = templateLayout?.defaults || {
+      uurtarief: 45,
+      dotPrijs: 21,
+      dotIsPercentage: true,
+      kmTarief: 0.23,
+    }
+    const trimmed = dotPercentageOverride.trim()
+    if (trimmed !== '') {
+      const parsed = parseFloat(trimmed.replace(',', '.'))
+      if (!isNaN(parsed)) {
+        return { ...base, dotPrijs: parsed }
+      }
+    }
+    return base
+  }, [templateLayout, dotPercentageOverride])
   const totalsConfig = useMemo(() => templateLayout?.totals || {
     showSubtotaal: true,
     showBtw: true,
@@ -1399,10 +1411,13 @@ export default function InvoiceCreatePage() {
     btwPercentage: 21,
   }, [templateLayout])
 
-  // Load next invoice number when type changes
-  const loadNextInvoiceNumber = useCallback(async (type: 'verkoop' | 'inkoop' | 'credit') => {
+  // Load next invoice number when type or administratie changes
+  const loadNextInvoiceNumber = useCallback(async (
+    type: 'verkoop' | 'inkoop' | 'credit',
+    administratie?: string | null,
+  ) => {
     try {
-      const result = await getNextInvoiceNumber(type)
+      const result = await getNextInvoiceNumber(type, administratie || null)
       setFactuurnummer(result.factuurnummer)
     } catch (err) {
       console.error('Could not load next invoice number:', err)
@@ -1433,6 +1448,9 @@ export default function InvoiceCreatePage() {
             setOpmerkingen(existing.opmerkingen || '')
             setSelectedCompany(existing.bedrijf)
             setSelectedAdministratie(existing.administratie || '')
+            if (existing.dot_percentage !== null && existing.dot_percentage !== undefined) {
+              setDotPercentageOverride(String(existing.dot_percentage))
+            }
             const tpl = templatesRes.results.find(t => t.id === existing.template)
             if (tpl) setSelectedTemplate(tpl)
           } catch (e) {
@@ -1452,6 +1470,14 @@ export default function InvoiceCreatePage() {
     }
     loadData()
   }, [reimportId])
+
+  // Refresh next invoice number when administratie changes (skip in reimport mode,
+  // where the existing factuurnummer must stay untouched)
+  useEffect(() => {
+    if (reimportId) return
+    loadNextInvoiceNumber(invoiceType, selectedAdministratie || null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAdministratie])
 
   // Create empty line with default values for all columns
   const createEmptyLine = useCallback((): InvoiceLineData => {
@@ -1505,8 +1531,19 @@ export default function InvoiceCreatePage() {
 
   // Import time entries with automatic KM and DOT calculations
   const handleImportEntries = (entries: TimeEntry[]) => {
+    // Filter regels zonder ritnummer (of 'Geen inzet') én 0 km — geen inzet, niet factureren
+    const isGeenInzet = (e: TimeEntry) => {
+      const rit = String(e.ritnummer || '').trim().toLowerCase()
+      const km = e.totaal_km || 0
+      return (rit === '' || rit === 'geen inzet') && km === 0
+    }
+    const filteredEntries = entries.filter(e => !isGeenInzet(e))
+    const skippedGeenInzet = entries.length - filteredEntries.length
+    if (skippedGeenInzet > 0) {
+      console.info(`[invoice import] ${skippedGeenInzet} 'Geen inzet / 0 km' regel(s) overgeslagen`)
+    }
     // Sort entries by date ascending (oldest first)
-    const sortedEntries = [...entries].sort((a, b) => 
+    const sortedEntries = [...filteredEntries].sort((a, b) => 
       new Date(a.datum).getTime() - new Date(b.datum).getTime()
     )
     
@@ -1710,10 +1747,16 @@ export default function InvoiceCreatePage() {
       ].map(v => String(v ?? '').toLowerCase()).join(' ')
       return haystack.includes('niet gereden')
     }
-    const validEntries = entries.filter(e => !isNietGereden(e))
+    // Regels zonder ritlijst (of 'Geen inzet') én 0 km zijn geen inzet en mogen niet gefactureerd worden
+    const isGeenInzetImported = (e: ImportedTimeEntry) => {
+      const rit = String(e.ritlijst || '').trim().toLowerCase()
+      const km = e.user ? (chauffeurEntries.find(c => c.user === e.user && c.datum === e.datum)?.totaal_km || 0) : 0
+      return (rit === '' || rit === 'geen inzet') && km === 0
+    }
+    const validEntries = entries.filter(e => !isNietGereden(e) && !isGeenInzetImported(e))
     const skipped = entries.length - validEntries.length
     if (skipped > 0) {
-      console.info(`[invoice import] ${skipped} 'niet gereden' regel(s) overgeslagen`)
+      console.info(`[invoice import] ${skipped} 'niet gereden' / 'Geen inzet' regel(s) overgeslagen`)
     }
 
     // Sort entries by date ascending
@@ -2024,6 +2067,14 @@ export default function InvoiceCreatePage() {
       if (chauffeur !== null) {
         invoiceData.chauffeur = chauffeur
       }
+      // Optional DOT percentage override (gebruikt om template default te overrulen)
+      const dotTrimmed = dotPercentageOverride.trim()
+      if (dotTrimmed !== '') {
+        const dotParsed = parseFloat(dotTrimmed.replace(',', '.'))
+        if (!isNaN(dotParsed)) {
+          invoiceData.dot_percentage = dotParsed
+        }
+      }
       
       let invoiceId: string
       if (reimportId) {
@@ -2240,7 +2291,7 @@ export default function InvoiceCreatePage() {
                 onChange={(e) => {
                   const newType = e.target.value as 'verkoop' | 'inkoop' | 'credit'
                   setInvoiceType(newType)
-                  loadNextInvoiceNumber(newType)
+                  loadNextInvoiceNumber(newType, selectedAdministratie || null)
                 }}
                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
               >
@@ -2276,6 +2327,25 @@ export default function InvoiceCreatePage() {
                 onChange={(e) => setVervaldatum(e.target.value)}
                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                DOT {templateLayout?.defaults?.dotIsPercentage === false ? '(prijs/km)' : '%'}
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={dotPercentageOverride}
+                onChange={(e) => setDotPercentageOverride(e.target.value)}
+                placeholder={
+                  templateLayout?.defaults
+                    ? `Template: ${templateLayout.defaults.dotPrijs}${templateLayout.defaults.dotIsPercentage ? '%' : ''}`
+                    : ''
+                }
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">Overruled de template waarde</p>
             </div>
           </div>
           <div className="mt-4">

@@ -32,6 +32,11 @@ interface FormState {
   beschrijving: string
   bedrijven: string[]
   allowed_users: string[]
+  gebruik_eigen_facturatie: boolean
+  invoice_prefix: string
+  invoice_start_number_verkoop: number
+  invoice_start_number_inkoop: number
+  invoice_start_number_credit: number
 }
 
 const emptyForm = (): FormState => ({
@@ -39,6 +44,11 @@ const emptyForm = (): FormState => ({
   beschrijving: '',
   bedrijven: [],
   allowed_users: [],
+  gebruik_eigen_facturatie: false,
+  invoice_prefix: '',
+  invoice_start_number_verkoop: 1,
+  invoice_start_number_inkoop: 1,
+  invoice_start_number_credit: 1,
 })
 
 export default function AdministratiesManager() {
@@ -94,6 +104,11 @@ export default function AdministratiesManager() {
       beschrijving: adm.beschrijving,
       bedrijven: adm.bedrijven_info.map(b => b.id),
       allowed_users: adm.allowed_users_info.map(u => u.id),
+      gebruik_eigen_facturatie: adm.gebruik_eigen_facturatie ?? false,
+      invoice_prefix: adm.invoice_prefix ?? '',
+      invoice_start_number_verkoop: adm.invoice_start_number_verkoop ?? 1,
+      invoice_start_number_inkoop: adm.invoice_start_number_inkoop ?? 1,
+      invoice_start_number_credit: adm.invoice_start_number_credit ?? 1,
     })
     setModalOpen(true)
   }
@@ -112,11 +127,21 @@ export default function AdministratiesManager() {
     try {
       setSaving(true)
       setError(null)
+      if (form.gebruik_eigen_facturatie && !form.invoice_prefix.trim()) {
+        setError('Vul een prefix in wanneer eigen factuurnummering actief is')
+        setSaving(false)
+        return
+      }
       const payload: AdministratieWrite = {
         naam: form.naam.trim(),
         beschrijving: form.beschrijving.trim(),
         bedrijven: form.bedrijven,
         allowed_users: form.allowed_users,
+        gebruik_eigen_facturatie: form.gebruik_eigen_facturatie,
+        invoice_prefix: form.invoice_prefix.trim(),
+        invoice_start_number_verkoop: form.invoice_start_number_verkoop || 1,
+        invoice_start_number_inkoop: form.invoice_start_number_inkoop || 1,
+        invoice_start_number_credit: form.invoice_start_number_credit || 1,
       }
       if (editingId) {
         await updateAdministratie(editingId, payload)
@@ -373,6 +398,80 @@ export default function AdministratiesManager() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              {/* Eigen factuurnummering */}
+              <div className="border-t border-gray-200 pt-4">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.gebruik_eigen_facturatie}
+                    onChange={e => setForm(f => ({ ...f, gebruik_eigen_facturatie: e.target.checked }))}
+                    className="h-4 w-4 mt-0.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-gray-700">
+                      Eigen factuurnummering gebruiken
+                    </span>
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      Anders worden de algemene instellingen onder Facturatie gebruikt.
+                      Vereist een unieke prefix om botsing met andere administraties te voorkomen.
+                    </span>
+                  </span>
+                </label>
+
+                {form.gebruik_eigen_facturatie && (
+                  <div className="mt-3 space-y-3 pl-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Prefix <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field w-full"
+                        value={form.invoice_prefix}
+                        onChange={e => setForm(f => ({ ...f, invoice_prefix: e.target.value.toUpperCase() }))}
+                        placeholder="bijv. MOV"
+                        maxLength={10}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Resulteert in factuurnummers zoals <code>{(form.invoice_prefix || 'PFX')}-F-{new Date().getFullYear()}-0001</code>
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Verkoop start</label>
+                        <input
+                          type="number"
+                          min={1}
+                          className="input-field w-full"
+                          value={form.invoice_start_number_verkoop}
+                          onChange={e => setForm(f => ({ ...f, invoice_start_number_verkoop: parseInt(e.target.value, 10) || 1 }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Inkoop start</label>
+                        <input
+                          type="number"
+                          min={1}
+                          className="input-field w-full"
+                          value={form.invoice_start_number_inkoop}
+                          onChange={e => setForm(f => ({ ...f, invoice_start_number_inkoop: parseInt(e.target.value, 10) || 1 }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Credit start</label>
+                        <input
+                          type="number"
+                          min={1}
+                          className="input-field w-full"
+                          value={form.invoice_start_number_credit}
+                          onChange={e => setForm(f => ({ ...f, invoice_start_number_credit: parseInt(e.target.value, 10) || 1 }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -190,7 +190,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     module_permission = 'view_invoices'
     filterset_fields = ['type', 'status', 'bedrijf', 'administratie', 'week_number', 'week_year', 'chauffeur']
     search_fields = ['factuurnummer', 'bedrijf__naam']
-    ordering_fields = ['factuurdatum', 'factuurnummer', 'totaal', 'bedrijf__naam']
+    ordering_fields = ['factuurdatum', 'factuurnummer', 'totaal', 'bedrijf__naam', 'administratie__naam', 'week_number']
 
     def get_queryset(self):
         from apps.core.models import Administratie
@@ -236,49 +236,66 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def next_number(self, request):
-        """Get next invoice number for a given type."""
-        from apps.core.models import AppSettings
-        
+        """Get next invoice number for a given type and optional administratie."""
+        from apps.core.models import AppSettings, Administratie
+
         invoice_type = request.query_params.get('type', 'verkoop')
+        administratie_id = request.query_params.get('administratie') or None
         today = date.today()
-        
-        type_prefixes = {
-            'verkoop': 'F',
-            'credit': 'C',
-            'inkoop': 'I',
-        }
-        prefix_char = type_prefixes.get(invoice_type, 'F')
-        prefix = f"{prefix_char}-{today.year}"
-        
-        # Get start number from settings
-        app_settings = AppSettings.objects.first()
-        start_numbers = {
-            'verkoop': getattr(app_settings, 'invoice_start_number_verkoop', 1) if app_settings else 1,
-            'credit': getattr(app_settings, 'invoice_start_number_credit', 1) if app_settings else 1,
-            'inkoop': getattr(app_settings, 'invoice_start_number_inkoop', 1) if app_settings else 1,
-        }
-        start_number = start_numbers.get(invoice_type, 1)
-        
-        last_invoice = Invoice.objects.filter(
-            factuurnummer__startswith=prefix
-        ).order_by('-factuurnummer').first()
-        
-        if last_invoice:
+
+        administratie = None
+        if administratie_id:
             try:
-                last_num = int(last_invoice.factuurnummer.split('-')[-1])
-                next_num = max(last_num + 1, start_number)
-            except (ValueError, IndexError):
-                next_num = start_number
-        else:
-            next_num = start_number
-        
-        factuurnummer = f"{prefix}-{next_num:04d}"
-        
+                administratie = Administratie.objects.filter(pk=administratie_id).first()
+            except (ValueError, TypeError):
+                administratie = None
+
+        lookup_prefix, start_number = self._resolve_invoice_numbering(
+            invoice_type, administratie
+        )
+        next_num = self._compute_next_invoice_number(lookup_prefix, start_number)
+        factuurnummer = f"{lookup_prefix}-{next_num:04d}"
+
         return Response({
             'factuurnummer': factuurnummer,
             'type': invoice_type,
             'jaar': today.year,
+            'administratie': str(administratie.id) if administratie else None,
         })
+
+    @staticmethod
+    def _resolve_invoice_numbering(invoice_type, administratie):
+        """Bepaal (lookup_prefix, start_number) op basis van administratie of
+        algemene AppSettings. Mag NIETs in de DB schrijven."""
+        from apps.core.models import AppSettings
+
+        if administratie is not None:
+            return administratie.get_invoice_number_config(invoice_type)
+
+        type_chars = {'verkoop': 'F', 'credit': 'C', 'inkoop': 'I'}
+        type_char = type_chars.get(invoice_type, 'F')
+        year = date.today().year
+        app_settings = AppSettings.objects.first()
+        start_attr = f"invoice_start_number_{invoice_type}"
+        start_number = (
+            getattr(app_settings, start_attr, 1) if app_settings else 1
+        ) or 1
+        return f"{type_char}-{year}", start_number
+
+    @staticmethod
+    def _compute_next_invoice_number(lookup_prefix, start_number):
+        """Zoek het hoogste bestaande nummer met deze prefix en return de
+        eerstvolgende (minimaal start_number)."""
+        last_invoice = Invoice.objects.filter(
+            factuurnummer__startswith=f"{lookup_prefix}-"
+        ).order_by('-factuurnummer').first()
+        if not last_invoice:
+            return start_number
+        try:
+            last_num = int(last_invoice.factuurnummer.split('-')[-1])
+            return max(last_num + 1, start_number)
+        except (ValueError, IndexError):
+            return start_number
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -288,56 +305,26 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return InvoiceSerializer
     
     def perform_create(self, serializer):
-        # Generate invoice number based on type
-        from apps.core.models import AppSettings
-        
-        today = date.today()
+        # Generate invoice number based on type and (optional) administratie
         invoice_type = serializer.validated_data.get('type', 'verkoop')
-        
-        # Prefix based on type: F=Factuur(verkoop), C=Credit, I=Inkoop
-        type_prefixes = {
-            'verkoop': 'F',
-            'credit': 'C',
-            'inkoop': 'I',
-        }
-        prefix_char = type_prefixes.get(invoice_type, 'F')
-        prefix = f"{prefix_char}-{today.year}"
-        
-        # Get start number from settings
-        app_settings = AppSettings.objects.first()
-        start_numbers = {
-            'verkoop': getattr(app_settings, 'invoice_start_number_verkoop', 1) if app_settings else 1,
-            'credit': getattr(app_settings, 'invoice_start_number_credit', 1) if app_settings else 1,
-            'inkoop': getattr(app_settings, 'invoice_start_number_inkoop', 1) if app_settings else 1,
-        }
-        start_number = start_numbers.get(invoice_type, 1)
-        
-        # Get next number for this type and year
-        last_invoice = Invoice.objects.filter(
-            factuurnummer__startswith=prefix
-        ).order_by('-factuurnummer').first()
-        
-        if last_invoice:
-            try:
-                last_num = int(last_invoice.factuurnummer.split('-')[-1])
-                next_num = max(last_num + 1, start_number)
-            except (ValueError, IndexError):
-                next_num = start_number
-        else:
-            next_num = start_number
-        
-        factuurnummer = f"{prefix}-{next_num:04d}"
-        
+        administratie = serializer.validated_data.get('administratie')
+
+        lookup_prefix, start_number = self._resolve_invoice_numbering(
+            invoice_type, administratie
+        )
+        next_num = self._compute_next_invoice_number(lookup_prefix, start_number)
+        factuurnummer = f"{lookup_prefix}-{next_num:04d}"
+
         invoice = serializer.save(
             created_by=self.request.user,
             factuurnummer=factuurnummer
         )
-        
+
         logger.info(
             f"Invoice created: {factuurnummer} for {invoice.bedrijf.naam} "
             f"by user {self.request.user.email}"
         )
-        
+
         # Store invoice instance for create response
         self._created_invoice = invoice
     
