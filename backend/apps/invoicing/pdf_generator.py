@@ -340,11 +340,20 @@ class InvoicePDFGenerator:
         left_x = left_margin
         center_x = left_margin + col_width
         right_x = left_margin + 2 * col_width
-        
+
+        # Determine alignment per field: respect field.style.alignment if set,
+        # otherwise fall back to the column position default.
+        def field_align(field, default):
+            if field:
+                a = (field.get('style') or {}).get('alignment')
+                if a in ('left', 'center', 'right'):
+                    return a
+            return default
+
         # Draw each column
-        draw_multiline(left_lines, left_x, 'left', left_field)
-        draw_multiline(center_lines, center_x, 'center', center_field)
-        draw_multiline(right_lines, right_x, 'right', right_field)
+        draw_multiline(left_lines, left_x, field_align(left_field, 'left'), left_field)
+        draw_multiline(center_lines, center_x, field_align(center_field, 'center'), center_field)
+        draw_multiline(right_lines, right_x, field_align(right_field, 'right'), right_field)
         
         canvas.restoreState()
     
