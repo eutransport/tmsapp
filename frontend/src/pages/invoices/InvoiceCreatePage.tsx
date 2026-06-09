@@ -1812,7 +1812,7 @@ export default function InvoiceCreatePage() {
     const entryLines: InvoiceLineData[] = sortedEntries.flatMap(entry => {
       const values: Record<string, number | string> = {}
 
-      const uren = roundUren(Number(entry.uren_factuur) || 0)
+      const uren = roundUren(Number(entry.uren_factuur))
       const km = entry.user ? (chauffeurKmMap[`${entry.user}|${entry.datum}`] || 0) : 0
 
       totalUren += uren
