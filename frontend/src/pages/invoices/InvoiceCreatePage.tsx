@@ -163,6 +163,12 @@ function formatCurrency(value: number): string {
   }).format(value)
 }
 
+// Rond een hoeveelheid (uren/aantal) af op maximaal 1 decimaal
+function roundUren(n: number): number {
+  if (!isFinite(n)) return 0
+  return Math.round(n * 10) / 10
+}
+
 // ============================================
 // Components
 // ============================================
@@ -1586,7 +1592,7 @@ export default function InvoiceCreatePage() {
       
       // Parse uren
       const [h, m] = (entry.totaal_uren || '0:00').split(':').map(Number)
-      const uren = h + (m / 60)
+      const uren = roundUren(h + (m / 60))
       const km = entry.totaal_km || 0
       
       totalUren += uren
@@ -1806,7 +1812,7 @@ export default function InvoiceCreatePage() {
     const entryLines: InvoiceLineData[] = sortedEntries.flatMap(entry => {
       const values: Record<string, number | string> = {}
 
-      const uren = entry.uren_factuur || 0
+      const uren = roundUren(Number(entry.uren_factuur))
       const km = entry.user ? (chauffeurKmMap[`${entry.user}|${entry.datum}`] || 0) : 0
 
       totalUren += uren
@@ -1924,7 +1930,7 @@ export default function InvoiceCreatePage() {
       const overnachting = parseFloat(rij.overnachting as any || 0)
       const overigeKosten = parseFloat(rij.overige_kosten as any || 0)
       
-      const uren = Math.max(0, eindTijd - beginTijd - pauze - correctie)
+      const uren = roundUren(Math.max(0, eindTijd - beginTijd - pauze - correctie))
       const km = Math.max(0, eindKm - beginKm)
       
       totalKm += km
