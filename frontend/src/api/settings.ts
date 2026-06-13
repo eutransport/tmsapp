@@ -53,6 +53,18 @@ export interface DashboardStats {
   financial: DashboardFinancial
 }
 
+export interface AdministratieFinancials {
+  id: string
+  naam: string
+  year: number
+  open_invoices: number
+  income: number
+  expenses: number
+  profit: number
+  collected: number
+  outstanding: number
+}
+
 export interface ActivityItem {
   id?: string
   type: string
@@ -239,6 +251,12 @@ export const settingsApi = {
   // Dashboard stats
   getDashboardStats: async (): Promise<DashboardStats> => {
     const response = await api.get('/core/dashboard/stats/')
+    return response.data
+  },
+
+  // Financial stats per administration
+  getDashboardStatsPerAdministratie: async (): Promise<AdministratieFinancials[]> => {
+    const response = await api.get('/core/dashboard/stats/per-administratie/')
     return response.data
   },
   

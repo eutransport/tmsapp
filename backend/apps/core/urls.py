@@ -7,6 +7,7 @@ from .views import (
     PublicSettingsView, 
     AdminSettingsViewSet, 
     DashboardStatsView,
+    DashboardStatsPerAdministratieView,
     OnlineUsersView,
     RecentLoginsView,
     RecentActivityView,
@@ -39,6 +40,7 @@ urlpatterns = [
     
     # Dashboard stats
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('dashboard/stats/per-administratie/', DashboardStatsPerAdministratieView.as_view(), name='dashboard-stats-per-administratie'),
     
     # Online users (polled every 2 minutes)
     path('dashboard/online-users/', OnlineUsersView.as_view(), name='online-users'),
