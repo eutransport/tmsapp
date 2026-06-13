@@ -708,6 +708,7 @@ class DashboardStatsPerAdministratieView(APIView):
     def get(self, request):
         from apps.invoicing.models import Invoice, InvoiceType, InvoiceStatus
         from apps.core.access import accessible_administratie_ids
+        from apps.companies.models import Company as CompanyModel
         from datetime import date
 
         today = timezone.now().date()
@@ -792,9 +793,8 @@ class DashboardStatsPerAdministratieView(APIView):
 
             all_company_ids = set(collected_map.keys()) | set(outstanding_map.keys())
             # Fetch names for companies that only appear in outstanding_map
-            if all_company_ids - set(collected_map.keys()):
-                from apps.companies.models import Company as CompanyModel
-                missing_ids = all_company_ids - set(collected_map.keys())
+            missing_ids = all_company_ids - set(collected_map.keys())
+            if missing_ids:
                 for c in CompanyModel.objects.filter(id__in=missing_ids).values('id', 'naam'):
                     collected_map[str(c['id'])] = {'naam': c['naam'], 'collected': 0.0}
 
@@ -802,8 +802,8 @@ class DashboardStatsPerAdministratieView(APIView):
                 [
                     {
                         'id': cid,
-                        'naam': collected_map[cid]['naam'],
-                        'collected': round(collected_map[cid]['collected'], 2),
+                        'naam': collected_map.get(cid, {}).get('naam', ''),
+                        'collected': round(collected_map.get(cid, {}).get('collected', 0.0), 2),
                         'outstanding': round(outstanding_map.get(cid, 0.0), 2),
                     }
                     for cid in all_company_ids
