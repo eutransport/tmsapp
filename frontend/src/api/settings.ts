@@ -53,11 +53,16 @@ export interface DashboardStats {
   financial: DashboardFinancial
 }
 
-export interface CompanyFinancials {
+export interface AdministratieInvoice {
   id: string
-  naam: string
-  collected: number
-  outstanding: number
+  factuurnummer: string
+  bedrijf_id: string | null
+  bedrijf_naam: string
+  factuurdatum: string | null
+  vervaldatum: string | null
+  totaal: number
+  status: string
+  type: string
 }
 
 export interface AdministratieFinancials {
@@ -70,7 +75,7 @@ export interface AdministratieFinancials {
   profit: number
   collected: number
   outstanding: number
-  companies: CompanyFinancials[]
+  invoices: AdministratieInvoice[]
 }
 
 export interface ActivityItem {
