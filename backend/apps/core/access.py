@@ -55,5 +55,6 @@ def accessible_company_ids(user) -> Optional[Set[UUID]]:
     return set(
         Administratie.objects
         .filter(allowed_users=user)
+        .exclude(bedrijven__isnull=True)
         .values_list('bedrijven__id', flat=True)
-    ) - {None}
+    )
