@@ -766,6 +766,51 @@ class DashboardStatsPerAdministratieView(APIView):
                 status__in=[InvoiceStatus.CONCEPT, InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
             ).count()
 
+            # Per-company breakdown (collected + outstanding for VERKOOP invoices)
+            collected_per_company = (
+                base_qs.filter(type=InvoiceType.VERKOOP, status=InvoiceStatus.BETAALD)
+                .values('bedrijf', 'bedrijf__naam')
+                .annotate(total=Sum('totaal'))
+            )
+            outstanding_per_company = (
+                base_qs.filter(
+                    type=InvoiceType.VERKOOP,
+                    status__in=[InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
+                )
+                .values('bedrijf', 'bedrijf__naam')
+                .annotate(total=Sum('totaal'))
+            )
+
+            collected_map = {
+                str(row['bedrijf']): {'naam': row['bedrijf__naam'], 'collected': float(row['total'] or 0)}
+                for row in collected_per_company
+            }
+            outstanding_map = {
+                str(row['bedrijf']): float(row['total'] or 0)
+                for row in outstanding_per_company
+            }
+
+            all_company_ids = set(collected_map.keys()) | set(outstanding_map.keys())
+            # Fetch names for companies that only appear in outstanding_map
+            if all_company_ids - set(collected_map.keys()):
+                from apps.companies.models import Company as CompanyModel
+                missing_ids = all_company_ids - set(collected_map.keys())
+                for c in CompanyModel.objects.filter(id__in=missing_ids).values('id', 'naam'):
+                    collected_map[str(c['id'])] = {'naam': c['naam'], 'collected': 0.0}
+
+            companies = sorted(
+                [
+                    {
+                        'id': cid,
+                        'naam': collected_map[cid]['naam'],
+                        'collected': round(collected_map[cid]['collected'], 2),
+                        'outstanding': round(outstanding_map.get(cid, 0.0), 2),
+                    }
+                    for cid in all_company_ids
+                ],
+                key=lambda x: x['naam'],
+            )
+
             result.append({
                 'id': str(adm.id),
                 'naam': adm.naam,
@@ -776,6 +821,7 @@ class DashboardStatsPerAdministratieView(APIView):
                 'profit': round(total_income - total_expenses, 2),
                 'collected': round(total_collected, 2),
                 'outstanding': round(total_outstanding, 2),
+                'companies': companies,
             })
 
         return Response(result)

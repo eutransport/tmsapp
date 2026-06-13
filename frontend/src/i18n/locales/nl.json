@@ -251,7 +251,9 @@
     "viewLeaveCalendar": "Bekijk verlofkalender",
     "leaveHours": "Verlofuren",
     "financialPerAdministration": "Financieel overzicht per administratie",
-    "openInvoices": "Openstaande facturen"
+    "openInvoices": "Openstaande facturen",
+    "perCompany": "Per bedrijf",
+    "company": "Bedrijf"
   },
   "companies": {
     "title": "Bedrijven",

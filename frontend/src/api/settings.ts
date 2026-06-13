@@ -53,6 +53,13 @@ export interface DashboardStats {
   financial: DashboardFinancial
 }
 
+export interface CompanyFinancials {
+  id: string
+  naam: string
+  collected: number
+  outstanding: number
+}
+
 export interface AdministratieFinancials {
   id: string
   naam: string
@@ -63,6 +70,7 @@ export interface AdministratieFinancials {
   profit: number
   collected: number
   outstanding: number
+  companies: CompanyFinancials[]
 }
 
 export interface ActivityItem {
