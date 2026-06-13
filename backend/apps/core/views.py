@@ -763,7 +763,7 @@ class DashboardStatsPerAdministratieView(APIView):
 
             open_invoices = Invoice.objects.filter(
                 administratie=adm,
-                status__in=['concept', 'definitief', 'verzonden'],
+                status__in=[InvoiceStatus.CONCEPT, InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
             ).count()
 
             result.append({
