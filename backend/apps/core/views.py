@@ -563,6 +563,7 @@ class DashboardStatsView(APIView):
         from apps.fleet.models import Vehicle
         from apps.timetracking.models import TimeEntry
         from apps.invoicing.models import Invoice, InvoiceType, InvoiceStatus, Expense
+        from apps.core.access import accessible_administratie_ids, accessible_company_ids
         from datetime import date
         
         # Get current week number
@@ -596,11 +597,25 @@ class DashboardStatsView(APIView):
                     total_hours += hours + (minutes / 60)
                 except (ValueError, IndexError):
                     pass
-        
+
+        # Scoping op administratie/bedrijf voor niet-admins
+        admin_ids = accessible_administratie_ids(request.user)
+        company_ids = accessible_company_ids(request.user)
+
+        def scope_invoices(qs):
+            if admin_ids is None:
+                return qs
+            return qs.filter(administratie_id__in=admin_ids)
+
+        def scope_expenses(qs):
+            if company_ids is None:
+                return qs
+            return qs.filter(bedrijf_id__in=company_ids)
+
         # Count open invoices (concept or definitief, not betaald)
-        open_invoice_count = Invoice.objects.filter(
+        open_invoice_count = scope_invoices(Invoice.objects.filter(
             status__in=['concept', 'definitief', 'verzonden']
-        ).count()
+        )).count()
         
         # ── Financial totals for current year ──
         start_of_year = date(year, 1, 1)
@@ -608,36 +623,36 @@ class DashboardStatsView(APIView):
         active_statuses = [InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN, InvoiceStatus.BETAALD]
         
         # Total income (verkoop)
-        income_agg = Invoice.objects.filter(
+        income_agg = scope_invoices(Invoice.objects.filter(
             type=InvoiceType.VERKOOP,
             status__in=active_statuses,
             factuurdatum__gte=start_of_year,
             factuurdatum__lte=today,
-        ).aggregate(total=Sum('totaal'))
+        )).aggregate(total=Sum('totaal'))
 
         # Credit invoices (subtract from income, not add to expenses)
-        credit_agg = Invoice.objects.filter(
+        credit_agg = scope_invoices(Invoice.objects.filter(
             type=InvoiceType.CREDIT,
             status__in=active_statuses,
             factuurdatum__gte=start_of_year,
             factuurdatum__lte=today,
-        ).aggregate(total=Sum('totaal'))
+        )).aggregate(total=Sum('totaal'))
 
         total_credit = abs(float(credit_agg['total'] or 0))
         total_income = float(income_agg['total'] or 0) - total_credit
 
         # Total expenses (inkoop + direct expenses)
-        invoice_expenses_agg = Invoice.objects.filter(
+        invoice_expenses_agg = scope_invoices(Invoice.objects.filter(
             type=InvoiceType.INKOOP,
             status__in=active_statuses,
             factuurdatum__gte=start_of_year,
             factuurdatum__lte=today,
-        ).aggregate(total=Sum('totaal'))
+        )).aggregate(total=Sum('totaal'))
 
-        direct_expenses_agg = Expense.objects.filter(
+        direct_expenses_agg = scope_expenses(Expense.objects.filter(
             datum__gte=start_of_year,
             datum__lte=today,
-        ).aggregate(total=Sum('totaal'))
+        )).aggregate(total=Sum('totaal'))
 
         total_expenses = (
             float(invoice_expenses_agg['total'] or 0) +
@@ -645,21 +660,21 @@ class DashboardStatsView(APIView):
         )
         
         # Collected (betaald)
-        collected_agg = Invoice.objects.filter(
+        collected_agg = scope_invoices(Invoice.objects.filter(
             type=InvoiceType.VERKOOP,
             status=InvoiceStatus.BETAALD,
             factuurdatum__gte=start_of_year,
             factuurdatum__lte=today,
-        ).aggregate(total=Sum('totaal'))
+        )).aggregate(total=Sum('totaal'))
         total_collected = float(collected_agg['total'] or 0)
         
         # Outstanding (not betaald: definitief + verzonden)
-        outstanding_agg = Invoice.objects.filter(
+        outstanding_agg = scope_invoices(Invoice.objects.filter(
             type=InvoiceType.VERKOOP,
             status__in=[InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
             factuurdatum__gte=start_of_year,
             factuurdatum__lte=today,
-        ).aggregate(total=Sum('totaal'))
+        )).aggregate(total=Sum('totaal'))
         total_outstanding = float(outstanding_agg['total'] or 0)
         
         return Response({

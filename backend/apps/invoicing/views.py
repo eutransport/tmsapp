@@ -14,6 +14,7 @@ from rest_framework.response import Response
 
 from apps.core.permissions import IsAdminOrManager, HasModulePermission
 from apps.core.security import sanitize_filename
+from apps.core.access import accessible_administratie_ids, accessible_company_ids
 from .models import InvoiceTemplate, Invoice, InvoiceLine, InvoiceStatus, InvoiceType, Expense, ExpenseCategory
 from .serializers import (
     InvoiceTemplateSerializer,
@@ -193,19 +194,15 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     ordering_fields = ['factuurdatum', 'factuurnummer', 'totaal', 'bedrijf__naam', 'administratie__naam', 'week_number']
 
     def get_queryset(self):
-        from apps.core.models import Administratie
         base_qs = Invoice.objects.select_related(
             'bedrijf', 'template', 'created_by', 'administratie'
         ).prefetch_related('lines')
-        user = self.request.user
-        # Admins always see everything
-        if user.rol == 'admin' or user.is_staff:
+        admin_ids = accessible_administratie_ids(self.request.user)
+        # Admins (None) zien alles
+        if admin_ids is None:
             return base_qs.all()
         # Non-admin: restrict to invoices linked to an Administratie the user has access to
-        accessible_admin_ids = Administratie.objects.filter(
-            allowed_users=user
-        ).values_list('id', flat=True)
-        return base_qs.filter(administratie__in=accessible_admin_ids)
+        return base_qs.filter(administratie__in=admin_ids)
 
     @action(detail=False, methods=['post'], url_path='bulk_assign_administratie')
     def bulk_assign_administratie(self, request):
@@ -939,49 +936,63 @@ class RevenueView(APIView):
             'year': TruncYear,
         }
         trunc_func = trunc_funcs.get(period, TruncMonth)
-        
+
+        # Scoping op administratie/bedrijf voor niet-admins
+        admin_ids = accessible_administratie_ids(request.user)
+        company_ids = accessible_company_ids(request.user)
+
+        def scope_invoices(qs):
+            if admin_ids is None:
+                return qs
+            return qs.filter(administratie_id__in=admin_ids)
+
+        def scope_expenses(qs):
+            if company_ids is None:
+                return qs
+            return qs.filter(bedrijf_id__in=company_ids)
+
         # Get income (verkoop facturen - definitief/verzonden/betaald)
         income_statuses = [InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN, InvoiceStatus.BETAALD]
-        income_qs = Invoice.objects.filter(
+        income_qs = scope_invoices(Invoice.objects.filter(
             type=InvoiceType.VERKOOP,
             status__in=income_statuses,
             factuurdatum__gte=start_date,
             factuurdatum__lte=end_date,
-        ).annotate(
+        )).annotate(
             period=trunc_func('factuurdatum')
         ).values('period').annotate(
             totaal=Sum('totaal')
         ).order_by('period')
         
         # Get expenses from invoices (inkoop facturen)
-        invoice_expenses_qs = Invoice.objects.filter(
+        invoice_expenses_qs = scope_invoices(Invoice.objects.filter(
             type=InvoiceType.INKOOP,
             status__in=income_statuses,
             factuurdatum__gte=start_date,
             factuurdatum__lte=end_date,
-        ).annotate(
+        )).annotate(
             period=trunc_func('factuurdatum')
         ).values('period').annotate(
             totaal=Sum('totaal')
         ).order_by('period')
         
         # Get credit invoices as expenses (creditfacturen)
-        credit_expenses_qs = Invoice.objects.filter(
+        credit_expenses_qs = scope_invoices(Invoice.objects.filter(
             type=InvoiceType.CREDIT,
             status__in=income_statuses,
             factuurdatum__gte=start_date,
             factuurdatum__lte=end_date,
-        ).annotate(
+        )).annotate(
             period=trunc_func('factuurdatum')
         ).values('period').annotate(
             totaal=Sum('totaal')
         ).order_by('period')
         
         # Get expenses from Expense model
-        direct_expenses_qs = Expense.objects.filter(
+        direct_expenses_qs = scope_expenses(Expense.objects.filter(
             datum__gte=start_date,
             datum__lte=end_date,
-        ).annotate(
+        )).annotate(
             period=trunc_func('datum')
         ).values('period').annotate(
             totaal=Sum('totaal')
@@ -1042,21 +1053,21 @@ class RevenueView(APIView):
         total_profit = total_income + total_credit - total_expenses
         
         # Totaal gevorderd: verkoop facturen die betaald zijn
-        collected_agg = Invoice.objects.filter(
+        collected_agg = scope_invoices(Invoice.objects.filter(
             type=InvoiceType.VERKOOP,
             status=InvoiceStatus.BETAALD,
             factuurdatum__gte=start_date,
             factuurdatum__lte=end_date,
-        ).aggregate(total=Sum('totaal'))
+        )).aggregate(total=Sum('totaal'))
         total_collected = float(collected_agg['total'] or 0)
         
         # Totaal nog te vorderen: verkoop facturen die NIET betaald zijn (definitief + verzonden)
-        outstanding_agg = Invoice.objects.filter(
+        outstanding_agg = scope_invoices(Invoice.objects.filter(
             type=InvoiceType.VERKOOP,
             status__in=[InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
             factuurdatum__gte=start_date,
             factuurdatum__lte=end_date,
-        ).aggregate(total=Sum('totaal'))
+        )).aggregate(total=Sum('totaal'))
         total_outstanding = float(outstanding_agg['total'] or 0)
         
         return Response({
@@ -1098,23 +1109,30 @@ class RevenueForecastView(APIView):
         lookback_start = date(today.year - 1, today.month, 1)
         income_statuses = [InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN, InvoiceStatus.BETAALD]
 
-        monthly_income = Invoice.objects.filter(
+        admin_ids = accessible_administratie_ids(request.user)
+
+        def scope_invoices(qs):
+            if admin_ids is None:
+                return qs
+            return qs.filter(administratie_id__in=admin_ids)
+
+        monthly_income = scope_invoices(Invoice.objects.filter(
             type=InvoiceType.VERKOOP,
             status__in=income_statuses,
             factuurdatum__gte=lookback_start,
             factuurdatum__lte=today,
-        ).annotate(
+        )).annotate(
             period=TruncMonth('factuurdatum')
         ).values('period').annotate(
             totaal=Sum('totaal')
         ).order_by('period')
 
-        monthly_expenses = Invoice.objects.filter(
+        monthly_expenses = scope_invoices(Invoice.objects.filter(
             type=InvoiceType.INKOOP,
             status__in=income_statuses,
             factuurdatum__gte=lookback_start,
             factuurdatum__lte=today,
-        ).annotate(
+        )).annotate(
             period=TruncMonth('factuurdatum')
         ).values('period').annotate(
             totaal=Sum('totaal')
@@ -1157,13 +1175,23 @@ class RevenueYearsView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrManager]
     
     def get(self, request):
+        admin_ids = accessible_administratie_ids(request.user)
+        company_ids = accessible_company_ids(request.user)
+
+        invoice_qs = Invoice.objects.all()
+        expense_qs = Expense.objects.all()
+        if admin_ids is not None:
+            invoice_qs = invoice_qs.filter(administratie_id__in=admin_ids)
+        if company_ids is not None:
+            expense_qs = expense_qs.filter(bedrijf_id__in=company_ids)
+
         # Get years from invoices
-        invoice_years = Invoice.objects.values_list(
+        invoice_years = invoice_qs.values_list(
             'factuurdatum__year', flat=True
         ).distinct()
-        
+
         # Get years from expenses
-        expense_years = Expense.objects.values_list(
+        expense_years = expense_qs.values_list(
             'datum__year', flat=True
         ).distinct()
         

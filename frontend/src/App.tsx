@@ -328,7 +328,7 @@ function App() {
         <Route path="/invoices/templates/:id/edit" element={<AdminRoute><TemplateEditorPage /></AdminRoute>} />
 
         {/* Revenue */}
-        <Route path="/revenue" element={<AdminRoute><RevenuePage /></AdminRoute>} />
+        <Route path="/revenue" element={<PermissionRoute permission="view_revenue"><RevenuePage /></PermissionRoute>} />
 
         {/* Invoice Import (OCR) */}
         <Route path="/imports" element={<AdminRoute><InvoiceImportPage /></AdminRoute>} />

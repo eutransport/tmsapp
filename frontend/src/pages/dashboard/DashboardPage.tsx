@@ -732,13 +732,176 @@ function formatTimestamp(timestamp: string, t: any) {
 
 export default function DashboardPage() {
   const { user } = useAuthStore()
-  
-  // Show chauffeur-specific dashboard for both chauffeur and gebruiker roles
-  // (gebruiker should not see financial data)
-  if (user?.rol === 'chauffeur' || user?.rol === 'gebruiker') {
+
+  // Chauffeurs: dedicated chauffeur dashboard (no financial data)
+  if (user?.rol === 'chauffeur') {
     return <ChauffeurDashboard user={user} />
   }
-  
-  // Show admin dashboard (with financial data) only for admin role
+
+  // Gebruikers (non-admin): financial-only dashboard, scoped to their administraties on the backend
+  if (user?.rol === 'gebruiker') {
+    return <FinancialDashboard user={user} />
+  }
+
+  // Show admin dashboard (with financial data + full management widgets) only for admin role
   return <AdminDashboard user={user} />
+}
+
+// Financial-only dashboard for gebruikers with administratie access.
+// Backend scopes the financial figures to the user's accessible administraties.
+function FinancialDashboard({ user }: { user: any }) {
+  const { t } = useTranslation()
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    settingsApi
+      .getDashboardStats()
+      .then((data) => {
+        if (!cancelled) setStats(data)
+      })
+      .catch((err) => {
+        console.error('Failed to load dashboard stats:', err)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const fin = stats?.financial
+  const financialCards = [
+    {
+      name: t('dashboard.totalIncome'),
+      value: fin ? formatCurrency(fin.income) : '-',
+      icon: ArrowTrendingUpIcon,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+      borderColor: 'border-green-200',
+    },
+    {
+      name: t('dashboard.totalExpenses'),
+      value: fin ? formatCurrency(fin.expenses) : '-',
+      icon: ArrowTrendingDownIcon,
+      color: 'text-red-600',
+      bgColor: 'bg-red-50',
+      borderColor: 'border-red-200',
+    },
+    {
+      name: t('dashboard.profit'),
+      value: fin ? formatCurrency(fin.profit) : '-',
+      icon: BanknotesIcon,
+      color: fin && fin.profit >= 0 ? 'text-blue-600' : 'text-red-600',
+      bgColor: fin && fin.profit >= 0 ? 'bg-blue-50' : 'bg-red-50',
+      borderColor: fin && fin.profit >= 0 ? 'border-blue-200' : 'border-red-200',
+    },
+    {
+      name: t('dashboard.totalCollected'),
+      value: fin ? formatCurrency(fin.collected) : '-',
+      icon: CheckCircleIcon,
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-50',
+      borderColor: 'border-emerald-200',
+    },
+    {
+      name: t('dashboard.totalOutstanding'),
+      value: fin ? formatCurrency(fin.outstanding) : '-',
+      icon: ClockIcon,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50',
+      borderColor: 'border-purple-200',
+    },
+  ]
+
+  return (
+    <div className="space-y-6">
+      {/* Welcome message */}
+      <div>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+          {t('dashboard.welcomeDriver', { name: user?.voornaam })}
+        </h1>
+        <p className="mt-1 text-sm text-gray-500">
+          {t('dashboard.overview')}
+        </p>
+      </div>
+
+      {/* Open invoices stat */}
+      <div className="grid grid-cols-1 gap-2 sm:gap-3 sm:grid-cols-2 md:grid-cols-3">
+        <Link
+          to="/invoices"
+          className="card p-3 sm:p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex-shrink-0 p-1.5 sm:p-2.5 rounded-lg bg-red-50">
+              <DocumentTextIcon className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] sm:text-xs font-medium text-gray-500 truncate">
+                {t('dashboard.pendingInvoices')}
+              </p>
+              <p className="text-base sm:text-xl font-semibold text-gray-900">
+                {loading ? (
+                  <span className="inline-block w-8 h-5 bg-gray-200 rounded animate-pulse" />
+                ) : (
+                  stats?.open_invoices ?? '-'
+                )}
+              </p>
+            </div>
+          </div>
+        </Link>
+      </div>
+
+      {/* Financial cards */}
+      <div>
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">
+          {t('dashboard.financialOverview')} {stats?.year}
+        </h2>
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-5">
+          {financialCards.map((card) => (
+            <div
+              key={card.name}
+              className={`rounded-xl border p-3 sm:p-4 ${card.bgColor} ${card.borderColor}`}
+            >
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className={`flex-shrink-0 p-1.5 sm:p-2 rounded-lg ${card.bgColor}`}>
+                  <card.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${card.color}`} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] sm:text-xs font-medium opacity-70 truncate">{card.name}</p>
+                  <p className={`text-sm sm:text-lg font-bold ${card.color} truncate`}>
+                    {loading ? (
+                      <span className="inline-block w-16 h-5 bg-gray-200/50 rounded animate-pulse" />
+                    ) : (
+                      card.value
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick actions */}
+      <div>
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">
+          {t('dashboard.quickActions')}
+        </h2>
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3">
+          <Link to="/invoices" className="btn-secondary text-center text-xs sm:text-sm py-2 sm:py-2.5">
+            {t('nav.invoices')}
+          </Link>
+          <Link to="/revenue" className="btn-secondary text-center text-xs sm:text-sm py-2 sm:py-2.5">
+            {t('nav.revenue')}
+          </Link>
+          <Link to="/invoices/new" className="btn-secondary text-center text-xs sm:text-sm py-2 sm:py-2.5">
+            + {t('dashboard.createInvoiceAction')}
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
 }
