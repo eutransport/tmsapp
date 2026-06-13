@@ -251,7 +251,9 @@
     "viewLeaveCalendar": "View leave calendar",
     "leaveHours": "Leave hours",
     "financialPerAdministration": "Financial overview per administration",
-    "openInvoices": "Open invoices"
+    "openInvoices": "Open invoices",
+    "perCompany": "Per company",
+    "company": "Company"
   },
   "companies": {
     "title": "Companies",

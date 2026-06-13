@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
-import { settingsApi, DashboardStats, OnlineUser, RecentLogin, ActivityItem, AdministratieFinancials } from '@/api/settings'
+import { settingsApi, DashboardStats, OnlineUser, RecentLogin, ActivityItem, AdministratieFinancials, CompanyFinancials } from '@/api/settings'
 import { getLeaveCalendar, CalendarLeaveEntry } from '@/api/leave'
 import {
   UsersIcon,
@@ -179,6 +179,33 @@ function AdministratieFinancialsSection({ year }: { year?: number }) {
                 <p className="text-sm font-bold text-purple-600 truncate">{formatCurrency(adm.outstanding)}</p>
               </div>
             </div>
+
+            {/* Per-company breakdown — only shown when multiple companies exist */}
+            {adm.companies && adm.companies.length > 1 && (
+              <div className="border-t border-gray-100">
+                <p className="px-4 pt-2 pb-1 text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  {t('dashboard.perCompany')}
+                </p>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      <th className="px-4 py-1.5 text-left font-medium text-gray-500">{t('dashboard.company')}</th>
+                      <th className="px-3 py-1.5 text-right font-medium text-emerald-600">{t('dashboard.totalCollected')}</th>
+                      <th className="px-3 py-1.5 text-right font-medium text-purple-600">{t('dashboard.totalOutstanding')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adm.companies.map((company: CompanyFinancials) => (
+                      <tr key={company.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                        <td className="px-4 py-1.5 text-gray-700 font-medium truncate max-w-[160px]">{company.naam}</td>
+                        <td className="px-3 py-1.5 text-right text-emerald-600 font-semibold tabular-nums whitespace-nowrap">{formatCurrency(company.collected)}</td>
+                        <td className="px-3 py-1.5 text-right text-purple-600 font-semibold tabular-nums whitespace-nowrap">{formatCurrency(company.outstanding)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ))}
       </div>
