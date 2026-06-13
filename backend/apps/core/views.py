@@ -695,6 +695,92 @@ class DashboardStatsView(APIView):
         })
 
 
+class DashboardStatsPerAdministratieView(APIView):
+    """
+    Financial statistics per Administratie for the current year.
+
+    Admins see all administrations.
+    Other users (manager/gebruiker) see only the administrations they are
+    listed in ``allowed_users`` for.
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrManagerStrict]
+
+    def get(self, request):
+        from apps.invoicing.models import Invoice, InvoiceType, InvoiceStatus
+        from apps.core.access import accessible_administratie_ids
+        from datetime import date
+
+        today = timezone.now().date()
+        year = today.year
+        start_of_year = date(year, 1, 1)
+
+        admin_ids = accessible_administratie_ids(request.user)
+
+        if admin_ids is None:
+            # Admin: all administrations
+            qs = Administratie.objects.all().order_by('naam')
+        else:
+            qs = Administratie.objects.filter(id__in=admin_ids).order_by('naam')
+
+        active_statuses = [InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN, InvoiceStatus.BETAALD]
+
+        result = []
+        for adm in qs:
+            base_qs = Invoice.objects.filter(
+                administratie=adm,
+                factuurdatum__gte=start_of_year,
+                factuurdatum__lte=today,
+            )
+
+            income_agg = base_qs.filter(
+                type=InvoiceType.VERKOOP,
+                status__in=active_statuses,
+            ).aggregate(total=Sum('totaal'))
+            credit_agg = base_qs.filter(
+                type=InvoiceType.CREDIT,
+                status__in=active_statuses,
+            ).aggregate(total=Sum('totaal'))
+            total_credit = abs(float(credit_agg['total'] or 0))
+            total_income = float(income_agg['total'] or 0) - total_credit
+
+            expense_agg = base_qs.filter(
+                type=InvoiceType.INKOOP,
+                status__in=active_statuses,
+            ).aggregate(total=Sum('totaal'))
+            total_expenses = float(expense_agg['total'] or 0)
+
+            collected_agg = base_qs.filter(
+                type=InvoiceType.VERKOOP,
+                status=InvoiceStatus.BETAALD,
+            ).aggregate(total=Sum('totaal'))
+            total_collected = float(collected_agg['total'] or 0)
+
+            outstanding_agg = base_qs.filter(
+                type=InvoiceType.VERKOOP,
+                status__in=[InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
+            ).aggregate(total=Sum('totaal'))
+            total_outstanding = float(outstanding_agg['total'] or 0)
+
+            open_invoices = Invoice.objects.filter(
+                administratie=adm,
+                status__in=[InvoiceStatus.CONCEPT, InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
+            ).count()
+
+            result.append({
+                'id': str(adm.id),
+                'naam': adm.naam,
+                'year': year,
+                'open_invoices': open_invoices,
+                'income': round(total_income, 2),
+                'expenses': round(total_expenses, 2),
+                'profit': round(total_income - total_expenses, 2),
+                'collected': round(total_collected, 2),
+                'outstanding': round(total_outstanding, 2),
+            })
+
+        return Response(result)
+
+
 class OnlineUsersView(APIView):
     """
     Online users endpoint — users with activity in the last 2 minutes.

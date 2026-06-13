@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
-import { settingsApi, DashboardStats, OnlineUser, RecentLogin, ActivityItem } from '@/api/settings'
+import { settingsApi, DashboardStats, OnlineUser, RecentLogin, ActivityItem, AdministratieFinancials } from '@/api/settings'
 import { getLeaveCalendar, CalendarLeaveEntry } from '@/api/leave'
 import {
   UsersIcon,
@@ -104,6 +104,83 @@ function ChauffeurDashboard({ user }: { user: any }) {
         <p className="text-sm text-blue-700 mt-1">
           {t('dashboard.tipText')}
         </p>
+      </div>
+    </div>
+  )
+}
+
+// Per-administration financial breakdown component
+function AdministratieFinancialsSection({ year }: { year?: number }) {
+  const { t } = useTranslation()
+  const [data, setData] = useState<AdministratieFinancials[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    settingsApi
+      .getDashboardStatsPerAdministratie()
+      .then((d) => { if (!cancelled) setData(d) })
+      .catch((err) => console.error('Failed to load per-administratie stats:', err))
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="card p-6 text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
+      </div>
+    )
+  }
+
+  if (data.length === 0) {
+    return null
+  }
+
+  return (
+    <div>
+      <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">
+        {t('dashboard.financialPerAdministration')} {year}
+      </h2>
+      <div className="space-y-3">
+        {data.map((adm) => (
+          <div key={adm.id} className="card overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+              <h3 className="text-sm font-semibold text-gray-900">{adm.naam}</h3>
+              <Link
+                to={`/invoices?administratie=${adm.id}`}
+                className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
+              >
+                {t('dashboard.openInvoices')}: {adm.open_invoices}
+                <ArrowRightIcon className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-px bg-gray-100 sm:grid-cols-3 lg:grid-cols-5">
+              <div className="bg-white px-3 py-2.5">
+                <p className="text-[10px] sm:text-xs text-gray-500">{t('dashboard.totalIncome')}</p>
+                <p className="text-sm font-bold text-green-600 truncate">{formatCurrency(adm.income)}</p>
+              </div>
+              <div className="bg-white px-3 py-2.5">
+                <p className="text-[10px] sm:text-xs text-gray-500">{t('dashboard.totalExpenses')}</p>
+                <p className="text-sm font-bold text-red-600 truncate">{formatCurrency(adm.expenses)}</p>
+              </div>
+              <div className="bg-white px-3 py-2.5">
+                <p className="text-[10px] sm:text-xs text-gray-500">{t('dashboard.profit')}</p>
+                <p className={`text-sm font-bold truncate ${adm.profit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                  {formatCurrency(adm.profit)}
+                </p>
+              </div>
+              <div className="bg-white px-3 py-2.5">
+                <p className="text-[10px] sm:text-xs text-gray-500">{t('dashboard.totalCollected')}</p>
+                <p className="text-sm font-bold text-emerald-600 truncate">{formatCurrency(adm.collected)}</p>
+              </div>
+              <div className="bg-white px-3 py-2.5 col-span-2 sm:col-span-1">
+                <p className="text-[10px] sm:text-xs text-gray-500">{t('dashboard.totalOutstanding')}</p>
+                <p className="text-sm font-bold text-purple-600 truncate">{formatCurrency(adm.outstanding)}</p>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -392,6 +469,9 @@ function AdminDashboard({ user }: { user: any }) {
           ))}
         </div>
       </div>
+
+      {/* Per-administration financial breakdown */}
+      <AdministratieFinancialsSection year={stats?.year} />
       
       {/* Quick actions — 2 cols mobile, 3 md, 5 lg */}
       <div>
@@ -884,6 +964,9 @@ function FinancialDashboard({ user }: { user: any }) {
           ))}
         </div>
       </div>
+
+      {/* Per-administration financial breakdown */}
+      <AdministratieFinancialsSection year={stats?.year} />
 
       {/* Quick actions */}
       <div>

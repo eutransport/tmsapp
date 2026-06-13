@@ -249,7 +249,9 @@
     "leaveThisMonth": "Verlof deze maand",
     "noLeaveThisMonth": "Geen verlof gepland deze maand",
     "viewLeaveCalendar": "Bekijk verlofkalender",
-    "leaveHours": "Verlofuren"
+    "leaveHours": "Verlofuren",
+    "financialPerAdministration": "Financieel overzicht per administratie",
+    "openInvoices": "Openstaande facturen"
   },
   "companies": {
     "title": "Bedrijven",
