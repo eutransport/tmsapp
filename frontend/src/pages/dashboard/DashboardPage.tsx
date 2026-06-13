@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
-import { settingsApi, DashboardStats, OnlineUser, RecentLogin, ActivityItem, AdministratieFinancials, AdministratieInvoice } from '@/api/settings'
+import { settingsApi, DashboardStats, OnlineUser, RecentLogin, ActivityItem, AdministratieFinancials, AdministratieCompanyOutstanding } from '@/api/settings'
 import { getLeaveCalendar, CalendarLeaveEntry } from '@/api/leave'
 import {
   UsersIcon,
@@ -180,32 +180,37 @@ function AdministratieFinancialsSection({ year }: { year?: number }) {
               </div>
             </div>
 
-            {/* Invoices linked to this administration */}
-            {adm.invoices && adm.invoices.length > 0 && (
+            {/* Outstanding amount per invoiced company for this administration */}
+            {adm.companies && adm.companies.length > 0 && (
               <div className="border-t border-gray-100">
                 <p className="px-4 pt-2 pb-1 text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                  {t('dashboard.openInvoices')}
+                  {t('dashboard.outstandingPerCompany')}
                 </p>
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="px-4 py-1.5 text-left font-medium text-gray-500">{t('dashboard.invoiceNumber')}</th>
-                      <th className="px-3 py-1.5 text-left font-medium text-gray-500">{t('dashboard.company')}</th>
-                      <th className="px-3 py-1.5 text-left font-medium text-gray-500">{t('dashboard.dueDate')}</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-gray-500">{t('dashboard.total')}</th>
+                      <th className="px-4 py-1.5 text-left font-medium text-gray-500">{t('dashboard.company')}</th>
+                      <th className="px-3 py-1.5 text-right font-medium text-gray-500">{t('dashboard.openInvoices')}</th>
+                      <th className="px-3 py-1.5 text-right font-medium text-gray-500">{t('dashboard.totalOutstanding')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {adm.invoices.map((inv: AdministratieInvoice) => (
-                      <tr key={inv.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                        <td className="px-4 py-1.5 text-gray-700 font-medium whitespace-nowrap">
-                          <Link to={`/invoices/${inv.id}`} className="text-primary-600 hover:text-primary-700">
-                            {inv.factuurnummer}
-                          </Link>
+                    {adm.companies.map((c: AdministratieCompanyOutstanding) => (
+                      <tr key={c.bedrijf_id ?? c.bedrijf_naam} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                        <td className="px-4 py-1.5 text-gray-700 font-medium truncate max-w-[240px]">
+                          {c.bedrijf_id ? (
+                            <Link
+                              to={`/invoices?administratie=${adm.id}&bedrijf=${c.bedrijf_id}`}
+                              className="text-primary-600 hover:text-primary-700"
+                            >
+                              {c.bedrijf_naam || '—'}
+                            </Link>
+                          ) : (
+                            <span>{c.bedrijf_naam || '—'}</span>
+                          )}
                         </td>
-                        <td className="px-3 py-1.5 text-gray-700 truncate max-w-[160px]">{inv.bedrijf_naam}</td>
-                        <td className="px-3 py-1.5 text-gray-500 whitespace-nowrap">{inv.vervaldatum ? new Date(inv.vervaldatum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</td>
-                        <td className="px-3 py-1.5 text-right text-gray-900 font-semibold tabular-nums whitespace-nowrap">{formatCurrency(inv.totaal)}</td>
+                        <td className="px-3 py-1.5 text-right text-gray-500 tabular-nums whitespace-nowrap">{c.invoice_count}</td>
+                        <td className="px-3 py-1.5 text-right text-gray-900 font-semibold tabular-nums whitespace-nowrap">{formatCurrency(c.outstanding)}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -252,6 +252,7 @@
     "leaveHours": "Verlofuren",
     "financialPerAdministration": "Financieel overzicht per administratie",
     "openInvoices": "Openstaande facturen",
+    "outstandingPerCompany": "Te vorderen per bedrijf",
     "company": "Bedrijf",
     "invoiceNumber": "Factuurnummer",
     "dueDate": "Vervaldatum",

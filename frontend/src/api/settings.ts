@@ -65,6 +65,13 @@ export interface AdministratieInvoice {
   type: string
 }
 
+export interface AdministratieCompanyOutstanding {
+  bedrijf_id: string | null
+  bedrijf_naam: string
+  outstanding: number
+  invoice_count: number
+}
+
 export interface AdministratieFinancials {
   id: string
   naam: string
@@ -75,7 +82,7 @@ export interface AdministratieFinancials {
   profit: number
   collected: number
   outstanding: number
-  invoices: AdministratieInvoice[]
+  companies: AdministratieCompanyOutstanding[]
 }
 
 export interface ActivityItem {
