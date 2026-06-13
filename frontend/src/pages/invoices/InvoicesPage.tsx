@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Dialog, Transition } from '@headlessui/react'
 import {
@@ -60,6 +60,7 @@ const TYPE_COLORS: Record<string, string> = {
 export default function InvoicesPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { user } = useAuthStore()
   const isReadOnly = user?.rol === 'chauffeur'
   const isAdmin = user?.rol === 'admin'
@@ -71,12 +72,24 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true)
   const [totalCount, setTotalCount] = useState(0)
   
-  // Filter state
-  const [filters, setFilters] = useState<InvoiceFilters>({
-    page: 1,
-    page_size: 30,
-    ordering: '-factuurdatum',
-    jaar: new Date().getFullYear(),
+  // Filter state — initial values can be seeded from URL query params
+  // (e.g. coming from the dashboard "te vorderen per bedrijf" link)
+  const [filters, setFilters] = useState<InvoiceFilters>(() => {
+    const initial: InvoiceFilters = {
+      page: 1,
+      page_size: 30,
+      ordering: '-factuurdatum',
+      jaar: new Date().getFullYear(),
+    }
+    const administratie = searchParams.get('administratie')
+    const bedrijf = searchParams.get('bedrijf')
+    const status = searchParams.get('status') as InvoiceFilters['status'] | null
+    const type = searchParams.get('type') as InvoiceFilters['type'] | null
+    if (administratie) initial.administratie = administratie
+    if (bedrijf) initial.bedrijf = bedrijf
+    if (status) initial.status = status
+    if (type) initial.type = type
+    return initial
   })
   const [searchInput, setSearchInput] = useState('')
   const [pageSize, setPageSize] = useState<PageSize>(30)

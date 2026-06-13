@@ -183,21 +183,21 @@ function AdministratieFinancialsSection({ year }: { year?: number }) {
             {/* Outstanding amount per invoiced company for this administration */}
             {adm.companies && adm.companies.length > 0 && (
               <div className="border-t border-gray-100">
-                <p className="px-4 pt-2 pb-1 text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                <p className="px-3 sm:px-4 pt-2 pb-1 text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wide">
                   {t('dashboard.outstandingPerCompany')}
                 </p>
-                <table className="w-full text-xs">
+                <div className="overflow-x-auto"><table className="w-full text-xs table-fixed"><colgroup><col /><col className="w-12 sm:w-20" /><col className="w-24 sm:w-32" /></colgroup>
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
                       <th className="px-4 py-1.5 text-left font-medium text-gray-500">{t('dashboard.company')}</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-gray-500">{t('dashboard.openInvoices')}</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-gray-500">{t('dashboard.totalOutstanding')}</th>
+                      <th className="px-2 sm:px-3 py-1.5 text-right font-medium text-gray-500"><span className="sm:hidden">#</span><span className="hidden sm:inline">{t('dashboard.openInvoices')}</span></th>
+                      <th className="px-2 sm:px-3 py-1.5 text-right font-medium text-gray-500">{t('dashboard.totalOutstanding')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {adm.companies.map((c: AdministratieCompanyOutstanding) => (
                       <tr key={c.bedrijf_id ?? c.bedrijf_naam} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                        <td className="px-4 py-1.5 text-gray-700 font-medium truncate max-w-[240px]">
+                        <td className="px-3 sm:px-4 py-1.5 text-gray-700 font-medium truncate">
                           {c.bedrijf_id ? (
                             <Link
                               to={`/invoices?administratie=${adm.id}&bedrijf=${c.bedrijf_id}`}
@@ -209,12 +209,12 @@ function AdministratieFinancialsSection({ year }: { year?: number }) {
                             <span>{c.bedrijf_naam || '—'}</span>
                           )}
                         </td>
-                        <td className="px-3 py-1.5 text-right text-gray-500 tabular-nums whitespace-nowrap">{c.invoice_count}</td>
-                        <td className="px-3 py-1.5 text-right text-gray-900 font-semibold tabular-nums whitespace-nowrap">{formatCurrency(c.outstanding)}</td>
+                        <td className="px-2 sm:px-3 py-1.5 text-right text-gray-500 tabular-nums whitespace-nowrap">{c.invoice_count}</td>
+                        <td className="px-2 sm:px-3 py-1.5 text-right text-gray-900 font-semibold tabular-nums whitespace-nowrap">{formatCurrency(c.outstanding)}</td>
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             )}
           </div>
