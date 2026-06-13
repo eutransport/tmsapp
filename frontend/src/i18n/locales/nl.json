@@ -252,8 +252,10 @@
     "leaveHours": "Verlofuren",
     "financialPerAdministration": "Financieel overzicht per administratie",
     "openInvoices": "Openstaande facturen",
-    "perCompany": "Per bedrijf",
-    "company": "Bedrijf"
+    "company": "Bedrijf",
+    "invoiceNumber": "Factuurnummer",
+    "dueDate": "Vervaldatum",
+    "total": "Totaal"
   },
   "companies": {
     "title": "Bedrijven",

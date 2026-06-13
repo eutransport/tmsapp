@@ -252,8 +252,10 @@
     "leaveHours": "Leave hours",
     "financialPerAdministration": "Financial overview per administration",
     "openInvoices": "Open invoices",
-    "perCompany": "Per company",
-    "company": "Company"
+    "company": "Company",
+    "invoiceNumber": "Invoice number",
+    "dueDate": "Due date",
+    "total": "Total"
   },
   "companies": {
     "title": "Companies",

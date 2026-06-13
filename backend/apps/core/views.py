@@ -708,7 +708,6 @@ class DashboardStatsPerAdministratieView(APIView):
     def get(self, request):
         from apps.invoicing.models import Invoice, InvoiceType, InvoiceStatus
         from apps.core.access import accessible_administratie_ids
-        from apps.companies.models import Company as CompanyModel
         from datetime import date
 
         today = timezone.now().date()
@@ -767,49 +766,36 @@ class DashboardStatsPerAdministratieView(APIView):
                 status__in=[InvoiceStatus.CONCEPT, InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
             ).count()
 
-            # Per-company breakdown (collected + outstanding for VERKOOP invoices)
-            collected_per_company = (
-                base_qs.filter(type=InvoiceType.VERKOOP, status=InvoiceStatus.BETAALD)
-                .values('bedrijf', 'bedrijf__naam')
-                .annotate(total=Sum('totaal'))
-            )
-            outstanding_per_company = (
-                base_qs.filter(
-                    type=InvoiceType.VERKOOP,
-                    status__in=[InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
+            # Invoices linked to this administration — show the open invoices
+            # (Concept/Definitief/Verzonden) so users see the actual invoices
+            # under the administration section instead of an aggregated
+            # per-company breakdown.
+            open_invoice_qs = (
+                Invoice.objects.filter(
+                    administratie=adm,
+                    status__in=[
+                        InvoiceStatus.CONCEPT,
+                        InvoiceStatus.DEFINITIEF,
+                        InvoiceStatus.VERZONDEN,
+                    ],
                 )
-                .values('bedrijf', 'bedrijf__naam')
-                .annotate(total=Sum('totaal'))
+                .select_related('bedrijf')
+                .order_by('vervaldatum', 'factuurnummer')
             )
-
-            collected_map = {
-                str(row['bedrijf']): {'naam': row['bedrijf__naam'], 'collected': float(row['total'] or 0)}
-                for row in collected_per_company
-            }
-            outstanding_map = {
-                str(row['bedrijf']): float(row['total'] or 0)
-                for row in outstanding_per_company
-            }
-
-            all_company_ids = set(collected_map.keys()) | set(outstanding_map.keys())
-            # Fetch names for companies that only appear in outstanding_map
-            missing_ids = all_company_ids - set(collected_map.keys())
-            if missing_ids:
-                for c in CompanyModel.objects.filter(id__in=missing_ids).values('id', 'naam'):
-                    collected_map[str(c['id'])] = {'naam': c['naam'], 'collected': 0.0}
-
-            companies = sorted(
-                [
-                    {
-                        'id': cid,
-                        'naam': collected_map.get(cid, {}).get('naam', ''),
-                        'collected': round(collected_map.get(cid, {}).get('collected', 0.0), 2),
-                        'outstanding': round(outstanding_map.get(cid, 0.0), 2),
-                    }
-                    for cid in all_company_ids
-                ],
-                key=lambda x: x['naam'],
-            )
+            invoices = [
+                {
+                    'id': str(inv.id),
+                    'factuurnummer': inv.factuurnummer,
+                    'bedrijf_id': str(inv.bedrijf_id) if inv.bedrijf_id else None,
+                    'bedrijf_naam': inv.bedrijf.naam if inv.bedrijf_id else '',
+                    'factuurdatum': inv.factuurdatum.isoformat() if inv.factuurdatum else None,
+                    'vervaldatum': inv.vervaldatum.isoformat() if inv.vervaldatum else None,
+                    'totaal': round(float(inv.totaal or 0), 2),
+                    'status': inv.status,
+                    'type': inv.type,
+                }
+                for inv in open_invoice_qs
+            ]
 
             result.append({
                 'id': str(adm.id),
@@ -821,7 +807,7 @@ class DashboardStatsPerAdministratieView(APIView):
                 'profit': round(total_income - total_expenses, 2),
                 'collected': round(total_collected, 2),
                 'outstanding': round(total_outstanding, 2),
-                'companies': companies,
+                'invoices': invoices,
             })
 
         return Response(result)
