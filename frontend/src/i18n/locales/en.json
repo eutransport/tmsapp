@@ -252,6 +252,7 @@
     "leaveHours": "Leave hours",
     "financialPerAdministration": "Financial overview per administration",
     "openInvoices": "Open invoices",
+    "outstandingPerCompany": "Outstanding per company",
     "company": "Company",
     "invoiceNumber": "Invoice number",
     "dueDate": "Due date",

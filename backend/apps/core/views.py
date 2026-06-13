@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.core.mail import send_mail, EmailMessage, get_connection
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Count
 from django.db import connection
 from django.core.cache import cache
 from django.utils import timezone
@@ -766,35 +766,29 @@ class DashboardStatsPerAdministratieView(APIView):
                 status__in=[InvoiceStatus.CONCEPT, InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
             ).count()
 
-            # Invoices linked to this administration — show the open invoices
-            # (Concept/Definitief/Verzonden) so users see the actual invoices
-            # under the administration section instead of an aggregated
-            # per-company breakdown.
-            open_invoice_qs = (
+            # Outstanding amount per invoiced company for this administration.
+            # Aggregates the total still-to-be-collected (Definitief/Verzonden
+            # sales invoices) per company, so the administration section shows
+            # one line per company with the total amount still outstanding —
+            # not a list of individual open invoices.
+            per_company_qs = (
                 Invoice.objects.filter(
                     administratie=adm,
-                    status__in=[
-                        InvoiceStatus.CONCEPT,
-                        InvoiceStatus.DEFINITIEF,
-                        InvoiceStatus.VERZONDEN,
-                    ],
+                    type=InvoiceType.VERKOOP,
+                    status__in=[InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN],
                 )
-                .select_related('bedrijf')
-                .order_by('vervaldatum', 'factuurnummer')
+                .values('bedrijf_id', 'bedrijf__naam')
+                .annotate(outstanding=Sum('totaal'), invoice_count=Count('id'))
+                .order_by('-outstanding')
             )
-            invoices = [
+            companies = [
                 {
-                    'id': str(inv.id),
-                    'factuurnummer': inv.factuurnummer,
-                    'bedrijf_id': str(inv.bedrijf_id) if inv.bedrijf_id else None,
-                    'bedrijf_naam': inv.bedrijf.naam if inv.bedrijf_id else '',
-                    'factuurdatum': inv.factuurdatum.isoformat() if inv.factuurdatum else None,
-                    'vervaldatum': inv.vervaldatum.isoformat() if inv.vervaldatum else None,
-                    'totaal': round(float(inv.totaal or 0), 2),
-                    'status': inv.status,
-                    'type': inv.type,
+                    'bedrijf_id': str(row['bedrijf_id']) if row['bedrijf_id'] else None,
+                    'bedrijf_naam': row['bedrijf__naam'] or '',
+                    'outstanding': round(float(row['outstanding'] or 0), 2),
+                    'invoice_count': row['invoice_count'],
                 }
-                for inv in open_invoice_qs
+                for row in per_company_qs
             ]
 
             result.append({
@@ -807,7 +801,7 @@ class DashboardStatsPerAdministratieView(APIView):
                 'profit': round(total_income - total_expenses, 2),
                 'collected': round(total_collected, 2),
                 'outstanding': round(total_outstanding, 2),
-                'invoices': invoices,
+                'companies': companies,
             })
 
         return Response(result)
