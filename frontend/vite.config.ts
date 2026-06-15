@@ -93,7 +93,7 @@ export default defineConfig({
       },
       workbox: {
         // Increase max file size to cache - needed for large bundles
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
         // Don't intercept /media/ and /api/ navigation requests with the SPA fallback
         navigateFallbackDenylist: [/^\/media\//, /^\/api\//],
         // Cache strategieën

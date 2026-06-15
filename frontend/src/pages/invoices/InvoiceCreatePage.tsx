@@ -19,6 +19,7 @@ import {
   XCircleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ReceiptPercentIcon,
 } from '@heroicons/react/24/outline'
 import { getTemplates, createInvoice, createInvoiceLine, getNextInvoiceNumber, getInvoice, getInvoiceLines, updateInvoice, deleteInvoiceLine } from '@/api/invoices'
 import { getCompanies } from '@/api/companies'
@@ -26,6 +27,7 @@ import { getMijnAdministraties, Administratie } from '@/api/administraties'
 import { getTimeEntries, markKilometerheffingGefactureerd } from '@/api/timetracking'
 import { getSpreadsheets } from '@/api/spreadsheets'
 import { getImportedEntries, ImportedTimeEntry } from '@/api/urenImport'
+import { getTolRegistraties, markTolGefactureerd, TolRegistratie } from '@/api/tolregistratie'
 import { 
   InvoiceTemplate, 
   Company, 
@@ -38,6 +40,8 @@ import {
 // ============================================
 // Types
 // ============================================
+
+const SINGLE_INVOICE_TARGET = '__single__'
 
 interface InvoiceLineData {
   id: string // Local temp id
@@ -66,6 +70,18 @@ interface ImportedChauffeurWeekGroup {
   chauffeurNaam: string
   entries: ImportedTimeEntry[]
   selected: boolean
+}
+
+type ImportMode = 'single' | 'perWeek'
+
+interface BatchInvoiceDraft {
+  id: string
+  factuurnummer: string
+  weekNumber: number | null
+  weekYear: number | null
+  chauffeur: string | null
+  chauffeurNaam: string | null
+  lines: InvoiceLineData[]
 }
 
 // ============================================
@@ -142,7 +158,9 @@ function evaluateFormula(formula: string, values: Record<string, number | string
     
     // Evaluate using safe math parser (no eval!)
     if (/^[\d\s+\-*/().]+$/.test(expression)) {
-      return safeMathEval(expression) || 0
+      const result = safeMathEval(expression) || 0
+      // Rond af op maximaal 2 decimalen (voorkomt floating-point staarten zoals 801.5999999999999)
+      return Math.round(result * 100) / 100
     }
     return 0
   } catch {
@@ -167,6 +185,25 @@ function formatCurrency(value: number): string {
 function roundUren(n: number): number {
   if (!isFinite(n)) return 0
   return Math.round(n * 10) / 10
+}
+
+// Toon een celwaarde met maximaal 2 decimalen (getallen), strings blijven ongewijzigd
+function formatCellValue(value: number | string | null | undefined): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'number') {
+    if (!isFinite(value)) return ''
+    return String(Math.round(value * 100) / 100)
+  }
+  return String(value)
+}
+
+function incrementInvoiceNumber(baseNumber: string, offset: number): string {
+  if (offset <= 0) return baseNumber
+  const match = baseNumber.match(/^(.*?)(\d+)$/)
+  if (!match) return `${baseNumber}-${offset + 1}`
+  const [, prefix, numericPart] = match
+  const nextNumber = String(parseInt(numericPart, 10) + offset).padStart(numericPart.length, '0')
+  return `${prefix}${nextNumber}`
 }
 
 // ============================================
@@ -379,7 +416,7 @@ function InvoiceLineCard({
                 <input
                   type="number"
                   step="0.01"
-                  value={line.values[col.id] || ''}
+                  value={line.values[col.id] ? formatCellValue(line.values[col.id]) : ''}
                   onChange={(e) => handleValueChange(col.id, e.target.value)}
                   className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-right"
                   placeholder="0.00"
@@ -389,7 +426,7 @@ function InvoiceLineCard({
               <input
                 type="number"
                 step={col.type === 'km' ? '1' : col.type === 'uren' ? '0.25' : '0.01'}
-                value={line.values[col.id] || ''}
+                value={line.values[col.id] ? formatCellValue(line.values[col.id]) : ''}
                 onChange={(e) => handleValueChange(col.id, e.target.value)}
                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-right"
                 placeholder="0"
@@ -413,8 +450,8 @@ function TimeEntryImportModal({
 }: {
   isOpen: boolean
   onClose: () => void
-  onImport: (entries: TimeEntry[]) => void
-  onImportImported: (entries: ImportedTimeEntry[], chauffeurEntries: TimeEntry[]) => void
+  onImport: (entries: TimeEntry[], mode: ImportMode) => void
+  onImportImported: (entries: ImportedTimeEntry[], chauffeurEntries: TimeEntry[], mode: ImportMode) => void
   showWorkTimes: boolean
   setShowWorkTimes: (v: boolean) => void
 }) {
@@ -435,6 +472,7 @@ function TimeEntryImportModal({
   const [importedPage, setImportedPage] = useState(1)
   const [expandedImportedGroup, setExpandedImportedGroup] = useState<string | null>(null)
   const [importedWeekFilter, setImportedWeekFilter] = useState<string>('')
+  const [importMode, setImportMode] = useState<ImportMode>('single')
 
   useEffect(() => {
     if (isOpen) {
@@ -445,6 +483,7 @@ function TimeEntryImportModal({
       setWeekFilter('')
       setImportedWeekFilter('')
       setActiveTab('chauffeur')
+      setImportMode('single')
     }
   }, [isOpen])
 
@@ -565,7 +604,9 @@ function TimeEntryImportModal({
         entriesToImport.push(...group.entries)
       }
     })
-    onImport(entriesToImport)
+    const selectedGroupCount = chauffeurGroups.filter(group => group.selected).length
+    const mode: ImportMode = selectedGroupCount > 1 ? importMode : 'single'
+    onImport(entriesToImport, mode)
     onClose()
   }
 
@@ -576,7 +617,9 @@ function TimeEntryImportModal({
         entriesToImport.push(...group.entries)
       }
     })
-    onImportImported(entriesToImport, chauffeurEntriesForMatch)
+    const selectedGroupCount = importedGroups.filter(group => group.selected).length
+    const mode: ImportMode = selectedGroupCount > 1 ? importMode : 'single'
+    onImportImported(entriesToImport, chauffeurEntriesForMatch, mode)
     onClose()
   }
 
@@ -821,6 +864,31 @@ function TimeEntryImportModal({
                   <span className="text-sm text-gray-600">
                     {selectedCount > 0 ? <>{t('invoices.groupsSelectedLines', { count: selectedCount, entries: totalEntries })}</> : t('invoices.selectDriverWeekCombinations')}
                   </span>
+                  {selectedCount > 1 && (
+                    <div className="flex items-center gap-4 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm">
+                      <span className="text-gray-600">Importeren als:</span>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-gray-700">
+                        <input
+                          type="radio"
+                          name="import-mode-chauffeur"
+                          checked={importMode === 'single'}
+                          onChange={() => setImportMode('single')}
+                          className="h-4 w-4 border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        1 factuur
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-gray-700">
+                        <input
+                          type="radio"
+                          name="import-mode-chauffeur"
+                          checked={importMode === 'perWeek'}
+                          onChange={() => setImportMode('perWeek')}
+                          className="h-4 w-4 border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        Losse facturen per groep
+                      </label>
+                    </div>
+                  )}
                   <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer" title="Voegt onder elke rit/dag een extra regel toe met begin- en eindtijd">
                     <input
                       type="checkbox"
@@ -985,6 +1053,31 @@ function TimeEntryImportModal({
                   <span className="text-sm text-gray-600">
                     {selectedImportedCount > 0 ? <>{t('invoices.groupsSelectedTrips', { count: selectedImportedCount, entries: totalImportedEntries })}</> : t('invoices.selectDriverWeekCombinations')}
                   </span>
+                  {selectedImportedCount > 1 && (
+                    <div className="flex items-center gap-4 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm">
+                      <span className="text-gray-600">Importeren als:</span>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-gray-700">
+                        <input
+                          type="radio"
+                          name="import-mode-imported"
+                          checked={importMode === 'single'}
+                          onChange={() => setImportMode('single')}
+                          className="h-4 w-4 border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        1 factuur
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-gray-700">
+                        <input
+                          type="radio"
+                          name="import-mode-imported"
+                          checked={importMode === 'perWeek'}
+                          onChange={() => setImportMode('perWeek')}
+                          className="h-4 w-4 border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        Losse facturen per groep
+                      </label>
+                    </div>
+                  )}
                   <label className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer" title="Voegt onder elke rit een extra regel toe met begin- en eindtijd">
                     <input
                       type="checkbox"
@@ -1343,6 +1436,228 @@ function SpreadsheetImportModal({
 }
 
 // ============================================
+// Tol Import Modal
+// ============================================
+
+interface TolTarget {
+  id: string
+  label: string
+}
+
+function TolImportModal({
+  isOpen,
+  onClose,
+  onImport,
+  targets,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onImport: (registraties: TolRegistratie[], targetId: string) => void
+  targets: TolTarget[]
+}) {
+  const [allRegistraties, setAllRegistraties] = useState<TolRegistratie[]>([])
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isLoading, setIsLoading] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [targetId, setTargetId] = useState<string>('')
+
+  useEffect(() => {
+    if (isOpen) {
+      loadData()
+      setSelectedIds(new Set())
+      setSearchTerm('')
+      setTargetId(targets[0]?.id || '')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
+
+  // Keep selected target valid if the list changes while open
+  useEffect(() => {
+    if (isOpen && targets.length > 0 && !targets.some(t => t.id === targetId)) {
+      setTargetId(targets[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targets])
+
+  const loadData = async () => {
+    setIsLoading(true)
+    try {
+      const response = await getTolRegistraties({ gefactureerd: false, page_size: 500, ordering: '-datum' })
+      setAllRegistraties(response.results)
+    } catch {
+      console.error('Failed to load toll registrations')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const filtered = allRegistraties.filter(r => {
+    if (!searchTerm) return true
+    const q = searchTerm.toLowerCase()
+    return (r.user_naam || '').toLowerCase().includes(q) || r.kenteken.toLowerCase().includes(q)
+  })
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(r => r.id)))
+    }
+  }
+
+  const handleImport = () => {
+    if (!targetId) return
+    const toImport = allRegistraties.filter(r => selectedIds.has(r.id))
+    onImport(toImport, targetId)
+    onClose()
+  }
+
+  const formatBedrag = (value: string | number) => {
+    const num = typeof value === 'string' ? parseFloat(value) : value
+    return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(isNaN(num) ? 0 : num)
+  }
+
+  const totalSelected = selectedIds.size
+  const totalBedrag = allRegistraties
+    .filter(r => selectedIds.has(r.id))
+    .reduce((sum, r) => sum + parseFloat(r.totaal_bedrag), 0)
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="fixed inset-0 bg-gray-500/75" onClick={onClose} />
+        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+          {/* Header */}
+          <div className="px-6 py-4 border-b flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Tol importeren</h3>
+            <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+              <XCircleIcon className="h-5 w-5 text-gray-400" />
+            </button>
+          </div>
+
+          {/* Target + Search */}
+          <div className="px-6 py-3 border-b bg-gray-50 space-y-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-600">Koppel aan factuur</label>
+              <select
+                value={targetId}
+                onChange={e => setTargetId(e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:ring-primary-500 focus:border-primary-500 bg-white"
+              >
+                {targets.map(target => (
+                  <option key={target.id} value={target.id}>{target.label}</option>
+                ))}
+              </select>
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Zoek op chauffeur of kenteken..."
+              className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto">
+            {isLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+              </div>
+            ) : allRegistraties.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <p>Geen openstaande tolregistraties gevonden</p>
+                <p className="text-sm mt-1">Alleen niet-gefactureerde registraties worden getoond</p>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <p>Geen resultaten gevonden</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-3 w-12">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.size === filtered.length && filtered.length > 0}
+                        onChange={toggleAll}
+                        className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Chauffeur</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Wagen</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Bedrag</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {filtered.map(reg => (
+                    <tr
+                      key={reg.id}
+                      className={`hover:bg-gray-50 cursor-pointer ${selectedIds.has(reg.id) ? 'bg-primary-50' : ''}`}
+                      onClick={() => toggleSelection(reg.id)}
+                    >
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(reg.id)}
+                          onChange={() => toggleSelection(reg.id)}
+                          onClick={e => e.stopPropagation()}
+                          className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm">
+                        {new Date(reg.datum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td className="px-4 py-3 text-sm">{reg.user_naam || '—'}</td>
+                      <td className="px-4 py-3 font-mono text-xs">{reg.kenteken}</td>
+                      <td className="px-4 py-3 text-right font-medium text-sm">{formatBedrag(reg.totaal_bedrag)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t bg-gray-50 flex items-center justify-between">
+            <span className="text-sm text-gray-600">
+              {totalSelected > 0
+                ? `${totalSelected} geselecteerd — totaal ${formatBedrag(totalBedrag)}`
+                : 'Selecteer tolregistraties om te importeren'}
+            </span>
+            <div className="flex gap-3">
+              <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                Annuleren
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={totalSelected === 0 || !targetId}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Importeer {totalSelected > 0 ? `(${totalSelected})` : ''}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
 // Main Component
 // ============================================
 
@@ -1385,7 +1700,11 @@ export default function InvoiceCreatePage() {
   const [error, setError] = useState<string | null>(null)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showSpreadsheetImportModal, setShowSpreadsheetImportModal] = useState(false)
+  const [showTolImportModal, setShowTolImportModal] = useState(false)
   const [showWorkTimes, setShowWorkTimes] = useState(false)
+  const [batchDrafts, setBatchDrafts] = useState<BatchInvoiceDraft[]>([])
+  const [expandedBatchDraftId, setExpandedBatchDraftId] = useState<string | null>(null)
+  const [savingBatchDraftId, setSavingBatchDraftId] = useState<string | null>(null)
   
   // Get template layout
   const templateLayout = useMemo(() => {
@@ -1535,8 +1854,118 @@ export default function InvoiceCreatePage() {
     setLines(prev => prev.filter(line => line.id !== lineId))
   }
 
+  // Batch draft line operations (editable per-draft lines)
+  const addBatchLine = (draftId: string) => {
+    setBatchDrafts(prev => prev.map(d =>
+      d.id === draftId ? { ...d, lines: [...d.lines, createEmptyLine()] } : d
+    ))
+  }
+
+  const updateBatchLine = (draftId: string, lineId: string, values: Record<string, number | string>) => {
+    setBatchDrafts(prev => prev.map(d =>
+      d.id === draftId
+        ? { ...d, lines: d.lines.map(l => (l.id === lineId ? { ...l, values } : l)) }
+        : d
+    ))
+  }
+
+  const deleteBatchLine = (draftId: string, lineId: string) => {
+    setBatchDrafts(prev => prev.map(d =>
+      d.id === draftId ? { ...d, lines: d.lines.filter(l => l.id !== lineId) } : d
+    ))
+  }
+
+  // Build invoice lines from selected toll registrations
+  const buildTolLines = useCallback((registraties: TolRegistratie[]): InvoiceLineData[] => {
+    return registraties.map(reg => {
+      const values: Record<string, number | string> = {}
+      const bedrag = parseFloat(reg.totaal_bedrag) || 0
+
+      columns.forEach(col => {
+        if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
+          values[col.id] = `Tol - ${reg.kenteken} - ${new Date(reg.datum).toLocaleDateString('nl-NL')}`
+        } else if (col.type === 'aantal' || col.id === 'aantal' || col.id.includes('aantal')) {
+          values[col.id] = 1
+        } else if (col.type === 'prijs' || col.id === 'prijs' || col.id.includes('prijs') || col.id.includes('tarief')) {
+          values[col.id] = bedrag
+        } else if (col.type === 'berekend') {
+          values[col.id] = 0
+        } else {
+          values[col.id] = 0
+        }
+      })
+
+      columns.forEach(col => {
+        if (col.type === 'berekend' && col.formule) {
+          values[col.id] = evaluateFormula(col.formule, values, defaults)
+        }
+      })
+
+      return { id: generateId(), values }
+    })
+  }, [columns, defaults])
+
+  // Import toll registrations as invoice lines, attached to the chosen target invoice
+  const handleImportTol = async (registraties: TolRegistratie[], targetId: string) => {
+    if (registraties.length === 0 || !targetId) return
+
+    const tolLines = buildTolLines(registraties)
+
+    if (targetId === SINGLE_INVOICE_TARGET) {
+      setLines(prev => [...prev, ...tolLines])
+    } else {
+      setBatchDrafts(prev => prev.map(d =>
+        d.id === targetId ? { ...d, lines: [...d.lines, ...tolLines] } : d
+      ))
+      setExpandedBatchDraftId(targetId)
+    }
+
+    try {
+      await markTolGefactureerd(registraties.map(r => r.id))
+    } catch {
+      console.error('Failed to mark toll registrations as gefactureerd')
+    }
+  }
+
   // Import time entries with automatic KM and DOT calculations
-  const handleImportEntries = (entries: TimeEntry[]) => {
+  const handleImportEntries = (entries: TimeEntry[], mode: ImportMode = 'single') => {
+    if (mode === 'perWeek') {
+      if (!selectedCompany) {
+        setError('Selecteer eerst een bedrijf voordat je losse facturen maakt.')
+        return
+      }
+
+      const groupedByWeek: Record<string, TimeEntry[]> = {}
+      entries.forEach(entry => {
+        const year = new Date(entry.datum).getFullYear()
+        const key = `${year}-W${entry.weeknummer}-${entry.user ?? 'onbekend'}`
+        if (!groupedByWeek[key]) groupedByWeek[key] = []
+        groupedByWeek[key].push(entry)
+      })
+
+      const sortedKeys = Object.keys(groupedByWeek).sort((a, b) => b.localeCompare(a))
+      const drafts = sortedKeys.map((key, index) => {
+        const built = buildLinesFromTimeEntries(groupedByWeek[key])
+        return {
+          id: `draft-time-${key}-${Date.now()}-${index}`,
+          factuurnummer: incrementInvoiceNumber(factuurnummer, index),
+          weekNumber: built.weekNumber,
+          weekYear: built.weekYear,
+          chauffeur: built.chauffeur,
+          chauffeurNaam: built.chauffeurNaam,
+          lines: built.lines,
+        } satisfies BatchInvoiceDraft
+      })
+
+      setBatchDrafts(drafts)
+      setExpandedBatchDraftId(drafts[0]?.id || null)
+      setLines([])
+      setWeekNumber(null)
+      setWeekYear(null)
+      setChauffeur(null)
+      return
+    }
+
     // Filter regels zonder ritnummer (of 'Geen inzet') én 0 km — geen inzet, niet factureren
     const isGeenInzet = (e: TimeEntry) => {
       const rit = String(e.ritnummer || '').trim().toLowerCase()
@@ -1742,7 +2171,44 @@ export default function InvoiceCreatePage() {
   }
 
   // Import imported (Excel) entries with ritnummers from import, km from chauffeur, uren from import
-  const handleImportImportedEntries = (entries: ImportedTimeEntry[], chauffeurEntries: TimeEntry[]) => {
+  const handleImportImportedEntries = (entries: ImportedTimeEntry[], chauffeurEntries: TimeEntry[], mode: ImportMode = 'single') => {
+    if (mode === 'perWeek') {
+      if (!selectedCompany) {
+        setError('Selecteer eerst een bedrijf voordat je losse facturen maakt.')
+        return
+      }
+
+      const groupedByWeek: Record<string, ImportedTimeEntry[]> = {}
+      entries.forEach(entry => {
+        const year = new Date(entry.datum).getFullYear()
+        const key = `${year}-W${entry.weeknummer}-${entry.user ?? 'onbekend'}`
+        if (!groupedByWeek[key]) groupedByWeek[key] = []
+        groupedByWeek[key].push(entry)
+      })
+
+      const sortedKeys = Object.keys(groupedByWeek).sort((a, b) => b.localeCompare(a))
+      const drafts = sortedKeys.map((key, index) => {
+        const built = buildLinesFromImportedEntries(groupedByWeek[key], chauffeurEntries)
+        return {
+          id: `draft-imported-${key}-${Date.now()}-${index}`,
+          factuurnummer: incrementInvoiceNumber(factuurnummer, index),
+          weekNumber: built.weekNumber,
+          weekYear: built.weekYear,
+          chauffeur: built.chauffeur,
+          chauffeurNaam: built.chauffeurNaam,
+          lines: built.lines,
+        } satisfies BatchInvoiceDraft
+      })
+
+      setBatchDrafts(drafts)
+      setExpandedBatchDraftId(drafts[0]?.id || null)
+      setLines([])
+      setWeekNumber(null)
+      setWeekYear(null)
+      setChauffeur(null)
+      return
+    }
+
     // Filter out "niet gereden" rows — these are non-valid trips and must not be invoiced
     const isNietGereden = (e: ImportedTimeEntry) => {
       const haystack = [
@@ -2028,6 +2494,425 @@ export default function InvoiceCreatePage() {
     return { subtotaal, btw, totaal }
   }, [lines, columns, totalsConfig])
 
+  // Totals for a specific batch draft's lines
+  const calculateDraftTotals = useCallback((draftLines: InvoiceLineData[]) => {
+    const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
+    const subtotaal = draftLines.reduce((sum, line) => {
+      const val = totaalColumn ? (line.values[totaalColumn.id] as number || 0) : 0
+      return sum + val
+    }, 0)
+    const btw = subtotaal * (totalsConfig.btwPercentage / 100)
+    const totaal = subtotaal + btw
+    return { subtotaal, btw, totaal }
+  }, [columns, totalsConfig])
+
+  const isBatchMode = batchDrafts.length > 0
+
+  // Targets for toll import: each open batch draft, or the single invoice
+  const tolTargets = useMemo<TolTarget[]>(() => {
+    if (isBatchMode) {
+      return batchDrafts.map(d => ({
+        id: d.id,
+        label: `${d.factuurnummer}${d.chauffeurNaam ? ` · ${d.chauffeurNaam}` : ''}${d.weekNumber ? ` · Week ${d.weekNumber}` : ''}`,
+      }))
+    }
+    return [{ id: SINGLE_INVOICE_TARGET, label: factuurnummer || 'Deze factuur' }]
+  }, [isBatchMode, batchDrafts, factuurnummer])
+
+  const buildLinesFromTimeEntries = useCallback((entries: TimeEntry[]) => {
+    const isGeenInzet = (e: TimeEntry) => {
+      const rit = String(e.ritnummer || '').trim().toLowerCase()
+      const km = e.totaal_km || 0
+      return (rit === '' || rit === 'geen inzet') && km === 0
+    }
+    const filteredEntries = entries.filter(e => !isGeenInzet(e))
+    const sortedEntries = [...filteredEntries].sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime())
+
+    const firstEntry = sortedEntries[0]
+    const resolvedWeekNumber = firstEntry ? firstEntry.weeknummer : null
+    const resolvedWeekYear = firstEntry ? new Date(firstEntry.datum).getFullYear() : null
+    const resolvedChauffeur = firstEntry ? firstEntry.user : null
+    const resolvedChauffeurNaam = firstEntry ? (firstEntry.user_naam || null) : null
+
+    let totalKm = 0
+    const fmtTime = (t: string | null | undefined): string | null => {
+      if (!t) return null
+      const m = String(t).match(/^(\d{1,2}):(\d{2})/)
+      return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null
+    }
+
+    const buildWorkTimeLine = (begin: string | null, eind: string | null): InvoiceLineData => {
+      const values: Record<string, number | string> = {}
+      const tekst = `Werktijden: ${begin || '-'} - ${eind || '-'}`
+      columns.forEach(col => {
+        if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
+          values[col.id] = tekst
+        } else {
+          values[col.id] = 0
+        }
+      })
+      return { id: generateId(), values, isInfoLine: true }
+    }
+
+    const entryLines: InvoiceLineData[] = sortedEntries.flatMap(entry => {
+      const values: Record<string, number | string> = {}
+      const [h, m] = (entry.totaal_uren || '0:00').split(':').map(Number)
+      const uren = roundUren(h + (m / 60))
+      const km = entry.totaal_km || 0
+      totalKm += km
+
+      columns.forEach(col => {
+        if (col.type === 'text' || col.id === 'omschrijving') {
+          values[col.id] = `Rit ${entry.ritnummer} - ${new Date(entry.datum).toLocaleDateString('nl-NL')} (${km} km)`
+        } else if (col.type === 'aantal' || col.id === 'aantal') {
+          values[col.id] = uren
+        } else if (col.type === 'prijs' || col.id === 'prijs') {
+          values[col.id] = defaults.uurtarief
+        } else if (col.type === 'uren' || col.id.includes('uur')) {
+          values[col.id] = uren
+        } else if (col.type === 'km' || col.id.includes('km')) {
+          values[col.id] = km
+        } else {
+          values[col.id] = 0
+        }
+      })
+
+      columns.forEach(col => {
+        if (col.type === 'berekend' && col.formule) {
+          values[col.id] = evaluateFormula(col.formule, values, defaults)
+        }
+      })
+
+      const mainLine: InvoiceLineData = {
+        id: generateId(),
+        values,
+        timeEntryId: entry.id,
+      }
+
+      if (showWorkTimes) {
+        const begin = fmtTime(entry.aanvang)
+        const eind = fmtTime(entry.eind)
+        if (begin || eind) return [mainLine, buildWorkTimeLine(begin, eind)]
+      }
+
+      return [mainLine]
+    })
+
+    const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
+    const entriesSubtotaal = entryLines.reduce((sum, line) => {
+      const val = totaalColumn ? (line.values[totaalColumn.id] as number || 0) : 0
+      return sum + val
+    }, 0)
+
+    const createSummaryLine = (omschrijving: string, aantal: number, prijs: number): InvoiceLineData => {
+      const values: Record<string, number | string> = {}
+      columns.forEach(col => {
+        if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
+          values[col.id] = omschrijving
+        } else if (col.type === 'aantal' || col.id === 'aantal' || col.id.includes('aantal')) {
+          values[col.id] = aantal
+        } else if (col.type === 'prijs' || col.id === 'prijs' || col.id.includes('prijs') || col.id.includes('tarief')) {
+          values[col.id] = prijs
+        } else {
+          values[col.id] = 0
+        }
+      })
+      columns.forEach(col => {
+        if (col.type === 'berekend' && col.formule) {
+          values[col.id] = evaluateFormula(col.formule, values, defaults)
+        }
+      })
+      return { id: generateId(), values }
+    }
+
+    const summaryLines: InvoiceLineData[] = []
+    if (defaults.dotIsPercentage) {
+      if (defaults.dotPrijs > 0) {
+        const dotBedrag = entriesSubtotaal * (defaults.dotPrijs / 100)
+        summaryLines.push(createSummaryLine(`Totaal DOT (${defaults.dotPrijs}%)`, 1, dotBedrag))
+      }
+    } else {
+      if (totalKm > 0 && defaults.kmTarief > 0) {
+        summaryLines.push(createSummaryLine('Totaal KM', totalKm, defaults.kmTarief))
+      }
+      if (totalKm > 0 && defaults.dotPrijs > 0) {
+        summaryLines.push(createSummaryLine('Totaal DOT', totalKm, defaults.dotPrijs))
+      }
+    }
+
+    const kilometerheffingLines: InvoiceLineData[] = sortedEntries
+      .filter(entry => entry.kilometerheffing_bedrag != null && String(entry.kilometerheffing_bedrag).trim() !== '')
+      .map(entry => {
+        const bedrag = parseFloat(String(entry.kilometerheffing_bedrag)) || 0
+        const datumStr = new Date(entry.datum).toLocaleDateString('nl-NL')
+        const omschrijving = `Kilometerheffing rit ${entry.ritnummer} - ${datumStr}`
+        const values: Record<string, number | string> = {}
+        columns.forEach(col => {
+          if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
+            values[col.id] = omschrijving
+          } else if (col.type === 'aantal' || col.id === 'aantal' || col.id.includes('aantal')) {
+            values[col.id] = 1
+          } else if (col.type === 'prijs' || col.id === 'prijs' || col.id.includes('prijs') || col.id.includes('tarief')) {
+            values[col.id] = bedrag
+          } else {
+            values[col.id] = 0
+          }
+        })
+        columns.forEach(col => {
+          if (col.type === 'berekend' && col.formule) {
+            values[col.id] = evaluateFormula(col.formule, values, defaults)
+          }
+        })
+        return { id: generateId(), values, kilometerheffingTimeEntryId: entry.id }
+      })
+
+    return {
+      lines: [...entryLines, ...summaryLines, ...kilometerheffingLines],
+      weekNumber: resolvedWeekNumber,
+      weekYear: resolvedWeekYear,
+      chauffeur: resolvedChauffeur,
+      chauffeurNaam: resolvedChauffeurNaam,
+    }
+  }, [columns, defaults, showWorkTimes])
+
+  const buildLinesFromImportedEntries = useCallback((entries: ImportedTimeEntry[], chauffeurEntries: TimeEntry[]) => {
+    const isNietGereden = (e: ImportedTimeEntry) => {
+      const haystack = [e.ritlijst, e.periode, e.dot, e.kenteken_import].map(v => String(v ?? '').toLowerCase()).join(' ')
+      return haystack.includes('niet gereden')
+    }
+    const isGeenInzetImported = (e: ImportedTimeEntry) => {
+      const rit = String(e.ritlijst || '').trim().toLowerCase()
+      const km = e.user ? (chauffeurEntries.find(c => c.user === e.user && c.datum === e.datum)?.totaal_km || 0) : 0
+      return (rit === '' || rit === 'geen inzet') && km === 0
+    }
+
+    const validEntries = entries.filter(e => !isNietGereden(e) && !isGeenInzetImported(e))
+    const sortedEntries = [...validEntries].sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime())
+    const first = sortedEntries[0]
+
+    const resolvedWeekNumber = first ? first.weeknummer : null
+    const resolvedWeekYear = first ? new Date(first.datum).getFullYear() : null
+    const resolvedChauffeur = first?.user || null
+    const resolvedChauffeurNaam = first ? (first.user_naam || null) : null
+
+    const chauffeurKmMap: Record<string, number> = {}
+    chauffeurEntries.forEach(e => {
+      chauffeurKmMap[`${e.user}|${e.datum}`] = e.totaal_km || 0
+    })
+
+    let totalKm = 0
+    const fmtTime = (t: string | null | undefined): string | null => {
+      if (!t) return null
+      const m = String(t).match(/^(\d{1,2}):(\d{2})/)
+      return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null
+    }
+
+    const buildWorkTimeLine = (begin: string | null, eind: string | null): InvoiceLineData => {
+      const values: Record<string, number | string> = {}
+      const tekst = `Werktijden: ${begin || '-'} - ${eind || '-'}`
+      columns.forEach(col => {
+        if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
+          values[col.id] = tekst
+        } else {
+          values[col.id] = 0
+        }
+      })
+      return { id: generateId(), values, isInfoLine: true }
+    }
+
+    const entryLines: InvoiceLineData[] = sortedEntries.flatMap(entry => {
+      const values: Record<string, number | string> = {}
+      const uren = roundUren(Number(entry.uren_factuur))
+      const km = entry.user ? (chauffeurKmMap[`${entry.user}|${entry.datum}`] || 0) : 0
+      totalKm += km
+
+      columns.forEach(col => {
+        if (col.type === 'text' || col.id === 'omschrijving') {
+          values[col.id] = `Rit ${entry.ritlijst} - ${new Date(entry.datum).toLocaleDateString('nl-NL')} (${km} km)`
+        } else if (col.type === 'aantal' || col.id === 'aantal') {
+          values[col.id] = uren
+        } else if (col.type === 'prijs' || col.id === 'prijs') {
+          values[col.id] = defaults.uurtarief
+        } else if (col.type === 'uren' || col.id.includes('uur')) {
+          values[col.id] = uren
+        } else if (col.type === 'km' || col.id.includes('km')) {
+          values[col.id] = km
+        } else {
+          values[col.id] = 0
+        }
+      })
+
+      columns.forEach(col => {
+        if (col.type === 'berekend' && col.formule) {
+          values[col.id] = evaluateFormula(col.formule, values, defaults)
+        }
+      })
+
+      const mainLine: InvoiceLineData = { id: generateId(), values }
+      if (showWorkTimes) {
+        const begin = fmtTime(entry.begintijd_rit)
+        const eind = fmtTime(entry.eindtijd_rit)
+        if (begin || eind) return [mainLine, buildWorkTimeLine(begin, eind)]
+      }
+      return [mainLine]
+    })
+
+    const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
+    const entriesSubtotaal = entryLines.reduce((sum, line) => {
+      const val = totaalColumn ? (line.values[totaalColumn.id] as number || 0) : 0
+      return sum + val
+    }, 0)
+
+    const createSummaryLine = (omschrijving: string, aantal: number, prijs: number): InvoiceLineData => {
+      const values: Record<string, number | string> = {}
+      columns.forEach(col => {
+        if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
+          values[col.id] = omschrijving
+        } else if (col.type === 'aantal' || col.id === 'aantal' || col.id.includes('aantal')) {
+          values[col.id] = aantal
+        } else if (col.type === 'prijs' || col.id === 'prijs' || col.id.includes('prijs') || col.id.includes('tarief')) {
+          values[col.id] = prijs
+        } else {
+          values[col.id] = 0
+        }
+      })
+      columns.forEach(col => {
+        if (col.type === 'berekend' && col.formule) {
+          values[col.id] = evaluateFormula(col.formule, values, defaults)
+        }
+      })
+      return { id: generateId(), values }
+    }
+
+    const summaryLines: InvoiceLineData[] = []
+    if (defaults.dotIsPercentage) {
+      if (defaults.dotPrijs > 0) {
+        const dotBedrag = entriesSubtotaal * (defaults.dotPrijs / 100)
+        summaryLines.push(createSummaryLine(`Totaal DOT (${defaults.dotPrijs}%)`, 1, dotBedrag))
+      }
+    } else {
+      if (totalKm > 0 && defaults.kmTarief > 0) {
+        summaryLines.push(createSummaryLine('Totaal KM', totalKm, defaults.kmTarief))
+      }
+      if (totalKm > 0 && defaults.dotPrijs > 0) {
+        summaryLines.push(createSummaryLine('Totaal DOT', totalKm, defaults.dotPrijs))
+      }
+    }
+
+    return {
+      lines: [...entryLines, ...summaryLines],
+      weekNumber: resolvedWeekNumber,
+      weekYear: resolvedWeekYear,
+      chauffeur: resolvedChauffeur,
+      chauffeurNaam: resolvedChauffeurNaam,
+    }
+  }, [columns, defaults, showWorkTimes])
+
+  const persistInvoiceLines = useCallback(async (invoiceId: string, linesToPersist: InvoiceLineData[]) => {
+    const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
+
+    for (const [index, line] of linesToPersist.entries()) {
+      const omschrijvingCol = columns.find(c => c.type === 'text' || c.id === 'omschrijving')
+      const aantalCol = columns.find(c => c.type === 'aantal' || c.id === 'aantal')
+      const prijsCol = columns.find(c => c.type === 'prijs' || c.id.includes('prijs') || c.id.includes('tarief'))
+      const roundTo2 = (n: number) => Math.round(n * 100) / 100
+
+      const lineData: any = {
+        invoice: invoiceId,
+        volgorde: index,
+        omschrijving: omschrijvingCol ? String(line.values[omschrijvingCol.id]) : 'Regel',
+        aantal: line.isInfoLine ? 0 : roundTo2(aantalCol ? Number(line.values[aantalCol.id]) || 1 : 1),
+        prijs_per_eenheid: line.isInfoLine ? 0 : roundTo2(prijsCol
+          ? Number(line.values[prijsCol.id]) || 0
+          : totaalColumn
+            ? Number(line.values[totaalColumn.id]) || 0
+            : 0),
+      }
+
+      if (line.isInfoLine) {
+        lineData.extra_data = { info_line: true }
+      }
+      if (line.timeEntryId) {
+        lineData.time_entry = line.timeEntryId
+      }
+      if (line.kilometerheffingTimeEntryId) {
+        lineData.extra_data = { ...(lineData.extra_data || {}), kind: 'kilometerheffing', time_entry: line.kilometerheffingTimeEntryId }
+      }
+
+      await createInvoiceLine(lineData)
+    }
+
+    const heffingIds = Array.from(new Set(
+      linesToPersist.map(l => l.kilometerheffingTimeEntryId).filter((x): x is string => !!x)
+    ))
+    if (heffingIds.length > 0) {
+      try {
+        await markKilometerheffingGefactureerd(heffingIds)
+      } catch {
+        // niet-fataal: factuur is opgeslagen
+      }
+    }
+  }, [columns])
+
+  const saveBatchDraft = async (draftId: string) => {
+    if (!selectedTemplate || !selectedCompany || !selectedAdministratie) {
+      setError('Template, bedrijf en administratie zijn verplicht om batchfacturen op te slaan.')
+      return
+    }
+
+    const draft = batchDrafts.find(d => d.id === draftId)
+    if (!draft) return
+
+    setSavingBatchDraftId(draftId)
+    setError(null)
+    try {
+      const invoiceData: any = {
+        template: selectedTemplate.id,
+        bedrijf: selectedCompany,
+        administratie: selectedAdministratie,
+        type: invoiceType,
+        factuurdatum,
+        vervaldatum,
+        btw_percentage: totalsConfig.btwPercentage,
+        opmerkingen,
+      }
+
+      if (draft.weekNumber !== null) {
+        invoiceData.week_number = draft.weekNumber
+      }
+      if (draft.weekYear !== null) {
+        invoiceData.week_year = draft.weekYear
+      }
+      if (draft.chauffeur !== null) {
+        invoiceData.chauffeur = draft.chauffeur
+      }
+
+      const dotTrimmed = dotPercentageOverride.trim()
+      if (dotTrimmed !== '') {
+        const dotParsed = parseFloat(dotTrimmed.replace(',', '.'))
+        if (!isNaN(dotParsed)) {
+          invoiceData.dot_percentage = dotParsed
+        }
+      }
+
+      const invoice = await createInvoice(invoiceData)
+      await persistInvoiceLines(invoice.id, draft.lines)
+
+      setBatchDrafts(prev => {
+        const remaining = prev.filter(d => d.id !== draftId)
+        if (expandedBatchDraftId === draftId) {
+          setExpandedBatchDraftId(remaining[0]?.id || null)
+        }
+        return remaining
+      })
+    } catch (err: any) {
+      const errorMessage = err.message || err.response?.data?.detail || t('errors.saveFailed')
+      setError(errorMessage)
+    } finally {
+      setSavingBatchDraftId(null)
+    }
+  }
+
   // Save invoice
   const handleSave = async () => {
     if (!selectedTemplate) {
@@ -2101,69 +2986,7 @@ export default function InvoiceCreatePage() {
         invoiceId = invoice.id
       }
 
-      // Create invoice lines
-      const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
-      
-      for (const [index, line] of lines.entries()) {
-        // Find omschrijving column
-        const omschrijvingCol = columns.find(c => c.type === 'text' || c.id === 'omschrijving')
-        const aantalCol = columns.find(c => c.type === 'aantal' || c.id === 'aantal')
-        const prijsCol = columns.find(c => c.type === 'prijs' || c.id.includes('prijs') || c.id.includes('tarief'))
-        
-        // Round values to 2 decimals to prevent backend validation errors
-        const roundTo2 = (n: number) => Math.round(n * 100) / 100
-        
-        const lineData: any = {
-          invoice: invoiceId,
-          volgorde: index,
-          omschrijving: omschrijvingCol ? String(line.values[omschrijvingCol.id]) : 'Regel',
-          aantal: line.isInfoLine ? 0 : roundTo2(aantalCol ? Number(line.values[aantalCol.id]) || 1 : 1),
-          prijs_per_eenheid: line.isInfoLine ? 0 : roundTo2(prijsCol 
-            ? Number(line.values[prijsCol.id]) || 0 
-            : totaalColumn 
-              ? Number(line.values[totaalColumn.id]) || 0 
-              : 0),
-        }
-
-        if (line.isInfoLine) {
-          lineData.extra_data = { info_line: true }
-        }
-        
-        // Only add time_entry if it exists
-        if (line.timeEntryId) {
-          lineData.time_entry = line.timeEntryId
-        }
-
-        if (line.kilometerheffingTimeEntryId) {
-          lineData.extra_data = { ...(lineData.extra_data || {}), kind: 'kilometerheffing', time_entry: line.kilometerheffingTimeEntryId }
-        }
-
-        try {
-          await createInvoiceLine(lineData)
-        } catch (lineErr: any) {
-          // Parse DRF validation errors
-          const validationErrors = lineErr.response?.data
-          let errorMsg = ''
-          if (validationErrors && typeof validationErrors === 'object') {
-            errorMsg = Object.entries(validationErrors)
-              .map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(', ') : val}`)
-              .join('; ')
-          }
-          throw new Error(errorMsg || t('errors.saveFailed'))
-        }
-      }
-
-      // Mark TimeEntries as kilometerheffing-invoiced
-      const heffingIds = Array.from(new Set(
-        lines.map(l => l.kilometerheffingTimeEntryId).filter((x): x is string => !!x)
-      ))
-      if (heffingIds.length > 0) {
-        try {
-          await markKilometerheffingGefactureerd(heffingIds)
-        } catch {
-          // niet-fataal: factuur is opgeslagen
-        }
-      }
+      await persistInvoiceLines(invoiceId, lines)
 
       // Navigate back
       navigate(reimportId ? `/invoices/${reimportId}/edit` : '/invoices')
@@ -2213,11 +3036,11 @@ export default function InvoiceCreatePage() {
         </div>
         <button
           onClick={handleSave}
-          disabled={isSaving || !selectedTemplate || !selectedCompany || !selectedAdministratie}
+          disabled={isSaving || isBatchMode || !selectedTemplate || !selectedCompany || !selectedAdministratie}
           className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2 flex-shrink-0"
         >
           {isSaving && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
-          {t('invoices.saveInvoice')}
+          {isBatchMode ? 'Batch actief: opslaan via tabs hieronder' : t('invoices.saveInvoice')}
         </button>
       </div>
 
@@ -2368,7 +3191,7 @@ export default function InvoiceCreatePage() {
       )}
 
       {/* Step 3: Invoice Lines */}
-      {selectedTemplate && columns.length > 0 && (
+      {selectedTemplate && columns.length > 0 && !isBatchMode && (
         <div className="bg-white rounded-lg shadow p-4 sm:p-6 min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h2 className="text-lg font-semibold">3. {t('invoices.lines')}</h2>
@@ -2395,6 +3218,13 @@ export default function InvoiceCreatePage() {
               >
                 <CalculatorIcon className="h-4 w-4" />
                 {t('invoices.importSpreadsheet')}
+              </button>
+              <button
+                onClick={() => setShowTolImportModal(true)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                <ReceiptPercentIcon className="h-4 w-4" />
+                Tol importeren
               </button>
               <button
                 onClick={addLine}
@@ -2551,6 +3381,153 @@ export default function InvoiceCreatePage() {
         </div>
       )}
 
+      {/* Losse facturen (batch) - editable tabs at the bottom */}
+      {isBatchMode && (
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6 min-w-0">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Losse facturen</h2>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowTolImportModal(true)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                <ReceiptPercentIcon className="h-4 w-4" />
+                Tol importeren
+              </button>
+              <span className="text-sm text-gray-500">{batchDrafts.length} open</span>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {batchDrafts.map((draft) => {
+              const isExpanded = expandedBatchDraftId === draft.id
+              const draftTotals = calculateDraftTotals(draft.lines)
+              return (
+                <div key={draft.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-3 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedBatchDraftId(prev => (prev === draft.id ? null : draft.id))}
+                      className="flex items-center gap-2 min-w-0"
+                    >
+                      {isExpanded ? <ChevronDownIcon className="h-4 w-4 text-gray-500" /> : <ChevronRightIcon className="h-4 w-4 text-gray-500" />}
+                      <span className="font-mono font-semibold text-gray-900">{draft.factuurnummer}</span>
+                      <span className="text-sm text-gray-600">
+                        {draft.chauffeurNaam ? `${draft.chauffeurNaam} · ` : ''}{draft.weekNumber ? `Week ${draft.weekNumber}` : 'Week onbekend'} {draft.weekYear || ''}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => saveBatchDraft(draft.id)}
+                      disabled={savingBatchDraftId !== null}
+                      className="px-3 py-1.5 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 flex-shrink-0"
+                    >
+                      {savingBatchDraftId === draft.id ? 'Opslaan...' : 'Factuur opslaan'}
+                    </button>
+                  </div>
+                  {isExpanded && (
+                    <div className="p-4">
+                      <div className="flex justify-end mb-3">
+                        <button
+                          type="button"
+                          onClick={() => addBatchLine(draft.id)}
+                          className="px-3 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 flex items-center gap-2"
+                        >
+                          <PlusIcon className="h-4 w-4" />
+                          {t('invoices.addLine')}
+                        </button>
+                      </div>
+
+                      {draft.lines.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg">
+                          <p className="text-sm">{t('invoices.noLinesYet')}</p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Table layout for md+ screens */}
+                          <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b-2 border-gray-200">
+                                  {columns.map((col) => (
+                                    <th
+                                      key={col.id}
+                                      className="px-3 py-2 text-left font-semibold text-gray-700"
+                                      style={{ width: `${col.breedte}%` }}
+                                    >
+                                      {col.naam}
+                                      {col.type === 'berekend' && (
+                                        <span className="ml-1 text-xs font-normal text-gray-400">(auto)</span>
+                                      )}
+                                    </th>
+                                  ))}
+                                  <th className="w-10"></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {draft.lines.map((line) => (
+                                  <InvoiceLineRow
+                                    key={line.id}
+                                    line={line}
+                                    columns={columns}
+                                    defaults={defaults}
+                                    onUpdate={(lineId, values) => updateBatchLine(draft.id, lineId, values)}
+                                    onDelete={(lineId) => deleteBatchLine(draft.id, lineId)}
+                                  />
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Card layout for small screens */}
+                          <div className="md:hidden space-y-3">
+                            {draft.lines.map((line, index) => (
+                              <InvoiceLineCard
+                                key={line.id}
+                                line={line}
+                                index={index}
+                                columns={columns}
+                                defaults={defaults}
+                                onUpdate={(lineId, values) => updateBatchLine(draft.id, lineId, values)}
+                                onDelete={(lineId) => deleteBatchLine(draft.id, lineId)}
+                              />
+                            ))}
+                          </div>
+
+                          {/* Totals */}
+                          <div className="mt-4 flex justify-end">
+                            <div className="w-full sm:w-72 bg-gray-50 rounded-lg p-4">
+                              {totalsConfig.showSubtotaal && (
+                                <div className="flex justify-between py-1">
+                                  <span className="text-gray-600">{t('invoices.subtotalExclVat')}:</span>
+                                  <span className="font-medium">{formatCurrency(draftTotals.subtotaal)}</span>
+                                </div>
+                              )}
+                              {totalsConfig.showBtw && (
+                                <div className="flex justify-between py-1">
+                                  <span className="text-gray-600">{t('invoices.vat')} ({totalsConfig.btwPercentage}%):</span>
+                                  <span className="font-medium">{formatCurrency(draftTotals.btw)}</span>
+                                </div>
+                              )}
+                              {totalsConfig.showTotaal && (
+                                <div className="flex justify-between py-2 border-t border-gray-300 mt-2 text-lg font-bold">
+                                  <span>{t('invoices.totalInclVat')}:</span>
+                                  <span className="text-primary-600">{formatCurrency(draftTotals.totaal)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Time Entry Import Modal */}
       <TimeEntryImportModal
         isOpen={showImportModal}
@@ -2566,6 +3543,14 @@ export default function InvoiceCreatePage() {
         isOpen={showSpreadsheetImportModal}
         onClose={() => setShowSpreadsheetImportModal(false)}
         onImport={handleImportSpreadsheet}
+      />
+
+      {/* Tol Import Modal */}
+      <TolImportModal
+        isOpen={showTolImportModal}
+        onClose={() => setShowTolImportModal(false)}
+        onImport={handleImportTol}
+        targets={tolTargets}
       />
     </div>
   )
