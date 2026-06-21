@@ -15,6 +15,8 @@ import {
   EyeIcon,
   EnvelopeIcon,
   ArrowDownTrayIcon,
+  DocumentMagnifyingGlassIcon,
+  ShareIcon,
   PencilSquareIcon,
   ChevronUpIcon,
   ChevronDownIcon,
@@ -36,6 +38,8 @@ import {
   markBetaald,
   sendInvoiceEmail,
   generatePdf,
+  openPdfInNewTab,
+  sharePdf,
   changeStatus,
   InvoiceFilters,
 } from '@/api/invoices'
@@ -424,6 +428,33 @@ export default function InvoicesPage() {
       setSaving(true)
       setError(null)
       await generatePdf(invoice.id)
+    } catch (err: any) {
+      setError(err.response?.data?.error || t('errors.loadFailed'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleViewPdf = async (invoice: Invoice) => {
+    try {
+      setSaving(true)
+      setError(null)
+      await openPdfInNewTab(invoice.id)
+    } catch (err: any) {
+      setError(err.response?.data?.error || t('errors.loadFailed'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSharePdf = async (invoice: Invoice) => {
+    try {
+      setSaving(true)
+      setError(null)
+      const shared = await sharePdf(invoice.id, invoice.factuurnummer)
+      if (!shared) {
+        toast.error(t('invoices.shareNotSupported'))
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || t('errors.loadFailed'))
     } finally {
@@ -846,6 +877,26 @@ export default function InvoicesPage() {
                           <ArrowDownTrayIcon className="h-4 w-4" />
                         </button>
                         
+                        {/* PDF View */}
+                        <button
+                          onClick={() => handleViewPdf(invoice)}
+                          disabled={saving}
+                          className="p-1 text-teal-600 hover:text-teal-900 hover:bg-teal-50 rounded disabled:opacity-50"
+                          title={t('invoices.viewPdf')}
+                        >
+                          <DocumentMagnifyingGlassIcon className="h-4 w-4" />
+                        </button>
+                        
+                        {/* PDF Share */}
+                        <button
+                          onClick={() => handleSharePdf(invoice)}
+                          disabled={saving}
+                          className="p-1 text-cyan-600 hover:text-cyan-900 hover:bg-cyan-50 rounded disabled:opacity-50"
+                          title={t('invoices.sharePdf')}
+                        >
+                          <ShareIcon className="h-4 w-4" />
+                        </button>
+                        
                         {/* Edit button */}
                         {!isReadOnly && (
                           <button
@@ -1009,6 +1060,22 @@ export default function InvoicesPage() {
                     title="PDF"
                   >
                     <ArrowDownTrayIcon className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleViewPdf(invoice)}
+                    disabled={saving}
+                    className="p-1.5 text-teal-600 hover:bg-teal-50 rounded disabled:opacity-50"
+                    title={t('invoices.viewPdf')}
+                  >
+                    <DocumentMagnifyingGlassIcon className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleSharePdf(invoice)}
+                    disabled={saving}
+                    className="p-1.5 text-cyan-600 hover:bg-cyan-50 rounded disabled:opacity-50"
+                    title={t('invoices.sharePdf')}
+                  >
+                    <ShareIcon className="h-4 w-4" />
                   </button>
                   {!isReadOnly && (
                     <button

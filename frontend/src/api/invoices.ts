@@ -288,6 +288,45 @@ export async function openPdfInNewTab(id: string): Promise<void> {
   window.open(pdfUrl, '_blank')
 }
 
+/**
+ * Share the invoice PDF with other apps using the Web Share API.
+ * Returns false when file sharing is not supported by the browser/device.
+ */
+export async function sharePdf(id: string, invoiceNumber?: string): Promise<boolean> {
+  const url = `/invoicing/invoices/${id}/generate_pdf/`
+  const response = await api.get(url, { responseType: 'blob' })
+
+  // Determine filename from Content-Disposition header or build a default one
+  const contentDisposition = response.headers['content-disposition']
+  let filename = `factuur_${(invoiceNumber || id).replace(/\//g, '-')}.pdf`
+  if (contentDisposition) {
+    const match = contentDisposition.match(/filename="?([^";\n]+)"?/)
+    if (match) filename = match[1]
+  }
+
+  const file = new File([response.data], filename, { type: 'application/pdf' })
+
+  // Web Share API with files (supported on most mobile browsers)
+  const nav = navigator as Navigator & {
+    canShare?: (data?: ShareData) => boolean
+  }
+  if (typeof nav.share === 'function' && nav.canShare?.({ files: [file] })) {
+    try {
+      await nav.share({
+        files: [file],
+        title: invoiceNumber ? `Factuur ${invoiceNumber}` : 'Factuur',
+      })
+    } catch (err) {
+      // User cancelled the share dialog – not an error we need to surface
+      if ((err as DOMException)?.name === 'AbortError') return true
+      throw err
+    }
+    return true
+  }
+
+  return false
+}
+
 export async function sendInvoiceEmail(
   id: string,
   email?: string,
