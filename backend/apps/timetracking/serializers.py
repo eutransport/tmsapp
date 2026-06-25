@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import os
-from .models import TimeEntry, WeeklyMinimumHours, ImportBatch, ImportedTimeEntry, TolRegistratie
+from .models import TimeEntry, WeeklyMinimumHours, ImportBatch, ImportedTimeEntry, TolRegistratie, TolRit
 
 
 class TimeEntrySerializer(serializers.ModelSerializer):
@@ -180,22 +180,99 @@ class ImportBatchSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class TolRitSerializer(serializers.ModelSerializer):
+    rit_datum = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TolRit
+        fields = ['id', 'ritnummer', 'volgorde', 'rit_datum']
+        read_only_fields = ['id']
+
+    def get_rit_datum(self, obj):
+        matched_date = (
+            TimeEntry.objects
+            .filter(user=obj.tol_registratie.user, ritnummer=obj.ritnummer)
+            .order_by('-datum')
+            .values_list('datum', flat=True)
+            .first()
+        )
+        if not matched_date:
+            matched_date = (
+                TimeEntry.objects
+                .filter(ritnummer=obj.ritnummer)
+                .order_by('-datum')
+                .values_list('datum', flat=True)
+                .first()
+            )
+        return matched_date.isoformat() if matched_date else None
+
+
 class TolRegistratieSerializer(serializers.ModelSerializer):
     user_naam = serializers.CharField(source='user.full_name', read_only=True)
     bijlage_url = serializers.SerializerMethodField()
     bijlage_naam = serializers.SerializerMethodField()
+    ritten = TolRitSerializer(many=True, read_only=True)
+    ritnummers = serializers.ListField(
+        child=serializers.CharField(allow_blank=True),
+        write_only=True,
+        required=False,
+    )
 
     class Meta:
         model = TolRegistratie
         fields = [
             'id', 'user', 'user_naam', 'datum', 'kenteken',
             'totaal_bedrag', 'bijlage', 'bijlage_url', 'bijlage_naam',
+            'ritten', 'ritnummers',
             'status', 'gefactureerd', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'user', 'created_at', 'updated_at']
         extra_kwargs = {
-            'bijlage': {'write_only': True},
+            'bijlage': {'write_only': True, 'required': False, 'allow_null': True},
+            'datum': {'required': False, 'allow_null': True},
+            'kenteken': {'required': False, 'allow_blank': True},
         }
+
+    def validate(self, attrs):
+        # Datum is optional; if not provided, a vehicle (kenteken) is required.
+        datum = attrs.get('datum', getattr(self.instance, 'datum', None))
+        kenteken = attrs.get('kenteken', getattr(self.instance, 'kenteken', None))
+        if not datum and not (kenteken and str(kenteken).strip()):
+            raise serializers.ValidationError({
+                'kenteken': 'Selecteer een wagen wanneer er geen datum is ingevuld.'
+            })
+        return attrs
+
+    def _parse_ritnummers(self, raw):
+        """Accept a list of ritnummers, or comma/newline separated string(s)."""
+        result = []
+        if raw is None:
+            return result
+        items = raw if isinstance(raw, (list, tuple)) else [raw]
+        for item in items:
+            if item is None:
+                continue
+            for part in str(item).replace('\n', ',').split(','):
+                part = part.strip()
+                if part:
+                    result.append(part)
+        return result
+
+    def create(self, validated_data):
+        ritnummers = self._parse_ritnummers(validated_data.pop('ritnummers', None))
+        instance = super().create(validated_data)
+        for index, ritnummer in enumerate(ritnummers):
+            TolRit.objects.create(tol_registratie=instance, ritnummer=ritnummer, volgorde=index)
+        return instance
+
+    def update(self, instance, validated_data):
+        ritnummers_raw = validated_data.pop('ritnummers', None)
+        instance = super().update(instance, validated_data)
+        if ritnummers_raw is not None:
+            instance.ritten.all().delete()
+            for index, ritnummer in enumerate(self._parse_ritnummers(ritnummers_raw)):
+                TolRit.objects.create(tol_registratie=instance, ritnummer=ritnummer, volgorde=index)
+        return instance
 
     def get_bijlage_url(self, obj):
         if obj.bijlage:

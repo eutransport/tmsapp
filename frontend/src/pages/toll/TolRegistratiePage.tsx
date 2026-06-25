@@ -17,9 +17,10 @@ import { formatBedrag, formatDate } from './utils'
 import { Dialog, Transition } from '@headlessui/react'
 
 export default function TolRegistratiePage() {
-  const [datum, setDatum] = useState(new Date().toISOString().split('T')[0])
+  const [datum, setDatum] = useState('')
   const [kenteken, setKenteken] = useState('')
   const [totaalBedrag, setTotaalBedrag] = useState('')
+  const [ritnummers, setRitnummers] = useState<string[]>([''])
   const [bijlage, setBijlage] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -85,16 +86,26 @@ export default function TolRegistratiePage() {
     return value.replace(',', '.')
   }
 
+  const handleRitnummerChange = (index: number, value: string) => {
+    setRitnummers(prev => prev.map((r, i) => (i === index ? value : r)))
+  }
+
+  const addRitnummer = () => {
+    setRitnummers(prev => [...prev, ''])
+  }
+
+  const removeRitnummer = (index: number) => {
+    setRitnummers(prev => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
 
-    if (!bijlage) {
-      setFormError('Bijlage is verplicht. Upload de tolfactuur.')
-      return
-    }
-    if (!kenteken.trim()) {
-      setFormError('Selecteer of voer een kenteken in.')
+    const cleanRitnummers = ritnummers.map(r => r.trim()).filter(Boolean)
+
+    if (!datum && !kenteken.trim()) {
+      setFormError('Selecteer een wagen wanneer er geen datum is ingevuld.')
       return
     }
     if (!totaalBedrag) {
@@ -105,20 +116,22 @@ export default function TolRegistratiePage() {
     setSubmitting(true)
     try {
       await createTolRegistratie({
-        datum,
-        kenteken: kenteken.toUpperCase(),
+        datum: datum || undefined,
+        kenteken: kenteken ? kenteken.toUpperCase() : undefined,
         totaal_bedrag: normalizeBedrag(totaalBedrag),
+        ritnummers: cleanRitnummers,
         bijlage,
       })
       toast.success('Tolregistratie ingediend!')
-      setDatum(new Date().toISOString().split('T')[0])
+      setDatum('')
       setKenteken('')
       setTotaalBedrag('')
+      setRitnummers([''])
       setBijlage(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
       loadRegistraties()
     } catch (err: any) {
-      const msg = err.response?.data?.bijlage?.[0] || err.response?.data?.detail || 'Fout bij indienen'
+      const msg = err.response?.data?.kenteken?.[0] || err.response?.data?.bijlage?.[0] || err.response?.data?.detail || 'Fout bij indienen'
       toast.error(msg)
     } finally {
       setSubmitting(false)
@@ -199,24 +212,27 @@ export default function TolRegistratiePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Datum */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Datum *</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Datum</label>
               <input
                 type="date"
                 value={datum}
                 onChange={e => setDatum(e.target.value)}
-                required
+                onFocus={e => { if (!datum) e.currentTarget.showPicker?.() }}
+                placeholder="Optioneel"
                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm py-2 px-3 border"
               />
+              <p className="text-[11px] text-gray-400 mt-1">Optioneel. Geen datum? Dan is een wagen verplicht.</p>
             </div>
 
             {/* Kenteken / Wagen */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Wagen *</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Wagen {!datum && <span className="text-red-500">*</span>}
+              </label>
               {vehicles.length > 0 ? (
                 <select
                   value={kenteken}
                   onChange={e => setKenteken(e.target.value)}
-                  required
                   className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm py-2 px-3 border"
                 >
                   <option value="">Selecteer wagen...</option>
@@ -230,7 +246,6 @@ export default function TolRegistratiePage() {
                   value={kenteken}
                   onChange={e => setKenteken(e.target.value.toUpperCase())}
                   placeholder="Bijv. AB-123-CD"
-                  required
                   className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm py-2 px-3 border"
                 />
               )}
@@ -247,7 +262,6 @@ export default function TolRegistratiePage() {
                   value={totaalBedrag}
                   onChange={e => handleBedragChange(e.target.value)}
                   placeholder="0,00"
-                  required
                   className="w-full pl-7 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm py-2 px-3 border"
                 />
               </div>
@@ -255,13 +269,12 @@ export default function TolRegistratiePage() {
 
             {/* Bijlage */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Tolfactuur (bijlage) *</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Tolfactuur (bijlage)</label>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
                 onChange={e => setBijlage(e.target.files?.[0] || null)}
-                required
                 className="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 border border-gray-300 rounded-md py-1.5 px-2"
               />
               {bijlage && (
@@ -270,6 +283,45 @@ export default function TolRegistratiePage() {
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Ritnummers */}
+          <div className="mt-4">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Ritnummer(s)</label>
+            <div className="space-y-2">
+              {ritnummers.map((rit, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={rit}
+                    onChange={e => handleRitnummerChange(index, e.target.value)}
+                    placeholder={`Ritnummer ${index + 1}`}
+                    className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm py-2 px-3 border"
+                  />
+                  {ritnummers.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeRitnummer(index)}
+                      className="p-2 text-gray-400 hover:text-red-600"
+                      title="Ritnummer verwijderen"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  )}
+                  {index === ritnummers.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={addRitnummer}
+                      className="p-2 text-primary-600 hover:text-primary-800"
+                      title="Ritnummer toevoegen"
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">Voeg meerdere ritnummers toe voor hetzelfde totaalbedrag.</p>
           </div>
 
           <div className="mt-3 flex justify-end">
@@ -307,6 +359,7 @@ export default function TolRegistratiePage() {
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Wagen</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ritnummers</th>
                   <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Bedrag</th>
                   <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Bijlage</th>
                   <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -316,8 +369,21 @@ export default function TolRegistratiePage() {
               <tbody className="divide-y divide-gray-100">
                 {registraties.map(reg => (
                   <tr key={reg.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 whitespace-nowrap">{formatDate(reg.datum)}</td>
-                    <td className="px-4 py-2 font-mono text-xs">{reg.kenteken}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{reg.datum ? formatDate(reg.datum) : '—'}</td>
+                    <td className="px-4 py-2 font-mono text-xs">{reg.kenteken || '—'}</td>
+                    <td className="px-4 py-2 text-xs">
+                      {reg.ritten && reg.ritten.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {reg.ritten.map(r => (
+                            <span key={r.id} className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-mono">
+                              {r.ritnummer}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right font-medium">{formatBedrag(reg.totaal_bedrag)}</td>
                     <td className="px-4 py-2 text-center">
                       {reg.bijlage_url ? (

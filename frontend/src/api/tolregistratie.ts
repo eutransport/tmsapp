@@ -1,14 +1,22 @@
 import api from './client'
 
+export interface TolRit {
+  id: string
+  ritnummer: string
+  volgorde: number
+  rit_datum: string | null
+}
+
 export interface TolRegistratie {
   id: string
   user: string
   user_naam: string
-  datum: string
+  datum: string | null
   kenteken: string
   totaal_bedrag: string
   bijlage_url: string | null
   bijlage_naam: string | null
+  ritten: TolRit[]
   status: 'ingediend' | 'gefactureerd'
   gefactureerd: boolean
   created_at: string
@@ -16,10 +24,11 @@ export interface TolRegistratie {
 }
 
 export interface TolRegistratieCreate {
-  datum: string
-  kenteken: string
+  datum?: string
+  kenteken?: string
   totaal_bedrag: string
-  bijlage: File
+  ritnummers?: string[]
+  bijlage?: File | null
 }
 
 export interface TolRegistratieFilters {
@@ -56,10 +65,14 @@ export async function getTolRegistraties(filters?: TolRegistratieFilters): Promi
 
 export async function createTolRegistratie(data: TolRegistratieCreate): Promise<TolRegistratie> {
   const formData = new FormData()
-  formData.append('datum', data.datum)
-  formData.append('kenteken', data.kenteken)
+  if (data.datum) formData.append('datum', data.datum)
+  if (data.kenteken) formData.append('kenteken', data.kenteken)
   formData.append('totaal_bedrag', data.totaal_bedrag)
-  formData.append('bijlage', data.bijlage)
+  ;(data.ritnummers || []).forEach(rit => {
+    const trimmed = rit.trim()
+    if (trimmed) formData.append('ritnummers', trimmed)
+  })
+  if (data.bijlage) formData.append('bijlage', data.bijlage)
 
   const response = await api.post('/time-entries/tol/', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

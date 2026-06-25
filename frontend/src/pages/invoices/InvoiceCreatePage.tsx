@@ -1494,7 +1494,11 @@ function TolImportModal({
   const filtered = allRegistraties.filter(r => {
     if (!searchTerm) return true
     const q = searchTerm.toLowerCase()
-    return (r.user_naam || '').toLowerCase().includes(q) || r.kenteken.toLowerCase().includes(q)
+    return (
+      (r.user_naam || '').toLowerCase().includes(q) ||
+      (r.kenteken || '').toLowerCase().includes(q) ||
+      (r.ritten || []).some(rit => rit.ritnummer.toLowerCase().includes(q))
+    )
   })
 
   const toggleSelection = (id: string) => {
@@ -1599,6 +1603,7 @@ function TolImportModal({
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Chauffeur</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Wagen</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ritnummers</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Bedrag</th>
                   </tr>
                 </thead>
@@ -1619,10 +1624,21 @@ function TolImportModal({
                         />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm">
-                        {new Date(reg.datum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {reg.datum ? new Date(reg.datum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
                       </td>
                       <td className="px-4 py-3 text-sm">{reg.user_naam || '—'}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{reg.kenteken}</td>
+                      <td className="px-4 py-3 font-mono text-xs">{reg.kenteken || '—'}</td>
+                      <td className="px-4 py-3 text-xs">
+                        {reg.ritten && reg.ritten.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {reg.ritten.map(rit => (
+                              <span key={rit.id} className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-mono">{rit.ritnummer}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right font-medium text-sm">{formatBedrag(reg.totaal_bedrag)}</td>
                     </tr>
                   ))}
@@ -1875,34 +1891,59 @@ export default function InvoiceCreatePage() {
     ))
   }
 
-  // Build invoice lines from selected toll registrations
+  // Build invoice lines from selected toll registrations.
+  // Each ritnummer becomes an informational line without toll amount.
+  // Per submission, add one final line carrying the full toll amount.
   const buildTolLines = useCallback((registraties: TolRegistratie[]): InvoiceLineData[] => {
-    return registraties.map(reg => {
-      const values: Record<string, number | string> = {}
+    const result: InvoiceLineData[] = []
+
+    registraties.forEach(reg => {
       const bedrag = parseFloat(reg.totaal_bedrag) || 0
+      const ritten = reg.ritten && reg.ritten.length > 0 ? reg.ritten : null
+      const wagenLabel = reg.kenteken || ''
 
-      columns.forEach(col => {
-        if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
-          values[col.id] = `Tol - ${reg.kenteken} - ${new Date(reg.datum).toLocaleDateString('nl-NL')}`
-        } else if (col.type === 'aantal' || col.id === 'aantal' || col.id.includes('aantal')) {
-          values[col.id] = 1
-        } else if (col.type === 'prijs' || col.id === 'prijs' || col.id.includes('prijs') || col.id.includes('tarief')) {
-          values[col.id] = bedrag
-        } else if (col.type === 'berekend') {
-          values[col.id] = 0
-        } else {
-          values[col.id] = 0
-        }
-      })
+      const buildLine = (omschrijving: string, lineBedrag: number) => {
+        const values: Record<string, number | string> = {}
 
-      columns.forEach(col => {
-        if (col.type === 'berekend' && col.formule) {
-          values[col.id] = evaluateFormula(col.formule, values, defaults)
-        }
-      })
+        columns.forEach(col => {
+          if (col.type === 'text' || col.id === 'omschrijving' || col.id.includes('omschrijving')) {
+            values[col.id] = omschrijving
+          } else if (col.type === 'aantal' || col.id === 'aantal' || col.id.includes('aantal')) {
+            values[col.id] = 1
+          } else if (col.type === 'prijs' || col.id === 'prijs' || col.id.includes('prijs') || col.id.includes('tarief')) {
+            values[col.id] = lineBedrag
+          } else if (col.type === 'berekend') {
+            values[col.id] = 0
+          } else {
+            values[col.id] = 0
+          }
+        })
 
-      return { id: generateId(), values }
+        columns.forEach(col => {
+          if (col.type === 'berekend' && col.formule) {
+            values[col.id] = evaluateFormula(col.formule, values, defaults)
+          }
+        })
+
+        result.push({ id: generateId(), values })
+      }
+
+      if (ritten) {
+        ritten.forEach(rit => {
+          const ritDatumLabel = rit.rit_datum ? new Date(rit.rit_datum).toLocaleDateString('nl-NL') : ''
+          const parts = ['Tol', wagenLabel, `rit ${rit.ritnummer}`, ritDatumLabel].filter(Boolean)
+          buildLine(parts.join(' - '), 0)
+        })
+
+        const totalParts = ['Totaal tol', wagenLabel].filter(Boolean)
+        buildLine(totalParts.join(' - '), bedrag)
+      } else {
+        const totalParts = ['Totaal tol', wagenLabel].filter(Boolean)
+        buildLine(totalParts.join(' - '), bedrag)
+      }
     })
+
+    return result
   }, [columns, defaults])
 
   // Import toll registrations as invoice lines, attached to the chosen target invoice

@@ -203,6 +203,7 @@ export default function AdminTolRegistratiePage() {
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Chauffeur</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Wagen</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ritnummers</th>
                   <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Bedrag</th>
                   <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Bijlage</th>
                   <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -214,7 +215,20 @@ export default function AdminTolRegistratiePage() {
                   <tr key={reg.id} className="hover:bg-gray-50">
                     <td className="px-4 py-2 font-medium">{reg.user_naam || '—'}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{formatDate(reg.datum)}</td>
-                    <td className="px-4 py-2 font-mono text-xs">{reg.kenteken}</td>
+                    <td className="px-4 py-2 font-mono text-xs">{reg.kenteken || '—'}</td>
+                    <td className="px-4 py-2 text-xs">
+                      {reg.ritten && reg.ritten.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {reg.ritten.map(r => (
+                            <span key={r.id} className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-mono">
+                              {r.ritnummer}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right font-medium">{formatBedrag(reg.totaal_bedrag)}</td>
                     <td className="px-4 py-2 text-center">
                       {reg.bijlage_url ? (

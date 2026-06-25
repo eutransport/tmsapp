@@ -6,6 +6,7 @@ export function formatBedrag(value: string | number): string {
   return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(num)
 }
 
-export function formatDate(dateStr: string): string {
+export function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—'
   return new Date(dateStr).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })
 }

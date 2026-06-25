@@ -229,10 +229,10 @@ class TolRegistratie(models.Model):
         related_name='tol_registraties',
         verbose_name='Gebruiker'
     )
-    datum = models.DateField(verbose_name='Datum')
-    kenteken = models.CharField(max_length=20, verbose_name='Kenteken')
+    datum = models.DateField(null=True, blank=True, verbose_name='Datum')
+    kenteken = models.CharField(max_length=20, blank=True, verbose_name='Kenteken')
     totaal_bedrag = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Totaal bedrag')
-    bijlage = models.FileField(upload_to=tol_bijlage_upload_path, verbose_name='Bijlage')
+    bijlage = models.FileField(upload_to=tol_bijlage_upload_path, null=True, blank=True, verbose_name='Bijlage')
     status = models.CharField(
         max_length=20,
         choices=TolRegistratieStatus.choices,
@@ -250,3 +250,25 @@ class TolRegistratie(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.datum} - €{self.totaal_bedrag}"
+
+
+class TolRit(models.Model):
+    """Underlying trip number belonging to a toll registration submission."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tol_registratie = models.ForeignKey(
+        TolRegistratie,
+        on_delete=models.CASCADE,
+        related_name='ritten',
+        verbose_name='Tolregistratie'
+    )
+    ritnummer = models.CharField(max_length=50, verbose_name='Ritnummer')
+    volgorde = models.PositiveIntegerField(default=0, verbose_name='Volgorde')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Tolrit'
+        verbose_name_plural = 'Tolritten'
+        ordering = ['volgorde', 'created_at']
+
+    def __str__(self):
+        return f"{self.tol_registratie_id} - rit {self.ritnummer}"
