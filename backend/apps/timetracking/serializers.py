@@ -275,7 +275,7 @@ class TolRegistratieSerializer(serializers.ModelSerializer):
         return instance
 
     def get_bijlage_url(self, obj):
-        if obj.bijlage:
+        if obj.bijlage and obj.bijlage.storage.exists(obj.bijlage.name):
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.bijlage.url)
@@ -283,6 +283,6 @@ class TolRegistratieSerializer(serializers.ModelSerializer):
         return None
 
     def get_bijlage_naam(self, obj):
-        if obj.bijlage:
+        if obj.bijlage and obj.bijlage.storage.exists(obj.bijlage.name):
             return os.path.basename(obj.bijlage.name)
         return None

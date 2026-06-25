@@ -26,6 +26,12 @@ export interface TaskActivity {
   created_at: string
 }
 
+export interface TaskInvoice {
+  id: string
+  factuurnummer: string
+  status: 'concept' | 'definitief' | 'verzonden' | 'betaald'
+}
+
 export interface Task {
   id: string
   titel: string
@@ -34,6 +40,9 @@ export interface Task {
   prioriteit: TaskPriority
   aangemaakt_door: TaskUser | null
   toegewezen_aan: TaskUser | null
+  factuur: TaskInvoice | null
+  bijlage_url: string | null
+  bijlage_naam: string | null
   vervaldatum: string | null
   status_changed_at: string | null
   last_activity_at: string | null
@@ -51,6 +60,7 @@ export interface TaskListItem {
   prioriteit: TaskPriority
   aangemaakt_door: TaskUser | null
   toegewezen_aan: TaskUser | null
+  factuur: TaskInvoice | null
   vervaldatum: string | null
   notes_count: number
   last_activity_at: string | null
@@ -79,6 +89,8 @@ export interface TaskCreate {
   omschrijving?: string
   prioriteit?: TaskPriority
   toegewezen_aan_id?: string | null
+  factuur_id?: string | null
+  bijlage?: File | null
   vervaldatum?: string | null
 }
 
@@ -86,7 +98,21 @@ export interface TaskUpdate {
   titel?: string
   omschrijving?: string
   prioriteit?: TaskPriority
+  factuur_id?: string | null
+  bijlage?: File | null
   vervaldatum?: string | null
+}
+
+function toFormData(data: TaskCreate | TaskUpdate): FormData {
+  const formData = new FormData()
+  if (data.titel !== undefined) formData.append('titel', data.titel)
+  if (data.omschrijving !== undefined) formData.append('omschrijving', data.omschrijving || '')
+  if (data.prioriteit !== undefined) formData.append('prioriteit', data.prioriteit)
+  if (data.vervaldatum !== undefined) formData.append('vervaldatum', data.vervaldatum || '')
+  if (data.toegewezen_aan_id !== undefined) formData.append('toegewezen_aan_id', data.toegewezen_aan_id || '')
+  if (data.factuur_id !== undefined) formData.append('factuur_id', data.factuur_id || '')
+  if (data.bijlage) formData.append('bijlage', data.bijlage)
+  return formData
 }
 
 export interface ReminderSettings {
@@ -117,12 +143,16 @@ export async function getTask(id: string): Promise<Task> {
 }
 
 export async function createTask(data: TaskCreate): Promise<Task> {
-  const response = await api.post('/tasks/tasks/', data)
+  const response = await api.post('/tasks/tasks/', toFormData(data), {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
   return response.data
 }
 
 export async function updateTask(id: string, data: TaskUpdate): Promise<Task> {
-  const response = await api.patch(`/tasks/tasks/${id}/`, data)
+  const response = await api.patch(`/tasks/tasks/${id}/`, toFormData(data), {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
   return response.data
 }
 
@@ -167,5 +197,12 @@ export async function getReminderSettings(): Promise<ReminderSettings> {
 
 export async function updateReminderSettings(data: ReminderSettings): Promise<ReminderSettings> {
   const response = await api.put('/tasks/tasks/reminder-settings/', data)
+  return response.data
+}
+
+export async function downloadTaskAttachment(id: string): Promise<Blob> {
+  const response = await api.get(`/tasks/tasks/${id}/download_bijlage/`, {
+    responseType: 'blob',
+  })
   return response.data
 }

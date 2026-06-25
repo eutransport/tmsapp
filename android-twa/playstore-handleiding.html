@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TMS naar Google Play Store — Volledige handleiding</title>
+<style>
+  :root {
+    --primary: #1e3a5f;
+    --accent: #2563eb;
+    --bg: #f4f6f9;
+    --card: #ffffff;
+    --border: #dbe2ea;
+    --code-bg: #1e293b;
+    --code-fg: #e2e8f0;
+    --green: #15803d;
+    --amber: #b45309;
+    --red: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0; background: var(--bg); color: #1f2933; line-height: 1.6;
+  }
+  header {
+    background: linear-gradient(135deg, var(--primary), #2c5282);
+    color: #fff; padding: 40px 24px; text-align: center;
+  }
+  header h1 { margin: 0 0 8px; font-size: 28px; }
+  header p { margin: 0; opacity: .9; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 24px; }
+  nav.toc {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin-bottom: 28px;
+  }
+  nav.toc h2 { margin-top: 0; font-size: 18px; }
+  nav.toc ol { margin: 0; padding-left: 22px; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  section.card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px 28px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  h2.step {
+    display: flex; align-items: center; gap: 12px; margin-top: 0;
+    font-size: 22px; color: var(--primary);
+  }
+  .badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 34px; height: 34px; border-radius: 50%; background: var(--primary);
+    color: #fff; font-size: 16px; font-weight: 700; flex-shrink: 0;
+  }
+  .tag {
+    display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 10px;
+    border-radius: 999px; margin-left: 8px; vertical-align: middle;
+  }
+  .tag-google { background: #e8f0fe; color: #1a73e8; }
+  .tag-linux  { background: #e6f4ea; color: #137333; }
+  .tag-dns    { background: #fce8e6; color: #c5221f; }
+  .tag-local  { background: #fef7e0; color: #b06000; }
+  pre {
+    background: var(--code-bg); color: var(--code-fg); padding: 16px 18px;
+    border-radius: 8px; overflow-x: auto; font-size: 13.5px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  code.inline {
+    background: #eef2f7; padding: 2px 6px; border-radius: 5px;
+    font-family: Consolas, Menlo, monospace; font-size: 13px; color: #b91c1c;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; }
+  th, td { border: 1px solid var(--border); padding: 9px 12px; text-align: left; font-size: 14px; }
+  th { background: #f1f5f9; }
+  .note, .warn, .ok {
+    border-left: 4px solid; padding: 12px 16px; border-radius: 6px; margin: 16px 0; font-size: 14px;
+  }
+  .note { background: #eff6ff; border-color: var(--accent); }
+  .warn { background: #fffbeb; border-color: var(--amber); }
+  .ok   { background: #f0fdf4; border-color: var(--green); }
+  .warn strong { color: var(--amber); }
+  .checklist { list-style: none; padding-left: 0; }
+  .checklist li { padding: 6px 0 6px 30px; position: relative; }
+  .checklist li::before {
+    content: "☐"; position: absolute; left: 0; font-size: 18px; color: var(--accent);
+  }
+  footer { text-align: center; color: #64748b; font-size: 13px; padding: 30px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 0; }
+  .legend span { font-size: 12px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>TMS &rarr; Google Play Store</h1>
+  <p>Volledige stap-voor-stap handleiding — productie op je eigen Linux cloud</p>
+  <p style="margin-top:10px;font-size:14px;">Domein: <strong>tms.moveo-bv.nl</strong> &nbsp;·&nbsp; Package: <strong>nl.moveobv.tms</strong> &nbsp;·&nbsp; Methode: <strong>TWA (Bubblewrap)</strong></p>
+</header>
+
+<div class="wrap">
+
+  <div class="note">
+    <strong>Wat is een TWA?</strong> De Android-app is een dun "schilletje" (Trusted Web Activity)
+    rond je bestaande PWA op <code class="inline">https://tms.moveo-bv.nl</code>. De app laadt die
+    site fullscreen zonder browserbalk. Inhoudelijke wijzigingen aan de web-app verschijnen
+    <em>automatisch</em> in de app — je bouwt alleen een nieuwe app-bundle bij wijziging van
+    icoon, naam of versienummer.
+  </div>
+
+  <div class="legend">
+    <span class="tag tag-google">GOOGLE</span> = doe je in Google-account/Play Console
+    <span class="tag tag-linux">LINUX</span> = doe je op je productieserver (SSH)
+    <span class="tag tag-dns">DNS</span> = doe je bij je DNS-provider
+    <span class="tag tag-local">LOKAAL/PC</span> = doe je op je eigen werk-pc
+  </div>
+
+  <nav class="toc">
+    <h2>Inhoud</h2>
+    <ol>
+      <li><a href="#vereisten">Vereisten &amp; overzicht</a></li>
+      <li><a href="#dns">DNS &amp; domein controleren</a> <span class="tag tag-dns">DNS</span></li>
+      <li><a href="#linux-pwa">PWA + HTTPS live op Linux productie</a> <span class="tag tag-linux">LINUX</span></li>
+      <li><a href="#assetlinks-deploy">assetlinks.json deployen</a> <span class="tag tag-linux">LINUX</span></li>
+      <li><a href="#google-account">Google Play Developer-account</a> <span class="tag tag-google">GOOGLE</span></li>
+      <li><a href="#build-tools">Build-tools installeren (PC)</a> <span class="tag tag-local">LOKAAL/PC</span></li>
+      <li><a href="#build">App bouwen met Bubblewrap</a> <span class="tag tag-local">LOKAAL/PC</span></li>
+      <li><a href="#fingerprint">Fingerprint koppelen &amp; verifiëren</a> <span class="tag tag-linux">LINUX</span></li>
+      <li><a href="#test">App testen op een toestel</a> <span class="tag tag-local">LOKAAL/PC</span></li>
+      <li><a href="#playstore">Play Console: app aanmaken &amp; vermelding</a> <span class="tag tag-google">GOOGLE</span></li>
+      <li><a href="#review">Inleveren voor review &amp; publiceren</a> <span class="tag tag-google">GOOGLE</span></li>
+      <li><a href="#updates">Updates publiceren</a></li>
+      <li><a href="#checklist">Eind-checklist</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <section class="card" id="vereisten">
+    <h2 class="step"><span class="badge">1</span> Vereisten &amp; overzicht</h2>
+    <p>Zorg dat je het volgende klaar hebt liggen:</p>
+    <table>
+      <tr><th>Wat</th><th>Waar</th><th>Toelichting</th></tr>
+      <tr><td>Werkende PWA op HTTPS</td><td>Linux productie</td><td><code class="inline">https://tms.moveo-bv.nl</code> moet publiek bereikbaar zijn met geldig SSL.</td></tr>
+      <tr><td>Google-account</td><td>Google</td><td>Liefst een zakelijk account voor het bedrijf.</td></tr>
+      <tr><td>$25 (eenmalig)</td><td>Google</td><td>Registratiekosten Play Developer-account.</td></tr>
+      <tr><td>Java JDK 17</td><td>Lokaal/PC</td><td>Nodig voor Bubblewrap build.</td></tr>
+      <tr><td>Node.js</td><td>Lokaal/PC</td><td>Voor de Bubblewrap CLI.</td></tr>
+      <tr><td>Een Android-toestel</td><td>—</td><td>Om de app te testen vóór publicatie (optioneel maar aanbevolen).</td></tr>
+    </table>
+    <div class="warn">
+      <strong>Belangrijk vooraf:</strong> Sinds 2023 vraagt Google voor <em>nieuwe persoonlijke</em>
+      developer-accounts een gesloten test met 12 testers gedurende 14 dagen vóór je naar productie
+      mag. Een <strong>organisatie-account</strong> (met bedrijfsverificatie via D-U-N-S-nummer)
+      heeft die eis niet. Voor een bedrijfs-TMS kies je dus een organisatie-account.
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="card" id="dns">
+    <h2 class="step"><span class="badge">2</span> DNS &amp; domein controleren <span class="tag tag-dns">DNS</span></h2>
+    <p>De app koppelt aan exact het domein <code class="inline">tms.moveo-bv.nl</code>. Dat subdomein
+       moet naar je Linux-server wijzen.</p>
+    <h3>Bij je DNS-provider (bijv. TransIP, Cloudflare, Versio, GoDaddy):</h3>
+    <ol>
+      <li>Log in op het DNS-beheer van het domein <code class="inline">moveo-bv.nl</code>.</li>
+      <li>Controleer of er een record bestaat voor het subdomein <code class="inline">tms</code>:
+        <table>
+          <tr><th>Type</th><th>Naam</th><th>Waarde</th><th>TTL</th></tr>
+          <tr><td>A</td><td>tms</td><td>&lt;publiek IP van je Linux-server&gt;</td><td>3600</td></tr>
+        </table>
+        Heb je IPv6, voeg dan ook een <strong>AAAA</strong>-record toe met je IPv6-adres.
+      </li>
+      <li>Gebruik je Cloudflare? Zet de proxy (oranje wolk) desgewenst aan — let er dan op dat SSL-modus
+          op <em>Full (strict)</em> staat.</li>
+      <li>Wacht tot de DNS is gepropageerd (meestal minuten, soms tot een uur).</li>
+    </ol>
+    <p>Controleer vanaf je pc dat het subdomein naar het juiste IP wijst:</p>
+    <pre>nslookup tms.moveo-bv.nl</pre>
+    <div class="note">
+      Het IP in het antwoord moet het publieke IP van je Linux-productieserver zijn.
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="card" id="linux-pwa">
+    <h2 class="step"><span class="badge">3</span> PWA + HTTPS live op Linux productie <span class="tag tag-linux">LINUX</span></h2>
+    <p>De app kan alleen de browserbalk verbergen als de PWA via geldig HTTPS draait. Jullie productie
+       gebruikt Docker Compose met <strong>Nginx Proxy Manager (NPM)</strong> voor SSL.</p>
+
+    <h3>3a. Inloggen op de server</h3>
+    <pre>ssh gebruiker@tms.moveo-bv.nl
+cd /pad/naar/tmsapp   # map waar docker-compose.yml staat</pre>
+
+    <h3>3b. Laatste code ophalen &amp; stack starten</h3>
+    <pre>git pull
+docker compose pull
+docker compose up -d --build</pre>
+
+    <h3>3c. SSL-certificaat instellen in Nginx Proxy Manager</h3>
+    <ol>
+      <li>Open NPM admin: <code class="inline">http://&lt;SERVER-IP&gt;:81</code> (of <code class="inline">https://npm.moveo-bv.nl</code>).</li>
+      <li>Ga naar <strong>Hosts &rarr; Proxy Hosts</strong> en open (of maak) de host voor
+          <code class="inline">tms.moveo-bv.nl</code>:
+        <ul>
+          <li><strong>Domain Names:</strong> <code class="inline">tms.moveo-bv.nl</code></li>
+          <li><strong>Forward Hostname:</strong> <code class="inline">tms-frontend</code> (containernaam)</li>
+          <li><strong>Forward Port:</strong> <code class="inline">80</code></li>
+          <li>Zet <em>Block Common Exploits</em> aan.</li>
+        </ul>
+      </li>
+      <li>Tabblad <strong>SSL</strong>: kies <em>Request a new SSL Certificate</em> (Let's Encrypt),
+          vink <em>Force SSL</em> en <em>HTTP/2</em> aan, accepteer de voorwaarden en sla op.</li>
+    </ol>
+
+    <h3>3d. Controleer dat de PWA en het manifest live zijn</h3>
+    <pre>curl -I https://tms.moveo-bv.nl
+curl https://tms.moveo-bv.nl/manifest.webmanifest</pre>
+    <div class="ok">
+      Je moet een <code class="inline">HTTP/2 200</code> krijgen en het manifest moet geldige JSON
+      teruggeven met <code class="inline">"display": "standalone"</code>. Pas als dit klopt, ga je verder.
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="card" id="assetlinks-deploy">
+    <h2 class="step"><span class="badge">4</span> assetlinks.json deployen <span class="tag tag-linux">LINUX</span></h2>
+    <p>In de repo staat al <code class="inline">frontend/public/.well-known/assetlinks.json</code> en is
+       <code class="inline">frontend/nginx.conf</code> aangepast om dit te serveren. Bij de
+       <code class="inline">docker compose up --build</code> uit stap 3 is dit al meegedeployed.</p>
+    <p>De fingerprint staat nu nog op een placeholder — die vullen we in stap 8 in. Controleer eerst dat
+       het bestand bereikbaar is:</p>
+    <pre>curl https://tms.moveo-bv.nl/.well-known/assetlinks.json</pre>
+    <div class="note">
+      Je krijgt nu JSON terug met <code class="inline">REPLACE_WITH_SHA256_FINGERPRINT...</code>.
+      Dat is verwacht; we vervangen die waarde nadat de app gebouwd is (stap 8).
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="card" id="google-account">
+    <h2 class="step"><span class="badge">5</span> Google Play Developer-account <span class="tag tag-google">GOOGLE</span></h2>
+    <ol>
+      <li>Ga naar <a href="https://play.google.com/console/signup" target="_blank">play.google.com/console/signup</a>.</li>
+      <li>Log in met het Google-account dat eigenaar wordt van de app (gebruik een bedrijfsaccount,
+          geen privé-Gmail).</li>
+      <li>Kies accounttype <strong>Organisatie</strong> (aanbevolen) en vul de bedrijfsgegevens in.
+          Google vraagt mogelijk om een <strong>D-U-N-S-nummer</strong> ter verificatie.</li>
+      <li>Betaal de eenmalige <strong>$25</strong> registratiekosten.</li>
+      <li>Doorloop de identiteitsverificatie (kan 1–3 dagen duren). Pas daarna kun je publiceren.</li>
+    </ol>
+    <div class="warn">
+      Plan dit vroeg in: de account- en bedrijfsverificatie bij Google kan enkele dagen duren en
+      blokkeert anders je publicatie aan het eind.
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="card" id="build-tools">
+    <h2 class="step"><span class="badge">6</span> Build-tools installeren (op je pc) <span class="tag tag-local">LOKAAL/PC</span></h2>
+    <p>De app-bundle bouw je op je eigen werk-pc (Windows), niet op de server.</p>
+    <h3>6a. Java JDK 17</h3>
+    <p>Download &amp; installeer <a href="https://adoptium.net/temurin/releases/?version=17" target="_blank">Eclipse Temurin JDK 17</a>. Controleer:</p>
+    <pre>java -version</pre>
+    <h3>6b. Bubblewrap CLI</h3>
+    <pre>npm install -g @bubblewrap/cli</pre>
+    <div class="note">
+      Bij de eerste build biedt Bubblewrap aan om automatisch de Android SDK en JDK te downloaden —
+      accepteer dat als je geen Android Studio hebt.
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="card" id="build">
+    <h2 class="step"><span class="badge">7</span> App bouwen met Bubblewrap <span class="tag tag-local">LOKAAL/PC</span></h2>
+    <p>In de repo staat de map <code class="inline">android-twa/</code> met een vooringevulde
+       <code class="inline">twa-manifest.json</code> (package <code class="inline">nl.moveobv.tms</code>).</p>
+
+    <h3>7a. Project initialiseren (eenmalig)</h3>
+    <pre>cd android-twa
+bubblewrap init --manifest https://tms.moveo-bv.nl/manifest.webmanifest</pre>
+    <ul>
+      <li>Bevestig de waarden (package-naam, app-naam, kleuren komen uit het manifest).</li>
+      <li>Bubblewrap maakt een <strong>signing key</strong> aan: <code class="inline">android.keystore</code>.
+          Je kiest hierbij wachtwoorden.</li>
+    </ul>
+    <div class="warn">
+      <strong>BEWAAR DE KEYSTORE + WACHTWOORDEN VEILIG</strong> (password manager / backup buiten de
+      repo). Raak je deze kwijt, dan kun je <em>nooit meer</em> een update onder dezelfde app
+      publiceren. De keystore staat in <code class="inline">.gitignore</code> en mag nóóit in git.
+    </div>
+
+    <h3>7b. Bouwen</h3>
+    <pre>bubblewrap build</pre>
+    <p>Resultaat in de map <code class="inline">android-twa/</code>:</p>
+    <table>
+      <tr><th>Bestand</th><th>Gebruik</th></tr>
+      <tr><td><code class="inline">app-release-bundle.aab</code></td><td>Upload je naar de Play Store.</td></tr>
+      <tr><td><code class="inline">app-release-signed.apk</code></td><td>Voor lokaal testen op een toestel.</td></tr>
+    </table>
+    <p>Bubblewrap toont aan het eind de <strong>SHA-256 fingerprint</strong>. Noteer deze. Opnieuw opvragen kan met:</p>
+    <pre>keytool -list -v -keystore android.keystore -alias android</pre>
+  </section>
+
+  <!-- 8 -->
+  <section class="card" id="fingerprint">
+    <h2 class="step"><span class="badge">8</span> Fingerprint koppelen &amp; verifiëren <span class="tag tag-linux">LINUX</span></h2>
+    <p>Nu koppelen we de app aan het domein, zodat de browserbalk verdwijnt.</p>
+    <ol>
+      <li>Open op je pc <code class="inline">frontend/public/.well-known/assetlinks.json</code>.</li>
+      <li>Vervang <code class="inline">REPLACE_WITH_SHA256_FINGERPRINT_FROM_BUBBLEWRAP_BUILD</code>
+          door de SHA-256 fingerprint uit stap 7b (formaat <code class="inline">AA:BB:CC:...</code>).</li>
+      <li>Commit &amp; push:
+        <pre>git add frontend/public/.well-known/assetlinks.json
+git commit -m "chore: add Android TWA fingerprint to assetlinks"
+git push</pre>
+      </li>
+      <li>Op de Linux-server opnieuw deployen:
+        <pre>ssh gebruiker@tms.moveo-bv.nl
+cd /pad/naar/tmsapp
+git pull
+docker compose up -d --build frontend</pre>
+      </li>
+      <li>Verifieer dat de echte fingerprint nu live staat:
+        <pre>curl https://tms.moveo-bv.nl/.well-known/assetlinks.json</pre>
+      </li>
+      <li>Controleer de koppeling met Google's tool:
+        <a href="https://developers.google.com/digital-asset-links/tools/generator" target="_blank">Digital Asset Links tester</a>
+        — vul domein <code class="inline">tms.moveo-bv.nl</code> en package <code class="inline">nl.moveobv.tms</code> in.</li>
+    </ol>
+    <div class="warn">
+      Klopt de fingerprint niet exact, dan toont de app alsnog de browser-adresbalk. Dit is veruit de
+      meest voorkomende fout — controleer dus zorgvuldig.
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="card" id="test">
+    <h2 class="step"><span class="badge">9</span> App testen op een toestel <span class="tag tag-local">LOKAAL/PC</span></h2>
+    <ol>
+      <li>Zet op je Android-toestel <em>Ontwikkelaarsopties</em> en <em>USB-debugging</em> aan.</li>
+      <li>Sluit het toestel via USB aan en draai:
+        <pre>cd android-twa
+bubblewrap install</pre>
+        (of kopieer <code class="inline">app-release-signed.apk</code> naar je toestel en installeer handmatig).
+      </li>
+      <li>Open de app. Controleer:
+        <ul>
+          <li>De app opent <strong>zonder</strong> browser-adresbalk (anders: fingerprint fout, zie stap 8).</li>
+          <li>Inloggen werkt.</li>
+          <li>Push-notificaties vragen netjes om toestemming (Android 13+).</li>
+        </ul>
+      </li>
+    </ol>
+  </section>
+
+  <!-- 10 -->
+  <section class="card" id="playstore">
+    <h2 class="step"><span class="badge">10</span> Play Console: app aanmaken &amp; vermelding <span class="tag tag-google">GOOGLE</span></h2>
+    <ol>
+      <li>Open <a href="https://play.google.com/console" target="_blank">Play Console</a> &rarr;
+          <strong>Create app</strong>.</li>
+      <li>Vul in: app-naam (<em>TMS</em>), taal (Nederlands), type <em>App</em>, gratis/betaald.</li>
+      <li>Ga naar <strong>Test and release &rarr; Production</strong> (of eerst <em>Internal testing</em>)
+          en upload <code class="inline">app-release-bundle.aab</code>.</li>
+      <li>Vul de <strong>Store listing</strong> (winkelvermelding) in:
+        <table>
+          <tr><th>Asset</th><th>Vereiste</th></tr>
+          <tr><td>App-icoon</td><td>512 × 512 px PNG</td></tr>
+          <tr><td>Feature graphic</td><td>1024 × 500 px PNG</td></tr>
+          <tr><td>Telefoon-screenshots</td><td>Minimaal 2 (max 8)</td></tr>
+          <tr><td>Korte beschrijving</td><td>Max 80 tekens</td></tr>
+          <tr><td>Volledige beschrijving</td><td>Max 4000 tekens</td></tr>
+          <tr><td>Privacybeleid-URL</td><td>Verplicht (bijv. <code class="inline">https://tms.moveo-bv.nl/privacy</code>)</td></tr>
+        </table>
+      </li>
+      <li>Vul de verplichte vragenlijsten in (linkermenu, <em>Policy &amp; programs / App content</em>):
+        <ul>
+          <li><strong>App access</strong>: de TMS zit achter login &rarr; geef Google een
+              <em>testaccount</em> (gebruikersnaam + wachtwoord), anders wordt de review afgekeurd.</li>
+          <li><strong>Data safety</strong>: welke data je verzamelt (login, evt. locatie).</li>
+          <li><strong>Content rating</strong>: vragenlijst invullen.</li>
+          <li><strong>Target audience</strong>: doelgroep (zakelijk, 18+).</li>
+          <li><strong>Ads</strong>: geef aan dat de app geen advertenties bevat.</li>
+        </ul>
+      </li>
+    </ol>
+    <div class="warn">
+      <strong>App access (testlogin) is cruciaal.</strong> Omdat je TMS volledig achter een login zit,
+      kan Google's reviewer niets zien zonder account. Zonder geldige testlogin volgt vrijwel zeker een
+      afwijzing.
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="card" id="review">
+    <h2 class="step"><span class="badge">11</span> Inleveren voor review &amp; publiceren <span class="tag tag-google">GOOGLE</span></h2>
+    <ol>
+      <li>Heb je een nieuw persoonlijk account? Doorloop eerst de verplichte
+          <strong>gesloten test</strong> (12 testers, 14 dagen). Organisatie-accounts mogen direct naar
+          productie.</li>
+      <li>Controleer dat alle secties een groen vinkje hebben (geen openstaande taken).</li>
+      <li>Ga naar <strong>Production &rarr; Releases</strong>, klik <em>Review release</em> en daarna
+          <strong>Start rollout to Production</strong>.</li>
+      <li>De review duurt doorgaans enkele dagen (eerste keer langer). Je krijgt mail bij goedkeuring of
+          afwijzing.</li>
+      <li>Na goedkeuring staat de app live op Google Play onder
+          <code class="inline">https://play.google.com/store/apps/details?id=nl.moveobv.tms</code>.</li>
+    </ol>
+    <div class="ok">
+      Tip: gebruik eerst de <strong>Internal testing</strong>-track om de app snel (binnen minuten) op
+      een paar toestellen te testen voordat je naar Production gaat.
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="card" id="updates">
+    <h2 class="step"><span class="badge">12</span> Updates publiceren</h2>
+    <p><strong>Content-updates</strong> (nieuwe features in de web-app) vereisen <em>geen</em> nieuwe
+       app-build: na een normale productie-deploy op Linux verschijnt het direct in de app.</p>
+    <p>Een nieuwe <strong>app-bundle</strong> is alleen nodig bij wijziging van icoon, naam of
+       native-config:</p>
+    <pre>cd android-twa
+# verhoog appVersionCode (+1) en appVersionName in twa-manifest.json
+bubblewrap update
+bubblewrap build</pre>
+    <p>Upload de nieuwe <code class="inline">.aab</code> met <strong>dezelfde keystore</strong> in
+       Play Console &rarr; Production &rarr; nieuwe release.</p>
+  </section>
+
+  <!-- 13 -->
+  <section class="card" id="checklist">
+    <h2 class="step"><span class="badge">13</span> Eind-checklist</h2>
+    <ul class="checklist">
+      <li><span class="tag tag-dns">DNS</span> A-record <code class="inline">tms</code> wijst naar server-IP</li>
+      <li><span class="tag tag-linux">LINUX</span> PWA live op HTTPS met geldig SSL-certificaat</li>
+      <li><span class="tag tag-linux">LINUX</span> <code class="inline">/manifest.webmanifest</code> geeft 200 + geldige JSON</li>
+      <li><span class="tag tag-linux">LINUX</span> <code class="inline">/.well-known/assetlinks.json</code> bevat de échte fingerprint</li>
+      <li><span class="tag tag-google">GOOGLE</span> Developer-account geverifieerd (organisatie)</li>
+      <li><span class="tag tag-local">LOKAAL/PC</span> JDK 17 + Bubblewrap geïnstalleerd</li>
+      <li><span class="tag tag-local">LOKAAL/PC</span> <code class="inline">.aab</code> gebouwd, keystore veilig opgeslagen</li>
+      <li><span class="tag tag-local">LOKAAL/PC</span> App test: opent zonder adresbalk, login werkt</li>
+      <li><span class="tag tag-google">GOOGLE</span> Store listing + alle vragenlijsten ingevuld</li>
+      <li><span class="tag tag-google">GOOGLE</span> Testaccount opgegeven bij App access</li>
+      <li><span class="tag tag-google">GOOGLE</span> Release ingeleverd voor review</li>
+    </ul>
+  </section>
+
+  <footer>
+    TMS — Transport Management Systeem &nbsp;·&nbsp; Handleiding gegenereerd op 21 juni 2026<br>
+    Domein: tms.moveo-bv.nl &nbsp;·&nbsp; Package: nl.moveobv.tms
+  </footer>
+
+</div>
+</body>
+</html>

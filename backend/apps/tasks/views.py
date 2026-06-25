@@ -1,11 +1,14 @@
 """Views voor de taken-module."""
 import logging
+import os
 
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.http import FileResponse
 from django.utils import timezone
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 
 from .models import Task, TaskNote, TaskActivity, TaskReminderSettings, TaskStatus
@@ -41,6 +44,7 @@ class TaskViewSet(viewsets.ModelViewSet):
       - `all`: alle taken (alleen admins)
     """
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -208,6 +212,23 @@ class TaskViewSet(viewsets.ModelViewSet):
         task.last_reminder_sent_at = timezone.now()
         task.save(update_fields=['last_reminder_sent_at'])
         return Response({'sent': sent})
+
+    @action(detail=True, methods=['get'])
+    def download_bijlage(self, request, pk=None):
+        """Download task attachment with task-level access checks."""
+        task = self.get_object()
+        if not self._can_touch(task, request.user):
+            return Response({'error': 'Geen rechten voor deze taak'}, status=status.HTTP_403_FORBIDDEN)
+        if not task.bijlage:
+            return Response({'detail': 'Geen bijlage.'}, status=status.HTTP_404_NOT_FOUND)
+        if not task.bijlage.storage.exists(task.bijlage.name):
+            return Response({'detail': 'Bijlagebestand niet gevonden op de server.'}, status=status.HTTP_404_NOT_FOUND)
+
+        return FileResponse(
+            task.bijlage.open('rb'),
+            as_attachment=True,
+            filename=os.path.basename(task.bijlage.name),
+        )
 
     @action(detail=False, methods=['get'])
     def active_count(self, request):

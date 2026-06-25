@@ -3,7 +3,7 @@
  * Edit existing invoice details and lines
  */
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeftIcon, PlusIcon, TrashIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { 
@@ -30,6 +30,16 @@ export default function InvoiceEditPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
+  const fromTask = searchParams.get('fromTask')
+
+  const goBack = () => {
+    if (fromTask) {
+      navigate(`/tasks?task=${fromTask}`)
+      return
+    }
+    navigate('/invoices')
+  }
   
   // Data state
   const [invoice, setInvoice] = useState<Invoice | null>(null)
@@ -209,7 +219,7 @@ export default function InvoiceEditPage() {
     return (
       <div className="text-center py-12">
         <p className="text-red-600">{error || t('invoices.notFound')}</p>
-        <button onClick={() => navigate('/invoices')} className="btn-secondary mt-4">
+        <button onClick={goBack} className="btn-secondary mt-4">
           {t('invoices.backToOverview')}
         </button>
       </div>
@@ -222,7 +232,7 @@ export default function InvoiceEditPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/invoices')}
+            onClick={goBack}
             className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
           >
             <ArrowLeftIcon className="h-5 w-5" />
@@ -236,8 +246,13 @@ export default function InvoiceEditPage() {
         </div>
         
         <div className="flex items-center gap-3">
+          {fromTask && (
+            <button onClick={() => navigate(`/tasks?task=${fromTask}`)} className="btn-secondary">
+              Terug naar taak
+            </button>
+          )}
           <button
-            onClick={() => navigate('/invoices')}
+            onClick={goBack}
             className="btn-secondary"
           >
             {t('common.cancel')}

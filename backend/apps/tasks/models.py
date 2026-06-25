@@ -1,10 +1,18 @@
 """
 Taken-module: persoonlijke en toegewezen takenlijst met reminders.
 """
+import os
 import uuid
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+
+
+def task_bijlage_upload_path(instance, filename):
+    """Generate upload path for task attachments with randomized file name."""
+    ext = filename.split('.')[-1] if '.' in filename else 'bin'
+    new_filename = f"{uuid.uuid4().hex}.{ext}"
+    return os.path.join('tasks', 'attachments', new_filename)
 
 
 class TaskStatus(models.TextChoices):
@@ -50,6 +58,20 @@ class Task(models.Model):
         on_delete=models.CASCADE,
         related_name='assigned_tasks',
         verbose_name='Toegewezen aan',
+    )
+    factuur = models.ForeignKey(
+        'invoicing.Invoice',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tasks',
+        verbose_name='Gekoppelde factuur',
+    )
+    bijlage = models.FileField(
+        upload_to=task_bijlage_upload_path,
+        null=True,
+        blank=True,
+        verbose_name='Bijlage',
     )
 
     vervaldatum = models.DateField(null=True, blank=True, verbose_name='Vervaldatum')

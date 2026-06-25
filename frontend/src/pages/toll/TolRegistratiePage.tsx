@@ -10,15 +10,20 @@ import {
 } from '@heroicons/react/24/outline'
 import { TolRegistratie, createTolRegistratie, getTolRegistraties, deleteTolRegistratie, getTolDownloadUrl } from '@/api/tolregistratie'
 import { getVehiclesForDropdown } from '@/api/fleet'
-import { Vehicle } from '@/types'
+import { User, Vehicle } from '@/types'
+import { getUsers } from '@/api/users'
 import toast from 'react-hot-toast'
 import api from '@/api/client'
 import { formatBedrag, formatDate } from './utils'
 import { Dialog, Transition } from '@headlessui/react'
+import { useAuthStore } from '@/stores/authStore'
 
 export default function TolRegistratiePage() {
+  const { user } = useAuthStore()
+  const isAdmin = user?.rol === 'admin'
   const [datum, setDatum] = useState('')
   const [kenteken, setKenteken] = useState('')
+  const [selectedUserId, setSelectedUserId] = useState('')
   const [totaalBedrag, setTotaalBedrag] = useState('')
   const [ritnummers, setRitnummers] = useState<string[]>([''])
   const [bijlage, setBijlage] = useState<File | null>(null)
@@ -30,6 +35,7 @@ export default function TolRegistratiePage() {
   const [loading, setLoading] = useState(true)
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [users, setUsers] = useState<User[]>([])
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
@@ -43,7 +49,8 @@ export default function TolRegistratiePage() {
   useEffect(() => {
     loadRegistraties()
     loadVehicles()
-  }, [])
+    if (isAdmin) loadUsers()
+  }, [isAdmin])
 
   // Cleanup blob URL when modal closes
   useEffect(() => {
@@ -71,6 +78,15 @@ export default function TolRegistratiePage() {
       setVehicles(data)
     } catch {
       // not critical
+    }
+  }
+
+  const loadUsers = async () => {
+    try {
+      const response = await getUsers({ rol: 'chauffeur', is_active: 'true', page_size: 500, ordering: 'voornaam' })
+      setUsers(response.results)
+    } catch {
+      toast.error('Fout bij laden van chauffeurs')
     }
   }
 
@@ -116,6 +132,7 @@ export default function TolRegistratiePage() {
     setSubmitting(true)
     try {
       await createTolRegistratie({
+        user: isAdmin && selectedUserId ? selectedUserId : undefined,
         datum: datum || undefined,
         kenteken: kenteken ? kenteken.toUpperCase() : undefined,
         totaal_bedrag: normalizeBedrag(totaalBedrag),
@@ -125,13 +142,14 @@ export default function TolRegistratiePage() {
       toast.success('Tolregistratie ingediend!')
       setDatum('')
       setKenteken('')
+      setSelectedUserId('')
       setTotaalBedrag('')
       setRitnummers([''])
       setBijlage(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
       loadRegistraties()
     } catch (err: any) {
-      const msg = err.response?.data?.kenteken?.[0] || err.response?.data?.bijlage?.[0] || err.response?.data?.detail || 'Fout bij indienen'
+      const msg = err.response?.data?.user?.[0] || err.response?.data?.kenteken?.[0] || err.response?.data?.bijlage?.[0] || err.response?.data?.detail || 'Fout bij indienen'
       toast.error(msg)
     } finally {
       setSubmitting(false)
@@ -166,8 +184,8 @@ export default function TolRegistratiePage() {
       const blob = new Blob([response.data], { type: response.headers['Content-Type'] || response.headers['content-type'] || 'application/pdf' })
       const url = URL.createObjectURL(blob)
       setPdfBlobUrl(url)
-    } catch {
-      toast.error('Fout bij laden van bijlage')
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Fout bij laden van bijlage')
       setPdfModalReg(null)
     } finally {
       setPdfLoading(false)
@@ -188,8 +206,8 @@ export default function TolRegistratiePage() {
       a.download = reg.bijlage_naam || `tol-${reg.id}`
       a.click()
       window.URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Fout bij downloaden')
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Fout bij downloaden')
     }
   }
 
@@ -207,6 +225,23 @@ export default function TolRegistratiePage() {
           {formError && (
             <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               {formError}
+            </div>
+          )}
+          {isAdmin && (
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Chauffeur</label>
+              <select
+                value={selectedUserId}
+                onChange={e => setSelectedUserId(e.target.value)}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm py-2 px-3 border"
+              >
+                <option value="">Indienen als mijzelf</option>
+                {users.map(option => (
+                  <option key={option.id} value={option.id}>
+                    {option.full_name || option.email}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

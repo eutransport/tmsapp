@@ -24,6 +24,7 @@ export interface TolRegistratie {
 }
 
 export interface TolRegistratieCreate {
+  user?: string
   datum?: string
   kenteken?: string
   totaal_bedrag: string
@@ -65,6 +66,7 @@ export async function getTolRegistraties(filters?: TolRegistratieFilters): Promi
 
 export async function createTolRegistratie(data: TolRegistratieCreate): Promise<TolRegistratie> {
   const formData = new FormData()
+  if (data.user) formData.append('user', data.user)
   if (data.datum) formData.append('datum', data.datum)
   if (data.kenteken) formData.append('kenteken', data.kenteken)
   formData.append('totaal_bedrag', data.totaal_bedrag)

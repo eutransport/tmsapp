@@ -1,0 +1,23 @@
+# Bubblewrap / Android build artifacts — NEVER commit these
+*.keystore
+*.jks
+android.keystore
+app-release-bundle.aab
+app-release-signed.apk
+app-release-unsigned-aligned.apk
+*.apk
+*.aab
+
+# Bubblewrap generated project files
+/app/
+/build/
+.gradle/
+gradlew
+gradlew.bat
+gradle/
+local.properties
+store_icon.png
+
+# Signing key info (contains passwords)
+signing-key-info.txt
+android.keystore.base64

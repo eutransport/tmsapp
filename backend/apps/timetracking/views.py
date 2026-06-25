@@ -2,9 +2,11 @@ import logging
 import os
 from datetime import timedelta
 from decimal import Decimal
+from django.contrib.auth import get_user_model
 from django.http import FileResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -1874,6 +1876,14 @@ class TolRegistratieViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
+        if self._can_view_all():
+            target_user_id = self.request.data.get('user')
+            if target_user_id:
+                target_user = get_user_model().objects.filter(pk=target_user_id).first()
+                if not target_user:
+                    raise ValidationError({'user': 'Geselecteerde chauffeur bestaat niet.'})
+                serializer.save(user=target_user)
+                return
         serializer.save(user=self.request.user)
 
     def update(self, request, *args, **kwargs):
@@ -1894,6 +1904,8 @@ class TolRegistratieViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         if not instance.bijlage:
             return Response({'detail': 'Geen bijlage.'}, status=status.HTTP_404_NOT_FOUND)
+        if not instance.bijlage.storage.exists(instance.bijlage.name):
+            return Response({'detail': 'Bijlagebestand niet gevonden op de server.'}, status=status.HTTP_404_NOT_FOUND)
 
         response = FileResponse(
             instance.bijlage.open('rb'),
@@ -1923,4 +1935,6 @@ class TolRegistratieViewSet(viewsets.ModelViewSet):
         instance.status = TolStatus.INGEDIEND
         instance.save()
         return Response({'success': True})
+
+
 

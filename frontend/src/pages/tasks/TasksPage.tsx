@@ -1,6 +1,7 @@
 import { useState, useEffect, Fragment, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Dialog, Transition, Combobox } from '@headlessui/react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   PlusIcon,
   XMarkIcon,
@@ -15,6 +16,8 @@ import {
   ClipboardDocumentListIcon,
   CalendarIcon,
   PencilSquareIcon,
+  ArrowTopRightOnSquareIcon,
+  PaperClipIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/stores/authStore'
@@ -29,6 +32,7 @@ import {
   reassignTask,
   addTaskNote,
   sendTaskReminder,
+  downloadTaskAttachment,
   Task,
   TaskListItem,
   TaskTab,
@@ -36,6 +40,7 @@ import {
   TaskPriority,
 } from '@/api/tasks'
 import { getUsers } from '@/api/users'
+import { getInvoices } from '@/api/invoices'
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
   nieuw: 'bg-gray-100 text-gray-800',
@@ -55,11 +60,19 @@ interface SimpleUser {
   email: string
 }
 
+interface SimpleInvoice {
+  id: string
+  factuurnummer: string
+}
+
 export default function TasksPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuthStore()
   const isAdmin = user?.rol === 'admin'
   const canManage = isAdmin || (user?.module_permissions?.includes('manage_tasks') ?? false)
+  const canViewInvoices = isAdmin || user?.rol === 'gebruiker' || (user?.module_permissions?.includes('view_invoices') ?? false)
 
   const [tab, setTab] = useState<TaskTab>('mine')
   const [statusFilter, setStatusFilter] = useState<TaskStatus | ''>('')
@@ -76,6 +89,8 @@ export default function TasksPage() {
   const [formPrioriteit, setFormPrioriteit] = useState<TaskPriority>('normaal')
   const [formVervaldatum, setFormVervaldatum] = useState('')
   const [formAssignee, setFormAssignee] = useState<SimpleUser | null>(null)
+  const [formInvoice, setFormInvoice] = useState<SimpleInvoice | null>(null)
+  const [formBijlage, setFormBijlage] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Detail panel
@@ -90,6 +105,8 @@ export default function TasksPage() {
   // User search for combobox
   const [userQuery, setUserQuery] = useState('')
   const [userOptions, setUserOptions] = useState<SimpleUser[]>([])
+  const [invoiceQuery, setInvoiceQuery] = useState('')
+  const [invoiceOptions, setInvoiceOptions] = useState<SimpleInvoice[]>([])
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
@@ -134,6 +151,26 @@ export default function TasksPage() {
     return () => clearTimeout(h)
   }, [userQuery, canManage])
 
+  // Invoice search (debounced)
+  useEffect(() => {
+    if (!canViewInvoices || !showFormModal) return
+    const h = setTimeout(async () => {
+      try {
+        const res = await getInvoices({ search: invoiceQuery, page_size: 20, ordering: '-factuurdatum' })
+        const list = res.results ?? []
+        setInvoiceOptions(
+          list.map((inv) => ({
+            id: inv.id,
+            factuurnummer: inv.factuurnummer,
+          }))
+        )
+      } catch {
+        // ignore
+      }
+    }, 300)
+    return () => clearTimeout(h)
+  }, [invoiceQuery, canViewInvoices, showFormModal])
+
   const availableTabs: { key: TaskTab; label: string }[] = [
     { key: 'mine', label: t('tasks.tabs.mine') },
     ...(canManage ? [{ key: 'assigned_by_me' as TaskTab, label: t('tasks.tabs.assignedByMe') }] : []),
@@ -147,6 +184,9 @@ export default function TasksPage() {
     setFormPrioriteit('normaal')
     setFormVervaldatum('')
     setFormAssignee(null)
+    setFormInvoice(null)
+    setFormBijlage(null)
+    setInvoiceQuery('')
     setShowFormModal(true)
   }
 
@@ -156,6 +196,9 @@ export default function TasksPage() {
     setFormOmschrijving(task.omschrijving)
     setFormPrioriteit(task.prioriteit)
     setFormVervaldatum(task.vervaldatum ? task.vervaldatum.slice(0, 10) : '')
+    setFormInvoice(task.factuur ? { id: task.factuur.id, factuurnummer: task.factuur.factuurnummer } : null)
+    setFormBijlage(null)
+    setInvoiceQuery('')
     setShowFormModal(true)
   }
 
@@ -168,6 +211,8 @@ export default function TasksPage() {
           titel: formTitel.trim(),
           omschrijving: formOmschrijving,
           prioriteit: formPrioriteit,
+          factuur_id: canViewInvoices ? (formInvoice?.id ?? null) : undefined,
+          bijlage: formBijlage,
           vervaldatum: formVervaldatum || null,
         })
         toast.success(t('tasks.toast.updated'))
@@ -179,6 +224,8 @@ export default function TasksPage() {
           titel: formTitel.trim(),
           omschrijving: formOmschrijving,
           prioriteit: formPrioriteit,
+          factuur_id: canViewInvoices ? (formInvoice?.id ?? null) : undefined,
+          bijlage: formBijlage,
           vervaldatum: formVervaldatum || null,
           toegewezen_aan_id: canManage && formAssignee ? formAssignee.id : null,
         })
@@ -193,9 +240,14 @@ export default function TasksPage() {
     }
   }
 
-  const openDetail = async (id: string) => {
+  const openDetail = useCallback(async (id: string, syncUrl = true) => {
     setDetailLoading(true)
     setShowReassign(false)
+    if (syncUrl) {
+      const next = new URLSearchParams(searchParams)
+      next.set('task', id)
+      setSearchParams(next, { replace: true })
+    }
     try {
       const task = await getTask(id)
       setDetailTask(task)
@@ -204,7 +256,25 @@ export default function TasksPage() {
     } finally {
       setDetailLoading(false)
     }
-  }
+  }, [searchParams, setSearchParams, t])
+
+  const closeDetail = useCallback(() => {
+    setDetailTask(null)
+    const next = new URLSearchParams(searchParams)
+    next.delete('task')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  useEffect(() => {
+    const taskId = searchParams.get('task')
+    if (taskId && taskId !== detailTask?.id) {
+      openDetail(taskId, false)
+      return
+    }
+    if (!taskId && detailTask) {
+      setDetailTask(null)
+    }
+  }, [searchParams, detailTask, openDetail])
 
   const handleStatusChange = async (task: Task | TaskListItem, status: TaskStatus) => {
     try {
@@ -258,8 +328,24 @@ export default function TasksPage() {
       await deleteTask(deleteTarget.id)
       toast.success(t('tasks.toast.deleted'))
       setDeleteTarget(null)
-      if (detailTask?.id === deleteTarget.id) setDetailTask(null)
+      if (detailTask?.id === deleteTarget.id) closeDetail()
       fetchTasks()
+    } catch {
+      toast.error(t('tasks.toast.error'))
+    }
+  }
+
+  const handleDownloadAttachment = async (task: Task) => {
+    try {
+      const blob = await downloadTaskAttachment(task.id)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = task.bijlage_naam || 'bijlage'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
     } catch {
       toast.error(t('tasks.toast.error'))
     }
@@ -559,6 +645,42 @@ export default function TasksPage() {
                         </Combobox>
                       </div>
                     )}
+
+                    {canViewInvoices && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">{t('tasks.fields.factuur')}</label>
+                        <Combobox value={formInvoice} onChange={setFormInvoice} nullable>
+                          <div className="relative mt-1">
+                            <Combobox.Input
+                              className="w-full rounded-lg border border-gray-300 py-2 px-3 text-sm focus:border-primary-500 focus:ring-primary-500"
+                              placeholder={t('tasks.placeholders.searchInvoice')}
+                              displayValue={(inv: SimpleInvoice | null) => inv?.factuurnummer ?? ''}
+                              onChange={(e) => setInvoiceQuery(e.target.value)}
+                            />
+                            <Combobox.Options className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                              <Combobox.Option value={null} className={({ active }) => clsx('cursor-pointer px-3 py-2', active && 'bg-primary-50')}>
+                                <span className="text-gray-400">{t('tasks.unassigned')}</span>
+                              </Combobox.Option>
+                              {invoiceOptions.map((inv) => (
+                                <Combobox.Option key={inv.id} value={inv} className={({ active }) => clsx('cursor-pointer px-3 py-2', active && 'bg-primary-50')}>
+                                  <div className="font-medium text-gray-900">{inv.factuurnummer}</div>
+                                </Combobox.Option>
+                              ))}
+                            </Combobox.Options>
+                          </div>
+                        </Combobox>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">{t('tasks.fields.bijlage')}</label>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        onChange={(e) => setFormBijlage(e.target.files?.[0] || null)}
+                        className="mt-1 w-full rounded-lg border border-gray-300 py-2 px-3 text-sm focus:border-primary-500 focus:ring-primary-500"
+                      />
+                    </div>
                   </div>
 
                   <div className="mt-6 flex justify-end gap-3">
@@ -580,174 +702,188 @@ export default function TasksPage() {
         </Dialog>
       </Transition.Root>
 
-      {/* Detail panel (slide over) */}
+      {/* Detail panel (fullscreen) */}
       <Transition.Root show={!!detailTask} as={Fragment}>
-        <Dialog as="div" className="relative z-50" onClose={() => setDetailTask(null)}>
+        <Dialog as="div" className="relative z-50" onClose={closeDetail}>
           <Transition.Child as={Fragment} enter="ease-out duration-200" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-150" leaveFrom="opacity-100" leaveTo="opacity-0">
             <div className="fixed inset-0 bg-gray-900/50" />
           </Transition.Child>
-          <div className="fixed inset-0 overflow-hidden">
-            <div className="absolute inset-0 overflow-hidden">
-              <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
-                <Transition.Child as={Fragment} enter="transform transition ease-in-out duration-300" enterFrom="translate-x-full" enterTo="translate-x-0" leave="transform transition ease-in-out duration-300" leaveFrom="translate-x-0" leaveTo="translate-x-full">
-                  <Dialog.Panel className="pointer-events-auto w-screen max-w-md">
-                    <div className="flex h-full flex-col bg-white shadow-xl">
-                      {detailTask && (
-                        <>
-                          {/* Header */}
-                          <div className="border-b border-gray-200 px-6 py-4">
-                            <div className="flex items-start justify-between gap-2">
-                              <Dialog.Title className="text-lg font-semibold text-gray-900">{detailTask.titel}</Dialog.Title>
-                              <button onClick={() => setDetailTask(null)} className="rounded p-1 text-gray-400 hover:bg-gray-100">
-                                <XMarkIcon className="h-5 w-5" />
-                              </button>
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-start justify-center p-4 md:p-8">
+              <Transition.Child as={Fragment} enter="ease-out duration-200" enterFrom="opacity-0 translate-y-2" enterTo="opacity-100 translate-y-0" leave="ease-in duration-150" leaveFrom="opacity-100 translate-y-0" leaveTo="opacity-0 translate-y-2">
+                <Dialog.Panel className="w-full max-w-6xl rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
+                  {detailTask && (
+                    <>
+                      <div className="border-b border-gray-200 px-6 py-4 md:px-8">
+                        <div className="flex items-start justify-between gap-2">
+                          <Dialog.Title className="text-xl font-semibold text-gray-900">{detailTask.titel}</Dialog.Title>
+                          <button onClick={closeDetail} className="rounded p-1 text-gray-400 hover:bg-gray-100">
+                            <XMarkIcon className="h-5 w-5" />
+                          </button>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <StatusBadge status={detailTask.status} />
+                          <PriorityBadge priority={detailTask.prioriteit} />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-6 p-6 md:grid-cols-3 md:p-8">
+                        <div className="md:col-span-2 space-y-5">
+                          {detailLoading && (
+                            <div className="flex justify-center py-4">
+                              <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-primary-600" />
                             </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <StatusBadge status={detailTask.status} />
-                              <PriorityBadge priority={detailTask.prioriteit} />
-                            </div>
-                          </div>
+                          )}
 
-                          {/* Body */}
-                          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-                            {detailLoading && (
-                              <div className="flex justify-center py-4">
-                                <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-primary-600" />
-                              </div>
-                            )}
+                          {detailTask.omschrijving && (
+                            <p className="whitespace-pre-wrap text-sm text-gray-700">{detailTask.omschrijving}</p>
+                          )}
 
-                            {detailTask.omschrijving && (
-                              <p className="whitespace-pre-wrap text-sm text-gray-700">{detailTask.omschrijving}</p>
-                            )}
-
-                            <dl className="grid grid-cols-2 gap-3 text-sm">
-                              <div>
-                                <dt className="text-gray-500">{t('tasks.fields.toegewezenAan')}</dt>
-                                <dd className="font-medium text-gray-900">{detailTask.toegewezen_aan?.full_name ?? t('tasks.unassigned')}</dd>
-                              </div>
-                              <div>
-                                <dt className="text-gray-500">{t('tasks.fields.aangemaaktDoor')}</dt>
-                                <dd className="font-medium text-gray-900">{detailTask.aangemaakt_door?.full_name ?? '—'}</dd>
-                              </div>
-                              <div>
-                                <dt className="text-gray-500">{t('tasks.fields.vervaldatum')}</dt>
-                                <dd className="font-medium text-gray-900">{formatDate(detailTask.vervaldatum)}</dd>
-                              </div>
-                              <div>
-                                <dt className="text-gray-500">{t('tasks.createdAt')}</dt>
-                                <dd className="font-medium text-gray-900">{formatDate(detailTask.created_at)}</dd>
-                              </div>
-                            </dl>
-
-                            {/* Status actions */}
-                            <div className="flex flex-wrap gap-2">
-                              {detailTask.status !== 'in_behandeling' && detailTask.status !== 'afgerond' && (
-                                <button onClick={() => handleStatusChange(detailTask, 'in_behandeling')} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100">
-                                  <PlayCircleIcon className="h-4 w-4" />
-                                  {t('tasks.markInProgress')}
-                                </button>
-                              )}
-                              {detailTask.status !== 'afgerond' && (
-                                <button onClick={() => handleStatusChange(detailTask, 'afgerond')} className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100">
-                                  <CheckCircleIcon className="h-4 w-4" />
-                                  {t('tasks.markDone')}
-                                </button>
-                              )}
-                              {detailTask.status === 'afgerond' && (
-                                <button onClick={() => handleStatusChange(detailTask, 'nieuw')} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100">
-                                  <ArrowPathIcon className="h-4 w-4" />
-                                  {t('tasks.reopen')}
-                                </button>
-                              )}
-                              <button onClick={() => openEdit(detailTask)} className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200">
-                                <PencilSquareIcon className="h-4 w-4" />
-                                {t('tasks.editTask')}
-                              </button>
-                            </div>
-
-                            {/* Manager actions */}
-                            {canManage && (
-                              <div className="flex flex-wrap gap-2">
-                                <button onClick={() => setShowReassign((v) => !v)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                                  <UserPlusIcon className="h-4 w-4" />
-                                  {t('tasks.reassign')}
-                                </button>
-                                {detailTask.toegewezen_aan && (
-                                  <button onClick={() => handleReminder(detailTask)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                                    <BellAlertIcon className="h-4 w-4" />
-                                    {t('tasks.sendReminder')}
-                                  </button>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Reassign combobox */}
-                            {canManage && showReassign && (
-                              <Combobox value={null} onChange={handleReassign}>
-                                <div className="relative">
-                                  <Combobox.Input
-                                    className="w-full rounded-lg border border-gray-300 py-2 px-3 text-sm focus:border-primary-500 focus:ring-primary-500"
-                                    placeholder={t('tasks.placeholders.searchUser')}
-                                    onChange={(e) => setUserQuery(e.target.value)}
-                                  />
-                                  <Combobox.Options className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-lg">
-                                    {userOptions.map((u) => (
-                                      <Combobox.Option key={u.id} value={u} className={({ active }) => clsx('cursor-pointer px-3 py-2', active && 'bg-primary-50')}>
-                                        <div className="font-medium text-gray-900">{u.full_name}</div>
-                                        <div className="text-xs text-gray-500">{u.email}</div>
-                                      </Combobox.Option>
-                                    ))}
-                                  </Combobox.Options>
-                                </div>
-                              </Combobox>
-                            )}
-
-                            {/* Notes */}
-                            <div>
-                              <h4 className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
-                                <ChatBubbleLeftRightIcon className="h-4 w-4" />
-                                {t('tasks.notes')}
-                              </h4>
-                              <div className="mt-3 space-y-3">
-                                {detailTask.notes.length === 0 ? (
-                                  <p className="text-sm text-gray-400">{t('tasks.noNotes')}</p>
-                                ) : (
-                                  detailTask.notes.map((note) => (
-                                    <div key={note.id} className="rounded-lg bg-gray-50 p-3">
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-xs font-medium text-gray-700">{note.auteur?.full_name ?? '—'}</span>
-                                        <span className="text-xs text-gray-400">{new Date(note.created_at).toLocaleString()}</span>
-                                      </div>
-                                      <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{note.tekst}</p>
+                          <div>
+                            <h4 className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                              <ChatBubbleLeftRightIcon className="h-4 w-4" />
+                              {t('tasks.notes')}
+                            </h4>
+                            <div className="mt-3 space-y-3">
+                              {detailTask.notes.length === 0 ? (
+                                <p className="text-sm text-gray-400">{t('tasks.noNotes')}</p>
+                              ) : (
+                                detailTask.notes.map((note) => (
+                                  <div key={note.id} className="rounded-lg bg-gray-50 p-3">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-medium text-gray-700">{note.auteur?.full_name ?? '—'}</span>
+                                      <span className="text-xs text-gray-400">{new Date(note.created_at).toLocaleString()}</span>
                                     </div>
-                                  ))
-                                )}
-                              </div>
-                              <div className="mt-3 flex gap-2">
-                                <input
-                                  type="text"
-                                  value={noteInput}
-                                  onChange={(e) => setNoteInput(e.target.value)}
-                                  onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
-                                  placeholder={t('tasks.placeholders.note')}
-                                  className="flex-1 rounded-lg border border-gray-300 py-2 px-3 text-sm focus:border-primary-500 focus:ring-primary-500"
-                                />
-                                <button
-                                  onClick={handleAddNote}
-                                  disabled={!noteInput.trim()}
-                                  className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-                                >
-                                  {t('tasks.addNote')}
-                                </button>
-                              </div>
+                                    <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{note.tekst}</p>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                            <div className="mt-3 flex gap-2">
+                              <input
+                                type="text"
+                                value={noteInput}
+                                onChange={(e) => setNoteInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
+                                placeholder={t('tasks.placeholders.note')}
+                                className="flex-1 rounded-lg border border-gray-300 py-2 px-3 text-sm focus:border-primary-500 focus:ring-primary-500"
+                              />
+                              <button
+                                onClick={handleAddNote}
+                                disabled={!noteInput.trim()}
+                                className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                              >
+                                {t('tasks.addNote')}
+                              </button>
                             </div>
                           </div>
-                        </>
-                      )}
-                    </div>
-                  </Dialog.Panel>
-                </Transition.Child>
-              </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <dl className="grid grid-cols-1 gap-3 text-sm">
+                            <div>
+                              <dt className="text-gray-500">{t('tasks.fields.toegewezenAan')}</dt>
+                              <dd className="font-medium text-gray-900">{detailTask.toegewezen_aan?.full_name ?? t('tasks.unassigned')}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-gray-500">{t('tasks.fields.aangemaaktDoor')}</dt>
+                              <dd className="font-medium text-gray-900">{detailTask.aangemaakt_door?.full_name ?? '—'}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-gray-500">{t('tasks.fields.vervaldatum')}</dt>
+                              <dd className="font-medium text-gray-900">{formatDate(detailTask.vervaldatum)}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-gray-500">{t('tasks.createdAt')}</dt>
+                              <dd className="font-medium text-gray-900">{formatDate(detailTask.created_at)}</dd>
+                            </div>
+                          </dl>
+
+                          <div className="flex flex-wrap gap-2">
+                            {detailTask.status !== 'in_behandeling' && detailTask.status !== 'afgerond' && (
+                              <button onClick={() => handleStatusChange(detailTask, 'in_behandeling')} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100">
+                                <PlayCircleIcon className="h-4 w-4" />
+                                {t('tasks.markInProgress')}
+                              </button>
+                            )}
+                            {detailTask.status !== 'afgerond' && (
+                              <button onClick={() => handleStatusChange(detailTask, 'afgerond')} className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100">
+                                <CheckCircleIcon className="h-4 w-4" />
+                                {t('tasks.markDone')}
+                              </button>
+                            )}
+                            {detailTask.status === 'afgerond' && (
+                              <button onClick={() => handleStatusChange(detailTask, 'nieuw')} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100">
+                                <ArrowPathIcon className="h-4 w-4" />
+                                {t('tasks.reopen')}
+                              </button>
+                            )}
+                            <button onClick={() => openEdit(detailTask)} className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200">
+                              <PencilSquareIcon className="h-4 w-4" />
+                              {t('tasks.editTask')}
+                            </button>
+                          </div>
+
+                          {canViewInvoices && detailTask.factuur && (
+                            <button
+                              onClick={() => navigate(`/invoices/${detailTask.factuur!.id}/edit?fromTask=${detailTask.id}`)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                              <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+                              {detailTask.factuur.factuurnummer}
+                            </button>
+                          )}
+
+                          {detailTask.bijlage_url && (
+                            <button
+                              onClick={() => handleDownloadAttachment(detailTask)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                              <PaperClipIcon className="h-4 w-4" />
+                              {detailTask.bijlage_naam || t('tasks.fields.bijlage')}
+                            </button>
+                          )}
+
+                          {canManage && (
+                            <div className="flex flex-wrap gap-2">
+                              <button onClick={() => setShowReassign((v) => !v)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                <UserPlusIcon className="h-4 w-4" />
+                                {t('tasks.reassign')}
+                              </button>
+                              {detailTask.toegewezen_aan && (
+                                <button onClick={() => handleReminder(detailTask)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                  <BellAlertIcon className="h-4 w-4" />
+                                  {t('tasks.sendReminder')}
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {canManage && showReassign && (
+                            <Combobox value={null} onChange={handleReassign}>
+                              <div className="relative">
+                                <Combobox.Input
+                                  className="w-full rounded-lg border border-gray-300 py-2 px-3 text-sm focus:border-primary-500 focus:ring-primary-500"
+                                  placeholder={t('tasks.placeholders.searchUser')}
+                                  onChange={(e) => setUserQuery(e.target.value)}
+                                />
+                                <Combobox.Options className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                                  {userOptions.map((u) => (
+                                    <Combobox.Option key={u.id} value={u} className={({ active }) => clsx('cursor-pointer px-3 py-2', active && 'bg-primary-50')}>
+                                      <div className="font-medium text-gray-900">{u.full_name}</div>
+                                      <div className="text-xs text-gray-500">{u.email}</div>
+                                    </Combobox.Option>
+                                  ))}
+                                </Combobox.Options>
+                              </div>
+                            </Combobox>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </Dialog.Panel>
+              </Transition.Child>
             </div>
           </div>
         </Dialog>
