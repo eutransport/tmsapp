@@ -176,6 +176,7 @@
     "tachographComparison": "Hours Comparison",
     "reports": "Report Agent",
     "pakmiddelen": "Pakmiddelen",
+    "tasks": "Task List",
     "tolregistratie": "Toll Registration",
     "tolregistratieAdmin": "Toll Overview (Admin)",
     "kilometerheffing": "Mileage Charge",
@@ -183,6 +184,80 @@
     "users": "Users",
     "settings": "Settings",
     "profile": "Profile"
+  },
+  "tasks": {
+    "title": "Task List",
+    "subtitle": "Manage your tasks and assign them to colleagues",
+    "newTask": "New task",
+    "editTask": "Edit task",
+    "tabs": {
+      "mine": "My tasks",
+      "assignedByMe": "Assigned by me",
+      "all": "All tasks"
+    },
+    "status": {
+      "nieuw": "New",
+      "in_behandeling": "In progress",
+      "afgerond": "Done"
+    },
+    "priority": {
+      "laag": "Low",
+      "normaal": "Normal",
+      "hoog": "High"
+    },
+    "fields": {
+      "titel": "Title",
+      "omschrijving": "Description",
+      "prioriteit": "Priority",
+      "status": "Status",
+      "toegewezenAan": "Assigned to",
+      "vervaldatum": "Due date",
+      "aangemaaktDoor": "Created by",
+      "laatsteActiviteit": "Last activity"
+    },
+    "placeholders": {
+      "titel": "What needs to be done?",
+      "omschrijving": "Add more details (optional)",
+      "search": "Search tasks...",
+      "searchUser": "Search a colleague...",
+      "note": "Write a note..."
+    },
+    "assignToMe": "To myself",
+    "unassigned": "Unassigned",
+    "notes": "Notes",
+    "noNotes": "No notes yet",
+    "addNote": "Add note",
+    "reassign": "Reassign",
+    "sendReminder": "Send reminder",
+    "markInProgress": "Start working",
+    "markDone": "Mark done",
+    "reopen": "Reopen",
+    "noTasks": "No tasks found",
+    "noTasksHint": "Create your first task to get started",
+    "deleteConfirm": "Are you sure you want to delete this task?",
+    "filterStatus": "All statuses",
+    "details": "Details",
+    "createdAt": "Created at",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create",
+    "popup": {
+      "title": "You have open tasks",
+      "body": "You have {{count}} open task(s), {{nieuw}} of which are new.",
+      "view": "View tasks",
+      "dismiss": "Later"
+    },
+    "toast": {
+      "created": "Task created",
+      "updated": "Task updated",
+      "deleted": "Task deleted",
+      "statusChanged": "Status changed",
+      "reassigned": "Task reassigned",
+      "noteAdded": "Note added",
+      "reminderSent": "Reminder sent",
+      "error": "Something went wrong"
+    }
   },
   "dashboard": {
     "title": "Dashboard",

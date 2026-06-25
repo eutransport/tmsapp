@@ -43,4 +43,13 @@ app.conf.beat_schedule = {
         # Run daily at 03:00 — yesterday's tachograph data is then complete
         'schedule': crontab(hour=3, minute=0),
     },
+    'send-daily-task-reminders': {
+        # Runs every minute; the task itself checks the configured send time.
+        'task': 'apps.tasks.tasks.send_daily_task_reminders',
+        'schedule': crontab(minute='*'),
+    },
+    'send-stale-task-reminders': {
+        'task': 'apps.tasks.tasks.send_stale_task_reminders',
+        'schedule': crontab(hour=8, minute=45),
+    },
 }

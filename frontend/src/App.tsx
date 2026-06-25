@@ -78,6 +78,9 @@ import KilometerheffingPage from '@/pages/kilometerheffing/KilometerheffingPage'
 // Pakmiddelen Teruggavebonnen
 import PakmiddelenPage from '@/pages/pakmiddelen/PakmiddelenPage'
 
+// Tasks (Takenlijst)
+import TasksPage from '@/pages/tasks/TasksPage'
+
 // Notifications
 import NotificationsPage from '@/pages/notifications/NotificationsPage'
 
@@ -358,6 +361,9 @@ function App() {
 
         {/* Pakmiddelen Teruggavebonnen */}
         <Route path="/pakmiddelen" element={<PermissionRoute permission="view_pakmiddelen"><PakmiddelenPage /></PermissionRoute>} />
+
+        {/* Takenlijst */}
+        <Route path="/tasks" element={<TasksPage />} />
 
         {/* Spreadsheets (Ritregistratie) */}
         <Route path="/spreadsheets" element={<AdminRoute><SpreadsheetListPage /></AdminRoute>} />

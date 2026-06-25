@@ -41,6 +41,7 @@ import { AppSettings } from '@/types'
 import clsx from '@/utils/clsx'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import PushNotificationPrompt from '@/components/pwa/PushNotificationPrompt'
+import ActiveTasksPopup from '@/components/tasks/ActiveTasksPopup'
 import LicenseExpiryBanner from '@/components/licensing/LicenseExpiryBanner'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher'
 import { useTranslation } from 'react-i18next'
@@ -71,6 +72,7 @@ const navigation: NavItem[] = [
   { name: 'nav.leaveBalance', href: '/leave/balances', icon: ScaleIcon, roles: ['admin', 'gebruiker', 'chauffeur'], permission: 'view_leave_balances' },
   { name: 'nav.leaveRequests', href: '/leave/admin', icon: ClipboardDocumentCheckIcon, roles: ['admin'], permission: 'can_manage_leave_for_all' },
   { name: 'nav.documents', href: '/documents', icon: PencilSquareIcon },  // All roles - PDF signing
+  { name: 'nav.tasks', href: '/tasks', icon: ClipboardDocumentCheckIcon },  // All roles - takenlijst
   { name: 'nav.notifications', href: '/notifications', icon: BellIcon, roles: ['admin'], permission: 'view_notifications' },
   { name: 'nav.invoices', href: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'gebruiker'], permission: 'view_invoices' },
   { name: 'nav.invoiceTemplates', href: '/invoices/templates', icon: DocumentDuplicateIcon, roles: ['admin'], permission: 'view_invoice_templates' },
@@ -282,6 +284,9 @@ export default function DashboardLayout() {
 
       {/* Push Notification Prompt - shows after login if not subscribed */}
       <PushNotificationPrompt delay={3000} />
+
+      {/* Open tasks reminder popup - shows once per session */}
+      <ActiveTasksPopup />
     </div>
   )
 }

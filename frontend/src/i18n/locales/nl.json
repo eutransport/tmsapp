@@ -176,6 +176,7 @@
     "tachographComparison": "Uren Vergelijking",
     "reports": "Rapport Agent",
     "pakmiddelen": "Pakmiddelen",
+    "tasks": "Takenlijst",
     "tolregistratie": "Tolregistratie",
     "tolregistratieAdmin": "Tol Overzicht (Admin)",
     "kilometerheffing": "Kilometerheffing",
@@ -183,6 +184,80 @@
     "users": "Gebruikers",
     "settings": "Instellingen",
     "profile": "Profiel"
+  },
+  "tasks": {
+    "title": "Takenlijst",
+    "subtitle": "Beheer je taken en wijs ze toe aan collega's",
+    "newTask": "Nieuwe taak",
+    "editTask": "Taak bewerken",
+    "tabs": {
+      "mine": "Mijn taken",
+      "assignedByMe": "Toegewezen door mij",
+      "all": "Alle taken"
+    },
+    "status": {
+      "nieuw": "Nieuw",
+      "in_behandeling": "In behandeling",
+      "afgerond": "Afgerond"
+    },
+    "priority": {
+      "laag": "Laag",
+      "normaal": "Normaal",
+      "hoog": "Hoog"
+    },
+    "fields": {
+      "titel": "Titel",
+      "omschrijving": "Omschrijving",
+      "prioriteit": "Prioriteit",
+      "status": "Status",
+      "toegewezenAan": "Toegewezen aan",
+      "vervaldatum": "Vervaldatum",
+      "aangemaaktDoor": "Aangemaakt door",
+      "laatsteActiviteit": "Laatste activiteit"
+    },
+    "placeholders": {
+      "titel": "Wat moet er gebeuren?",
+      "omschrijving": "Voeg meer details toe (optioneel)",
+      "search": "Zoek taken...",
+      "searchUser": "Zoek een collega...",
+      "note": "Schrijf een notitie..."
+    },
+    "assignToMe": "Aan mezelf",
+    "unassigned": "Niet toegewezen",
+    "notes": "Notities",
+    "noNotes": "Nog geen notities",
+    "addNote": "Notitie toevoegen",
+    "reassign": "Opnieuw toewijzen",
+    "sendReminder": "Herinnering sturen",
+    "markInProgress": "In behandeling nemen",
+    "markDone": "Afronden",
+    "reopen": "Heropenen",
+    "noTasks": "Geen taken gevonden",
+    "noTasksHint": "Maak je eerste taak aan om te beginnen",
+    "deleteConfirm": "Weet je zeker dat je deze taak wilt verwijderen?",
+    "filterStatus": "Alle statussen",
+    "details": "Details",
+    "createdAt": "Aangemaakt op",
+    "save": "Opslaan",
+    "cancel": "Annuleren",
+    "delete": "Verwijderen",
+    "create": "Aanmaken",
+    "popup": {
+      "title": "Je hebt openstaande taken",
+      "body": "Je hebt {{count}} openstaande taak/taken waarvan {{nieuw}} nieuw.",
+      "view": "Bekijk taken",
+      "dismiss": "Later"
+    },
+    "toast": {
+      "created": "Taak aangemaakt",
+      "updated": "Taak bijgewerkt",
+      "deleted": "Taak verwijderd",
+      "statusChanged": "Status gewijzigd",
+      "reassigned": "Taak opnieuw toegewezen",
+      "noteAdded": "Notitie toegevoegd",
+      "reminderSent": "Herinnering verstuurd",
+      "error": "Er ging iets mis"
+    }
   },
   "dashboard": {
     "title": "Dashboard",

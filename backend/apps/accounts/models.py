@@ -39,6 +39,7 @@ AVAILABLE_MODULE_PERMISSIONS = [
     ('manage_dossiers', 'Dossiers beheren'),
     ('view_pakmiddelen', 'Pakmiddelen Teruggavebonnen (alleen lezen)'),
     ('manage_pakmiddelen', 'Pakmiddelen Teruggavebonnen beheren'),
+    ('manage_tasks', 'Taken toewijzen aan anderen'),
 ]
 
 # Dependencies: enabling a permission also requires these permissions
