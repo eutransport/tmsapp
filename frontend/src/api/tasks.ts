@@ -98,6 +98,7 @@ export interface TaskUpdate {
   titel?: string
   omschrijving?: string
   prioriteit?: TaskPriority
+  toegewezen_aan_id?: string | null
   factuur_id?: string | null
   bijlage?: File | null
   vervaldatum?: string | null
