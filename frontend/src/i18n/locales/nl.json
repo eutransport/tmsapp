@@ -183,7 +183,10 @@
     "urenImport": "Uren Import",
     "users": "Gebruikers",
     "settings": "Instellingen",
-    "profile": "Profiel"
+    "profile": "Profiel",
+    "favorites": "Favorieten",
+    "addFavorite": "Toevoegen aan favorieten",
+    "removeFavorite": "Verwijderen uit favorieten"
   },
   "tasks": {
     "title": "Takenlijst",

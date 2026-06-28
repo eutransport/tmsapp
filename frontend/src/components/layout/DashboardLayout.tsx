@@ -1,6 +1,7 @@
-import { useEffect, Fragment } from 'react'
+import { useEffect, useState, useCallback, Fragment } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { Dialog, Transition, Menu } from '@headlessui/react'
+import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid'
 import {
   Bars3Icon,
   XMarkIcon,
@@ -33,6 +34,7 @@ import {
   DocumentChartBarIcon,
   EnvelopeIcon,
   ReceiptPercentIcon,
+  StarIcon,
 } from '@heroicons/react/24/outline'
 import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
@@ -52,6 +54,27 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>
   roles?: ('admin' | 'gebruiker' | 'chauffeur')[]  // If undefined, all roles can see it
   permission?: string  // Module permission required (checked for non-admin users)
+}
+
+const FAVORITES_STORAGE_KEY = 'tms.nav.favorites'
+
+function loadFavorites(): string[] {
+  try {
+    const raw = localStorage.getItem(FAVORITES_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function saveFavorites(favorites: string[]) {
+  try {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites))
+  } catch {
+    // ignore quota / private mode errors
+  }
 }
 
 // Navigation items with role-based access - keys for translation
@@ -137,6 +160,17 @@ export default function DashboardLayout() {
   const filteredNavigation = filterByRole(navigation)
   const filteredAdminNavigation = filterByRole(adminNavigation)
   const allNavigation = [...filteredNavigation, ...filteredAdminNavigation]
+
+  // Favorites (per-browser via localStorage)
+  const [favorites, setFavorites] = useState<string[]>(() => loadFavorites())
+  useEffect(() => {
+    saveFavorites(favorites)
+  }, [favorites])
+  const toggleFavorite = useCallback((href: string) => {
+    setFavorites((prev) =>
+      prev.includes(href) ? prev.filter((h) => h !== href) : [...prev, href]
+    )
+  }, [])
   
   return (
     <div className="h-full flex">
@@ -176,6 +210,8 @@ export default function DashboardLayout() {
                   navigation={allNavigation} 
                   settings={settings} 
                   onNavigate={() => setSidebarOpen(false)}
+                  favorites={favorites}
+                  onToggleFavorite={toggleFavorite}
                 />
               </Dialog.Panel>
             </Transition.Child>
@@ -185,7 +221,12 @@ export default function DashboardLayout() {
 
       {/* Desktop sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
-        <SidebarContent navigation={allNavigation} settings={settings} />
+        <SidebarContent
+          navigation={allNavigation}
+          settings={settings}
+          favorites={favorites}
+          onToggleFavorite={toggleFavorite}
+        />
       </div>
 
       {/* Main content */}
@@ -295,11 +336,57 @@ interface SidebarContentProps {
   navigation: NavItem[]
   settings: AppSettings | null
   onNavigate?: () => void
+  favorites: string[]
+  onToggleFavorite: (href: string) => void
 }
 
-function SidebarContent({ navigation, settings, onNavigate }: SidebarContentProps) {
+function SidebarContent({ navigation, settings, onNavigate, favorites, onToggleFavorite }: SidebarContentProps) {
   const { t } = useTranslation()
-  
+  const favoriteSet = new Set(favorites)
+  const favoriteItems = navigation.filter((item) => favoriteSet.has(item.href))
+
+  const renderItem = (item: NavItem, keyPrefix: string) => {
+    const isFav = favoriteSet.has(item.href)
+    return (
+      <li key={`${keyPrefix}-${item.href}`} className="relative">
+        <NavLink
+          to={item.href}
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            clsx(
+              'group flex items-center gap-x-3 rounded-md p-2 pr-10 text-sm font-semibold leading-6 transition-colors',
+              isActive ? 'text-white' : 'hover:text-white'
+            )
+          }
+          style={({ isActive }) => ({
+            backgroundColor: isActive ? 'var(--color-sidebar-hover)' : 'transparent',
+            color: isActive ? 'white' : 'var(--color-sidebar-text)',
+          })}
+        >
+          <item.icon className="h-6 w-6 shrink-0" />
+          <span className="truncate">{t(item.name)}</span>
+        </NavLink>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onToggleFavorite(item.href)
+          }}
+          aria-label={isFav ? t('nav.removeFavorite') : t('nav.addFavorite')}
+          title={isFav ? t('nav.removeFavorite') : t('nav.addFavorite')}
+          className="absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-md text-white/60 hover:text-yellow-300 touch-target"
+        >
+          {isFav ? (
+            <StarSolidIcon className="h-5 w-5 text-yellow-300" />
+          ) : (
+            <StarIcon className="h-5 w-5" />
+          )}
+        </button>
+      </li>
+    )
+  }
+
   return (
     <div 
       className="flex grow flex-col gap-y-5 overflow-y-auto px-6 pb-4"
@@ -314,31 +401,22 @@ function SidebarContent({ navigation, settings, onNavigate }: SidebarContentProp
       
       <nav className="flex flex-1 flex-col">
         <ul role="list" className="flex flex-1 flex-col gap-y-7">
+          {favoriteItems.length > 0 && (
+            <li>
+              <div
+                className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider"
+                style={{ color: 'var(--color-sidebar-text)' }}
+              >
+                {t('nav.favorites')}
+              </div>
+              <ul role="list" className="-mx-2 space-y-1">
+                {favoriteItems.map((item) => renderItem(item, 'fav'))}
+              </ul>
+            </li>
+          )}
           <li>
             <ul role="list" className="-mx-2 space-y-1">
-              {navigation.map((item) => (
-                <li key={item.name}>
-                  <NavLink
-                    to={item.href}
-                    onClick={onNavigate}
-                    className={({ isActive }) =>
-                      clsx(
-                        'group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 transition-colors',
-                        isActive
-                          ? 'text-white'
-                          : 'hover:text-white'
-                      )
-                    }
-                    style={({ isActive }) => ({
-                      backgroundColor: isActive ? 'var(--color-sidebar-hover)' : 'transparent',
-                      color: isActive ? 'white' : 'var(--color-sidebar-text)',
-                    })}
-                  >
-                    <item.icon className="h-6 w-6 shrink-0" />
-                    {t(item.name)}
-                  </NavLink>
-                </li>
-              ))}
+              {navigation.map((item) => renderItem(item, 'nav'))}
             </ul>
           </li>
         </ul>

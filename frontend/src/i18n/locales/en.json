@@ -183,7 +183,10 @@
     "urenImport": "Hours Import",
     "users": "Users",
     "settings": "Settings",
-    "profile": "Profile"
+    "profile": "Profile",
+    "favorites": "Favorites",
+    "addFavorite": "Add to favorites",
+    "removeFavorite": "Remove from favorites"
   },
   "tasks": {
     "title": "Task List",
