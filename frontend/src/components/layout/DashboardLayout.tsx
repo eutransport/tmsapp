@@ -161,7 +161,55 @@ export default function DashboardLayout() {
     },
     [user?.nav_favorites, setUser]
   )
-  
+
+  // Edge-swipe to open the mobile sidebar.
+  // Listens for a touch starting within ~18px of the left edge and moving
+  // predominantly to the right; opens the drawer once the gesture is clear.
+  useEffect(() => {
+    if (sidebarOpen) return
+    let startX = 0
+    let startY = 0
+    let tracking = false
+    const EDGE = 18
+    const THRESHOLD = 60
+
+    const onStart = (e: TouchEvent) => {
+      if (window.innerWidth >= 1024) return
+      const t = e.touches[0]
+      if (!t || t.clientX > EDGE) return
+      startX = t.clientX
+      startY = t.clientY
+      tracking = true
+    }
+    const onMove = (e: TouchEvent) => {
+      if (!tracking) return
+      const t = e.touches[0]
+      if (!t) return
+      const dx = t.clientX - startX
+      const dy = t.clientY - startY
+      if (dx > THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+        tracking = false
+        setSidebarOpen(true)
+      } else if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 20) {
+        tracking = false
+      }
+    }
+    const onEnd = () => {
+      tracking = false
+    }
+
+    window.addEventListener('touchstart', onStart, { passive: true })
+    window.addEventListener('touchmove', onMove, { passive: true })
+    window.addEventListener('touchend', onEnd, { passive: true })
+    window.addEventListener('touchcancel', onEnd, { passive: true })
+    return () => {
+      window.removeEventListener('touchstart', onStart)
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onEnd)
+      window.removeEventListener('touchcancel', onEnd)
+    }
+  }, [sidebarOpen, setSidebarOpen])
+
   return (
     <div className="h-full flex">
       {/* Mobile sidebar */}
