@@ -35,7 +35,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'username', 'voornaam', 'achternaam',
             'full_name', 'telefoon', 'bedrijf', 'rol',
-            'module_permissions',
+            'module_permissions', 'nav_favorites',
             'mfa_enabled', 'mfa_required', 'is_active', 'date_joined', 'last_login'
         ]
         read_only_fields = ['id', 'date_joined', 'last_login']
@@ -50,7 +50,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'username', 'voornaam', 'achternaam',
             'full_name', 'telefoon', 'bedrijf', 'rol',
-            'module_permissions',
+            'module_permissions', 'nav_favorites',
             'mfa_enabled', 'mfa_required', 'is_active', 'date_joined', 'last_login'
         ]
         read_only_fields = ['id', 'email', 'rol', 'is_active', 'date_joined', 'last_login']

@@ -121,6 +121,14 @@ class User(AbstractBaseUser, PermissionsMixin):
         help_text='Lijst van specifieke rechten voor deze gebruiker, bovenop de basisrol.'
     )
 
+    # User-specific UI preferences
+    nav_favorites = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Favoriete menu-items',
+        help_text='Lijst van hrefs van menu-items die de gebruiker als favoriet heeft gemarkeerd.'
+    )
+
     # Status
     is_active = models.BooleanField(default=True, verbose_name='Actief')
     is_staff = models.BooleanField(default=False, verbose_name='Staff')

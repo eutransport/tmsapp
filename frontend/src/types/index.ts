@@ -12,6 +12,7 @@ export interface User {
   mfa_enabled: boolean
   mfa_required: boolean
   module_permissions: string[]
+  nav_favorites?: string[]
   is_active: boolean
   date_joined: string
   last_login: string | null

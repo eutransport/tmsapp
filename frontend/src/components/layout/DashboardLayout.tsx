@@ -40,6 +40,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { AppSettings } from '@/types'
+import { authApi } from '@/api/auth'
 import clsx from '@/utils/clsx'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import PushNotificationPrompt from '@/components/pwa/PushNotificationPrompt'
@@ -54,27 +55,6 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>
   roles?: ('admin' | 'gebruiker' | 'chauffeur')[]  // If undefined, all roles can see it
   permission?: string  // Module permission required (checked for non-admin users)
-}
-
-const FAVORITES_STORAGE_KEY = 'tms.nav.favorites'
-
-function loadFavorites(): string[] {
-  try {
-    const raw = localStorage.getItem(FAVORITES_STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-function saveFavorites(favorites: string[]) {
-  try {
-    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites))
-  } catch {
-    // ignore quota / private mode errors
-  }
 }
 
 // Navigation items with role-based access - keys for translation
@@ -118,7 +98,7 @@ const adminNavigation: NavItem[] = [
 
 export default function DashboardLayout() {
   const navigate = useNavigate()
-  const { user, logout } = useAuthStore()
+  const { user, logout, setUser } = useAuthStore()
   const { settings, sidebarOpen, setSidebarOpen, fetchSettings } = useAppStore()
   const { currentTheme, applyTheme } = useThemeStore()
   const { t } = useTranslation()
@@ -161,16 +141,26 @@ export default function DashboardLayout() {
   const filteredAdminNavigation = filterByRole(adminNavigation)
   const allNavigation = [...filteredNavigation, ...filteredAdminNavigation]
 
-  // Favorites (per-browser via localStorage)
-  const [favorites, setFavorites] = useState<string[]>(() => loadFavorites())
+  // Favorites stored per-user in the database via /auth/profile/.
+  // We keep a local mirror so toggling feels instant; on failure we revert.
+  const [favorites, setFavorites] = useState<string[]>(user?.nav_favorites ?? [])
   useEffect(() => {
-    saveFavorites(favorites)
-  }, [favorites])
-  const toggleFavorite = useCallback((href: string) => {
-    setFavorites((prev) =>
-      prev.includes(href) ? prev.filter((h) => h !== href) : [...prev, href]
-    )
-  }, [])
+    setFavorites(user?.nav_favorites ?? [])
+  }, [user?.nav_favorites])
+  const toggleFavorite = useCallback(
+    (href: string) => {
+      const current = user?.nav_favorites ?? []
+      const next = current.includes(href)
+        ? current.filter((h) => h !== href)
+        : [...current, href]
+      setFavorites(next)
+      authApi
+        .updateProfile({ nav_favorites: next })
+        .then((updated) => setUser(updated))
+        .catch(() => setFavorites(current))
+    },
+    [user?.nav_favorites, setUser]
+  )
   
   return (
     <div className="h-full flex">
