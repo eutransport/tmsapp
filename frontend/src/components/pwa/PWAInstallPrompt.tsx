@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { DevicePhoneMobileIcon, XMarkIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import { DevicePhoneMobileIcon, XMarkIcon, ArrowUpOnSquareIcon } from '@heroicons/react/24/outline'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -96,7 +96,7 @@ export default function PWAInstallPrompt() {
             <p className="mt-1 text-sm text-white/80">
               {isIOS ? (
                 <>
-                  {t('pwa.iosTapOn')} <span className="inline-flex items-center"><ArrowDownTrayIcon className="h-4 w-4 mx-1" /></span> 
+                  {t('pwa.iosTapOn')} <span className="inline-flex items-center"><ArrowUpOnSquareIcon className="h-4 w-4 mx-1" /></span> 
                   {t('pwa.iosAddToHomeScreen')}
                 </>
               ) : (
