@@ -181,10 +181,10 @@ function formatCurrency(value: number): string {
   }).format(value)
 }
 
-// Rond een hoeveelheid (uren/aantal) af op maximaal 1 decimaal
+// Rond een hoeveelheid (uren/aantal) af op kwartieren (0.25)
 function roundUren(n: number): number {
   if (!isFinite(n)) return 0
-  return Math.round(n * 10) / 10
+  return Math.round(n * 4) / 4
 }
 
 // Toon een celwaarde met maximaal 2 decimalen (getallen), strings blijven ongewijzigd
