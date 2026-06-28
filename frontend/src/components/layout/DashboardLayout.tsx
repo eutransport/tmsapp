@@ -406,7 +406,9 @@ function SidebarContent({ navigation, settings, onNavigate, favorites, onToggleF
           )}
           <li>
             <ul role="list" className="-mx-2 space-y-1">
-              {navigation.map((item) => renderItem(item, 'nav'))}
+              {navigation
+                .filter((item) => !favoriteSet.has(item.href))
+                .map((item) => renderItem(item, 'nav'))}
             </ul>
           </li>
         </ul>
