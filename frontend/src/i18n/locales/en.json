@@ -793,6 +793,15 @@
     "hoursCalculationNote": "Hours are automatically calculated based on work days (8 hours/day). You can adjust this for partial leave.",
     "concurrentWarning": "Note: {{count}} colleagues already have leave during this period",
     "concurrentWarningNote": "Your request may not be approved due to staffing requirements.",
+    "overlap": {
+      "title": "Other colleagues on leave in this period",
+      "infoBody": "This is informational — there is still capacity on the schedule.",
+      "warningTitle": "Heads up: many colleagues on leave",
+      "warningBody": "{{count}} colleagues already have approved leave during (part of) this period (threshold: {{max}}). Your request will get extra review due to staffing.",
+      "countLabel": "{{count}} colleague(s)",
+      "noneTitle": "Nobody else is on leave",
+      "noneBody": "There are no approved leave requests from colleagues in this period."
+    },
     "submitRequest": "Submit request",
     "period": "Period",
     "comment": "Comment",

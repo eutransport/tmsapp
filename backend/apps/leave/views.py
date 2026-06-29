@@ -128,9 +128,9 @@ class GlobalLeaveSettingsViewSet(viewsets.ModelViewSet):
         reminder at the configured intervals (1/2/3/4 weeks later).
 
         Two modes:
-        - ``send: false`` (default) → dry-run: returns found leaves without
+        - ``send: false`` (default) â†’ dry-run: returns found leaves without
           sending email.
-        - ``send: true`` → actually sends the reminder email(s) so the admin
+        - ``send: true`` â†’ actually sends the reminder email(s) so the admin
           can verify the full email flow.
         """
         if not (request.user.is_superuser or request.user.rol == 'admin'):
@@ -240,7 +240,7 @@ class GlobalLeaveSettingsViewSet(viewsets.ModelViewSet):
                     lines = []
                     for lv in entry['leaves']:
                         lines.append(
-                            f"  • {lv['user_naam']} — {lv['leave_type']}\n"
+                            f"  â€¢ {lv['user_naam']} â€” {lv['leave_type']}\n"
                             f"    Van {lv['start_date']} t/m {lv['end_date']} "
                             f"({lv['hours_requested']} uur)"
                         )
@@ -478,7 +478,7 @@ class LeaveBalanceViewSet(viewsets.ModelViewSet):
         
         if vacation_delta == 0 and overtime_delta == 0:
             return Response(
-                {'error': 'Geef minstens één wijziging op (vacation_delta of overtime_delta).'},
+                {'error': 'Geef minstens Ã©Ã©n wijziging op (vacation_delta of overtime_delta).'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -1182,11 +1182,34 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             status=LeaveRequestStatus.APPROVED,
             start_date__lte=end_date,
             end_date__gte=start_date,
-        ).exclude(user=request.user).select_related('user')
-        
-        concurrent_users = list(set(req.user.full_name for req in overlapping))
+        ).exclude(user=request.user).select_related('user').order_by('start_date')
+
+        seen_users = {}
+        details = []
+        for req in overlapping:
+            uid = req.user_id
+            if uid in seen_users:
+                seen_users[uid]['periods'].append({
+                    'start_date': req.start_date,
+                    'end_date': req.end_date,
+                    'leave_type': req.leave_type,
+                })
+                continue
+            entry = {
+                'user_id': str(uid),
+                'name': req.user.full_name or req.user.username,
+                'periods': [{
+                    'start_date': req.start_date,
+                    'end_date': req.end_date,
+                    'leave_type': req.leave_type,
+                }],
+            }
+            seen_users[uid] = entry
+            details.append(entry)
+
+        concurrent_users = [d['name'] for d in details]
         concurrent_count = len(concurrent_users)
-        
+
         return Response({
             'start_date': start_date,
             'end_date': end_date,
@@ -1194,6 +1217,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             'max_concurrent': max_concurrent,
             'warning': concurrent_count >= max_concurrent,
             'employees_on_leave': concurrent_users,
+            'employees_on_leave_detail': details,
         })
 
 

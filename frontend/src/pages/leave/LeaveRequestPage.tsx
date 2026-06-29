@@ -9,6 +9,8 @@ import {
   ArrowLeftIcon,
   ExclamationTriangleIcon,
   CalendarDaysIcon,
+  UsersIcon,
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline'
 import {
   getMyLeaveBalance,
@@ -19,6 +21,7 @@ import {
   LeaveRequestCreate,
   LEAVE_TYPE_OPTIONS,
   ConcurrentLeaveCheck,
+  ConcurrentLeaveEmployee,
   PublicHoliday,
 } from '@/api/leave'
 
@@ -80,6 +83,160 @@ function calculateEndDate(startDate: string, hours: number, holidayDates: Set<st
   }
   
   return current.toISOString().split('T')[0]
+}
+
+/** Map leave_type code -> human label (falls back to code) */
+function leaveTypeLabel(code: string): string {
+  const opt = LEAVE_TYPE_OPTIONS.find(o => o.value === code)
+  return opt ? opt.label : code
+}
+
+/** Format a date range as "5 mrt" or "5 mrt – 9 mrt" (NL locale). */
+function formatPeriod(start: string, end: string): string {
+  const s = new Date(start)
+  const e = new Date(end)
+  const fmt = (d: Date) =>
+    d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })
+  return start === end ? fmt(s) : `${fmt(s)} – ${fmt(e)}`
+}
+
+/** Initials from a display name, e.g. "Jan de Vries" -> "JV". */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+/** Deterministic pastel-ish color from a string for the avatar bubble. */
+function colorFromName(name: string): string {
+  const palette = [
+    'bg-blue-100 text-blue-700',
+    'bg-emerald-100 text-emerald-700',
+    'bg-purple-100 text-purple-700',
+    'bg-amber-100 text-amber-700',
+    'bg-pink-100 text-pink-700',
+    'bg-cyan-100 text-cyan-700',
+    'bg-indigo-100 text-indigo-700',
+    'bg-rose-100 text-rose-700',
+  ]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  return palette[hash % palette.length]
+}
+
+interface ConcurrentLeavePanelProps {
+  check: ConcurrentLeaveCheck
+}
+
+function ConcurrentLeavePanel({ check }: ConcurrentLeavePanelProps) {
+  const { t } = useTranslation()
+  const detail: ConcurrentLeaveEmployee[] = check.employees_on_leave_detail
+    ?? check.employees_on_leave.map((name, idx) => ({
+      user_id: `legacy-${idx}`,
+      name,
+      periods: [],
+    }))
+
+  // Nobody else on leave -> friendly confirmation card.
+  if (detail.length === 0) {
+    return (
+      <div className="mb-6 p-4 rounded-xl border border-emerald-200 bg-emerald-50 flex items-start gap-3">
+        <CheckCircleIcon className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="font-medium text-emerald-800">
+            {t('leave.overlap.noneTitle')}
+          </p>
+          <p className="text-sm text-emerald-700 mt-0.5">
+            {t('leave.overlap.noneBody')}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  const isWarning = check.warning
+  const tone = isWarning
+    ? {
+        wrap: 'border-amber-300 bg-amber-50',
+        iconWrap: 'bg-amber-100 text-amber-700',
+        title: 'text-amber-900',
+        body: 'text-amber-800',
+        chip: 'bg-amber-200/60 text-amber-900',
+      }
+    : {
+        wrap: 'border-blue-200 bg-blue-50',
+        iconWrap: 'bg-blue-100 text-blue-700',
+        title: 'text-blue-900',
+        body: 'text-blue-800',
+        chip: 'bg-blue-200/60 text-blue-900',
+      }
+
+  return (
+    <div className={`mb-6 rounded-xl border ${tone.wrap} overflow-hidden`}>
+      {/* Header */}
+      <div className="p-4 flex items-start gap-3">
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${tone.iconWrap}`}>
+          {isWarning ? (
+            <ExclamationTriangleIcon className="w-5 h-5" />
+          ) : (
+            <UsersIcon className="w-5 h-5" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className={`font-semibold ${tone.title}`}>
+              {isWarning
+                ? t('leave.overlap.warningTitle')
+                : t('leave.overlap.title')}
+            </p>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${tone.chip}`}>
+              {t('leave.overlap.countLabel', { count: check.concurrent_count })}
+            </span>
+          </div>
+          <p className={`text-sm mt-1 ${tone.body}`}>
+            {isWarning
+              ? t('leave.overlap.warningBody', {
+                  count: check.concurrent_count,
+                  max: check.max_concurrent,
+                })
+              : t('leave.overlap.infoBody')}
+          </p>
+        </div>
+      </div>
+
+      {/* Employee list */}
+      <ul className="divide-y divide-white/60 bg-white/40">
+        {detail.map((emp) => (
+          <li key={emp.user_id} className="px-4 py-3 flex items-start gap-3">
+            <div
+              className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${colorFromName(emp.name)}`}
+            >
+              {initials(emp.name)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-gray-900 truncate">{emp.name}</p>
+              {emp.periods.length > 0 ? (
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {emp.periods.map((p, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 text-xs"
+                    >
+                      <CalendarDaysIcon className="w-3.5 h-3.5" />
+                      {formatPeriod(p.start_date, p.end_date)}
+                      <span className="text-gray-400">·</span>
+                      <span className="text-gray-600">{leaveTypeLabel(p.leave_type)}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 export default function LeaveRequestPage() {
@@ -335,22 +492,9 @@ export default function LeaveRequestPage() {
         </div>
       )}
 
-      {/* Concurrent Leave Warning */}
-      {concurrentCheck?.warning && (
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
-          <ExclamationTriangleIcon className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-medium text-yellow-800">
-              {t('leave.concurrentWarning', { count: concurrentCheck.concurrent_count })}
-            </p>
-            <p className="text-sm text-yellow-700 mt-1">
-              {concurrentCheck.employees_on_leave.join(', ')}
-            </p>
-            <p className="text-sm text-yellow-600 mt-2">
-              {t('leave.concurrentWarningNote')}
-            </p>
-          </div>
-        </div>
+      {/* Concurrent Leave Overview */}
+      {formData.start_date && formData.end_date && concurrentCheck && (
+        <ConcurrentLeavePanel check={concurrentCheck} />
       )}
 
       {/* Error */}

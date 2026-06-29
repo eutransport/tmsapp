@@ -793,6 +793,15 @@
     "hoursCalculationNote": "Uren worden automatisch berekend op basis van werkdagen (8 uur/dag). Je kunt dit aanpassen voor gedeeltelijk verlof.",
     "concurrentWarning": "Let op: {{count}} collega's hebben al verlof in deze periode",
     "concurrentWarningNote": "Het kan zijn dat je aanvraag niet goedgekeurd wordt vanwege bezetting.",
+    "overlap": {
+      "title": "Andere collega's met verlof in deze periode",
+      "infoBody": "Dit is informatief — er is nog ruimte op de planning.",
+      "warningTitle": "Let op: veel collega's met verlof",
+      "warningBody": "Er zijn al {{count}} collega's met goedgekeurd verlof in (een deel van) deze periode (drempel: {{max}}). Je aanvraag wordt extra beoordeeld vanwege de bezetting.",
+      "countLabel": "{{count}} collega('s)",
+      "noneTitle": "Niemand anders heeft verlof",
+      "noneBody": "Er staan geen goedgekeurde verlofaanvragen van collega's in deze periode."
+    },
     "submitRequest": "Aanvraag indienen",
     "period": "Periode",
     "comment": "Opmerking",

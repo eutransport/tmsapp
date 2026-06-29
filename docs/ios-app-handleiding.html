@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TMS als iOS-app via TestFlight — Handleiding</title>
+<style>
+  :root {
+    --primary: #1e3a5f;
+    --primary-light: #2d5a8a;
+    --accent: #f59e0b;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+  }
+  header {
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: white;
+    padding: 3rem 1.25rem;
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+  header h1 {
+    margin: 0 0 0.5rem;
+    font-size: 2rem;
+    font-weight: 700;
+  }
+  header p {
+    margin: 0;
+    opacity: 0.9;
+    font-size: 1.1rem;
+  }
+  .badges {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 1.25rem;
+    flex-wrap: wrap;
+  }
+  .badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.18);
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    backdrop-filter: blur(4px);
+  }
+  h2 {
+    font-size: 1.5rem;
+    margin: 2.5rem 0 1rem;
+    color: var(--primary);
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0.5rem;
+  }
+  h3 {
+    font-size: 1.15rem;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--primary-light);
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .step {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+  }
+  .step .step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--primary);
+    color: white;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 1rem;
+    margin-right: 0.75rem;
+    vertical-align: middle;
+  }
+  .step h3 {
+    display: inline;
+    margin: 0;
+    color: var(--text);
+  }
+  .step .body {
+    margin-top: 1rem;
+  }
+  ol, ul {
+    padding-left: 1.5rem;
+  }
+  li {
+    margin-bottom: 0.4rem;
+  }
+  code, pre {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9rem;
+  }
+  code {
+    background: #f1f5f9;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    color: #b91c1c;
+  }
+  pre {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 1rem 1.25rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+  }
+  .info, .warning, .success, .tip {
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    border-left: 4px solid;
+  }
+  .info     { background: #eff6ff; border-color: #3b82f6; color: #1e3a8a; }
+  .warning  { background: #fffbeb; border-color: var(--warning); color: #92400e; }
+  .success  { background: #ecfdf5; border-color: var(--success); color: #065f46; }
+  .tip      { background: #faf5ff; border-color: #8b5cf6; color: #5b21b6; }
+  .info strong, .warning strong, .success strong, .tip strong { display: block; margin-bottom: 0.25rem; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    background: var(--card);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--primary);
+    color: white;
+    font-weight: 600;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #f9fafb; }
+  .cost-row td { font-weight: 600; }
+  .checklist {
+    list-style: none;
+    padding: 0;
+  }
+  .checklist li {
+    padding: 0.5rem 0 0.5rem 2rem;
+    position: relative;
+  }
+  .checklist li::before {
+    content: "☐";
+    position: absolute;
+    left: 0;
+    font-size: 1.25rem;
+    color: var(--primary);
+  }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .toc ol { margin: 0; }
+  .toc a {
+    color: var(--primary);
+    text-decoration: none;
+  }
+  .toc a:hover { text-decoration: underline; }
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 2.5rem 0;
+  }
+  .total {
+    background: linear-gradient(135deg, var(--success), #059669);
+    color: white;
+    padding: 1.25rem 1.5rem;
+    border-radius: 8px;
+    font-size: 1.15rem;
+    text-align: center;
+    margin: 1.5rem 0;
+  }
+  .total strong { font-size: 1.5rem; }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  kbd {
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 0.85rem;
+  }
+  @media (max-width: 600px) {
+    header h1 { font-size: 1.5rem; }
+    h2 { font-size: 1.25rem; }
+    .container { padding: 1rem; }
+    pre { font-size: 0.8rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TMS als iOS-app via TestFlight</h1>
+  <p>Stap-voor-stap handleiding — zonder MacBook</p>
+  <div class="badges">
+    <span class="badge">Geschatte cash-kosten: €95/jaar</span>
+    <span class="badge">Eenmalige setup: ~1 dagdeel</span>
+    <span class="badge">Updates: automatisch</span>
+  </div>
+</header>
+
+<div class="container">
+
+<div class="toc">
+  <strong>Inhoud</strong>
+  <ol>
+    <li><a href="#wat">Wat ga je opzetten?</a></li>
+    <li><a href="#nodig">Wat je nodig hebt</a></li>
+    <li><a href="#kosten">Kostenoverzicht</a></li>
+    <li><a href="#stappen">Stap-voor-stap installatie</a></li>
+    <li><a href="#daarna">Daarna: dagelijks gebruik</a></li>
+    <li><a href="#troubleshoot">Veelvoorkomende problemen</a></li>
+  </ol>
+</div>
+
+<h2 id="wat">1. Wat ga je opzetten?</h2>
+<div class="card">
+  <p>Je TMS-website wordt verpakt in een echte iOS-app. Medewerkers krijgen een uitnodigingslink, installeren via de <strong>TestFlight</strong>-app van Apple, en hebben daarna een TMS-icoon op hun iPhone — net als elke andere app.</p>
+  <p>De app is een "wrapper" rond je productie-URL (bv. <code>https://tms.jouwdomein.nl</code>). Updates die jij doet via <code>docker-update.sh</code> verschijnen automatisch bij iedereen — de app zelf hoef je maandelijks alleen opnieuw te laten bouwen om de 90-dagen-vervaltijd van TestFlight te verversen. Dat doet <strong>Codemagic</strong> automatisch.</p>
+  <div class="info">
+    <strong>Visueel:</strong>
+    GitHub commit → Codemagic bouwt iOS-app in de cloud → uploadt naar TestFlight → testers krijgen automatisch update.
+  </div>
+</div>
+
+<h2 id="nodig">2. Wat je nodig hebt</h2>
+<ul class="checklist">
+  <li>Een iPhone of iPad om mee te testen</li>
+  <li>Een Apple ID (gratis, heb je waarschijnlijk al)</li>
+  <li>Een betaalkaart voor het Apple Developer Program ($99/jaar)</li>
+  <li>Een GitHub account (heb je al — deze repo)</li>
+  <li>Toegang tot je domeinprovider (om een privacy policy URL te hosten)</li>
+  <li>~2 uur tijd voor de eenmalige setup</li>
+</ul>
+
+<h2 id="kosten">3. Kostenoverzicht</h2>
+<table>
+  <thead>
+    <tr><th>Item</th><th>Kosten</th><th>Frequentie</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Apple Developer Program</td><td>$99 (~€95)</td><td>Per jaar</td></tr>
+    <tr><td>Codemagic (gratis tier)</td><td>€0</td><td>500 build-min/maand gratis</td></tr>
+    <tr><td>Capacitor</td><td>€0</td><td>Open source</td></tr>
+    <tr><td>Privacy policy hosting</td><td>€0</td><td>Op je eigen server</td></tr>
+    <tr class="cost-row"><td>Totaal eerste jaar</td><td>~€95</td><td></td></tr>
+  </tbody>
+</table>
+<div class="total">
+  Realistische totaalkosten: <strong>€95/jaar</strong>
+</div>
+
+<h2 id="stappen">4. Stap-voor-stap installatie</h2>
+
+<div class="step">
+  <span class="step-number">1</span><h3>Apple Developer-account aanmaken</h3>
+  <div class="body">
+    <ol>
+      <li>Ga naar <a href="https://developer.apple.com/programs/" target="_blank">developer.apple.com/programs</a>.</li>
+      <li>Klik op <strong>Enroll</strong> rechts bovenin.</li>
+      <li>Log in met je Apple ID (of maak er een aan, gratis).</li>
+      <li>Bij "Entity Type" kies <strong>Individual</strong> als je het op eigen naam doet, of <strong>Organization</strong> voor het bedrijf (dan heb je een D-U-N-S nummer nodig — gratis aan te vragen, duurt 5 werkdagen).</li>
+      <li>Vul je gegevens in, betaal $99 met creditcard of iDEAL.</li>
+      <li>Apple verifieert je account in <strong>1–3 werkdagen</strong>. Je krijgt een e-mail wanneer het klaar is.</li>
+    </ol>
+    <div class="tip">
+      <strong>Tip:</strong> Begin met deze stap meteen — terwijl Apple verifieert kun jij de andere stappen doen.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">2</span><h3>Privacy policy plaatsen</h3>
+  <div class="body">
+    <p>Apple eist een publieke URL met een privacy policy. Simpel HTML-bestandje op je eigen server volstaat.</p>
+    <ol>
+      <li>Maak een tekst met daarin: welke gegevens je verzamelt (e-mail, naam, locatie indien GPS), waarom, hoe lang je ze bewaart, en hoe iemand zijn gegevens kan laten verwijderen.</li>
+      <li>Plaats hem op bijvoorbeeld <code>https://tms.jouwdomein.nl/privacy.html</code>.</li>
+      <li>Bewaar de URL — die heb je later nodig.</li>
+    </ol>
+    <div class="info">
+      <strong>Hulp nodig?</strong> Ik kan een standaard NL/EN privacy policy template voor je genereren in deze repo. Vraag erom.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">3</span><h3>Capacitor toevoegen aan de frontend</h3>
+  <div class="body">
+    <p>Dit is wat de React-app verpakt tot een iOS-app. <strong>Ik doe deze stap voor je in de repo</strong>; jij hoeft alleen akkoord te geven. Voor de volledigheid: wat er gebeurt:</p>
+    <pre><code>cd frontend
+npm install @capacitor/core @capacitor/cli @capacitor/ios
+npx cap init "TMS" "nl.eutransport.tms" --web-dir=dist
+npm run build
+npx cap add ios</code></pre>
+    <p>Dit maakt een <code>ios/</code> map die ik in Git commit. <code>nl.eutransport.tms</code> is de "bundle ID" — een uniek adres voor jouw app. Aanpasbaar als je een andere naam wilt.</p>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">4</span><h3>App registreren in App Store Connect</h3>
+  <div class="body">
+    <p>Pas mogelijk zodra je Apple Developer-account verified is (stap 1).</p>
+    <ol>
+      <li>Ga naar <a href="https://appstoreconnect.apple.com" target="_blank">appstoreconnect.apple.com</a>.</li>
+      <li>Klik <strong>My Apps</strong> → het blauwe <strong>+</strong>-icoon → <strong>New App</strong>.</li>
+      <li>Vul in:
+        <ul>
+          <li><strong>Platform:</strong> iOS</li>
+          <li><strong>Name:</strong> TMS (of jouw gewenste naam)</li>
+          <li><strong>Primary Language:</strong> Dutch (Netherlands)</li>
+          <li><strong>Bundle ID:</strong> kies <code>nl.eutransport.tms</code> uit de dropdown (verschijnt automatisch na stap 3)</li>
+          <li><strong>SKU:</strong> verzin iets uniek, bv. <code>TMS-001</code></li>
+        </ul>
+      </li>
+      <li>Klik <strong>Create</strong>.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">5</span><h3>API-key voor Codemagic genereren</h3>
+  <div class="body">
+    <p>Hiermee kan Codemagic automatisch uploaden naar TestFlight zonder dat jij telkens hoeft in te loggen.</p>
+    <ol>
+      <li>App Store Connect → <strong>Users and Access</strong> → tab <strong>Integrations</strong> → <strong>Team Keys</strong>.</li>
+      <li>Klik op <strong>+</strong> om een nieuwe key te maken.</li>
+      <li>Naam: <code>Codemagic CI</code>. Access: <strong>App Manager</strong>.</li>
+      <li>Klik <strong>Generate</strong>.</li>
+      <li>Download het <code>.p8</code>-bestand <strong>direct</strong> — je kunt het maar één keer downloaden!</li>
+      <li>Noteer de <strong>Key ID</strong> en de <strong>Issuer ID</strong> die op deze pagina staan.</li>
+    </ol>
+    <div class="warning">
+      <strong>Belangrijk:</strong> Het <code>.p8</code>-bestand is een geheim. Niet committen naar Git. Bewaar in een wachtwoordmanager.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">6</span><h3>Codemagic account aanmaken en repo koppelen</h3>
+  <div class="body">
+    <ol>
+      <li>Ga naar <a href="https://codemagic.io" target="_blank">codemagic.io</a>.</li>
+      <li>Klik <strong>Sign up with GitHub</strong> en autoriseer toegang tot je repo <code>tmsapp</code>.</li>
+      <li>In het dashboard: <strong>Add application</strong> → kies <code>tmsapp</code> → projecttype <strong>Capacitor</strong>.</li>
+      <li>Ga naar <strong>Teams → Integrations → Apple Developer Portal</strong>.</li>
+      <li>Plak de <code>.p8</code>-key, Key ID en Issuer ID uit stap 5.</li>
+      <li>Codemagic test de connectie en haalt automatisch je app op.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">7</span><h3>codemagic.yaml in de repo plaatsen</h3>
+  <div class="body">
+    <p><strong>Ik doe deze stap voor je in de repo.</strong> Het bestand vertelt Codemagic hoe te bouwen, en regelt:</p>
+    <ul>
+      <li>Build bij elke push naar <code>main</code>.</li>
+      <li>Daarnaast 1× per maand een geplande build (zodat de 90-dagen-klok nooit afloopt).</li>
+      <li>Automatische upload naar TestFlight na succesvolle build.</li>
+      <li>E-mail notificatie als de build mislukt.</li>
+    </ul>
+    <p>Jij hoeft alleen de bestaande <strong>Apple Developer integratie-naam</strong> uit Codemagic in te vullen — dat doe ik samen met je zodra je daar bent.</p>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">8</span><h3>Eerste build starten</h3>
+  <div class="body">
+    <ol>
+      <li>In Codemagic dashboard → jouw app → klik <strong>Start new build</strong>.</li>
+      <li>Selecteer workflow <code>ios-testflight</code> en branch <code>main</code>.</li>
+      <li>Wachten: ~10–15 minuten voor de eerste build (latere builds zijn sneller dankzij caching).</li>
+      <li>Bij succes: de <code>.ipa</code> wordt geüpload naar App Store Connect.</li>
+      <li>Apple "processed" de build in ~15–30 minuten — je krijgt e-mail.</li>
+    </ol>
+    <div class="warning">
+      <strong>Eerste build kan falen</strong> aan een ontbrekend icoon of een missende permission. Geen probleem — log meldingen door, ik help met fix.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">9</span><h3>TestFlight inrichten</h3>
+  <div class="body">
+    <ol>
+      <li>App Store Connect → jouw app → tab <strong>TestFlight</strong>.</li>
+      <li>Bij de net-geüploade build: vul kort de <strong>Test Information</strong> in (welke functies kun je testen, e-mailadres voor feedback).</li>
+      <li>Maak een <strong>Internal Testing Group</strong> aan — leden moeten een Apple ID hebben dat onder jouw Apple Developer team valt (jezelf in eerste instantie).</li>
+      <li>OF: maak een <strong>External Testing Group</strong> — daar kun je tot 10.000 mensen aan toevoegen via e-mail of een <strong>publieke link</strong>. Externe testers krijgen wel een eenmalige lichte Apple review (1–2 dagen, vrijwel altijd goedgekeurd).</li>
+      <li>Verstuur uitnodigingen.</li>
+    </ol>
+    <div class="tip">
+      <strong>Voor jouw transportbedrijf:</strong> kies <strong>External Testing</strong> met een publieke link. Stuur die link naar je chauffeurs — ze hoeven niet eens op jouw Apple-team te staan.
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">10</span><h3>App installeren op de iPhone (testers)</h3>
+  <div class="body">
+    <p>Wat je medewerkers moeten doen:</p>
+    <ol>
+      <li>Installeer de <strong>TestFlight</strong>-app uit de App Store (gratis, van Apple).</li>
+      <li>Open de uitnodigingslink/e-mail op de iPhone.</li>
+      <li>Tik <strong>Accept</strong> → <strong>Install</strong>.</li>
+      <li>TMS verschijnt op het home-screen, herkenbaar aan een klein oranje stipje (geeft aan dat het via TestFlight is — verdwijnt zodra je in de echte App Store gaat).</li>
+      <li>Inloggen met TMS-account zoals gewoonlijk.</li>
+    </ol>
+    <div class="success">
+      <strong>Klaar!</strong> Vanaf nu: jij pusht code → Codemagic bouwt → testers krijgen automatisch een nieuwe versie op hun iPhone.
+    </div>
+  </div>
+</div>
+
+<h2 id="daarna">5. Daarna: dagelijks gebruik</h2>
+<div class="card">
+  <h3>Updates uitrollen</h3>
+  <p>Je werkt zoals nu: code aanpassen, <code>git push</code>. Codemagic ziet de push, bouwt automatisch, upload naar TestFlight. Testers krijgen een melding op hun iPhone en updaten met één tik.</p>
+
+  <h3>Inhoudelijke wijzigingen (frontend/backend)</h3>
+  <p>Omdat de app een wrapper is rond je live TMS-URL, hoeven kleine wijzigingen in de website helemaal geen nieuwe app-build te krijgen — je <code>docker-update.sh</code> op de server is genoeg. Een nieuwe app-build is alleen nodig bij:</p>
+  <ul>
+    <li>Native code-wijzigingen (zelden).</li>
+    <li>Iconen of splash-screens veranderen.</li>
+    <li>Permissions toevoegen (camera, locatie, push).</li>
+    <li>Elke 90 dagen — automatisch door de cron.</li>
+  </ul>
+
+  <h3>Build-limiet in de gaten houden</h3>
+  <p>Codemagic gratis: 500 minuten per maand. Eén build ≈ 10–15 minuten. Bij ~3 builds/maand zit je op ~45 minuten — ruim binnen de marge.</p>
+</div>
+
+<h2 id="troubleshoot">6. Veelvoorkomende problemen</h2>
+
+<div class="card">
+  <h3>Build mislukt: "No matching provisioning profile"</h3>
+  <p>Codemagic moet automatisch een profile maken. Check: in Codemagic → Settings → Code signing identities → "Use automatic code signing" staat aan.</p>
+
+  <h3>App crash bij opstarten op iPhone</h3>
+  <p>Vaak een <code>Info.plist</code> mis met een verplichte permission-uitleg. Codemagic build-logs tonen welke. Voeg toe in <code>ios/App/App/Info.plist</code>.</p>
+
+  <h3>TestFlight: "Could not process build"</h3>
+  <p>App-icoon ontbreekt of heeft transparantie. App Store Connect vereist 1024×1024 PNG zonder alpha-channel.</p>
+
+  <h3>"Geen toegang tot camera/locatie" in de app</h3>
+  <p>iOS vereist toestemming voor elke gevoelige feature. We voegen Capacitor-plugins toe (<code>@capacitor/camera</code>, <code>@capacitor/geolocation</code>) en zetten uitleg in <code>Info.plist</code>.</p>
+
+  <h3>Build na 90 dagen verlopen</h3>
+  <p>Mag niet gebeuren door de maandelijkse cron — maar als het toch gebeurt: simpel een nieuwe build starten in Codemagic en testers krijgen automatisch update.</p>
+</div>
+
+<hr/>
+
+<h2>Klaar om te beginnen?</h2>
+<div class="card">
+  <p>De volgorde voor jou:</p>
+  <ol>
+    <li>Start <strong>vandaag</strong> stap 1 (Apple Developer enrollment) — verifictie duurt 1–3 dagen.</li>
+    <li>Doe ondertussen stap 2 (privacy policy).</li>
+    <li>Zeg het seintje, dan voer ik stap 3 en 7 uit in de repo (Capacitor + codemagic.yaml).</li>
+    <li>Zodra Apple je verified heeft: stap 4 t/m 9 doen we samen.</li>
+    <li>Stap 10 stuur je naar je collega's.</li>
+  </ol>
+</div>
+
+<footer>
+  TMS iOS-app handleiding · gegenereerd voor <strong>tmsapp</strong> repo · €95/jaar route via TestFlight
+</footer>
+
+</div>
+</body>
+</html>

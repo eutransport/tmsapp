@@ -83,6 +83,18 @@ export interface CalendarLeaveEntry {
   status: LeaveRequestStatus
 }
 
+export interface ConcurrentLeavePeriod {
+  start_date: string
+  end_date: string
+  leave_type: string
+}
+
+export interface ConcurrentLeaveEmployee {
+  user_id: string
+  name: string
+  periods: ConcurrentLeavePeriod[]
+}
+
 export interface ConcurrentLeaveCheck {
   start_date: string
   end_date: string
@@ -90,6 +102,7 @@ export interface ConcurrentLeaveCheck {
   max_concurrent: number
   warning: boolean
   employees_on_leave: string[]
+  employees_on_leave_detail?: ConcurrentLeaveEmployee[]
 }
 
 // Leave type options for dropdowns
