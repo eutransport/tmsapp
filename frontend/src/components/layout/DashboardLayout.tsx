@@ -298,14 +298,17 @@ export default function DashboardLayout() {
         )}
       >
         {/* Top bar */}
-        <div className="sticky top-0 z-40 flex h-14 sm:h-16 shrink-0 items-center gap-x-2 sm:gap-x-4 border-b border-gray-200/80 bg-white/85 backdrop-blur px-3 sm:px-4 lg:px-8">
+        <div
+          className="sticky top-0 z-40 flex h-14 sm:h-16 shrink-0 items-center gap-x-2 sm:gap-x-4 border-b border-gray-200/80 bg-white/85 backdrop-blur px-3 sm:px-4 lg:px-8"
+          style={{ isolation: 'isolate' }}
+        >
           <button
             type="button"
-            className="p-2.5 -ml-1 text-gray-700 lg:hidden touch-target rounded-md hover:bg-gray-100"
+            className="p-2.5 -ml-1 text-gray-700 lg:hidden touch-target rounded-md hover:bg-gray-100 touch-manipulation"
             onClick={() => setSidebarOpen(true)}
             aria-label={t('nav.openSidebar', 'Open menu')}
           >
-            <Bars3Icon className="h-6 w-6" />
+            <Bars3Icon className="h-6 w-6 pointer-events-none" />
           </button>
 
           <div className="flex flex-1 items-center justify-end gap-x-2 sm:gap-x-3">
@@ -313,8 +316,8 @@ export default function DashboardLayout() {
             <NotificationBell />
 
             <Menu as="div" className="relative">
-              <Menu.Button className="flex items-center gap-2 p-1.5 hover:bg-gray-100 rounded-lg touch-target transition-colors">
-                <UserCircleIcon className="h-8 w-8 text-gray-400" />
+              <Menu.Button className="flex items-center gap-2 p-1.5 hover:bg-gray-100 rounded-lg touch-target transition-colors touch-manipulation">
+                <UserCircleIcon className="h-8 w-8 text-gray-400 pointer-events-none" />
                 <span className="hidden lg:flex lg:items-center">
                   <span className="text-sm font-semibold text-gray-900 max-w-[10rem] truncate">
                     {user?.full_name}
@@ -330,7 +333,7 @@ export default function DashboardLayout() {
                 leave="transition ease-in duration-75"
                 leaveFrom="transform opacity-100 scale-100" leaveTo="transform opacity-0 scale-95"
               >
-                <Menu.Items className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-xl bg-white py-2 shadow-pop ring-1 ring-gray-900/5 focus:outline-none">
+                <Menu.Items className="absolute right-0 z-[60] mt-2 w-56 origin-top-right rounded-xl bg-white py-2 shadow-pop ring-1 ring-gray-900/5 focus:outline-none">
                   <div className="px-4 py-2 border-b border-gray-100">
                     <p className="text-sm font-semibold text-gray-900 truncate">{user?.full_name}</p>
                     <p className="text-xs text-gray-500 truncate">{user?.email}</p>
@@ -342,10 +345,11 @@ export default function DashboardLayout() {
                   <Menu.Item>
                     {({ active }) => (
                       <button
+                        type="button"
                         onClick={() => navigate('/profile/password')}
-                        className={clsx(active ? 'bg-gray-50' : '', 'flex w-full items-center px-4 py-2 text-sm text-gray-700')}
+                        className={clsx(active ? 'bg-gray-50' : '', 'flex w-full items-center px-4 py-2 text-sm text-gray-700 touch-manipulation')}
                       >
-                        <KeyIcon className="mr-3 h-5 w-5 text-gray-400" />
+                        <KeyIcon className="mr-3 h-5 w-5 text-gray-400 pointer-events-none" />
                         {t('auth.changePassword')}
                       </button>
                     )}
@@ -353,10 +357,11 @@ export default function DashboardLayout() {
                   <Menu.Item>
                     {({ active }) => (
                       <button
+                        type="button"
                         onClick={handleLogout}
-                        className={clsx(active ? 'bg-gray-50' : '', 'flex w-full items-center px-4 py-2 text-sm text-gray-700')}
+                        className={clsx(active ? 'bg-gray-50' : '', 'flex w-full items-center px-4 py-2 text-sm text-gray-700 touch-manipulation')}
                       >
-                        <ArrowRightOnRectangleIcon className="mr-3 h-5 w-5 text-gray-400" />
+                        <ArrowRightOnRectangleIcon className="mr-3 h-5 w-5 text-gray-400 pointer-events-none" />
                         {t('auth.logout')}
                       </button>
                     )}
