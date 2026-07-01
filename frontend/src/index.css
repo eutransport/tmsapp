@@ -282,6 +282,28 @@
   .desktop-table { @apply hidden sm:block overflow-x-auto; }
   .mobile-only   { @apply sm:hidden; }
   .desktop-only  { @apply hidden sm:block; }
+
+  /* iOS notch / safe-area aware topbar. Height grows by the top inset so
+     content never sits under the status bar / dynamic island. */
+  .topbar-safe {
+    height: calc(3.5rem + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+    padding-left: max(env(safe-area-inset-left), 0.75rem);
+    padding-right: max(env(safe-area-inset-right), 0.75rem);
+  }
+  @media (min-width: 640px) {
+    .topbar-safe {
+      height: calc(4rem + env(safe-area-inset-top));
+      padding-left: max(env(safe-area-inset-left), 1rem);
+      padding-right: max(env(safe-area-inset-right), 1rem);
+    }
+  }
+  @media (min-width: 1024px) {
+    .topbar-safe {
+      padding-left: max(env(safe-area-inset-left), 2rem);
+      padding-right: max(env(safe-area-inset-right), 2rem);
+    }
+  }
 }
 
 /* ------------------------------------------------------------------

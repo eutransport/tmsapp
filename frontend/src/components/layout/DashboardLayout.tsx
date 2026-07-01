@@ -249,9 +249,12 @@ export default function DashboardLayout() {
               leaveFrom="translate-x-0" leaveTo="-translate-x-full"
             >
               <Dialog.Panel className="relative mr-16 flex w-full max-w-xs flex-1">
-                <div className="absolute left-full top-0 flex w-16 justify-center pt-5">
-                  <button type="button" className="-m-2.5 p-2.5" onClick={() => setSidebarOpen(false)}>
-                    <XMarkIcon className="h-6 w-6 text-white" />
+                <div
+                  className="absolute left-full top-0 flex w-16 justify-center"
+                  style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1.25rem)' }}
+                >
+                  <button type="button" className="-m-2.5 p-2.5 touch-manipulation" onClick={() => setSidebarOpen(false)} aria-label="Sluit menu">
+                    <XMarkIcon className="h-6 w-6 text-white pointer-events-none" />
                   </button>
                 </div>
 
@@ -299,7 +302,7 @@ export default function DashboardLayout() {
       >
         {/* Top bar */}
         <div
-          className="sticky top-0 z-40 flex h-14 sm:h-16 shrink-0 items-center gap-x-2 sm:gap-x-4 border-b border-gray-200/80 bg-white/85 backdrop-blur px-3 sm:px-4 lg:px-8"
+          className="topbar-safe sticky top-0 z-40 flex shrink-0 items-center gap-x-2 sm:gap-x-4 border-b border-gray-200/80 bg-white/85 backdrop-blur"
           style={{ isolation: 'isolate' }}
         >
           <button
@@ -479,7 +482,11 @@ function SidebarContent({
         'flex grow flex-col overflow-y-auto scrollbar-thin',
         collapsed ? 'px-2' : 'px-4'
       )}
-      style={{ backgroundColor: 'var(--color-sidebar)' }}
+      style={{
+        backgroundColor: 'var(--color-sidebar)',
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
     >
       {/* Header / brand */}
       <div className={clsx('flex h-16 shrink-0 items-center', collapsed ? 'justify-center' : 'justify-between gap-3')}>
