@@ -55,6 +55,15 @@
     text-size-adjust: 100%;
   }
 
+  /* Prevent iOS Safari from auto-zooming into form fields (which then leaves
+     the whole page zoomed and "un-responsive" until you pinch out). Any input
+     with font-size < 16px triggers this; force 16px on small screens. */
+  @media (max-width: 640px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+  }
+
   body {
     @apply h-full font-sans antialiased;
     background-color: var(--color-background);
