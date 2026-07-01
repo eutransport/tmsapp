@@ -105,6 +105,20 @@ create_backup() {
     docker exec tms-postgres pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_PATH/database.sql" 2>/dev/null || {
         print_warning "Could not backup database - container may not be running"
     }
+
+    # Verify database dump is non-trivial and ends with a completion marker
+    if [ -f "$BACKUP_PATH/database.sql" ]; then
+        DB_SIZE=$(wc -c < "$BACKUP_PATH/database.sql" 2>/dev/null || echo 0)
+        if [ "$DB_SIZE" -lt 1024 ]; then
+            print_error "Database dump verdacht klein (${DB_SIZE} bytes) - update afgebroken"
+            exit 1
+        fi
+        if ! tail -n 5 "$BACKUP_PATH/database.sql" | grep -q "PostgreSQL database dump complete"; then
+            print_error "Database dump onvolledig - update afgebroken"
+            exit 1
+        fi
+        log "Database dump verified (${DB_SIZE} bytes)"
+    fi
     
     # Backup media files
     log "Backing up media files..."
@@ -131,6 +145,14 @@ create_backup() {
     log "Compressing backup..."
     tar -czf "$BACKUP_DIR/$TIMESTAMP.tar.gz" -C "$BACKUP_DIR" "$TIMESTAMP"
     rm -rf "$BACKUP_PATH"
+
+    # Verify archive integrity before pruning old backups
+    if ! tar -tzf "$BACKUP_DIR/$TIMESTAMP.tar.gz" > /dev/null 2>&1; then
+        print_error "Backup archief corrupt: $BACKUP_DIR/$TIMESTAMP.tar.gz"
+        rm -f "$BACKUP_DIR/$TIMESTAMP.tar.gz"
+        exit 1
+    fi
+    log "Backup archive integrity verified"
     
     # Clean old backups
     cd "$BACKUP_DIR"

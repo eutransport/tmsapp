@@ -36,6 +36,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          memory: 256M
     networks:
       - tms_internal
 
@@ -54,6 +61,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 384M
     networks:
       - tms_internal
 
@@ -99,6 +111,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          memory: 512M
     networks:
       - tms_internal
       - tms_external
@@ -118,6 +137,11 @@ services:
     restart: always
     volumes:
       - media_files:/usr/share/nginx/html/media:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
     networks:
       - tms_internal
     expose:
@@ -157,6 +181,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          memory: 256M
     networks:
       - tms_internal
       - tms_external
@@ -170,7 +201,11 @@ services:
       dockerfile: Dockerfile
     container_name: tms_celery_beat
     restart: always
-    command: celery -A tms beat --loglevel=info
+    # Persist beat's last-run schedule file so restarts don't re-fire tasks.
+    # Keeps using code-defined beat_schedule (in tms/celery.py) — do NOT switch
+    # to django-celery-beat DatabaseScheduler; that would silently ignore the
+    # code-defined schedule and require Admin-driven re-configuration.
+    command: celery -A tms beat --loglevel=info --schedule=/app/celerybeat/celerybeat-schedule
     dns:
       - 8.8.8.8
       - 8.8.4.4
@@ -189,11 +224,17 @@ services:
       - CORS_ALLOWED_ORIGINS=https://${DOMAIN_NAME:-localhost},http://localhost
     volumes:
       - logs:/app/logs
+      - celery_beat_schedule:/app/celerybeat
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
     networks:
       - tms_internal
       - tms_external
@@ -223,17 +264,20 @@ services:
 
   # =========================================
   # Nginx Proxy Manager
-  # UI: http://server-ip:81
-  # Beheert SSL en reverse proxy
+  # UI: http://server-ip:81  (bescherm poort 81 via firewall — UFW/iptables)
+  # Beheert SSL en reverse proxy op 80/443
   # =========================================
+  # NOTE: image is gepind om onbedoelde downgrade/upgrade te voorkomen.
+  # Bij het upgraden: check de release notes eerst — NPM's SQLite migreert
+  # niet altijd achterwaarts compatibel.
   npm:
-    image: 'jc21/nginx-proxy-manager:latest'
+    image: 'jc21/nginx-proxy-manager:2.15.1'
     container_name: tms_npm
     restart: always
     ports:
-      - '80:80'      # HTTP
-      - '443:443'    # HTTPS
-      - '81:81'      # Admin UI
+      - '80:80'      # HTTP  (publiek voor HTTP→HTTPS redirect + ACME)
+      - '443:443'    # HTTPS (publiek voor reverse-proxy traffic)
+      - '81:81'      # Admin UI — beperk toegang via host-firewall (UFW allow from <IP> to any port 81)
     environment:
       - DB_SQLITE_FILE=/data/database.sqlite
       - DISABLE_IPV6=true
@@ -244,10 +288,18 @@ services:
       - tms_internal
       - tms_external
     depends_on:
+      # service_started (niet service_healthy): NPM moet ook opkomen als de
+      # backend nog aan het migreren is — anders krijg je een deadlock waarbij
+      # niets bereikbaar is en de maintenance-pagina niet getoond kan worden.
       backend:
-        condition: service_healthy
+        condition: service_started
       frontend:
-        condition: service_healthy
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:81/"]
       interval: 30s
@@ -259,7 +311,7 @@ services:
   # UI: https://server-ip:9443
   # =========================================
   portainer:
-    image: portainer/portainer-ce:latest
+    image: portainer/portainer-ce:2.39.4
     container_name: tms_portainer
     restart: always
     ports:
@@ -268,6 +320,11 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
     networks:
       - tms_external
 
@@ -291,6 +348,8 @@ volumes:
     name: tms_npm_letsencrypt
   portainer_data:
     name: tms_portainer_data
+  celery_beat_schedule:
+    name: tms_celery_beat_schedule
 
 # =========================================
 # Networks

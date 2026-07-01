@@ -38,8 +38,8 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy project files
 COPY . /app/
 
-# Create necessary directories including fonts and OCR temp
-RUN mkdir -p /app/staticfiles /app/media/fonts /app/media/branding /app/media/imports /app/media/temp/ocr /app/logs
+# Create necessary directories including fonts, OCR temp and celery-beat schedule
+RUN mkdir -p /app/staticfiles /app/media/fonts /app/media/branding /app/media/imports /app/media/temp/ocr /app/logs /app/celerybeat
 
 # Copy entrypoint script and fix line endings (Windows -> Linux)
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
@@ -56,8 +56,9 @@ USER app
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Health check — start-period of 60s gives migrations time to complete on
+# first boot; interval and retries then catch runtime failures.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/api/health/ || exit 1
 
 # Run entrypoint (setup + exec passed command)

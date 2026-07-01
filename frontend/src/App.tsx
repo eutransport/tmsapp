@@ -1,9 +1,9 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useServerConfigStore } from '@/stores/serverConfigStore'
 
-// Layouts
+// Layouts (always needed — kept eager)
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import AuthLayout from '@/components/layout/AuthLayout'
 
@@ -13,114 +13,125 @@ import { PWAUpdatePrompt, PWAInstallPrompt } from '@/components/pwa'
 // Font Components
 import FontLoader from '@/components/fonts/FontLoader'
 
-// Setup pages
-import ServerSetupPage from '@/pages/setup/ServerSetupPage'
+// Licensing store (used in guards)
+import { useLicenseStore } from '@/stores/licenseStore'
 
-// Auth pages
-import LoginPage from '@/pages/auth/LoginPage'
-import MfaSetupPage from '@/pages/auth/MfaSetupPage'
+// Small helper for code-split named exports
+const lazyNamed = <M extends Record<string, any>, K extends keyof M>(
+  loader: () => Promise<M>,
+  name: K
+) => React.lazy(() => loader().then(m => ({ default: m[name] })))
 
-// Dashboard pages
-import DashboardPage from '@/pages/dashboard/DashboardPage'
+// -------------------- Lazy-loaded pages --------------------
+// Setup / auth / licensing pages
+const ServerSetupPage = React.lazy(() => import('@/pages/setup/ServerSetupPage'))
+const LoginPage = React.lazy(() => import('@/pages/auth/LoginPage'))
+const MfaSetupPage = React.lazy(() => import('@/pages/auth/MfaSetupPage'))
+const LicenseActivationPage = React.lazy(() => import('@/pages/licensing/LicenseActivationPage'))
 
-// Activity page
-import ActivityPage from '@/pages/activity/ActivityPage'
+// Dashboard / activity
+const DashboardPage = React.lazy(() => import('@/pages/dashboard/DashboardPage'))
+const ActivityPage = React.lazy(() => import('@/pages/activity/ActivityPage'))
 
-// Admin pages
-import UsersPage from '@/pages/admin/UsersPage'
-import SettingsPage from '@/pages/settings/SettingsPage'
-import FontManagementPage from '@/pages/settings/FontManagementPage'
+// Admin / settings
+const UsersPage = React.lazy(() => import('@/pages/admin/UsersPage'))
+const SettingsPage = React.lazy(() => import('@/pages/settings/SettingsPage'))
+const FontManagementPage = React.lazy(() => import('@/pages/settings/FontManagementPage'))
 
-// Master data pages
-import CompaniesPage from '@/pages/companies/CompaniesPage'
-import DriversPage from '@/pages/drivers/DriversPage'
-import FleetPage from '@/pages/fleet/FleetPage'
+// Master data
+const CompaniesPage = React.lazy(() => import('@/pages/companies/CompaniesPage'))
+const DriversPage = React.lazy(() => import('@/pages/drivers/DriversPage'))
+const FleetPage = React.lazy(() => import('@/pages/fleet/FleetPage'))
 
 // Time tracking
-import TimeEntriesPage from '@/pages/time-entries/TimeEntriesPage'
-import MyHoursPage from '@/pages/time-entries/MyHoursPage'
-import SubmittedHoursPage from '@/pages/time-entries/SubmittedHoursPage'
+const TimeEntriesPage = React.lazy(() => import('@/pages/time-entries/TimeEntriesPage'))
+const MyHoursPage = React.lazy(() => import('@/pages/time-entries/MyHoursPage'))
+const SubmittedHoursPage = React.lazy(() => import('@/pages/time-entries/SubmittedHoursPage'))
 
 // Planning
-import PlanningPage from '@/pages/planning/PlanningPage'
+const PlanningPage = React.lazy(() => import('@/pages/planning/PlanningPage'))
 
 // Profile
-import PasswordChangePage from '@/pages/profile/PasswordChangePage'
+const PasswordChangePage = React.lazy(() => import('@/pages/profile/PasswordChangePage'))
 
 // Invoicing
-import InvoicesPage from '@/pages/invoices/InvoicesPage'
-import InvoiceCreatePage from '@/pages/invoices/InvoiceCreatePage'
-import TemplatesPage from '@/pages/invoices/TemplatesPage'
-import InvoiceEditPage from '@/pages/invoices/InvoiceEditPage'
-import TemplateEditorPage from '@/pages/invoices/TemplateEditorPage'
+const InvoicesPage = React.lazy(() => import('@/pages/invoices/InvoicesPage'))
+const InvoiceCreatePage = React.lazy(() => import('@/pages/invoices/InvoiceCreatePage'))
+const TemplatesPage = React.lazy(() => import('@/pages/invoices/TemplatesPage'))
+const InvoiceEditPage = React.lazy(() => import('@/pages/invoices/InvoiceEditPage'))
+const TemplateEditorPage = React.lazy(() => import('@/pages/invoices/TemplateEditorPage'))
 
 // Revenue
-import RevenuePage from '@/pages/revenue/RevenuePage'
+const RevenuePage = React.lazy(() => import('@/pages/revenue/RevenuePage'))
 
-// Invoice Import (OCR)
-import { InvoiceImportPage, InvoiceImportDetailPage, EmailImportPage, MailboxConfigPage } from '@/pages/imports'
+// Invoice Import (OCR) — grouped named exports
+const InvoiceImportPage = lazyNamed(() => import('@/pages/imports'), 'InvoiceImportPage')
+const InvoiceImportDetailPage = lazyNamed(() => import('@/pages/imports'), 'InvoiceImportDetailPage')
+const EmailImportPage = lazyNamed(() => import('@/pages/imports'), 'EmailImportPage')
+const MailboxConfigPage = lazyNamed(() => import('@/pages/imports'), 'MailboxConfigPage')
 
 // Leave management
-import LeaveOverviewPage from '@/pages/leave/LeaveOverviewPage'
-import LeaveRequestPage from '@/pages/leave/LeaveRequestPage'
-import LeaveCalendarPage from '@/pages/leave/LeaveCalendarPage'
-import LeaveSettingsPage from '@/pages/settings/LeaveSettingsPage'
-import LeaveRequestsAdminPage from '@/pages/leave/LeaveRequestsAdminPage'
-import LeaveBalancePage from '@/pages/leave/LeaveBalancePage'
+const LeaveOverviewPage = React.lazy(() => import('@/pages/leave/LeaveOverviewPage'))
+const LeaveRequestPage = React.lazy(() => import('@/pages/leave/LeaveRequestPage'))
+const LeaveCalendarPage = React.lazy(() => import('@/pages/leave/LeaveCalendarPage'))
+const LeaveSettingsPage = React.lazy(() => import('@/pages/settings/LeaveSettingsPage'))
+const LeaveRequestsAdminPage = React.lazy(() => import('@/pages/leave/LeaveRequestsAdminPage'))
+const LeaveBalancePage = React.lazy(() => import('@/pages/leave/LeaveBalancePage'))
 
 // Tolregistratie
-import TolRegistratiePage from '@/pages/toll/TolRegistratiePage'
-import AdminTolRegistratiePage from '@/pages/toll/AdminTolRegistratiePage'
+const TolRegistratiePage = React.lazy(() => import('@/pages/toll/TolRegistratiePage'))
+const AdminTolRegistratiePage = React.lazy(() => import('@/pages/toll/AdminTolRegistratiePage'))
 
 // Kilometerheffing
-import KilometerheffingPage from '@/pages/kilometerheffing/KilometerheffingPage'
+const KilometerheffingPage = React.lazy(() => import('@/pages/kilometerheffing/KilometerheffingPage'))
 
 // Pakmiddelen Teruggavebonnen
-import PakmiddelenPage from '@/pages/pakmiddelen/PakmiddelenPage'
+const PakmiddelenPage = React.lazy(() => import('@/pages/pakmiddelen/PakmiddelenPage'))
 
-// Tasks (Takenlijst)
-import TasksPage from '@/pages/tasks/TasksPage'
+// Tasks
+const TasksPage = React.lazy(() => import('@/pages/tasks/TasksPage'))
 
 // Notifications
-import NotificationsPage from '@/pages/notifications/NotificationsPage'
+const NotificationsPage = React.lazy(() => import('@/pages/notifications/NotificationsPage'))
 
-// Documents (PDF Signing)
-import {
-  DocumentsPage,
-  DocumentUploadPage,
-  DocumentDetailPage,
-  DocumentSignPage,
-} from '@/pages/documents'
+// Documents (PDF Signing) — grouped named exports
+const DocumentsPage = lazyNamed(() => import('@/pages/documents'), 'DocumentsPage')
+const DocumentUploadPage = lazyNamed(() => import('@/pages/documents'), 'DocumentUploadPage')
+const DocumentDetailPage = lazyNamed(() => import('@/pages/documents'), 'DocumentDetailPage')
+const DocumentSignPage = lazyNamed(() => import('@/pages/documents'), 'DocumentSignPage')
 
-// Spreadsheets (Ritregistratie)
-import SpreadsheetListPage from '@/pages/spreadsheets/SpreadsheetListPage'
-import SpreadsheetEditorPage from '@/pages/spreadsheets/SpreadsheetEditorPage'
-import SpreadsheetTemplateListPage from '@/pages/spreadsheets/SpreadsheetTemplateListPage'
-import SpreadsheetTemplateEditorPage from '@/pages/spreadsheets/SpreadsheetTemplateEditorPage'
+// Spreadsheets
+const SpreadsheetListPage = React.lazy(() => import('@/pages/spreadsheets/SpreadsheetListPage'))
+const SpreadsheetEditorPage = React.lazy(() => import('@/pages/spreadsheets/SpreadsheetEditorPage'))
+const SpreadsheetTemplateListPage = React.lazy(() => import('@/pages/spreadsheets/SpreadsheetTemplateListPage'))
+const SpreadsheetTemplateEditorPage = React.lazy(() => import('@/pages/spreadsheets/SpreadsheetTemplateEditorPage'))
 
 // Uren Import
-import UrenImportPage from '@/pages/uren-import/UrenImportPage'
+const UrenImportPage = React.lazy(() => import('@/pages/uren-import/UrenImportPage'))
 
 // Maintenance
-import MaintenanceOverviewPage from '@/pages/maintenance/MaintenanceOverviewPage'
-import APKPage from '@/pages/maintenance/APKPage'
-import MaintenanceTasksPage from '@/pages/maintenance/MaintenanceTasksPage'
-import TiresPage from '@/pages/maintenance/TiresPage'
-import MaintenanceSettingsPage from '@/pages/maintenance/MaintenanceSettingsPage'
+const MaintenanceOverviewPage = React.lazy(() => import('@/pages/maintenance/MaintenanceOverviewPage'))
+const APKPage = React.lazy(() => import('@/pages/maintenance/APKPage'))
+const MaintenanceTasksPage = React.lazy(() => import('@/pages/maintenance/MaintenanceTasksPage'))
+const TiresPage = React.lazy(() => import('@/pages/maintenance/TiresPage'))
+const MaintenanceSettingsPage = React.lazy(() => import('@/pages/maintenance/MaintenanceSettingsPage'))
 
 // Tachograph
-import TachographPage from '@/pages/tachograph/TachographPage'
-import TachographComparisonPage from '@/pages/tachograph/TachographComparisonPage'
+const TachographPage = React.lazy(() => import('@/pages/tachograph/TachographPage'))
+const TachographComparisonPage = React.lazy(() => import('@/pages/tachograph/TachographComparisonPage'))
 
 // Reports
-import ReportsPage from '@/pages/reports/ReportsPage'
+const ReportsPage = React.lazy(() => import('@/pages/reports/ReportsPage'))
 
 // Track & Trace
-import TrackingPage from '@/pages/tracking/TrackingPage'
+const TrackingPage = React.lazy(() => import('@/pages/tracking/TrackingPage'))
 
-// Licensing
-import LicenseActivationPage from '@/pages/licensing/LicenseActivationPage'
-import { useLicenseStore } from '@/stores/licenseStore'
+// Shared loading fallback used by every Suspense boundary
+const RouteFallback = () => (
+  <div className="h-full flex items-center justify-center py-16">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
+  </div>
+)
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -243,6 +254,7 @@ function App() {
       {/* Load custom fonts when authenticated and configured */}
       {isConfigured && isAuthenticated && <FontLoader />}
       
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
       {/* Server setup route */}
       <Route 
@@ -386,6 +398,7 @@ function App() {
       {/* Catch all - redirect to home */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
     </>
   )
 }

@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TMS Verbeterplan &amp; Feature Roadmap</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --card:#ffffff; --ink:#0f172a; --muted:#64748b;
+    --line:#e2e8f0; --brand:#2563eb; --brand-2:#1d4ed8;
+    --crit:#dc2626; --crit-bg:#fef2f2; --crit-br:#fecaca;
+    --high:#ea580c; --high-bg:#fff7ed; --high-br:#fed7aa;
+    --med:#ca8a04; --med-bg:#fefce8; --med-br:#fde68a;
+    --low:#0284c7; --low-bg:#f0f9ff; --low-br:#bae6fd;
+    --nice:#059669; --nice-bg:#ecfdf5; --nice-br:#a7f3d0;
+    --ok:#16a34a;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;line-height:1.55}
+  header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:48px 24px 56px}
+  header .wrap{max-width:1160px;margin:0 auto}
+  header h1{margin:0 0 8px;font-size:2rem;letter-spacing:-.02em}
+  header p{margin:0;opacity:.9;max-width:760px}
+  main{max-width:1160px;margin:-32px auto 64px;padding:0 20px}
+  section.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;margin-bottom:24px;box-shadow:0 6px 24px -12px rgba(15,23,42,.15)}
+  h2{margin:0 0 4px;font-size:1.35rem;letter-spacing:-.01em}
+  h2 .sub{font-size:.85rem;color:var(--muted);font-weight:500;margin-left:8px}
+  h3{margin:22px 0 10px;font-size:1.05rem}
+  .grid{display:grid;gap:14px}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:.78rem;font-weight:600;border:1px solid}
+  .pill.crit{color:var(--crit);background:var(--crit-bg);border-color:var(--crit-br)}
+  .pill.high{color:var(--high);background:var(--high-bg);border-color:var(--high-br)}
+  .pill.med {color:var(--med); background:var(--med-bg); border-color:var(--med-br)}
+  .pill.low {color:var(--low); background:var(--low-bg); border-color:var(--low-br)}
+  .pill.nice{color:var(--nice);background:var(--nice-bg);border-color:var(--nice-br)}
+  .pill.tag{color:#334155;background:#f1f5f9;border-color:#e2e8f0}
+  .item{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff;display:flex;gap:14px;align-items:flex-start}
+  .item .body{flex:1;min-width:0}
+  .item .title{font-weight:600;margin:0 0 4px}
+  .item .desc{color:#334155;font-size:.94rem;margin:0}
+  .item .meta{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+  .stripe{width:6px;align-self:stretch;border-radius:6px;flex-shrink:0}
+  .stripe.crit{background:var(--crit)}
+  .stripe.high{background:var(--high)}
+  .stripe.med {background:var(--med)}
+  .stripe.low {background:var(--low)}
+  .stripe.nice{background:var(--nice)}
+  .stripe.ok  {background:var(--ok)}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 6px;position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:5}
+  .toolbar button{border:1px solid var(--line);background:#fff;padding:6px 12px;border-radius:999px;font-size:.85rem;font-weight:600;cursor:pointer;color:#334155}
+  .toolbar button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:16px;overflow-x:auto}
+  .tabs button{background:none;border:none;padding:10px 14px;font-size:.95rem;font-weight:600;color:#64748b;cursor:pointer;border-bottom:2px solid transparent}
+  .tabs button.active{color:var(--brand);border-color:var(--brand)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:16px}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}
+  .stat .n{font-size:1.6rem;font-weight:700}
+  .stat .l{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  details.group{border:1px solid var(--line);border-radius:12px;background:#fafbfd;padding:0;margin-bottom:12px}
+  details.group>summary{cursor:pointer;padding:14px 16px;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center}
+  details.group>summary::after{content:"▸";transition:transform .2s;color:var(--muted)}
+  details.group[open]>summary::after{transform:rotate(90deg)}
+  details.group .items{padding:0 12px 12px;display:grid;gap:8px}
+  code{background:#f1f5f9;padding:1px 6px;border-radius:4px;font-size:.85em}
+  .hint{color:var(--muted);font-size:.88rem}
+  .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82em;background:#f1f5f9;border:1px solid #e2e8f0;border-bottom-width:2px;padding:1px 5px;border-radius:5px;color:#334155}
+  footer{color:var(--muted);font-size:.85rem;text-align:center;padding:24px}
+  @media print{
+    header{background:none;color:#000}
+    .toolbar,.tabs{display:none!important}
+    section.card{box-shadow:none;break-inside:avoid;page-break-inside:avoid}
+    .item{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>TMS App — Verbeterplan &amp; Feature Roadmap</h1>
+    <p>Overzicht van beveiligings- en verbeterpunten uit de projectaudit, gegroepeerd op prioriteit, plus een lijst nieuwe features die goed passen bij een Transport Management Systeem. Audit gedateerd 1 juli 2026.</p>
+    <div class="legend">
+      <span class="pill crit">● Kritiek</span>
+      <span class="pill high">● Hoog</span>
+      <span class="pill med">● Middel</span>
+      <span class="pill low">● Laag</span>
+      <span class="pill nice">● Nice-to-have</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- Stats -->
+  <section class="card">
+    <h2>Samenvatting</h2>
+    <p class="hint">Uit de audit van backend (Django/DRF), frontend (React/Vite/PWA) en DevOps (Docker Compose op Linux VPS).</p>
+    <div class="stats">
+      <div class="stat"><div class="n" style="color:var(--crit)">8</div><div class="l">Kritiek</div></div>
+      <div class="stat"><div class="n" style="color:var(--high)">14</div><div class="l">Hoog</div></div>
+      <div class="stat"><div class="n" style="color:var(--med)">17</div><div class="l">Middel</div></div>
+      <div class="stat"><div class="n" style="color:var(--low)">10</div><div class="l">Laag</div></div>
+      <div class="stat"><div class="n" style="color:var(--nice)">43</div><div class="l">Feature-ideeën</div></div>
+    </div>
+  </section>
+
+  <!-- Tabs -->
+  <div class="tabs" role="tablist">
+    <button class="tab-btn active" data-tab="fix">Verbeteringen &amp; Security</button>
+    <button class="tab-btn" data-tab="feat">Feature-roadmap</button>
+    <button class="tab-btn" data-tab="plan">Aanpakvolgorde</button>
+  </div>
+
+  <!-- =============== IMPROVEMENTS TAB =============== -->
+  <div class="tab-panel" id="tab-fix">
+
+    <div class="toolbar">
+      <button class="filter-btn active" data-filter="all">Alles</button>
+      <button class="filter-btn" data-filter="crit">Kritiek</button>
+      <button class="filter-btn" data-filter="high">Hoog</button>
+      <button class="filter-btn" data-filter="med">Middel</button>
+      <button class="filter-btn" data-filter="low">Laag</button>
+    </div>
+
+    <!-- CRITICAL -->
+    <section class="card">
+      <h2>🔴 Kritiek <span class="sub">— vóór volgende cloud-release oplossen</span></h2>
+      <div class="grid">
+
+        <div class="item" data-prio="crit">
+          <div class="stripe crit"></div>
+          <div class="body">
+            <p class="title">Hardcoded DB-wachtwoorden als default in dev/local settings</p>
+            <p class="desc">Verwijder <code>default='tms_password_dev'</code> en <code>default='postgres'</code>. Verplicht <code>.env</code> voor iedere omgeving en fail-fast bij ontbreken.</p>
+            <div class="meta"><span class="pill tag">Backend</span><span class="pill tag">settings/development.py</span><span class="pill tag">settings/local.py</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="crit">
+          <div class="stripe crit"></div>
+          <div class="body">
+            <p class="title">Klaartekst testwachtwoorden in seed_users.py</p>
+            <p class="desc">Verplaats naar dev-only fixture of genereer random wachtwoord per seed-run. Voorkomt dat een productie-seed een admin met bekend wachtwoord aanmaakt.</p>
+            <div class="meta"><span class="pill tag">Backend</span><span class="pill tag">seed_users.py</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="crit">
+          <div class="stripe crit"></div>
+          <div class="body">
+            <p class="title">Geen bestandstype-validatie op FileField uploads</p>
+            <p class="desc">Voeg <code>FileExtensionValidator</code> + magic-byte check + <code>Content-Disposition: attachment</code> toe aan invoices, documents, tasks, maintenance, signatures. Nu is een <code>.html</code>/<code>.exe</code>-upload technisch mogelijk.</p>
+            <div class="meta"><span class="pill tag">Backend</span><span class="pill tag">Security</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="crit">
+          <div class="stripe crit"></div>
+          <div class="body">
+            <p class="title">@tanstack/react-query ontbreekt in package.json</p>
+            <p class="desc">Wordt in <code>main.tsx</code> gebruikt maar niet expliciet gedeclareerd. Fresh install kan breken. Toevoegen aan <code>dependencies</code>.</p>
+            <div class="meta"><span class="pill tag">Frontend</span><span class="pill tag">Build</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="crit">
+          <div class="stripe crit"></div>
+          <div class="body">
+            <p class="title">Backup wordt gemaakt maar nooit gevalideerd</p>
+            <p class="desc">In <code>update-production-docker.sh</code> na de <code>pg_dump</code> een <code>pg_restore --list</code> of testrestore doen; anders wordt corruptie pas ontdekt bij een echte crash.</p>
+            <div class="meta"><span class="pill tag">DevOps</span><span class="pill tag">Backup</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="crit">
+          <div class="stripe crit"></div>
+          <div class="body">
+            <p class="title">Nul frontend tests, minimale backend tests</p>
+            <p class="desc">Vitest + React Testing Library minimaal, Playwright voor login/verlof/factuur flow. Backend: pytest coverage op permissions en multi-tenant scoping.</p>
+            <div class="meta"><span class="pill tag">Testing</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="crit">
+          <div class="stripe crit"></div>
+          <div class="body">
+            <p class="title">Nginx Proxy Manager admin UI open op 0.0.0.0:81</p>
+            <p class="desc">Bind aan <code>127.0.0.1:81</code> of intern netwerk. Verplicht wachtwoord wisselen na eerste boot; nu ships met <code>admin@example.com</code> / <code>changeme</code>.</p>
+            <div class="meta"><span class="pill tag">DevOps</span><span class="pill tag">Security</span><span class="pill tag">docker-compose.yml</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="crit">
+          <div class="stripe crit"></div>
+          <div class="body">
+            <p class="title">Ed25519 license private key zonder passphrase</p>
+            <p class="desc"><code>license_manager.py</code> laadt de key via <code>NoEncryption()</code>. Diefstal van het bestand = licenties vervalsen. Passphrase + off-box opslag (KMS, hardware token, of tenminste ge-encrypteerd op VPS).</p>
+            <div class="meta"><span class="pill tag">Licensing</span><span class="pill tag">Security</span></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- HIGH -->
+    <section class="card">
+      <h2>🟠 Hoog <span class="sub">— binnen 1–2 sprints</span></h2>
+      <div class="grid">
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">Geen resource limits op containers</p>
+            <p class="desc">Één runaway Celery-task kan de hele VPS OOM-killen. Voeg <code>deploy.resources.limits</code> toe aan backend, celery-worker, celery-beat, frontend.</p>
+            <div class="meta"><span class="pill tag">DevOps</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">Sentry SDK geïnstalleerd maar niet geïnitialiseerd</p>
+            <p class="desc"><code>sentry-sdk</code> zit in <code>production.txt</code>; init in <code>production.py</code> ontbreekt. Snelle win voor error-tracking. Overweeg self-hosted GlitchTip voor GDPR.</p>
+            <div class="meta"><span class="pill tag">Backend</span><span class="pill tag">Observability</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">django-csp niet actief</p>
+            <p class="desc">Pakket zit in requirements, middleware is niet toegevoegd. Backend stuurt nu geen CSP-header — alleen nginx doet dat, met <code>'unsafe-inline'</code>.</p>
+            <div class="meta"><span class="pill tag">Backend</span><span class="pill tag">Security</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">Geen route-level lazy loading in de frontend</p>
+            <p class="desc">Alle 34+ pagina's zitten in de initial bundle. <code>InvoiceCreatePage.tsx</code> is alleen al ~3800 regels. <code>React.lazy()</code> + <code>&lt;Suspense&gt;</code> per route.</p>
+            <div class="meta"><span class="pill tag">Frontend</span><span class="pill tag">Performance</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">Celery tasks zonder retry policy</p>
+            <p class="desc">Eén transient DB-error = herinneringsmail wordt nooit verstuurd. <code>@shared_task(max_retries=3, default_retry_delay=60)</code> + escalatie bij final failure.</p>
+            <div class="meta"><span class="pill tag">Backend</span><span class="pill tag">Reliability</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">Celery Beat in-memory scheduler</p>
+            <p class="desc">Bij restart worden geplande taken gemist of dubbel uitgevoerd. Overstappen op <code>django-celery-beat</code> (DB scheduler) met migratie.</p>
+            <div class="meta"><span class="pill tag">Backend</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">Backend healthcheck start-period te kort (5s)</p>
+            <p class="desc">Migrations kunnen 10–30s duren. Zet <code>start-period=60s</code>. Of splits <code>/healthz/live</code> vs <code>/healthz/ready</code>.</p>
+            <div class="meta"><span class="pill tag">DevOps</span><span class="pill tag">backend/Dockerfile</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">NPM depends_on: service_healthy → deadlock-risico</p>
+            <p class="desc">Als backend traag booted (migrations), blijft NPM in restart-loop en is de maintenance page niet bereikbaar. Zet op <code>service_started</code>.</p>
+            <div class="meta"><span class="pill tag">DevOps</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">Redis fallback naar localhost in productie</p>
+            <p class="desc">Als <code>REDIS_URL</code> ontbreekt, valt Django terug op <code>redis://localhost:6379/0</code>. Productie: verplicht maken.</p>
+            <div class="meta"><span class="pill tag">Backend</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">MFA secret in klaartekst in DB</p>
+            <p class="desc">Bestaande <code>EncryptedCharField</code> hergebruiken om de TOTP secret at-rest te versleutelen.</p>
+            <div class="meta"><span class="pill tag">Backend</span><span class="pill tag">Security</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">Multi-tenant scoping niet consistent</p>
+            <p class="desc">Geen zichtbare "filter altijd op bedrijf/company" op alle ViewSets. Nu waarschijnlijk single-tenant; wordt CRITICAL zodra je meerdere klanten in één DB draait.</p>
+            <div class="meta"><span class="pill tag">Backend</span><span class="pill tag">Architecture</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">:latest tags op NPM en Portainer</p>
+            <p class="desc">Onvoorspelbare updates bij rebuild. Pin naar specifieke versies (bv. <code>jc21/nginx-proxy-manager:2.11.3</code>).</p>
+            <div class="meta"><span class="pill tag">DevOps</span><span class="pill tag">docker-compose.yml</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">Rollback in update-script niet geïmplementeerd</p>
+            <p class="desc">De <code>rollback()</code> functie in <code>update-production-docker.sh</code> is een stub. Volledig implementeren: containers down, DB restore, media restore, compose restore, up.</p>
+            <div class="meta"><span class="pill tag">DevOps</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-prio="high">
+          <div class="stripe high"></div>
+          <div class="body">
+            <p class="title">Per-account login lockout ontbreekt</p>
+            <p class="desc">Nu alleen per-IP throttle (10/min). Botnet met veel IPs kan langzaam password spraying doen. Voeg per-user cooldown na X mislukkingen toe.</p>
+            <div class="meta"><span class="pill tag">Backend</span><span class="pill tag">Security</span></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- MEDIUM -->
+    <section class="card">
+      <h2>🟡 Middel <span class="sub">— na de hoge prio's</span></h2>
+      <div class="grid">
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">Serializer velden als <code>mfa_enabled</code>, <code>mfa_required</code> niet in <code>read_only_fields</code></p>
+          <p class="desc">Gebruiker kan die theoretisch patchen. Expliciet read-only zetten.</p>
+          <div class="meta"><span class="pill tag">Backend</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">SMTP injection risico in planning module</p>
+          <p class="desc">User-supplied SMTP host/from/body zonder validatie. Adressen valideren; body escapen; liever <code>django.core.mail</code> dan raw <code>smtplib</code>.</p>
+          <div class="meta"><span class="pill tag">Backend</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">JWT in localStorage (obfuscated, niet encrypted)</p>
+          <p class="desc">Bij XSS zijn tokens weg. Overweeg HttpOnly cookie voor refresh token + CSRF token voor mutating requests.</p>
+          <div class="meta"><span class="pill tag">Frontend</span><span class="pill tag">Security</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">Geen React Error Boundaries</p>
+          <p class="desc">Één throw = witte pagina. Voeg boundary per route toe met terugval-UI.</p>
+          <div class="meta"><span class="pill tag">Frontend</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">Geen list virtualization</p>
+          <p class="desc">Grote tabellen (invoices, time-entries) kunnen laggen. Gebruik <code>react-window</code> of <code>@tanstack/virtual</code>.</p>
+          <div class="meta"><span class="pill tag">Frontend</span><span class="pill tag">Performance</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">Duplicate i18n keys in nl.json / en.json</p>
+          <p class="desc">TS linter meldt duplicates voor <code>recentActivity</code>, <code>week</code>, <code>totalHours</code>, <code>totalKm</code>. Opruimen.</p>
+          <div class="meta"><span class="pill tag">Frontend</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">Onvolledige/inconsistente EN translations</p>
+          <p class="desc">Steekproef laat missende keys zien. In dev <code>debug:true</code> op i18next zetten om ze zichtbaar te maken.</p>
+          <div class="meta"><span class="pill tag">Frontend</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">A11y gaps</p>
+          <p class="desc">Skip-to-content link ontbreekt, iconen-only buttons zonder <code>aria-label</code>, geen consistente focus-management in dialogs.</p>
+          <div class="meta"><span class="pill tag">Frontend</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">Theme (violet/emerald) niet gekoppeld aan Tailwind primary-*</p>
+          <p class="desc">Themestore verandert kleuren maar veel classes blijven blauw. CSS custom properties koppelen aan Tailwind config.</p>
+          <div class="meta"><span class="pill tag">Frontend</span><span class="pill tag">Design</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">Media op lokaal Docker volume — geen off-site</p>
+          <p class="desc">VPS diskfailure = alle uploads kwijt. Overstap naar S3-compatible (MinIO self-host, Backblaze B2, Wasabi) via <code>django-storages</code>.</p>
+          <div class="meta"><span class="pill tag">DevOps</span><span class="pill tag">Data safety</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">Geen data-retention / GDPR purge job</p>
+          <p class="desc">Sessies, oude audit-logs, verwijderde entities blijven eeuwig hangen. Celery Beat job met configureerbare retentie per model.</p>
+          <div class="meta"><span class="pill tag">Backend</span><span class="pill tag">GDPR</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">Geen APM / distributed tracing</p>
+          <p class="desc">OpenTelemetry naar self-hosted Grafana Tempo, of Sentry Performance. Nu geen inzicht in trage endpoints.</p>
+          <div class="meta"><span class="pill tag">Observability</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">Race condition in pakmiddelen scheduler</p>
+          <p class="desc"><code>last_run_at</code>-check is niet atomair; twee beat workers kunnen dubbele mails sturen. DB-lock of Celery task lock (redlock).</p>
+          <div class="meta"><span class="pill tag">Backend</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">X-Frame-Options overschreven op <code>/media/</code> in nginx.local.conf</p>
+          <p class="desc">Clickjacking-oppervlak voor PDFs. Terugzetten op SAMEORIGIN of specifiek whitelisten.</p>
+          <div class="meta"><span class="pill tag">DevOps</span><span class="pill tag">Security</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">Docker socket gemount naar backend + celery</p>
+          <p class="desc">Read-only mount voorkomt schrijven naar het bestand, niet naar de Docker API. Verwijderen als niet gebruikt; anders via docker-socket-proxy.</p>
+          <div class="meta"><span class="pill tag">DevOps</span><span class="pill tag">Security</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">License activate: 10/min throttle en geen exponential backoff</p>
+          <p class="desc">~14.400 pogingen/dag mogelijk. Exponential backoff + audit-log per mislukte activatie.</p>
+          <div class="meta"><span class="pill tag">Backend</span><span class="pill tag">Licensing</span></div>
+        </div></div>
+
+        <div class="item" data-prio="med"><div class="stripe med"></div><div class="body">
+          <p class="title">Backup file <code>timeentry_backup_20260331.json</code> in git</p>
+          <p class="desc">Hoort niet in het repo. Verplaatsen naar backup-locatie en <code>.gitignore</code>.</p>
+          <div class="meta"><span class="pill tag">Repo hygiene</span></div>
+        </div></div>
+
+      </div>
+    </section>
+
+    <!-- LOW -->
+    <section class="card">
+      <h2>🔵 Laag <span class="sub">— netjes-om-te-doen</span></h2>
+      <div class="grid">
+
+        <div class="item" data-prio="low"><div class="stripe low"></div><div class="body">
+          <p class="title">Django/DRF pin op minor version</p>
+          <p class="desc"><code>Django==5.0.x</code> ipv <code>&gt;=5.0,&lt;6.0</code> voorkomt onverwachte minor-version bumps.</p>
+        </div></div>
+
+        <div class="item" data-prio="low"><div class="stripe low"></div><div class="body">
+          <p class="title"><code>apt-get upgrade -y</code> in backend Dockerfile</p>
+          <p class="desc">OS-CVE's in base image mee-patchen.</p>
+        </div></div>
+
+        <div class="item" data-prio="low"><div class="stripe low"></div><div class="body">
+          <p class="title"><code>pip-audit</code> / <code>safety</code> in CI</p>
+          <p class="desc">Dependency-CVE's automatisch signaleren.</p>
+        </div></div>
+
+        <div class="item" data-prio="low"><div class="stripe low"></div><div class="body">
+          <p class="title">Container image scan (<code>trivy</code>)</p>
+          <p class="desc">Bij elke build de image scannen op known-CVEs.</p>
+        </div></div>
+
+        <div class="item" data-prio="low"><div class="stripe low"></div><div class="body">
+          <p class="title">Runtime-config voor <code>VITE_API_URL</code></p>
+          <p class="desc">Via <code>window.API_URL</code> in <code>config.js</code>, zodat één frontend image voor meerdere omgevingen kan.</p>
+        </div></div>
+
+        <div class="item" data-prio="low"><div class="stripe low"></div><div class="body">
+          <p class="title">OPERATIONS.md &amp; DISASTER_RECOVERY.md</p>
+          <p class="desc">Runbooks voor logs, restart, health, monitoring, backup/restore procedure.</p>
+        </div></div>
+
+        <div class="item" data-prio="low"><div class="stripe low"></div><div class="body">
+          <p class="title">Correlation-ID middleware</p>
+          <p class="desc">Uniek request-ID per HTTP call, doorreiken naar logs en frontend.</p>
+        </div></div>
+
+        <div class="item" data-prio="low"><div class="stripe low"></div><div class="body">
+          <p class="title"><code>drf-spectacular</code> voor OpenAPI schema</p>
+          <p class="desc">Auto-generated docs + typegeneratie naar frontend mogelijk.</p>
+        </div></div>
+
+        <div class="item" data-prio="low"><div class="stripe low"></div><div class="body">
+          <p class="title">Bundle-analyzer in Vite</p>
+          <p class="desc"><code>rollup-plugin-visualizer</code> om bundle bloat zichtbaar te maken.</p>
+        </div></div>
+
+        <div class="item" data-prio="low"><div class="stripe low"></div><div class="body">
+          <p class="title">RunPython data-migrations reviewen</p>
+          <p class="desc">Alle reverse-functies verifiëren zodat rollback geen data verliest.</p>
+        </div></div>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- =============== FEATURES TAB =============== -->
+  <div class="tab-panel" id="tab-feat" style="display:none">
+    <section class="card">
+      <h2>🚚 Feature-ideeën voor het TMS</h2>
+      <p class="hint">Gegroepeerd per domein. Prioriteit binnen elke groep is <span class="pill nice">nice-to-have</span> tenzij anders aangegeven.</p>
+
+      <details class="group" open>
+        <summary>A. Compliance &amp; wetgeving (NL/EU transport)</summary>
+        <div class="items">
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">Digitale tachograaf DDD-analyse</p><p class="desc">DDD/C1B-bestanden parsen voor rij- en rusttijden-controle (EU 561/2006). Bouwt op bestaande tachograph-sync.</p><div class="meta"><span class="pill high">Hoge waarde</span></div></div></div>
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">Werktijdenwet / ATW dashboard</p><p class="desc">Per chauffeur dag/week/2-weken rusttijd, max diensttijd, night work limit met live waarschuwingen.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Boordcomputer koppeling</p><p class="desc">VDL/Roadservice/DAKO via bestaande tracking-module. Kilometerstand, brandstof, ECO-score.</p></div></div>
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">CMR digitalisering</p><p class="desc">Bestaande signature workflow uit <code>documents</code> hergebruiken. 1-op-1 fit.</p><div class="meta"><span class="pill high">Hoge waarde</span></div></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">eFTI / eCMR-gateway</p><p class="desc">2027 EU verplicht B2B. Datamodel nu al klaarzetten scheelt straks pijn.</p></div></div>
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">AVG / GDPR self-service</p><p class="desc">Chauffeur exporteert eigen data (JSON) en dient verwijder-verzoek in. Retention-jobs via Celery Beat.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">NIS2 audit trail</p><p class="desc">Bestaande audit-logger uitbreiden naar user/action/before/after/ip/user_agent op alle admin-mutaties.</p></div></div>
+        </div>
+      </details>
+
+      <details class="group">
+        <summary>B. Financieel / facturatie</summary>
+        <div class="items">
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">PEPPOL / UBL 2.1 e-factuur export &amp; inbox</p><p class="desc">Vanaf ~2028 verplicht B2B in NL. Integreren met bestaande invoicing.</p><div class="meta"><span class="pill high">Wet</span></div></div></div>
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">Automatische bankreconciliatie</p><p class="desc">MT940/CAMT.053 koppelen aan open facturen (matching op referentie/bedrag). Bouwt op bestaande banking-module.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Debiteurenbeheer &amp; aanmaanflow</p><p class="desc">Stages (herinnering → aanmaning → incasso) met geautomatiseerde mails via Celery Beat.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Voorschotten &amp; prijslijsten per klant</p><p class="desc">Contract-management, tariefstaffels, brandstofclausules.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Kostprijs per rit</p><p class="desc">Brandstof + tolgeld + uren + slijtage → marge zichtbaar per opdracht.</p></div></div>
+        </div>
+      </details>
+
+      <details class="group">
+        <summary>C. Planning / operationeel</summary>
+        <div class="items">
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">Route-optimalisatie</p><p class="desc">OR-Tools / VROOM / GraphHopper op basis van planning + fleet + tracking.</p></div></div>
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">ETA / real-time trip visibility voor klant</p><p class="desc">Publieke tracking-link (signed URL, geen login) — hergebruik bestaande HMAC-URL infrastructuur.</p><div class="meta"><span class="pill high">Klantwaarde</span></div></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Laad-/losvenster + wachttijd registratie</p><p class="desc">Meten van demurrage en objectief klant-gesprek voeren.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Trailer/oplegger-registratie</p><p class="desc">Apart van trekker, met koppel/ontkoppel events.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Digitale werkbon per rit</p><p class="desc">Chauffeur tekent af bij ontvangst/aflevering met foto's en handtekening.</p></div></div>
+          <div class="item"><div class="stripe low"></div><div class="body"><p class="title">Incident/schade module</p><p class="desc">Dossiers uitbreiden met foto's, verzekeringsclaim-PDF export, kosten tracking.</p></div></div>
+        </div>
+      </details>
+
+      <details class="group">
+        <summary>D. Onderhoud &amp; wagenpark</summary>
+        <div class="items">
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">Voorspellend onderhoud</p><p class="desc">Kilometerstand uit tracking koppelen aan onderhouds-intervallen. Automatische taken bij drempel.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">APK reminder → agenda + push</p><p class="desc">Deels aanwezig; uitbreiden met iCal feed voor agenda-koppeling.</p></div></div>
+          <div class="item"><div class="stripe low"></div><div class="body"><p class="title">Bandenbeheer</p><p class="desc">Druk/profiel per positie op voertuig, wisselmomenten, kosten.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Brandstoftransacties import</p><p class="desc">MultiTankcard, Shell, TotalEnergies CSV/API → koppel aan voertuig/chauffeur.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Rittenregistratie voor bijtelling</p><p class="desc">Auto-generate uit tracking, chauffeur bevestigt alleen nog.</p></div></div>
+        </div>
+      </details>
+
+      <details class="group">
+        <summary>E. Personeel / HR</summary>
+        <div class="items">
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">Loonaangifte-export</p><p class="desc">Nmbrs/Loket/AFAS/Exact voor uren + overuren + verlof.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Cursus-/opleiding tracking</p><p class="desc">Code 95, ADR, VCA. Bestaande expiry-reminder patroon hergebruiken.</p></div></div>
+          <div class="item"><div class="stripe low"></div><div class="body"><p class="title">Onboarding checklist per chauffeur</p><p class="desc">Documenten + handtekeningen + verplichte trainingen.</p></div></div>
+          <div class="item"><div class="stripe low"></div><div class="body"><p class="title">Salaris-/bonusberekening</p><p class="desc">Op basis van ritten/uren/km — sluit aan op timetracking + planning.</p></div></div>
+        </div>
+      </details>
+
+      <details class="group">
+        <summary>F. Klantportaal</summary>
+        <div class="items">
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">Klant login met eigen dashboard</p><p class="desc">Nieuwe rol <code>klant</code>: eigen zendingen, POD downloaden, facturen betalen (Mollie/Stripe).</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Publieke bestelmodule</p><p class="desc">Klant plaatst transportaanvraag → komt binnen in planning met status-workflow.</p></div></div>
+        </div>
+      </details>
+
+      <details class="group">
+        <summary>G. UX / mobiel voor chauffeurs</summary>
+        <div class="items">
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">Chauffeurs-modus PWA</p><p class="desc">Simpele flow: "welke rit nu?", "laden/aflevering afmelden met foto", "tanken registreren". Offline-first met sync.</p><div class="meta"><span class="pill high">Dagelijkse waarde</span></div></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Barcode/QR scan voor pakmiddelen</p><p class="desc">Sluit aan op bestaande pakmiddelen-module.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Push-notificaties bij nieuwe rit of wijziging</p><p class="desc">VAPID keys al aanwezig; alleen backend-trigger + frontend UI toevoegen.</p></div></div>
+        </div>
+      </details>
+
+      <details class="group">
+        <summary>H. AI / automation</summary>
+        <div class="items">
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">OCR-upgrade op inkoop-facturen</p><p class="desc">LayoutLM/Donut of Azure Document Intelligence voor betere velden-extractie dan huidige OCR.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">E-mail auto-classificatie</p><p class="desc">In bestaande email_import: klacht / offerte / factuur / POD.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Chat-to-action in bestaande chatbot</p><p class="desc">"Zet Jan morgen op rit 456" → schrijft direct in planning na bevestiging.</p></div></div>
+          <div class="item"><div class="stripe low"></div><div class="body"><p class="title">Anomaly detection dashboard</p><p class="desc">Uren, brandstof/km, onverwacht lange stops → alert.</p></div></div>
+        </div>
+      </details>
+
+      <details class="group">
+        <summary>I. Integraties</summary>
+        <div class="items">
+          <div class="item"><div class="stripe high"></div><div class="body"><p class="title">Boekhouding push</p><p class="desc">Exact Online / Twinfield / Moneybird / e-Boekhouden.</p></div></div>
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Payment providers (Mollie iDEAL)</p><p class="desc">Voor klantportaal-betalingen.</p></div></div>
+          <div class="item"><div class="stripe low"></div><div class="body"><p class="title">Address auto-complete</p><p class="desc">PDOK/Google Places + geocoding cache.</p></div></div>
+          <div class="item"><div class="stripe low"></div><div class="body"><p class="title">Weather / traffic in planning</p><p class="desc">KNMI EDR, ANWB verkeersinfo.</p></div></div>
+        </div>
+      </details>
+
+      <details class="group">
+        <summary>J. Observability &amp; ops (uitbreiding)</summary>
+        <div class="items">
+          <div class="item"><div class="stripe med"></div><div class="body"><p class="title">Beheerdersdashboard</p><p class="desc">DB size, celery queue depth, laatste backup, license expiry countdown, aantal actieve gebruikers. Deel bestaat al via <code>apps/core/monitoring.py</code>.</p></div></div>
+          <div class="item"><div class="stripe low"></div><div class="body"><p class="title">In-app changelog / release notes</p><p class="desc">Je pusht vaak; laat gebruikers zien wat er nieuw is.</p></div></div>
+          <div class="item"><div class="stripe low"></div><div class="body"><p class="title">Feature flags</p><p class="desc"><code>django-waffle</code> of eigen store; features per klant/rol togglen.</p></div></div>
+        </div>
+      </details>
+
+    </section>
+  </div>
+
+  <!-- =============== PLAN TAB =============== -->
+  <div class="tab-panel" id="tab-plan" style="display:none">
+    <section class="card">
+      <h2>🗓️ Aanpakvolgorde — sprints van ±1 week</h2>
+
+      <h3>Sprint 1 — hygiëne (weinig risico, veel winst)</h3>
+      <ul>
+        <li><code>@tanstack/react-query</code> toevoegen aan <code>package.json</code>.</li>
+        <li>Hardcoded defaults uit dev/local settings en seed scripts weghalen.</li>
+        <li><code>FileExtensionValidator</code> + magic-byte check op alle FileFields.</li>
+        <li>Backend healthcheck <code>start-period=60s</code>, NPM <code>depends_on: service_started</code>.</li>
+        <li>Resource limits in <code>docker-compose.yml</code>.</li>
+        <li>Sentry init + <code>SENTRY_DSN</code> env var.</li>
+        <li>NPM admin binden op <code>127.0.0.1:81</code>.</li>
+        <li>Backup verify (<code>pg_restore --list</code>) in update-script.</li>
+      </ul>
+
+      <h3>Sprint 2 — beveiliging &amp; audit</h3>
+      <ul>
+        <li>Celery task retry policies + <code>django-celery-beat</code>.</li>
+        <li>MFA secret at-rest encryption via bestaande <code>EncryptedCharField</code>.</li>
+        <li><code>django-csp</code> middleware activeren; permissive start, aanscherpen.</li>
+        <li>Per-account login lockout naast IP throttle.</li>
+        <li>Frontend Error Boundaries + route-level lazy loading.</li>
+        <li>Duplicate i18n keys opruimen.</li>
+      </ul>
+
+      <h3>Sprint 3 — data safety &amp; observability</h3>
+      <ul>
+        <li>Media naar object storage (MinIO self-host of Backblaze) via <code>django-storages</code>.</li>
+        <li>Automated <code>pg_dump</code> naar remote (Restic/rclone) + retention.</li>
+        <li>APM: OpenTelemetry naar self-hosted Grafana Tempo, of Sentry Performance.</li>
+        <li>Retention/purge job (Celery Beat).</li>
+      </ul>
+
+      <h3>Sprint 4 — feature-keuze</h3>
+      <p>Kies 1–2 items uit de feature-tab die passen bij je klanten. Persoonlijke tip:</p>
+      <ul>
+        <li><strong>Tachograaf DDD-analyse</strong> (A) — compliance-winst en direct nuttig.</li>
+        <li><strong>PEPPOL e-factuur</strong> (B) — regelgeving loopt op je af, nu al klaarzetten.</li>
+        <li><strong>Publieke ETA-link</strong> (C) — snel te bouwen op bestaande signed-URL infra, hoge klantwaarde.</li>
+        <li><strong>Chauffeurs-modus PWA</strong> (G) — dagelijkse gebruikswaarde, verhoogt adoption.</li>
+      </ul>
+
+      <h3>Beperkingen om rekening mee te houden op de VPS/Docker stack</h3>
+      <ul>
+        <li>CSP zonder <code>'unsafe-inline'</code> vraagt Vite-hashing van inline scripts en test op dynamische theme-kleuren.</li>
+        <li>HttpOnly refresh-cookie vraagt herschrijven van refresh-flow + CSRF-tokens (1–2 dagen werk).</li>
+        <li>Multi-tenant achteraf invoeren = bulk-migratie (welke row hoort bij welk bedrijf) + audits op alle <code>get_queryset</code>-overrides.</li>
+        <li>Object storage vraagt migratie van bestaande media-URLs.</li>
+        <li>Route-optimalisatie: GraphHopper is self-host op dezelfde VPS haalbaar; Google Routes vraagt betaald account.</li>
+        <li>PEPPOL vereist een access point (Storecove of Digipoort) — technisch simpel, wel abo/licentie.</li>
+        <li>Docker Compose <code>deploy.resources</code> werkt met moderne Docker (v25+) prima buiten Swarm.</li>
+      </ul>
+    </section>
+  </div>
+
+</main>
+
+<footer>
+  Gegenereerd uit de projectaudit van 1 juli 2026. Print-vriendelijk via <span class="kbd">Ctrl</span>+<span class="kbd">P</span>.
+</footer>
+
+<script>
+  // Tab switching
+  const tabs = document.querySelectorAll('.tab-btn');
+  const panels = document.querySelectorAll('.tab-panel');
+  tabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabs.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      panels.forEach(p => p.style.display = 'none');
+      document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
+    });
+  });
+
+  // Priority filter (fix tab)
+  const filters = document.querySelectorAll('.filter-btn');
+  filters.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filters.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const f = btn.dataset.filter;
+      document.querySelectorAll('#tab-fix .item[data-prio]').forEach(el => {
+        el.style.display = (f === 'all' || el.dataset.prio === f) ? '' : 'none';
+      });
+      // Hide whole cards that end up empty
+      document.querySelectorAll('#tab-fix section.card').forEach(card => {
+        if (!card.querySelector('.grid')) return;
+        const visible = [...card.querySelectorAll('.item[data-prio]')].some(el => el.style.display !== 'none');
+        card.style.display = visible || f === 'all' ? '' : 'none';
+      });
+    });
+  });
+</script>
+</body>
+</html>

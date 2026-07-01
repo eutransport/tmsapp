@@ -71,6 +71,7 @@ MIDDLEWARE = [
     'tms.middleware.LastActivityMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'apps.core.upload_validation.FileUploadValidationMiddleware',
     'apps.licensing.middleware.LicenseMiddleware',
 ]
 

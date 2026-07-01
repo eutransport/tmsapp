@@ -5,7 +5,7 @@ echo "=== TMS Backend Starting ==="
 
 # Ensure required directories exist
 echo "Creating required directories..."
-mkdir -p /app/media/fonts /app/media/branding /app/media/imports/invoices /app/media/temp/ocr /app/staticfiles /app/logs
+mkdir -p /app/media/fonts /app/media/branding /app/media/imports/invoices /app/media/temp/ocr /app/staticfiles /app/logs /app/celerybeat
 
 # Clean up any old temp OCR files from previous runs
 echo "Cleaning up old temp files..."
