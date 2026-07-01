@@ -256,7 +256,7 @@ const MailboxConfigPage: React.FC = () => {
           <ArrowLeft className="w-4 h-4" />
           {t('imports.backToEmailImport', 'Terug naar E-mail Import')}
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="page-title">
           {isNew ? t('imports.newMailboxConfig', 'Nieuwe Mailbox Configuratie') : t('imports.editMailboxConfig', 'Mailbox Configuratie Bewerken')}
         </h1>
         <p className="mt-1 text-sm text-gray-500">

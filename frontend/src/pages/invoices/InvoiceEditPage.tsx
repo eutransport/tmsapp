@@ -276,7 +276,7 @@ export default function InvoiceEditPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main content - lines */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div className="card p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
               <h2 className="text-base sm:text-lg font-semibold">{t('invoices.lines')}</h2>
               <div className="flex flex-wrap items-center gap-2">
@@ -468,7 +468,7 @@ export default function InvoiceEditPage() {
 
         {/* Sidebar - invoice details */}
         <div className="space-y-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="card p-6">
             <h2 className="text-lg font-semibold mb-4">{t('invoices.invoiceDetails')}</h2>
             
             <div className="space-y-4">

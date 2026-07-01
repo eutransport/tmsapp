@@ -683,7 +683,7 @@ function TimeEntryImportModal({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="fixed inset-0 bg-gray-500/75" onClick={onClose} />
-        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col">
+        <div className="modal-panel w-full max-w-4xl max-h-[85vh] flex flex-col">
           {/* Header with tabs */}
           <div className="border-b">
             <div className="px-6 py-4 flex items-center justify-between">
@@ -1205,7 +1205,7 @@ function SpreadsheetImportModal({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="fixed inset-0 bg-gray-500/75" onClick={onClose} />
-        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] flex flex-col">
+        <div className="modal-panel w-full max-w-5xl max-h-[85vh] flex flex-col">
           <div className="px-6 py-4 border-b flex items-center justify-between">
             <div className="flex items-center gap-4">
               <h3 className="text-lg font-semibold">Ritregistratie Importeren</h3>
@@ -1541,7 +1541,7 @@ function TolImportModal({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="fixed inset-0 bg-gray-500/75" onClick={onClose} />
-        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+        <div className="modal-panel w-full max-w-3xl max-h-[85vh] flex flex-col">
           {/* Header */}
           <div className="px-6 py-4 border-b flex items-center justify-between">
             <h3 className="text-lg font-semibold">Tol importeren</h3>
@@ -3094,7 +3094,7 @@ export default function InvoiceCreatePage() {
       )}
 
       {/* Step 1: Select Template */}
-      <div className="bg-white rounded-lg shadow p-4 sm:p-6 min-w-0">
+      <div className="card p-4 sm:p-6 min-w-0">
         <h2 className="text-lg font-semibold mb-4">1. {t('invoices.selectTemplate')}</h2>
         {templates.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
@@ -3125,7 +3125,7 @@ export default function InvoiceCreatePage() {
 
       {/* Step 2: Invoice Details */}
       {selectedTemplate && (
-        <div className="bg-white rounded-lg shadow p-4 sm:p-6 min-w-0">
+        <div className="card p-4 sm:p-6 min-w-0">
           <h2 className="text-lg font-semibold mb-4">2. {t('invoices.invoiceDetails')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
@@ -3233,7 +3233,7 @@ export default function InvoiceCreatePage() {
 
       {/* Step 3: Invoice Lines */}
       {selectedTemplate && columns.length > 0 && !isBatchMode && (
-        <div className="bg-white rounded-lg shadow p-4 sm:p-6 min-w-0">
+        <div className="card p-4 sm:p-6 min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h2 className="text-lg font-semibold">3. {t('invoices.lines')}</h2>
             <div className="flex flex-wrap gap-2 items-center">
@@ -3424,7 +3424,7 @@ export default function InvoiceCreatePage() {
 
       {/* Losse facturen (batch) - editable tabs at the bottom */}
       {isBatchMode && (
-        <div className="bg-white rounded-lg shadow p-4 sm:p-6 min-w-0">
+        <div className="card p-4 sm:p-6 min-w-0">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">Losse facturen</h2>
             <div className="flex items-center gap-3">

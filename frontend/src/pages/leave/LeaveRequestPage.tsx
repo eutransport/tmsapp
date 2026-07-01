@@ -471,7 +471,7 @@ export default function LeaveRequestPage() {
           <ArrowLeftIcon className="w-4 h-4 mr-2" />
           {t('common.back')}
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">{t('leave.requestLeave')}</h1>
+        <h1 className="page-title">{t('leave.requestLeave')}</h1>
       </div>
 
       {/* Balance Summary */}

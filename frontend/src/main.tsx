@@ -59,3 +59,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 )
+
+// Hide the boot splash once React has mounted. The splash script in
+// index.html enforces a minimum display time so the "app opening" moment
+// is perceivable, especially on PWA cold-start.
+requestAnimationFrame(() => {
+  ;(window as any).__hideAppSplash?.()
+})

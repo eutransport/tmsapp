@@ -414,7 +414,7 @@ function VehicleMonitorPanel({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border p-3 sm:p-4 space-y-3">
+    <div className="card p-3 sm:p-4 space-y-3">
       <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
         <MagnifyingGlassIcon className="h-4 w-4 text-primary-600" />
         {t('tracking.monitorVehicle')}
@@ -775,7 +775,7 @@ export default function TrackingPage() {
       {/* Main layout: Map + Sidebar */}
       <div className="flex flex-col lg:flex-row gap-4">
         {/* Map — z-index isolated so Leaflet controls don't overlap modals */}
-        <div className="flex-1 bg-white rounded-lg shadow-sm border overflow-hidden min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] relative z-0">
+        <div className="flex-1 card overflow-hidden min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] relative z-0">
           <TrackingMap
             vehicles={allMapVehicles}
             selectedRoute={selectedRoute}
@@ -800,7 +800,7 @@ export default function TrackingPage() {
 
           {/* Active vehicles list (admin only) */}
           {isAdmin && allMapVehicles.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+            <div className="card overflow-hidden">
               <div className="px-3 py-2 border-b bg-gray-50">
                 <h3 className="text-xs sm:text-sm font-semibold text-gray-900 flex items-center gap-2">
                   <TruckIcon className="h-4 w-4 text-gray-500 shrink-0" />

@@ -143,7 +143,7 @@ export default function ActivityPage() {
     <div className="max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t('activity.title')}</h1>
+        <h1 className="page-title">{t('activity.title')}</h1>
         <p className="mt-1 text-sm text-gray-500">
           {t('activity.systemOverview', 'Overzicht van alle activiteiten in het systeem')}
         </p>

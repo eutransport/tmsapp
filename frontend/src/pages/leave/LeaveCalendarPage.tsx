@@ -217,7 +217,7 @@ export default function LeaveCalendarPage() {
             <ArrowLeftIcon className="w-4 h-4 mr-2" />
             {t('common.back')}
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">{t('leave.leaveCalendar')}</h1>
+          <h1 className="page-title">{t('leave.leaveCalendar')}</h1>
           <p className="text-gray-500">{t('leave.calendarDescription')}</p>
         </div>
       </div>

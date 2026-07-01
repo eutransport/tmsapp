@@ -193,7 +193,7 @@ export default function TiresPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('maintenance.tires.title')}</h1>
+          <h1 className="page-title">{t('maintenance.tires.title')}</h1>
           <p className="text-gray-500 mt-1">{t('maintenance.tires.subtitle')}</p>
         </div>
         <button onClick={() => setShowCreateModal(true)} className="btn-primary flex items-center gap-2">

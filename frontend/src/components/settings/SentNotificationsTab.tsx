@@ -513,7 +513,7 @@ export default function SentNotificationsTab({ onSuccess, onError }: SentNotific
                       {/* Stats */}
                       <div className="grid grid-cols-3 gap-4">
                         <div className="bg-gray-50 rounded-lg p-3 text-center">
-                          <p className="text-2xl font-bold text-gray-900">
+                          <p className="page-title">
                             {selectedNotification.total_recipients}
                           </p>
                           <p className="text-xs text-gray-500">{t('notifications.recipients')}</p>

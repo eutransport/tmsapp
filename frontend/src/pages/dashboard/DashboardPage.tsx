@@ -35,7 +35,7 @@ function ChauffeurDashboard({ user }: { user: any }) {
     <div>
       {/* Welcome message */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="page-title">
           {t('dashboard.welcomeDriver', { name: user?.voornaam })}
         </h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -444,7 +444,7 @@ function AdminDashboard({ user }: { user: any }) {
     <div className="space-y-6">
       {/* Welcome message */}
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+        <h1 className="page-title">
           {t('dashboard.welcomeDriver', { name: user?.voornaam })}
         </h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -938,7 +938,7 @@ function FinancialDashboard({ user }: { user: any }) {
     <div className="space-y-6">
       {/* Welcome message */}
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+        <h1 className="page-title">
           {t('dashboard.welcomeDriver', { name: user?.voornaam })}
         </h1>
         <p className="mt-1 text-sm text-gray-500">

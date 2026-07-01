@@ -93,7 +93,7 @@ export default function VehicleDetailPanel({ objectId, platNumber, onClose, onRo
   const statusInfo = pos ? statusLabels[pos.vehicle_status] || statusLabels.parked : null
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+    <div className="card overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0 flex-1">

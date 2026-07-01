@@ -68,7 +68,7 @@ export default function DossierListPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{t('dossiers.title', 'Dossiers')}</h1>
+          <h1 className="page-title">{t('dossiers.title', 'Dossiers')}</h1>
           <p className="mt-1 text-sm text-gray-500">{count} {t('dossiers.totalItems', 'dossiers')}</p>
         </div>
         {isManager && (

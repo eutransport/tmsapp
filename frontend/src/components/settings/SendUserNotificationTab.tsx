@@ -298,7 +298,7 @@ export default function SendUserNotificationTab({ onSuccess, onError }: SendUser
             <BellIcon className="h-4 w-4" />
             {t('common.preview')}
           </h4>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 max-w-sm">
+          <div className="card p-4 max-w-sm">
             <div className="flex items-start gap-3">
               <div className="flex-shrink-0 w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
                 <BellIcon className="h-5 w-5 text-primary-600" />

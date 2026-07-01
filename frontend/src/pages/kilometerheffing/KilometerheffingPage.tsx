@@ -63,7 +63,7 @@ export default function KilometerheffingPage() {
   return (
     <div className="p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="page-title">
           {t('nav.kilometerheffing', 'Kilometerheffing')}
         </h1>
         <button
@@ -76,7 +76,7 @@ export default function KilometerheffingPage() {
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="card p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Jaar</label>
           <select value={jaar} onChange={(e) => setJaar(parseInt(e.target.value))} className="input">
@@ -111,7 +111,7 @@ export default function KilometerheffingPage() {
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">

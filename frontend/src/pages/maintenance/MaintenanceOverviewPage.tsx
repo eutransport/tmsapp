@@ -378,7 +378,7 @@ export default function MaintenanceOverviewPage() {
               <h3 className="text-sm font-medium text-gray-600">{t('maintenance.stats.mostExpensive')}</h3>
               <div className="flex items-center gap-3 mt-2">
                 <LicensePlate kenteken={stats.most_expensive_vehicle.vehicle_kenteken} size="md" />
-                <span className="text-2xl font-bold text-gray-900">
+                <span className="page-title">
                   {formatCurrency(stats.most_expensive_vehicle.total_cost)}
                 </span>
               </div>
@@ -414,7 +414,7 @@ function StatCard({
           {icon}
         </div>
         <div>
-          <div className="text-2xl font-bold text-gray-900">{value}</div>
+          <div className="page-title">{value}</div>
           <div className="text-sm text-gray-500">{label}</div>
         </div>
       </div>

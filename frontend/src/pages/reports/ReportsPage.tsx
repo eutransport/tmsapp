@@ -319,7 +319,7 @@ export default function ReportsPage() {
         <div className="flex items-center gap-3 min-w-0">
           <SparklesIcon className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600 flex-shrink-0" />
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{t('reports.title')}</h1>
+            <h1 className="page-title">{t('reports.title')}</h1>
             <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">
               {t('reports.subtitle')}
             </p>

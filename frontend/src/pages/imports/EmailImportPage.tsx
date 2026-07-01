@@ -173,7 +173,7 @@ const EmailImportPage: React.FC = () => {
           <ArrowLeft className="w-4 h-4" />
           {t('imports.backToImports', 'Terug naar Imports')}
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">{t('imports.emailInvoiceImport', 'E-mail Factuur Import')}</h1>
+        <h1 className="page-title">{t('imports.emailInvoiceImport', 'E-mail Factuur Import')}</h1>
         <p className="mt-1 text-sm text-gray-500">
           {t('imports.emailImportDescription', 'Importeer facturen automatisch uit shared mailboxen')}
         </p>
@@ -182,19 +182,19 @@ const EmailImportPage: React.FC = () => {
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white rounded-lg shadow p-4">
+          <div className="card p-4">
             <div className="text-sm font-medium text-gray-500">{t('common.total', 'Totaal')}</div>
-            <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+            <div className="page-title">{stats.total}</div>
           </div>
-          <div className="bg-white rounded-lg shadow p-4">
+          <div className="card p-4">
             <div className="text-sm font-medium text-gray-500">{t('common.today', 'Vandaag')}</div>
-            <div className="text-2xl font-bold text-gray-900">{stats.today}</div>
+            <div className="page-title">{stats.today}</div>
           </div>
-          <div className="bg-white rounded-lg shadow p-4">
+          <div className="card p-4">
             <div className="text-sm font-medium text-gray-500">{t('imports.toReview', 'Te Reviewen')}</div>
             <div className="text-2xl font-bold text-orange-600">{stats.by_status.awaiting_review}</div>
           </div>
-          <div className="bg-white rounded-lg shadow p-4">
+          <div className="card p-4">
             <div className="text-sm font-medium text-gray-500">{t('leave.approved', 'Goedgekeurd')}</div>
             <div className="text-2xl font-bold text-green-600">{stats.by_status.approved}</div>
           </div>

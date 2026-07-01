@@ -88,7 +88,7 @@ export default function MfaSetupPage() {
             <div className="mx-auto w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mb-4">
               <ShieldCheckIcon className="h-8 w-8 text-primary-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="page-title">
               {t('auth.setupMfa')}
             </h1>
             <p className="mt-2 text-sm text-gray-600">

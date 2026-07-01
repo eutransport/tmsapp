@@ -15,7 +15,7 @@ export default function LeaveBalancePage() {
       <div className="flex items-center gap-3">
         <ScaleIcon className="w-7 h-7 text-primary-600" />
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('nav.leaveBalance')}</h1>
+          <h1 className="page-title">{t('nav.leaveBalance')}</h1>
           <p className="text-gray-500">{t('leave.balanceOverview', 'Overzicht van verlofsaldo per medewerker')}</p>
         </div>
       </div>

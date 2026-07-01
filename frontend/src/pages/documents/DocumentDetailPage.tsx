@@ -224,7 +224,7 @@ export default function DocumentDetailPage() {
           <div className="flex items-start">
             <DocumentIcon className="h-12 w-12 text-gray-400" />
             <div className="ml-4">
-              <h1 className="text-2xl font-bold text-gray-900">{document.title}</h1>
+              <h1 className="page-title">{document.title}</h1>
               <p className="text-sm text-gray-500">{document.original_filename}</p>
               {document.description && (
                 <p className="mt-2 text-gray-600">{document.description}</p>

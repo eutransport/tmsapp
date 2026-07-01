@@ -157,7 +157,7 @@ function ChauffeurPlanningView() {
             </button>
             
             <div className="text-center min-w-[200px]">
-              <div className="text-2xl font-bold text-gray-900">
+              <div className="page-title">
                 {t('common.week')} {currentWeek}
               </div>
               <div className="text-sm text-gray-500">{currentYear}</div>
@@ -1314,7 +1314,7 @@ function HistorieView() {
   return (
     <div className="space-y-6">
       {/* Search Bar and Year Filter */}
-      <div className="bg-white rounded-lg shadow-sm border p-4">
+      <div className="card p-4">
         <div className="flex flex-col md:flex-row gap-4">
           {/* Chauffeur Search */}
           <div className="flex-1">
@@ -1405,14 +1405,14 @@ function HistorieView() {
 
       {/* Report Display */}
       {loading && (
-        <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+        <div className="card p-12 text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
           <p className="mt-4 text-gray-500">{t('common.loading')}</p>
         </div>
       )}
 
       {!loading && selectedDriver && report && (
-        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div className="card overflow-hidden">
           {/* Report Header */}
           <div className="px-3 py-3 sm:px-6 sm:py-4 border-b bg-gray-50">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -1537,7 +1537,7 @@ function HistorieView() {
 
       {/* Empty State */}
       {!loading && !selectedDriver && (
-        <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+        <div className="card p-12 text-center">
           <MagnifyingGlassIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">{t('drivers.selectDriver')}</h3>
           <p className="text-gray-500">{t('drivers.searchAndSelect')}</p>

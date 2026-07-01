@@ -51,7 +51,7 @@ export default function NotificationsPage() {
         <div className="flex items-center gap-3">
           <BellIcon className="h-8 w-8 text-primary-600" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t('notifications.title')}</h1>
+            <h1 className="page-title">{t('notifications.title')}</h1>
             <p className="text-sm text-gray-500">
               {t('notifications.manageDescription', "Beheer notificatie groepen, schema's en verstuur berichten.")}
             </p>
@@ -134,7 +134,7 @@ export default function NotificationsPage() {
 
       {/* Desktop Tab Content */}
       <div className="hidden md:block">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="card p-6">
           {activeSubTab === 'groups' && (
             <NotificationGroupsTab onSuccess={handleSuccess} onError={handleError} />
           )}

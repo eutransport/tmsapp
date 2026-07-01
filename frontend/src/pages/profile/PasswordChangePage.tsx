@@ -105,7 +105,7 @@ export default function PasswordChangePage() {
         </button>
         <div className="flex items-center gap-3">
           <KeyIcon className="h-8 w-8 text-primary-500" />
-          <h1 className="text-2xl font-bold text-gray-900">{t('profile.changePassword')}</h1>
+          <h1 className="page-title">{t('profile.changePassword')}</h1>
         </div>
       </div>
 

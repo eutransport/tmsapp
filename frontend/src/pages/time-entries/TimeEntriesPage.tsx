@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { 
   PlusIcon, 
@@ -496,7 +496,7 @@ function TimeEntryForm({
               </label>
               {trip.heeft_kilometerheffing && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Bedrag (€)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bedrag (�)</label>
                   <input
                     type="text"
                     inputMode="decimal"
@@ -591,7 +591,7 @@ function WeekSummaryCard({
         <div className="flex items-center gap-6">
           <div>
             <span className="text-sm text-gray-500">{t('common.week')} {weeknummer}, {jaar}</span>
-            <p className="text-2xl font-bold text-gray-900">{summary.totaal_entries} {t('timeEntries.entriesCount')}</p>
+            <p className="page-title">{summary.totaal_entries} {t('timeEntries.entriesCount')}</p>
           </div>
           <div className="h-12 w-px bg-gray-200" />
           <div>
@@ -1160,7 +1160,7 @@ export default function TimeEntriesPage() {
                 {[
                   debouncedSearch ? `"${debouncedSearch}"` : null,
                   searchWeek !== null ? `${t('common.week')} ${searchWeek}` : null
-                ].filter(Boolean).join(' â€¢ ')}
+                ].filter(Boolean).join(' • ')}
               </span>
             )}
           </div>

@@ -203,7 +203,7 @@ function FieldEditor({ field, position, onSave, onClose }: FieldEditorProps) {
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="fixed inset-0 bg-gray-500/75" onClick={onClose} />
-        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+        <div className="modal-panel w-full max-w-lg p-6">
           <h3 className="text-lg font-semibold mb-4">
             {t('templates.editor.editField')} - {position}
           </h3>
@@ -745,7 +745,7 @@ function ColumnEditor({ columns, onChange }: ColumnEditorProps) {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="fixed inset-0 bg-gray-500/75" onClick={() => setEditingColumn(null)} />
-            <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="modal-panel w-full max-w-md p-6">
               <h3 className="text-lg font-semibold mb-4">{t('templates.editor.editColumn')}</h3>
 
               <div className="space-y-4">

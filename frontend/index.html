@@ -36,9 +36,114 @@
     <link rel="manifest" href="/manifest.json" />
     
     <!-- Fonts loaded locally via @fontsource/inter (no external requests) -->
+
+    <style>
+      /* App splash - shown before React mounts. Especially visible on
+         PWA cold-start on mobile. Removed via JS below once app is ready. */
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(1200px 800px at 20% 10%, rgba(99,102,241,0.20), transparent 60%),
+          radial-gradient(900px 700px at 90% 110%, rgba(79,70,229,0.22), transparent 60%),
+          linear-gradient(160deg, #1e1b4b 0%, #312e81 55%, #4338ca 100%);
+        color: #eef2ff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+        transition: opacity 400ms ease, visibility 400ms ease;
+      }
+      #app-splash.hide { opacity: 0; visibility: hidden; pointer-events: none; }
+      #app-splash .splash-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.25rem;
+        animation: splash-in 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+      }
+      #app-splash .splash-logo {
+        width: 112px;
+        height: 112px;
+        border-radius: 28px;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.18);
+        box-shadow:
+          0 30px 60px -20px rgba(0,0,0,0.55),
+          0 10px 20px -8px rgba(0,0,0,0.35),
+          inset 0 1px 0 rgba(255,255,255,0.20);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        animation: splash-float 3s ease-in-out infinite;
+      }
+      #app-splash .splash-logo img { width: 76%; height: 76%; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35)); }
+      #app-splash .splash-title { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; }
+      #app-splash .splash-dots { display: inline-flex; gap: 6px; margin-top: 4px; }
+      #app-splash .splash-dots span {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: rgba(255,255,255,0.65);
+        animation: splash-bounce 1.2s infinite ease-in-out;
+      }
+      #app-splash .splash-dots span:nth-child(2) { animation-delay: 0.15s; }
+      #app-splash .splash-dots span:nth-child(3) { animation-delay: 0.30s; }
+
+      @keyframes splash-in {
+        0%   { opacity: 0; transform: translateY(20px) scale(0.85); }
+        60%  { opacity: 1; transform: translateY(-4px) scale(1.03); }
+        100% { opacity: 1; transform: translateY(0)    scale(1); }
+      }
+      @keyframes splash-float {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-8px); }
+      }
+      @keyframes splash-bounce {
+        0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+        40%           { transform: scale(1);   opacity: 1; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #app-splash .splash-inner,
+        #app-splash .splash-logo,
+        #app-splash .splash-dots span { animation: none !important; }
+      }
+    </style>
   </head>
   <body class="h-full">
+    <div id="app-splash" role="status" aria-label="Loading">
+      <div class="splash-inner">
+        <div class="splash-logo">
+          <img src="/icons/icon-192x192.png" alt="" aria-hidden="true" onerror="this.style.display='none'" />
+        </div>
+        <div class="splash-title">TMS</div>
+        <div class="splash-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      </div>
+    </div>
     <div id="root" class="h-full"></div>
+    <script>
+      // Ensure splash is visible for a minimum time so users perceive the
+      // "app opening" moment (especially on PWA cold-start). React removes it
+      // by setting window.__hideSplash = true when the shell is ready.
+      (function () {
+        var MIN_MS = (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches) ? 1400 : 800;
+        var start = Date.now();
+        function hide() {
+          var el = document.getElementById('app-splash');
+          if (!el) return;
+          el.classList.add('hide');
+          setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 500);
+        }
+        window.__hideAppSplash = function () {
+          var elapsed = Date.now() - start;
+          var wait = Math.max(0, MIN_MS - elapsed);
+          setTimeout(hide, wait);
+        };
+        // Safety fallback in case React never signals (e.g. white-screen bug)
+        setTimeout(function () { if (window.__hideAppSplash) window.__hideAppSplash(); }, 6000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

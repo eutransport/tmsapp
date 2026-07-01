@@ -289,7 +289,7 @@ export default function LeaveRequestsAdminPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('leave.adminRequests')}</h1>
+          <h1 className="page-title">{t('leave.adminRequests')}</h1>
           <p className="text-gray-500">
             {pendingCount > 0 ? (
               <span className="text-yellow-600 font-medium">{t('leave.pendingRequests', { count: pendingCount })}</span>
@@ -542,7 +542,7 @@ export default function LeaveRequestsAdminPage() {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="fixed inset-0 bg-black/30" onClick={closeEditModal} />
-            <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+            <div className="modal-panel max-w-lg w-full p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
                 {t('leave.editRequest')}
               </h2>
@@ -650,7 +650,7 @@ export default function LeaveRequestsAdminPage() {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="fixed inset-0 bg-black/30" onClick={() => setShowCreateModal(false)} />
-            <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+            <div className="modal-panel max-w-lg w-full p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <UserIcon className="w-5 h-5" />
                 {t('leave.createRequest', 'Verlof aanmaken')}
