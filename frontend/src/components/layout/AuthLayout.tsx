@@ -51,7 +51,7 @@ export default function AuthLayout() {
         {settings?.logo_url ? (
           <div className="auth-logo-badge">
             <img
-              className="h-16 sm:h-20 w-auto"
+              className="h-12 sm:h-16 md:h-20 w-auto"
               src={settings.logo_url}
               alt={settings.app_name}
             />
@@ -59,7 +59,7 @@ export default function AuthLayout() {
         ) : (
           <div className="auth-logo-badge">
             <span
-              className="text-3xl sm:text-4xl font-extrabold tracking-tight"
+              className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight"
               style={{ color: 'var(--color-primary)' }}
             >
               {settings?.app_name || 'TMS'}

@@ -440,9 +440,11 @@ function SidebarContent({
             )
           }
           style={({ isActive }) => ({
-            backgroundColor: isActive ? 'var(--color-sidebar-hover)' : 'transparent',
+            backgroundColor: isActive
+              ? 'color-mix(in srgb, var(--color-primary) 28%, var(--color-sidebar-hover))'
+              : 'transparent',
             color: isActive ? 'white' : 'var(--color-sidebar-text)',
-            boxShadow: isActive ? 'inset 3px 0 0 0 var(--color-primary)' : 'none',
+            boxShadow: isActive ? 'inset 4px 0 0 0 var(--color-primary)' : 'none',
           })}
         >
           <item.icon className="h-5 w-5 shrink-0" />

@@ -149,10 +149,21 @@
     @apply btn bg-danger-600 text-white shadow-sm hover:bg-danger-700 focus-visible:ring-danger-500;
   }
 
+  .btn-success {
+    @apply btn text-white shadow-sm bg-success-600 hover:bg-success-700 focus-visible:ring-success-500;
+  }
+
+  .btn-warning {
+    @apply btn text-white shadow-sm bg-warning-500 hover:bg-warning-600 focus-visible:ring-warning-500;
+  }
+
   .btn-ghost {
     @apply btn text-gray-700 hover:bg-gray-100;
     background-color: transparent;
   }
+
+  .btn-sm { @apply px-3 py-1.5 text-xs; min-height: 32px; }
+  .btn-icon { @apply px-2; min-width: 40px; }
 
   /* Inputs (utility variants ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â the base styles already cover raw <input>) */
   .input,
@@ -176,13 +187,19 @@
     color: var(--color-text);
   }
 
-  /* Card - one consistent look across the whole app */
+  /* Card - one consistent look across the whole app.
+     Note: base .card is intentionally NOT lifted on hover. Only
+     .card-hover / .card-interactive (used on links/buttons) reacts. */
   .card {
     @apply rounded-xl overflow-hidden;
     background-color: var(--color-card);
     border: 1px solid var(--color-card-border);
     box-shadow: var(--shadow-card);
-    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  }
+  .card-hover,
+  a.card,
+  button.card {
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
   }
   .card-hover:hover,
   a.card:hover,
@@ -319,8 +336,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 1rem 1.25rem;
-    border-radius: 1.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 1.25rem;
     background: rgba(255, 255, 255, 0.92);
     border: 1px solid rgba(255, 255, 255, 0.7);
     box-shadow:
@@ -329,6 +346,9 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
+  }
+  @media (min-width: 640px) {
+    .auth-logo-badge { padding: 1rem 1.25rem; border-radius: 1.5rem; }
   }
 
   .auth-card-wrap { animation: auth-spring-in 800ms 120ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
