@@ -46,26 +46,18 @@ export default function AuthLayout() {
         className="pointer-events-none absolute top-1/3 right-1/4 h-64 w-64 rounded-full opacity-20 blur-3xl auth-blob-c"
       />
 
-      {/* Floating logo — hovers above the card */}
+      {/* Floating logo — sits above the card, no badge */}
       <div className="relative z-10 sm:w-full sm:max-w-md flex flex-col items-center auth-logo-wrap">
-        {settings?.logo_url ? (
-          <div className="auth-logo-badge">
-            <img
-              className="h-12 sm:h-16 md:h-20 w-auto"
-              src={settings.logo_url}
-              alt={settings.app_name}
-            />
-          </div>
-        ) : (
-          <div className="auth-logo-badge">
-            <span
-              className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight"
-              style={{ color: 'var(--color-primary)' }}
-            >
-              {settings?.app_name || 'TMS'}
-            </span>
-          </div>
-        )}
+        <img
+          className="auth-logo-img"
+          src={settings?.logo_url || '/moveo-logo.png'}
+          alt={settings?.app_name || 'Moveo'}
+          onError={(e) => {
+            // Fall back to the bundled Moveo logo if the configured URL fails to load
+            const img = e.currentTarget
+            if (img.src.indexOf('/moveo-logo.png') === -1) img.src = '/moveo-logo.png'
+          }}
+        />
       </div>
 
       {/* Floating card — springs into view */}
