@@ -229,38 +229,38 @@ export default function InvoiceEditPage() {
   return (
     <div className="max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div className="flex items-start gap-3 min-w-0">
           <button
             onClick={goBack}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 shrink-0"
           >
             <ArrowLeftIcon className="h-5 w-5" />
           </button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
               {t('invoices.editInvoice')} {invoice.factuurnummer}
             </h1>
-            <p className="text-gray-500">{invoice.bedrijf_naam}</p>
+            <p className="text-sm text-gray-500 truncate">{invoice.bedrijf_naam}</p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-3">
+
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 sm:justify-end">
           {fromTask && (
-            <button onClick={() => navigate(`/tasks?task=${fromTask}`)} className="btn-secondary">
+            <button onClick={() => navigate(`/tasks?task=${fromTask}`)} className="btn-secondary flex-1 sm:flex-none">
               Terug naar taak
             </button>
           )}
           <button
             onClick={goBack}
-            className="btn-secondary"
+            className="btn-secondary flex-1 sm:flex-none"
           >
             {t('common.cancel')}
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="btn-primary"
+            className="btn-primary flex-1 sm:flex-none"
           >
             {isSaving ? t('common.saving') : t('common.save')}
           </button>
@@ -276,34 +276,36 @@ export default function InvoiceEditPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main content - lines */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">{t('invoices.lines')}</h2>
-              <div className="flex items-center gap-2">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+              <h2 className="text-base sm:text-lg font-semibold">{t('invoices.lines')}</h2>
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => {
                     if (!confirm('Hiermee ga je naar het importscherm waar je opnieuw uren of regels kunt toevoegen aan deze factuur. De bestaande regels blijven staan totdat je daar op opslaan klikt (dan worden ze vervangen). Doorgaan?')) return
                     navigate(`/invoices/new?reimport=${id}`)
                   }}
-                  className="btn-secondary flex items-center gap-2 text-primary-600"
+                  className="inline-flex items-center gap-1.5 h-9 px-2.5 text-xs sm:text-sm font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-md transition-colors"
                   title="Open importscherm om uren of regels opnieuw te importeren"
                 >
                   <ArrowPathIcon className="h-4 w-4" />
-                  Opnieuw importeren
+                  <span className="hidden xs:inline">Opnieuw importeren</span>
+                  <span className="xs:hidden">Import</span>
                 </button>
                 {lines.length > 0 && (
                   <button
                     onClick={handleDeleteAllLines}
-                    className="btn-secondary flex items-center gap-2 text-red-600 hover:bg-red-50 border-red-200"
+                    className="inline-flex items-center gap-1.5 h-9 px-2.5 text-xs sm:text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
                     title="Verwijder alle regels"
                   >
                     <TrashIcon className="h-4 w-4" />
-                    Alles verwijderen
+                    <span className="hidden xs:inline">Alles verwijderen</span>
+                    <span className="xs:hidden">Alles</span>
                   </button>
                 )}
                 <button
                   onClick={handleAddLine}
-                  className="btn-secondary flex items-center gap-2"
+                  className="inline-flex items-center gap-1.5 h-9 px-2.5 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
                 >
                   <PlusIcon className="h-4 w-4" />
                   {t('invoices.addLine')}
@@ -314,62 +316,132 @@ export default function InvoiceEditPage() {
             {lines.length === 0 ? (
               <p className="text-gray-500 text-center py-8">{t('invoices.noLines')}</p>
             ) : (
-              <table className="min-w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 text-sm font-medium text-gray-500">{t('invoices.lineDescription')}</th>
-                    <th className="text-right py-2 text-sm font-medium text-gray-500 w-24">{t('common.quantity')}</th>
-                    <th className="text-right py-2 text-sm font-medium text-gray-500 w-32">{t('common.price')}</th>
-                    <th className="text-right py-2 text-sm font-medium text-gray-500 w-32">{t('common.total')}</th>
-                    <th className="w-10"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map(line => (
-                    <tr key={line.id} className="border-b">
-                      <td className="py-2">
-                        <input
-                          type="text"
-                          value={line.omschrijving}
-                          onChange={(e) => handleLineChange(line.id, 'omschrijving', e.target.value)}
-                          onBlur={() => handleLineBlur(line.id, 'omschrijving')}
-                          className="w-full border-0 bg-transparent focus:ring-0 p-0"
-                        />
-                      </td>
-                      <td className="py-2">
-                        <input
-                          type="number"
-                          value={line.aantal}
-                          onChange={(e) => handleLineChange(line.id, 'aantal', parseFloat(e.target.value) || 0)}
-                          onBlur={() => handleLineBlur(line.id, 'aantal')}
-                          className="w-full text-right border-0 bg-transparent focus:ring-0 p-0"
-                        />
-                      </td>
-                      <td className="py-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={line.prijs_per_eenheid}
-                          onChange={(e) => handleLineChange(line.id, 'prijs_per_eenheid', parseFloat(e.target.value) || 0)}
-                          onBlur={() => handleLineBlur(line.id, 'prijs_per_eenheid')}
-                          className="w-full text-right border-0 bg-transparent focus:ring-0 p-0"
-                        />
-                      </td>
-                      <td className="py-2 text-right font-medium">
-                        {formatCurrency(line.totaal || line.aantal * line.prijs_per_eenheid)}
-                      </td>
-                      <td className="py-2">
+              <>
+                {/* Mobile: card per line */}
+                <div className="sm:hidden space-y-3">
+                  {lines.map((line, idx) => (
+                    <div key={line.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50/40">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-gray-500">Regel {idx + 1}</span>
                         <button
                           onClick={() => handleDeleteLine(line.id)}
-                          className="text-red-500 hover:text-red-700 p-1"
+                          className="text-red-500 hover:text-red-700 p-1.5 -mr-1 rounded-md hover:bg-red-50"
+                          aria-label="Verwijder regel"
                         >
                           <TrashIcon className="h-4 w-4" />
                         </button>
-                      </td>
-                    </tr>
+                      </div>
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-gray-500 mb-0.5">
+                            {t('invoices.lineDescription')}
+                          </label>
+                          <input
+                            type="text"
+                            value={line.omschrijving}
+                            onChange={(e) => handleLineChange(line.id, 'omschrijving', e.target.value)}
+                            onBlur={() => handleLineBlur(line.id, 'omschrijving')}
+                            className="w-full text-sm px-2 py-1.5 bg-white"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[11px] font-medium text-gray-500 mb-0.5">
+                              {t('common.quantity')}
+                            </label>
+                            <input
+                              type="number"
+                              value={line.aantal}
+                              onChange={(e) => handleLineChange(line.id, 'aantal', parseFloat(e.target.value) || 0)}
+                              onBlur={() => handleLineBlur(line.id, 'aantal')}
+                              className="w-full text-sm text-right px-2 py-1.5 bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-gray-500 mb-0.5">
+                              {t('common.price')}
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={line.prijs_per_eenheid}
+                              onChange={(e) => handleLineChange(line.id, 'prijs_per_eenheid', parseFloat(e.target.value) || 0)}
+                              onBlur={() => handleLineBlur(line.id, 'prijs_per_eenheid')}
+                              className="w-full text-sm text-right px-2 py-1.5 bg-white"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                          <span className="text-xs font-medium text-gray-500">{t('common.total')}</span>
+                          <span className="text-sm font-semibold text-gray-900">
+                            {formatCurrency(line.totaal || line.aantal * line.prijs_per_eenheid)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+
+                {/* Desktop: table */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 text-sm font-medium text-gray-500">{t('invoices.lineDescription')}</th>
+                        <th className="text-right py-2 text-sm font-medium text-gray-500 w-24">{t('common.quantity')}</th>
+                        <th className="text-right py-2 text-sm font-medium text-gray-500 w-32">{t('common.price')}</th>
+                        <th className="text-right py-2 text-sm font-medium text-gray-500 w-32">{t('common.total')}</th>
+                        <th className="w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lines.map(line => (
+                        <tr key={line.id} className="border-b">
+                          <td className="py-2">
+                            <input
+                              type="text"
+                              value={line.omschrijving}
+                              onChange={(e) => handleLineChange(line.id, 'omschrijving', e.target.value)}
+                              onBlur={() => handleLineBlur(line.id, 'omschrijving')}
+                              className="w-full border-0 bg-transparent focus:ring-0 p-0"
+                            />
+                          </td>
+                          <td className="py-2">
+                            <input
+                              type="number"
+                              value={line.aantal}
+                              onChange={(e) => handleLineChange(line.id, 'aantal', parseFloat(e.target.value) || 0)}
+                              onBlur={() => handleLineBlur(line.id, 'aantal')}
+                              className="w-full text-right border-0 bg-transparent focus:ring-0 p-0"
+                            />
+                          </td>
+                          <td className="py-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={line.prijs_per_eenheid}
+                              onChange={(e) => handleLineChange(line.id, 'prijs_per_eenheid', parseFloat(e.target.value) || 0)}
+                              onBlur={() => handleLineBlur(line.id, 'prijs_per_eenheid')}
+                              className="w-full text-right border-0 bg-transparent focus:ring-0 p-0"
+                            />
+                          </td>
+                          <td className="py-2 text-right font-medium">
+                            {formatCurrency(line.totaal || line.aantal * line.prijs_per_eenheid)}
+                          </td>
+                          <td className="py-2">
+                            <button
+                              onClick={() => handleDeleteLine(line.id)}
+                              className="text-red-500 hover:text-red-700 p-1"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
 
             {/* Totals */}

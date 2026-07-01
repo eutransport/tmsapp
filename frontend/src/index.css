@@ -2,8 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-/* CSS Variables for theming */
+/* ------------------------------------------------------------------
+   Design tokens
+   ------------------------------------------------------------------
+   Existing --color-* variables are still written by themeStore.ts at
+   runtime and must keep the same names. New tokens are added below
+   for radii, shadows and spacing so the whole app can share them.
+------------------------------------------------------------------ */
 :root {
+  /* Legacy color tokens (kept ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â themeStore overwrites these) */
   --color-primary: #3b82f6;
   --color-primary-hover: #2563eb;
   --color-primary-light: #eff6ff;
@@ -11,56 +18,90 @@
   --color-primary-500: #3b82f6;
   --color-primary-600: #3b82f6;
   --color-primary-700: #2563eb;
-  --color-background: #f3f4f6;
+  --color-background: #f5f7fb;
   --color-background-secondary: #ffffff;
-  --color-sidebar: #1e293b;
+  --color-sidebar: #0f172a;
   --color-sidebar-text: #94a3b8;
-  --color-sidebar-hover: #334155;
+  --color-sidebar-hover: #1e293b;
   --color-card: #ffffff;
-  --color-card-border: #e5e7eb;
-  --color-text: #111827;
-  --color-text-secondary: #6b7280;
+  --color-card-border: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-secondary: #64748b;
   --color-accent: #3b82f6;
-}
 
-/* Custom base styles */
+  /* New shared tokens */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  --shadow-card:       0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06);
+  --shadow-card-hover: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  --shadow-pop:        0 10px 25px -5px rgb(15 23 42 / 0.12), 0 4px 6px -2px rgb(15 23 42 / 0.06);
+  --focus-ring:        0 0 0 3px color-mix(in srgb, var(--color-primary) 35%, transparent);
+
+  --page-padding-x: 1rem;
+}
+@media (min-width: 640px)  { :root { --page-padding-x: 1.5rem; } }
+@media (min-width: 1024px) { :root { --page-padding-x: 2rem; } }
+
+/* ------------------------------------------------------------------
+   Base
+------------------------------------------------------------------ */
 @layer base {
   html {
     @apply h-full;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
-  
+
   body {
     @apply h-full font-sans antialiased;
     background-color: var(--color-background);
     color: var(--color-text);
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-  
-  #root {
-    @apply h-full;
-  }
-  
-  /* Default input styling with theme color border */
+
+  #root { @apply h-full; }
+
+  /* Consistent, fluid heading defaults. Pages can still override with
+     Tailwind utility classes; these only apply when no size classes are
+     present, keeping every existing page working. */
+  h1 { font-size: theme('fontSize.h1[0]'); line-height: 1.25; font-weight: 700; letter-spacing: -0.015em; color: var(--color-text); }
+  h2 { font-size: theme('fontSize.h2[0]'); line-height: 1.3;  font-weight: 600; letter-spacing: -0.01em;  color: var(--color-text); }
+  h3 { font-size: theme('fontSize.h3[0]'); line-height: 1.4;  font-weight: 600; color: var(--color-text); }
+  h4 { font-size: 0.9375rem; line-height: 1.4; font-weight: 600; color: var(--color-text); }
+
+  /* Form controls ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â softer border, better focus */
   input[type="text"],
   input[type="email"],
   input[type="password"],
   input[type="number"],
   input[type="date"],
   input[type="time"],
+  input[type="datetime-local"],
   input[type="tel"],
   input[type="url"],
   input[type="search"],
   select,
   textarea {
-    @apply border rounded-lg;
-    border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+    @apply border rounded-md;
+    border-color: color-mix(in srgb, var(--color-primary) 22%, #cbd5e1);
+    background-color: var(--color-card);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  
+
   input[type="text"]:focus,
   input[type="email"]:focus,
   input[type="password"]:focus,
   input[type="number"]:focus,
   input[type="date"]:focus,
   input[type="time"]:focus,
+  input[type="datetime-local"]:focus,
   input[type="tel"]:focus,
   input[type="url"]:focus,
   input[type="search"]:focus,
@@ -68,164 +109,165 @@
   textarea:focus {
     border-color: var(--color-primary);
     outline: none;
-    box-shadow: 0 0 0 1px var(--color-primary);
+    box-shadow: var(--focus-ring);
   }
+
+  ::placeholder { color: var(--color-text-secondary); opacity: 0.7; }
+  ::selection    { background-color: color-mix(in srgb, var(--color-primary) 28%, transparent); }
 }
 
-/* Custom component styles */
+/* ------------------------------------------------------------------
+   Components
+------------------------------------------------------------------ */
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-md border border-transparent transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none;
+    min-height: 40px;
   }
-  
+
   .btn-primary {
-    @apply btn text-white;
+    @apply btn text-white shadow-sm;
     background-color: var(--color-primary);
   }
-  
-  .btn-primary:hover:not(:disabled) {
-    background-color: var(--color-primary-hover);
-  }
-  
-  .btn-primary:focus {
-    box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-primary);
-  }
-  
+  .btn-primary:hover:not(:disabled) { background-color: var(--color-primary-hover); }
+  .btn-primary:focus-visible        { box-shadow: var(--focus-ring); }
+
   .btn-secondary {
-    @apply btn text-gray-700 border-gray-300 hover:bg-gray-50;
+    @apply btn shadow-sm;
     background-color: var(--color-card);
+    color: var(--color-text);
+    border-color: var(--color-card-border);
   }
-  
+  .btn-secondary:hover:not(:disabled) { background-color: #f8fafc; border-color: #cbd5e1; }
+  .btn-secondary:focus-visible        { box-shadow: var(--focus-ring); }
+
   .btn-danger {
-    @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+    @apply btn bg-danger-600 text-white shadow-sm hover:bg-danger-700 focus-visible:ring-danger-500;
   }
-  
-  .input {
-    @apply block w-full rounded-lg shadow-sm sm:text-sm;
-    border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
-    background-color: var(--color-card);
+
+  .btn-ghost {
+    @apply btn text-gray-700 hover:bg-gray-100;
+    background-color: transparent;
   }
-  
-  .input:focus {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 1px var(--color-primary);
-  }
-  
+
+  /* Inputs (utility variants ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â the base styles already cover raw <input>) */
+  .input,
   .input-field {
-    @apply block w-full rounded-lg px-3 py-2 shadow-sm sm:text-sm;
-    border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+    @apply block w-full rounded-md px-3 py-2 text-sm shadow-sm;
+    min-height: 40px;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 22%, #cbd5e1);
     background-color: var(--color-card);
+    color: var(--color-text);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  
+  .input:focus,
   .input-field:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 1px var(--color-primary);
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
-  
+
   .label {
     @apply block text-sm font-medium mb-1;
     color: var(--color-text);
   }
-  
+
+  /* Card ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â one consistent look across the whole app */
   .card {
-    @apply rounded-lg shadow-sm overflow-hidden;
+    @apply rounded-lg overflow-hidden;
     background-color: var(--color-card);
     border: 1px solid var(--color-card-border);
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
   }
-  
+  .card-hover:hover,
+  a.card:hover,
+  button.card:hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+  .card-interactive {
+    @apply card cursor-pointer;
+  }
+  .card-interactive:hover { box-shadow: var(--shadow-card-hover); transform: translateY(-1px); }
+  .card-interactive:active { transform: translateY(0); }
+
+  /* Chips / pills ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â used all over the app for filters and statuses */
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium;
+    background-color: #f1f5f9;
+    color: #334155;
+  }
+  .chip-primary { background-color: var(--color-primary-50); color: var(--color-primary-700); }
+  .chip-success { background-color: #dcfce7; color: #15803d; }
+  .chip-warning { background-color: #fef3c7; color: #b45309; }
+  .chip-danger  { background-color: #fee2e2; color: #b91c1c; }
+
+  /* Page layout helpers */
+  .page-container {
+    padding-left:  var(--page-padding-x);
+    padding-right: var(--page-padding-x);
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+    max-width: 100%;
+  }
+
   .page-header {
-    @apply flex items-center justify-between mb-6;
+    @apply flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-6;
   }
-  
+
   .page-title {
-    @apply text-2xl font-bold;
+    font-size: theme('fontSize.h1[0]');
+    line-height: 1.25;
+    font-weight: 700;
+    letter-spacing: -0.015em;
     color: var(--color-text);
   }
-  
-  /* Responsive utilities */
-  .touch-target {
-    @apply min-w-[44px] min-h-[44px];
+
+  .section-title {
+    font-size: theme('fontSize.h2[0]');
+    line-height: 1.3;
+    font-weight: 600;
+    color: var(--color-text);
   }
-  
-  .mobile-card {
-    @apply sm:hidden bg-white rounded-lg shadow-sm border border-gray-200 p-4;
-  }
-  
-  .desktop-table {
-    @apply hidden sm:block overflow-x-auto;
-  }
-  
-  .mobile-only {
-    @apply sm:hidden;
-  }
-  
-  .desktop-only {
-    @apply hidden sm:block;
-  }
-  
-  /* Better touch targets for inputs */
-  .input, .input-field, .btn {
-    @apply min-h-[44px];
-  }
-  
-  /* Responsive page header */
-  .page-header {
-    @apply flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6;
-  }
+
+  .text-muted { color: var(--color-text-secondary); }
+
+  /* Divider */
+  .divider { @apply my-6 border-t border-gray-200; }
+
+  /* Touch / responsive helpers (kept from previous version) */
+  .touch-target { @apply min-w-[44px] min-h-[44px]; }
+  .mobile-card  { @apply sm:hidden bg-white rounded-lg shadow-sm border border-gray-200 p-4; }
+  .desktop-table { @apply hidden sm:block overflow-x-auto; }
+  .mobile-only   { @apply sm:hidden; }
+  .desktop-only  { @apply hidden sm:block; }
 }
 
-/* Scrollbar styling */
+/* ------------------------------------------------------------------
+   Utilities
+------------------------------------------------------------------ */
 @layer utilities {
-  .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: theme('colors.gray.300') transparent;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: theme('colors.gray.300');
-    border-radius: 3px;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: theme('colors.gray.400');
-  }
-  
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: theme('colors.gray.300') transparent; }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background-color: theme('colors.gray.300'); border-radius: 3px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover { background-color: theme('colors.gray.400'); }
+
+  /* Vertical rhythm helper for stacked forms/sections */
+  .stack > * + * { margin-top: 1rem; }
+  .stack-sm > * + * { margin-top: 0.5rem; }
+  .stack-lg > * + * { margin-top: 1.5rem; }
+
   /* PWA Animations */
   @keyframes slide-up {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
-  
-  .animate-slide-up {
-    animation: slide-up 0.3s ease-out;
-  }
-  
-  /* PWA Install Banner styles */
+  .animate-slide-up { animation: slide-up 0.3s ease-out; }
+
   @keyframes pulse-subtle {
-    0%, 100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.8;
-    }
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.8; }
   }
-  
-  .animate-pulse-subtle {
-    animation: pulse-subtle 2s ease-in-out infinite;
-  }
+  .animate-pulse-subtle { animation: pulse-subtle 2s ease-in-out infinite; }
 }

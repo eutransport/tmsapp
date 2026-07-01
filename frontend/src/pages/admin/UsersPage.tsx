@@ -1127,43 +1127,53 @@ export default function UsersPage() {
                 </div>
                 
                 {/* Action Buttons */}
-                <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
+                <div className="flex flex-wrap gap-1.5 pt-3 border-t border-gray-100">
                   <button
                     onClick={() => { setSelectedUser(user); setShowEditModal(true) }}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg min-h-[44px]"
+                    title={t('common.edit')}
+                    aria-label={t('common.edit')}
+                    className="inline-flex items-center justify-center gap-1.5 h-9 px-2.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
                   >
                     <PencilSquareIcon className="w-4 h-4" />
-                    <span>{t('common.edit')}</span>
+                    <span className="hidden sm:inline">{t('common.edit')}</span>
                   </button>
                   <button
                     onClick={() => { setSelectedUser(user); setShowPasswordModal(true) }}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-yellow-600 bg-yellow-50 hover:bg-yellow-100 rounded-lg min-h-[44px]"
+                    title={t('auth.password')}
+                    aria-label={t('auth.password')}
+                    className="inline-flex items-center justify-center gap-1.5 h-9 px-2.5 text-xs font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100 rounded-md transition-colors"
                   >
                     <KeyIcon className="w-4 h-4" />
-                    <span>{t('auth.password')}</span>
+                    <span className="hidden sm:inline">{t('auth.password')}</span>
                   </button>
                   <button
                     onClick={() => { setSelectedUser(user); setShowBlockModal(true) }}
-                    className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg min-h-[44px] ${user.is_active ? 'text-orange-600 bg-orange-50 hover:bg-orange-100' : 'text-green-600 bg-green-50 hover:bg-green-100'}`}
+                    title={user.is_active ? t('common.inactive') : t('common.active')}
+                    aria-label={user.is_active ? t('common.inactive') : t('common.active')}
+                    className={`inline-flex items-center justify-center gap-1.5 h-9 px-2.5 text-xs font-medium rounded-md transition-colors ${user.is_active ? 'text-orange-700 bg-orange-50 hover:bg-orange-100' : 'text-green-700 bg-green-50 hover:bg-green-100'}`}
                   >
                     {user.is_active ? <NoSymbolIcon className="w-4 h-4" /> : <CheckCircleIcon className="w-4 h-4" />}
-                    <span>{user.is_active ? t('common.inactive') : t('common.active')}</span>
+                    <span className="hidden sm:inline">{user.is_active ? t('common.inactive') : t('common.active')}</span>
                   </button>
                   {user.mfa_enabled && (
                     <button
                       onClick={() => { setSelectedUser(user); setShowMfaModal(true) }}
-                      className="flex items-center gap-1.5 px-3 py-2 text-sm text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg min-h-[44px]"
+                      title="2FA uit"
+                      aria-label="2FA uit"
+                      className="inline-flex items-center justify-center gap-1.5 h-9 px-2.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-md transition-colors"
                     >
                       <ShieldCheckIcon className="w-4 h-4" />
-                      <span>2FA uit</span>
+                      <span className="hidden sm:inline">2FA uit</span>
                     </button>
                   )}
                   <button
                     onClick={() => { setSelectedUser(user); setShowDeleteModal(true) }}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg min-h-[44px]"
+                    title={t('common.delete')}
+                    aria-label={t('common.delete')}
+                    className="inline-flex items-center justify-center gap-1.5 h-9 px-2.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
                   >
                     <TrashIcon className="w-4 h-4" />
-                    <span>{t('common.delete')}</span>
+                    <span className="hidden sm:inline">{t('common.delete')}</span>
                   </button>
                 </div>
               </div>
