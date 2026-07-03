@@ -162,6 +162,7 @@ REST_FRAMEWORK = {
         'email_import': '30/hour',   # Email import fetch: 30 per hour
         'loadlist_upload': '20/hour',   # Load-list photo upload (OCR + LLM cost)
         'loadlist_optimize': '60/hour', # Route optimization
+        'loadlist_suggest': '120/hour', # Address autocomplete
     },
 }
 

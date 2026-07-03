@@ -12,7 +12,7 @@ import {
   TruckIcon,
 } from '@heroicons/react/24/outline'
 import clsx from '@/utils/clsx'
-import { loadlistApi, LoadList, LoadStop, StopWrite } from '@/api/loadlist'
+import { loadlistApi, LoadList, LoadStop, StopWrite, AddressSuggestion } from '@/api/loadlist'
 
 const STATUS_LABELS: Record<LoadList['status'], string> = {
   uploaded: 'Geüpload',
@@ -238,14 +238,11 @@ export default function LoadListPage() {
               maxLength={120}
             />
             <label className="block text-xs text-gray-600 mb-1">Startadres (depot)</label>
-            <input
-              type="text"
-              className="input w-full mb-3"
+            <AddressAutocomplete
               value={startAddress}
-              onChange={e => setStartAddress(e.target.value)}
+              onChange={setStartAddress}
               placeholder="Straat, postcode plaats, land"
-              maxLength={250}
-              autoComplete="street-address"
+              className="mb-3"
             />
             <label className="block text-xs text-gray-600 mb-1">Foto van adressenlijst</label>
             <input
@@ -349,16 +346,14 @@ export default function LoadListPage() {
                 )}
 
                 <div className="flex flex-col sm:flex-row gap-2 mb-3">
-                  <input
-                    type="text"
-                    className="input flex-1"
-                    value={selected.start_address}
-                    onChange={e => setSelected({ ...selected, start_address: e.target.value })}
-                    onBlur={e => saveDepot(e.target.value)}
-                    placeholder="Startadres (depot)"
-                    maxLength={250}
-                    autoComplete="street-address"
-                  />
+                  <div className="flex-1">
+                    <AddressAutocomplete
+                      value={selected.start_address}
+                      onChange={val => setSelected({ ...selected, start_address: val })}
+                      onCommit={val => saveDepot(val)}
+                      placeholder="Startadres (depot)"
+                    />
+                  </div>
                   <button
                     type="button"
                     className="btn btn-primary"
@@ -641,6 +636,116 @@ function ImageZoomViewer({ src, onClose }: ImageZoomViewerProps) {
           className="pointer-events-none"
         />
       </div>
+    </div>
+  )
+}
+
+interface AddressAutocompleteProps {
+  value: string
+  onChange: (v: string) => void
+  onCommit?: (v: string) => void
+  placeholder?: string
+  className?: string
+}
+
+function AddressAutocomplete({ value, onChange, onCommit, placeholder, className }: AddressAutocompleteProps) {
+  const [items, setItems] = useState<AddressSuggestion[]>([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [highlight, setHighlight] = useState(-1)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const debounceRef = useRef<number | null>(null)
+  const lastQuery = useRef<string>('')
+
+  useEffect(() => {
+    const q = value.trim()
+    if (q.length < 3 || q === lastQuery.current) {
+      setItems([])
+      return
+    }
+    if (debounceRef.current) window.clearTimeout(debounceRef.current)
+    debounceRef.current = window.setTimeout(async () => {
+      try {
+        setLoading(true)
+        const res = await loadlistApi.suggestAddress(q)
+        lastQuery.current = q
+        setItems(res)
+        setOpen(res.length > 0)
+        setHighlight(-1)
+      } catch {
+        setItems([])
+      } finally {
+        setLoading(false)
+      }
+    }, 350)
+    return () => { if (debounceRef.current) window.clearTimeout(debounceRef.current) }
+  }, [value])
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current) return
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [])
+
+  const pick = (s: AddressSuggestion) => {
+    onChange(s.label)
+    lastQuery.current = s.label
+    setOpen(false)
+    setItems([])
+    onCommit?.(s.label)
+  }
+
+  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!open || items.length === 0) {
+      if (e.key === 'Enter') onCommit?.(value)
+      return
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlight(h => Math.min(items.length - 1, h + 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlight(h => Math.max(0, h - 1)) }
+    else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (highlight >= 0 && items[highlight]) pick(items[highlight])
+      else onCommit?.(value)
+    } else if (e.key === 'Escape') { setOpen(false) }
+  }
+
+  return (
+    <div ref={wrapRef} className={clsx('relative', className)}>
+      <input
+        type="text"
+        className="input w-full"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => items.length > 0 && setOpen(true)}
+        onBlur={() => setTimeout(() => onCommit?.(value), 150)}
+        onKeyDown={onKey}
+        placeholder={placeholder}
+        maxLength={250}
+        autoComplete="off"
+      />
+      {loading && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">…</div>
+      )}
+      {open && items.length > 0 && (
+        <ul className="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-md border border-gray-200 bg-white shadow-lg">
+          {items.map((s, idx) => (
+            <li
+              key={`${s.lat},${s.lng},${idx}`}
+              className={clsx(
+                'px-3 py-2 text-sm cursor-pointer',
+                idx === highlight ? 'bg-primary-50 text-primary-900' : 'hover:bg-gray-50'
+              )}
+              onMouseDown={e => { e.preventDefault(); pick(s) }}
+              onMouseEnter={() => setHighlight(idx)}
+            >
+              {s.label}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

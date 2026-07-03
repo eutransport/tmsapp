@@ -115,3 +115,68 @@ def geocode(address: str, country_hint: str = '') -> Optional[GeocodeResult]:
     )
     cache.set(cache_key, result.__dict__, CACHE_TTL)
     return result
+
+
+@dataclass
+class AddressSuggestion:
+    label: str
+    lat: float
+    lng: float
+
+
+def suggest(query: str, limit: int = 6, country_hint: str = 'nl,be,de,lu,fr') -> list[AddressSuggestion]:
+    """Autocomplete-style search. Cached for 24h per query."""
+    q = (query or '').strip()
+    if len(q) < 3 or len(q) > 120:
+        return []
+
+    cache_key = f'loadlist:suggest:{country_hint}:{q.lower()}'
+    hit = cache.get(cache_key)
+    if hit is not None:
+        return [AddressSuggestion(**item) for item in hit]
+
+    params = {
+        'q': q,
+        'format': 'jsonv2',
+        'limit': max(1, min(int(limit), 10)),
+        'addressdetails': 0,
+    }
+    if country_hint:
+        params['countrycodes'] = country_hint
+
+    _throttle()
+    try:
+        resp = requests.get(
+            NOMINATIM_URL,
+            params=params,
+            headers={'User-Agent': USER_AGENT, 'Accept-Language': 'nl,en'},
+            timeout=8,
+        )
+    except requests.RequestException as exc:
+        logger.warning('Suggest request failed for %r: %s', q, exc)
+        return []
+
+    if resp.status_code != 200:
+        return []
+
+    try:
+        data = resp.json()
+    except ValueError:
+        return []
+
+    out: list[AddressSuggestion] = []
+    if isinstance(data, list):
+        for item in data:
+            try:
+                lat = float(item['lat'])
+                lng = float(item['lon'])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+                continue
+            label = str(item.get('display_name', ''))[:250]
+            if label:
+                out.append(AddressSuggestion(label=label, lat=lat, lng=lng))
+
+    cache.set(cache_key, [s.__dict__ for s in out], 60 * 60 * 24)
+    return out

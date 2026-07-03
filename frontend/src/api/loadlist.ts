@@ -108,4 +108,15 @@ export const loadlistApi = {
     const { data } = await api.post(`/loadlist/lists/${id}/optimize/`, {}, { timeout: 120000 })
     return data
   },
+
+  suggestAddress: async (q: string): Promise<AddressSuggestion[]> => {
+    const { data } = await api.get('/loadlist/lists/suggest/', { params: { q } })
+    return Array.isArray(data) ? data : []
+  },
+}
+
+export interface AddressSuggestion {
+  label: string
+  lat: number
+  lng: number
 }

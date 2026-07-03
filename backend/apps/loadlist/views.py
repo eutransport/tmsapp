@@ -18,7 +18,7 @@ from .serializers import (
     LoadStopWriteSerializer,
 )
 from .services.extraction import extract_stops_from_image
-from .services.geocoding import geocode
+from .services.geocoding import geocode, suggest as address_suggest
 from .services.routing import optimize
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,11 @@ class UploadThrottle(UserRateThrottle):
 class OptimizeThrottle(UserRateThrottle):
     scope = 'loadlist_optimize'
     rate = '60/hour'
+
+
+class SuggestThrottle(UserRateThrottle):
+    scope = 'loadlist_suggest'
+    rate = '120/hour'
 
 
 class LoadListViewSet(viewsets.ModelViewSet):
@@ -61,7 +66,19 @@ class LoadListViewSet(viewsets.ModelViewSet):
             return [UploadThrottle()]
         if self.action in ('optimize', 'reparse'):
             return [OptimizeThrottle()]
+        if self.action == 'suggest_address':
+            return [SuggestThrottle()]
         return super().get_throttles()
+
+    # -- address autocomplete ------------------------------------------------
+
+    @action(detail=False, methods=['get'], url_path='suggest')
+    def suggest_address(self, request):
+        q = (request.query_params.get('q') or '').strip()
+        results = address_suggest(q)
+        return Response([
+            {'label': s.label, 'lat': s.lat, 'lng': s.lng} for s in results
+        ])
 
     # -- create: upload + extract -------------------------------------------
 
