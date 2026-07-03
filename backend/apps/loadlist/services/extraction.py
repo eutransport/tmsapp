@@ -251,14 +251,15 @@ def _find_postcode(text: str):
 
 
 def _reconstruct_rows(data: dict) -> list[str]:
-    """Group Tesseract word tokens into visual rows.
+    """Group Tesseract word tokens into visual rows using pure y-bucketing.
 
-    Tesseract already gives us block/par/line numbers, but multi-column layouts
-    often confuse it. We group by (block_num, par_num, line_num) *and* by
-    y-center bucket as a safety net, then sort words left-to-right.
+    Tesseract's block/par/line grouping breaks on multi-column tables (columns
+    become their own "lines"). Bucketing by y-center with a tolerance of half
+    the median glyph height reliably merges columns of the same physical row.
     """
-    rows: dict[tuple, list[tuple[int, str]]] = {}
     n = len(data.get('text', []))
+    tokens: list[tuple[int, int, int, int, str]] = []  # (y_center, left, height, conf, word)
+    heights: list[int] = []
     for i in range(n):
         word = (data['text'][i] or '').strip()
         if not word:
@@ -267,23 +268,52 @@ def _reconstruct_rows(data: dict) -> list[str]:
             conf = int(float(data['conf'][i]))
         except (TypeError, ValueError):
             conf = -1
-        if conf < 30:  # skip garbage
+        if conf < 20 and not any(ch.isalnum() for ch in word):
             continue
         top = int(data['top'][i])
         height = int(data['height'][i]) or 1
         y_center = top + height // 2
-        y_bucket = y_center // max(10, height)  # ~1 row per line-height
-        key = (int(data['block_num'][i]), int(data['par_num'][i]),
-               int(data['line_num'][i]), y_bucket)
-        rows.setdefault(key, []).append((int(data['left'][i]), word))
+        tokens.append((y_center, int(data['left'][i]), height, conf, word))
+        heights.append(height)
 
+    if not tokens:
+        return []
+
+    heights.sort()
+    median_h = heights[len(heights) // 2] or 1
+    tol = max(6, median_h // 2)  # two tokens in the same row if y-centers within ± tol
+
+    tokens.sort(key=lambda t: t[0])
+    rows: list[list[tuple[int, str]]] = []
+    row_y: list[int] = []
+    for y, left, _h, _c, word in tokens:
+        placed = False
+        for idx, ry in enumerate(row_y):
+            if abs(y - ry) <= tol:
+                rows[idx].append((left, word))
+                # incremental average
+                row_y[idx] = (ry * (len(rows[idx]) - 1) + y) // len(rows[idx])
+                placed = True
+                break
+        if not placed:
+            rows.append([(left, word)])
+            row_y.append(y)
+
+    # sort rows top-to-bottom, words left-to-right
+    order = sorted(range(len(rows)), key=lambda i: row_y[i])
     out: list[str] = []
-    for key in sorted(rows.keys(), key=lambda k: (k[3], k[0], k[1], k[2])):
-        words = sorted(rows[key], key=lambda w: w[0])
+    for i in order:
+        words = sorted(rows[i], key=lambda w: w[0])
         line = ' '.join(w for _, w in words).strip()
         if line:
             out.append(line)
     return out
+
+
+# A row is only a real address row if the postcode is followed OR preceded by
+# actual street/city text (letters, ≥3 chars). This filters out title rows like
+# "LAADLIJST Route 2026" where "2026" happens to match a BE postcode.
+_ALPHA_TOKEN_RE = re.compile(r'[A-Za-zÀ-ÿ]{3,}')
 
 
 def _parse_row(line: str) -> Optional[ExtractedStop]:
@@ -296,12 +326,26 @@ def _parse_row(line: str) -> Optional[ExtractedStop]:
     before = line[:m.start()].strip(' \t-|,;')
     after = line[m.end():].strip(' \t-|,;')
 
-    # Reference / order number at the very front
+    # Sanity: must have street-like text before OR city-like text after the postcode.
+    # Rejects "LAADLIJST Route 2026" (nothing meaningful after the "postcode").
+    has_street = bool(_ALPHA_TOKEN_RE.search(before))
+    has_city = bool(_ALPHA_TOKEN_RE.search(after))
+    if not (has_street or has_city):
+        return None
+
+    # Reference / order number at the very front (e.g. "101 Stationsplein 1 …").
+    # Only strip if there is street text remaining after removal — otherwise the
+    # number IS the house number, not an order reference.
     reference = ''
     ref_m = _LEADING_REF_RE.match(before)
-    if ref_m and len(before) > len(ref_m.group(1)) + 1:
-        reference = ref_m.group(1)
-        before = before[ref_m.end():].strip(' \t-|,;')
+    if ref_m:
+        candidate_ref = ref_m.group(1)
+        rest_after_ref = before[ref_m.end():].strip(' \t-|,;')
+        # Only treat as an order reference if street text remains AND ref is not
+        # just a house number (1-2 digits are almost never order numbers).
+        if len(candidate_ref) >= 3 and _ALPHA_TOKEN_RE.search(rest_after_ref):
+            reference = candidate_ref
+            before = rest_after_ref
 
     # Load hint (pallets/colli) usually at the end
     pallets = None
