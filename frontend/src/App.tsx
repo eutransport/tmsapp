@@ -91,6 +91,9 @@ const PakmiddelenPage = React.lazy(() => import('@/pages/pakmiddelen/Pakmiddelen
 // Tasks
 const TasksPage = React.lazy(() => import('@/pages/tasks/TasksPage'))
 
+// Laadlijsten
+const LoadListPage = React.lazy(() => import('@/pages/loadlist/LoadListPage'))
+
 // Notifications
 const NotificationsPage = React.lazy(() => import('@/pages/notifications/NotificationsPage'))
 
@@ -376,6 +379,9 @@ function App() {
 
         {/* Takenlijst */}
         <Route path="/tasks" element={<TasksPage />} />
+
+        {/* Laadlijsten */}
+        <Route path="/laadlijst" element={<LoadListPage />} />
 
         {/* Spreadsheets (Ritregistratie) */}
         <Route path="/spreadsheets" element={<AdminRoute><SpreadsheetListPage /></AdminRoute>} />

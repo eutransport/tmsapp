@@ -57,6 +57,7 @@ LOCAL_APPS = [
     'apps.chatbot',
     'apps.pakmiddelen',
     'apps.tasks',
+    'apps.loadlist',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -159,6 +160,8 @@ REST_FRAMEWORK = {
         'document_email': '20/hour', # Document email: 20 per hour
         'document_sign': '60/hour',  # Document signing: 60 per hour
         'email_import': '30/hour',   # Email import fetch: 30 per hour
+        'loadlist_upload': '20/hour',   # Load-list photo upload (OCR + LLM cost)
+        'loadlist_optimize': '60/hour', # Route optimization
     },
 }
 
