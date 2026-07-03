@@ -59,11 +59,11 @@ class LoadListSerializer(serializers.ModelSerializer):
     def get_photo_url(self, obj: LoadList) -> str | None:
         if not obj.photo:
             return None
-        request = self.context.get('request')
-        try:
-            url = obj.photo.url
-        except Exception:
+        from apps.core.file_signing import sign_file_field
+        url = sign_file_field(obj.photo)
+        if not url:
             return None
+        request = self.context.get('request')
         return request.build_absolute_uri(url) if request else url
 
 
