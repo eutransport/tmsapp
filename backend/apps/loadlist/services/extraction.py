@@ -228,51 +228,156 @@ def _validate_llm_stops(data: dict) -> list[ExtractedStop]:
 
 # --- OCR fallback ------------------------------------------------------------
 
-_POSTCODE_RE = re.compile(
-    # NL: 1234 AB · BE: 1234 · DE: 12345 · FR: 12345 · LU: L-1234 · UK: SW1A 1AA
-    r'(?P<pc>[A-Z]?-?\d{4,5}(?:\s?[A-Z]{2})?)'
-    r'\s+(?P<city>[A-ZÄÖÜÉÈÀÂÊÎÔÛÇ][A-Za-zÀ-ÿ .\'\-]{1,80})'
-)
+# Postcode patterns per country. Kept anchored so a match tells us where street ends
+# and city begins on the reconstructed row.
+_POSTCODE_PATTERNS = [
+    (re.compile(r'\b(\d{4}\s?[A-Z]{2})\b'), 'NL'),      # 1234 AB
+    (re.compile(r'\bL[- ]?(\d{4})\b'), 'LU'),           # L-1234
+    (re.compile(r'\b(\d{5})\b'), 'DE_FR'),              # 12345
+    (re.compile(r'\b(\d{4})\b(?!\s?[A-Z]{2})'), 'BE'),  # 1234 (BE) - lowest priority
+    (re.compile(r'\b([A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2})\b'), 'UK'),
+]
+_STREET_TAIL_RE = re.compile(r'^(.*?[A-Za-zÀ-ÿ.\'\-]{2,})\s*(\d+[A-Za-z\-]?)?\s*$')
+_LOAD_HINT_RE = re.compile(r'(\d+)\s*(pallet|pallets|palet|paletten|colli|coll|stuks|pcs)', re.IGNORECASE)
+_LEADING_REF_RE = re.compile(r'^\s*([A-Z]{0,3}\d{2,8})\b')
+
+
+def _find_postcode(text: str):
+    for pattern, tag in _POSTCODE_PATTERNS:
+        m = pattern.search(text)
+        if m:
+            return m, tag
+    return None, ''
+
+
+def _reconstruct_rows(data: dict) -> list[str]:
+    """Group Tesseract word tokens into visual rows.
+
+    Tesseract already gives us block/par/line numbers, but multi-column layouts
+    often confuse it. We group by (block_num, par_num, line_num) *and* by
+    y-center bucket as a safety net, then sort words left-to-right.
+    """
+    rows: dict[tuple, list[tuple[int, str]]] = {}
+    n = len(data.get('text', []))
+    for i in range(n):
+        word = (data['text'][i] or '').strip()
+        if not word:
+            continue
+        try:
+            conf = int(float(data['conf'][i]))
+        except (TypeError, ValueError):
+            conf = -1
+        if conf < 30:  # skip garbage
+            continue
+        top = int(data['top'][i])
+        height = int(data['height'][i]) or 1
+        y_center = top + height // 2
+        y_bucket = y_center // max(10, height)  # ~1 row per line-height
+        key = (int(data['block_num'][i]), int(data['par_num'][i]),
+               int(data['line_num'][i]), y_bucket)
+        rows.setdefault(key, []).append((int(data['left'][i]), word))
+
+    out: list[str] = []
+    for key in sorted(rows.keys(), key=lambda k: (k[3], k[0], k[1], k[2])):
+        words = sorted(rows[key], key=lambda w: w[0])
+        line = ' '.join(w for _, w in words).strip()
+        if line:
+            out.append(line)
+    return out
+
+
+def _parse_row(line: str) -> Optional[ExtractedStop]:
+    m, tag = _find_postcode(line)
+    if not m:
+        return None
+    pc = m.group(1).strip().upper().replace('  ', ' ')
+    if tag == 'LU':
+        pc = f'L-{pc}'
+    before = line[:m.start()].strip(' \t-|,;')
+    after = line[m.end():].strip(' \t-|,;')
+
+    # Reference / order number at the very front
+    reference = ''
+    ref_m = _LEADING_REF_RE.match(before)
+    if ref_m and len(before) > len(ref_m.group(1)) + 1:
+        reference = ref_m.group(1)
+        before = before[ref_m.end():].strip(' \t-|,;')
+
+    # Load hint (pallets/colli) usually at the end
+    pallets = None
+    colli = None
+    notes = ''
+    load_m = _LOAD_HINT_RE.search(after)
+    if load_m:
+        qty = int(load_m.group(1))
+        unit = load_m.group(2).lower()
+        if unit.startswith('pal'):
+            pallets = qty
+        else:
+            colli = qty
+        after = (after[:load_m.start()] + after[load_m.end():]).strip(' \t-|,;')
+
+    # City = remaining alphabetic text after postcode (stop at digits)
+    city_match = re.match(r'([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ .\'\-]{1,80})', after)
+    city = city_match.group(1).strip(' .-') if city_match else ''
+    if city:
+        remainder = after[city_match.end():].strip(' \t-|,;')
+        if remainder and not notes:
+            notes = remainder[:250]
+
+    # Street = everything before the postcode
+    street = before[:200].strip(' \t-|,;')
+
+    address_raw = ' '.join(p for p in (street, pc, city) if p).strip()
+    if len(address_raw) < 4:
+        address_raw = line[:250]
+
+    return ExtractedStop(
+        address_raw=address_raw[:250],
+        postcode=pc[:20],
+        city=city[:120],
+        reference=reference[:80],
+        pallets=pallets,
+        colli=colli,
+        notes=notes[:250],
+    )
 
 
 def _ocr_fallback(pil_img: Image.Image) -> ExtractionResult:
     try:
         import pytesseract  # local import: only needed for fallback
+        from pytesseract import Output
     except Exception as exc:
         logger.warning('pytesseract not available: %s', exc)
         return ExtractionResult(provider='ocr:none', raw_text='', stops=[])
 
     try:
-        # Dutch + English is a good default for BE/NL loads.
-        text = pytesseract.image_to_string(pil_img, lang='nld+eng')
+        # PSM 6 = assume a single uniform block of text (works well for tables).
+        data = pytesseract.image_to_data(pil_img, lang='nld+eng',
+                                         config='--psm 6', output_type=Output.DICT)
+        raw_text = pytesseract.image_to_string(pil_img, lang='nld+eng', config='--psm 6')
     except Exception as exc:
         logger.warning('Tesseract failed: %s', exc)
         return ExtractionResult(provider='ocr:error', raw_text='', stops=[])
 
+    rows = _reconstruct_rows(data)
     stops: list[ExtractedStop] = []
     seen: set[str] = set()
-    for line in text.splitlines():
-        line = line.strip()
-        if len(line) < 6 or len(line) > 250:
+    for line in rows:
+        if len(line) < 6 or len(line) > 300:
             continue
-        m = _POSTCODE_RE.search(line)
-        if not m:
+        stop = _parse_row(line)
+        if not stop or not stop.postcode:
             continue
-        pc = m.group('pc').strip()
-        city = m.group('city').strip()
-        key = f'{pc}|{city}'.lower()
+        key = f'{stop.postcode}|{stop.city}|{stop.address_raw}'.lower()
         if key in seen:
             continue
         seen.add(key)
-        stops.append(ExtractedStop(
-            address_raw=line,
-            postcode=pc,
-            city=city,
-        ))
+        stops.append(stop)
         if len(stops) >= MAX_STOPS:
             break
 
-    return ExtractionResult(provider='ocr:tesseract', raw_text=text[:20000], stops=stops)
+    return ExtractionResult(provider='ocr:tesseract', raw_text=raw_text[:20000], stops=stops)
 
 
 # --- public API --------------------------------------------------------------
