@@ -183,7 +183,76 @@
     "urenImport": "Uren Import",
     "users": "Gebruikers",
     "settings": "Instellingen",
-    "profile": "Profiel"
+    "profile": "Profiel",
+    "tasks": "Taken"
+  },
+  "tasks": {
+    "title": "Taken",
+    "subtitle": "Beheer taken en toewijzingen",
+    "newTask": "Nieuwe taak",
+    "editTask": "Taak bewerken",
+    "save": "Opslaan",
+    "create": "Aanmaken",
+    "cancel": "Annuleren",
+    "delete": "Verwijderen",
+    "deleteConfirm": "Weet je zeker dat je deze taak wilt verwijderen?",
+    "markDone": "Markeer als afgerond",
+    "markInProgress": "In behandeling nemen",
+    "reopen": "Heropenen",
+    "reassign": "Opnieuw toewijzen",
+    "sendReminder": "Herinnering sturen",
+    "addNote": "Notitie toevoegen",
+    "notes": "Notities",
+    "noNotes": "Nog geen notities",
+    "unassigned": "Niet toegewezen",
+    "createdAt": "Aangemaakt op",
+    "filterStatus": "Alle statussen",
+    "noTasks": "Geen taken gevonden",
+    "noTasksHint": "Maak een nieuwe taak aan om te beginnen.",
+    "tabs": {
+      "mine": "Mijn taken",
+      "assignedByMe": "Door mij toegewezen",
+      "all": "Alle taken"
+    },
+    "status": {
+      "nieuw": "Nieuw",
+      "in_behandeling": "In behandeling",
+      "afgerond": "Afgerond"
+    },
+    "priority": {
+      "laag": "Laag",
+      "normaal": "Normaal",
+      "hoog": "Hoog"
+    },
+    "fields": {
+      "titel": "Titel",
+      "omschrijving": "Omschrijving",
+      "status": "Status",
+      "prioriteit": "Prioriteit",
+      "toegewezenAan": "Toegewezen aan",
+      "aangemaaktDoor": "Aangemaakt door",
+      "vervaldatum": "Vervaldatum",
+      "factuur": "Gekoppelde factuur",
+      "bijlage": "Bijlage"
+    },
+    "placeholders": {
+      "search": "Zoek taken...",
+      "titel": "Korte omschrijving",
+      "omschrijving": "Details van de taak",
+      "searchUser": "Zoek gebruiker...",
+      "searchInvoice": "Zoek factuur...",
+      "note": "Voeg een notitie toe..."
+    },
+    "toast": {
+      "created": "Taak aangemaakt",
+      "updated": "Taak bijgewerkt",
+      "deleted": "Taak verwijderd",
+      "statusChanged": "Status gewijzigd",
+      "noteAdded": "Notitie toegevoegd",
+      "reassigned": "Taak opnieuw toegewezen",
+      "reminderSent": "Herinnering verstuurd",
+      "error": "Er ging iets mis"
+    }
   },
   "dashboard": {
     "title": "Dashboard",

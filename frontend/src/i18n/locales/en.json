@@ -183,7 +183,76 @@
     "urenImport": "Hours Import",
     "users": "Users",
     "settings": "Settings",
-    "profile": "Profile"
+    "profile": "Profile",
+    "tasks": "Tasks"
+  },
+  "tasks": {
+    "title": "Tasks",
+    "subtitle": "Manage tasks and assignments",
+    "newTask": "New task",
+    "editTask": "Edit task",
+    "save": "Save",
+    "create": "Create",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "deleteConfirm": "Are you sure you want to delete this task?",
+    "markDone": "Mark as done",
+    "markInProgress": "Start working",
+    "reopen": "Reopen",
+    "reassign": "Reassign",
+    "sendReminder": "Send reminder",
+    "addNote": "Add note",
+    "notes": "Notes",
+    "noNotes": "No notes yet",
+    "unassigned": "Unassigned",
+    "createdAt": "Created at",
+    "filterStatus": "All statuses",
+    "noTasks": "No tasks found",
+    "noTasksHint": "Create a new task to get started.",
+    "tabs": {
+      "mine": "My tasks",
+      "assignedByMe": "Assigned by me",
+      "all": "All tasks"
+    },
+    "status": {
+      "nieuw": "New",
+      "in_behandeling": "In progress",
+      "afgerond": "Done"
+    },
+    "priority": {
+      "laag": "Low",
+      "normaal": "Normal",
+      "hoog": "High"
+    },
+    "fields": {
+      "titel": "Title",
+      "omschrijving": "Description",
+      "status": "Status",
+      "prioriteit": "Priority",
+      "toegewezenAan": "Assigned to",
+      "aangemaaktDoor": "Created by",
+      "vervaldatum": "Due date",
+      "factuur": "Linked invoice",
+      "bijlage": "Attachment"
+    },
+    "placeholders": {
+      "search": "Search tasks...",
+      "titel": "Short summary",
+      "omschrijving": "Task details",
+      "searchUser": "Search user...",
+      "searchInvoice": "Search invoice...",
+      "note": "Add a note..."
+    },
+    "toast": {
+      "created": "Task created",
+      "updated": "Task updated",
+      "deleted": "Task deleted",
+      "statusChanged": "Status changed",
+      "noteAdded": "Note added",
+      "reassigned": "Task reassigned",
+      "reminderSent": "Reminder sent",
+      "error": "Something went wrong"
+    }
   },
   "dashboard": {
     "title": "Dashboard",
