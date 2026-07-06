@@ -422,14 +422,28 @@ class AppSettings(models.Model):
     ai_provider = models.CharField(
         max_length=20,
         choices=[
+            ('gemini', 'Google Gemini (Aanbevolen)'),
             ('github', 'GitHub Models (Gratis)'),
             ('openai', 'OpenAI'),
             ('azure', 'Azure OpenAI'),
             ('none', 'Uitgeschakeld'),
         ],
-        default='none',
+        default='gemini',
         verbose_name='AI Provider',
-        help_text='Kies welke AI provider gebruikt wordt voor factuur extractie'
+        help_text='Primaire AI provider. Als deze faalt vallen we terug op andere geconfigureerde providers.'
+    )
+    ai_gemini_api_key = EncryptedCharField(
+        max_length=512,
+        blank=True,
+        verbose_name='Google Gemini API Key',
+        help_text='API key van Google AI Studio (aistudio.google.com/apikey)'
+    )
+    ai_gemini_model = models.CharField(
+        max_length=50,
+        blank=True,
+        default='gemini-2.0-flash',
+        verbose_name='Gemini Model',
+        help_text='Bijv: gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro'
     )
     ai_github_token = EncryptedCharField(
         max_length=512,

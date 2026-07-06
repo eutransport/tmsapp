@@ -41,6 +41,8 @@ class ExtractedStop:
     pallets: Optional[int] = None
     weight_kg: Optional[float] = None
     notes: str = ''
+    time_window_start: str = ''  # 'HH:MM' or ''
+    time_window_end: str = ''    # 'HH:MM' or ''
 
 
 @dataclass
@@ -88,20 +90,99 @@ _LLM_SYSTEM = (
     "Antwoord altijd met STRICT JSON (geen uitleg, geen markdown). "
     "Schema: {\"stops\": [{\"address_raw\": str, \"postcode\": str, \"city\": str, "
     "\"country\": str, \"reference\": str, \"colli\": int|null, "
-    "\"pallets\": int|null, \"weight_kg\": number|null, \"notes\": str}]}. "
-    "Behoud de volgorde zoals op de lijst. Laat velden leeg (\"\" of null) "
+    "\"pallets\": int|null, \"weight_kg\": number|null, \"notes\": str, "
+    "\"time_window_start\": str, \"time_window_end\": str}]}. "
+    "BELANGRIJK — bij vervoerslijsten met meerdere kolommen (bv. DACHSER, DHL, "
+    "waar 'Verzender/Afzender' EN 'Ontvanger/Empfänger' beide staan): pak "
+    "ALTIJD ALLEEN de ONTVANGER-adresgegevens (Naam + PCD/Postcode + Ort/Plaats). "
+    "De Verzender-kolom mag je volledig negeren; die is niet ons bezorgadres. "
+    "Sommige lijsten hebben géén straatnaam, alleen postcode + plaats — dat "
+    "is prima, vul dan postcode + city in en zet address_raw = 'POSTCODE PLAATS'. "
+    "Zet het zendingsnummer (Zendingsnr / Sendungsnr) in het veld 'reference'. "
+    "Voor time_window_start en time_window_end: gebruik ALTIJD formaat 'HH:MM' "
+    "(24-uurs, bv. '08:30' of '17:00'). Als er een tijdvenster staat als "
+    "'08:00-12:00' of 'tussen 9 en 11', splits dit in start='08:00' en end='12:00'. "
+    "Als er maar één tijd staat, zet die in beide velden. Laat leeg ('') als er "
+    "geen tijd bij die stop staat. "
+    "Behoud de volgorde zoals op de lijst. Laat andere velden leeg (\"\" of null) "
     "als je ze niet ziet. Geef nooit meer stops terug dan er op de lijst staan."
 )
 
 _LLM_USER = (
-    "Extraheer alle stops uit deze foto van een adressenlijst. "
-    "Elke rij is een leveradres met eventueel colli / pallets / gewicht / referentie. "
+    "Extraheer alle bezorgstops (ontvangers) uit deze foto. "
+    "Bij een DACHSER/DHL-lijst met kolommen 'Verzender' en 'Ontvanger': neem "
+    "ALLEEN de ontvanger-kolom (Naam, PCD, Ort). Sla headers en totalen over. "
     "Geef alleen het JSON-object."
 )
 
 
+# --- LLM provider clients ---------------------------------------------------
+
+def _build_openai_client(provider: str, settings_obj):
+    """Return (client, deployment_name) for a given provider, or None if not configured."""
+    try:
+        from openai import OpenAI, AzureOpenAI
+    except ImportError:
+        return None
+
+    try:
+        if provider == 'gemini':
+            key = getattr(settings_obj, 'ai_gemini_api_key', '')
+            if not key:
+                return None
+            client = OpenAI(
+                api_key=key,
+                base_url='https://generativelanguage.googleapis.com/v1beta/openai/',
+            )
+            model = getattr(settings_obj, 'ai_gemini_model', '') or 'gemini-2.0-flash'
+            return client, model
+        if provider == 'openai':
+            key = settings_obj.ai_openai_api_key
+            if not key:
+                return None
+            client = OpenAI(api_key=key)
+            return client, settings_obj.ai_model or 'gpt-4o-mini'
+        if provider == 'github':
+            token = settings_obj.ai_github_token
+            if not token:
+                return None
+            client = OpenAI(api_key=token, base_url='https://models.inference.ai.azure.com')
+            return client, settings_obj.ai_model or 'gpt-4o-mini'
+        if provider == 'azure':
+            endpoint = settings_obj.ai_azure_endpoint
+            key = settings_obj.ai_azure_api_key
+            if not (endpoint and key):
+                return None
+            client = AzureOpenAI(
+                azure_endpoint=endpoint,
+                api_key=key,
+                api_version='2024-02-01',
+            )
+            return client, settings_obj.ai_azure_deployment or settings_obj.ai_model or 'gpt-4o-mini'
+    except Exception as exc:  # pragma: no cover
+        logger.warning('LoadList LLM client init for %s failed: %s', provider, exc)
+    return None
+
+
+def _providers_fallback_order(settings_obj) -> list[str]:
+    """Return the ordered list of providers to try.
+
+    Only the configured primary provider is used. If it fails we drop to the
+    OCR fallback rather than silently switching provider — this keeps output
+    quality predictable and honours the admin's explicit choice.
+    """
+    primary = getattr(settings_obj, 'ai_provider', 'none') or 'none'
+    if primary and primary != 'none':
+        return [primary]
+    return []
+
+
 def _call_vision_llm(jpeg_bytes: bytes) -> Optional[ExtractionResult]:
-    """Try to extract via the configured AI provider. Returns None on failure."""
+    """Try to extract via the configured AI providers.
+
+    Iterates through the primary provider first, then the other configured
+    providers as fallbacks. Returns None if all fail.
+    """
     try:
         from apps.core.models import AppSettings
     except Exception:
@@ -112,56 +193,24 @@ def _call_vision_llm(jpeg_bytes: bytes) -> Optional[ExtractionResult]:
     except Exception:
         return None
 
-    if not settings_obj or settings_obj.ai_provider in (None, '', 'none'):
-        return None
-
-    provider = settings_obj.ai_provider
-    model = settings_obj.ai_model or 'gpt-4o-mini'
-
-    try:
-        from openai import OpenAI, AzureOpenAI
-    except ImportError:
-        return None
-
-    try:
-        if provider == 'openai':
-            key = settings_obj.ai_openai_api_key
-            if not key:
-                return None
-            client = OpenAI(api_key=key)
-            deployment = model
-        elif provider == 'github':
-            token = settings_obj.ai_github_token
-            if not token:
-                return None
-            client = OpenAI(api_key=token, base_url='https://models.inference.ai.azure.com')
-            deployment = model
-        elif provider == 'azure':
-            endpoint = settings_obj.ai_azure_endpoint
-            key = settings_obj.ai_azure_api_key
-            if not (endpoint and key):
-                return None
-            client = AzureOpenAI(
-                azure_endpoint=endpoint,
-                api_key=key,
-                api_version='2024-02-01',
-            )
-            deployment = settings_obj.ai_azure_deployment or model
-        else:
-            return None
-    except Exception as exc:  # pragma: no cover
-        logger.warning('LoadList LLM client init failed: %s', exc)
+    if not settings_obj or getattr(settings_obj, 'ai_provider', 'none') == 'none':
         return None
 
     b64 = base64.b64encode(jpeg_bytes).decode('ascii')
     data_url = f'data:image/jpeg;base64,{b64}'
 
-    try:
-        completion = client.chat.completions.create(
-            model=deployment,
-            temperature=0,
-            response_format={'type': 'json_object'},
-            messages=[
+    for provider in _providers_fallback_order(settings_obj):
+        built = _build_openai_client(provider, settings_obj)
+        if not built:
+            continue
+        client, deployment = built
+
+        # Gemini's OpenAI-compat layer doesn't support response_format on
+        # every model — omit it and rely on JSON in the system prompt.
+        chat_kwargs = {
+            'model': deployment,
+            'temperature': 0,
+            'messages': [
                 {'role': 'system', 'content': _LLM_SYSTEM},
                 {
                     'role': 'user',
@@ -171,27 +220,58 @@ def _call_vision_llm(jpeg_bytes: bytes) -> Optional[ExtractionResult]:
                     ],
                 },
             ],
-            timeout=60,
+            'timeout': 60,
+        }
+        if provider != 'gemini':
+            chat_kwargs['response_format'] = {'type': 'json_object'}
+
+        try:
+            completion = client.chat.completions.create(**chat_kwargs)
+        except Exception as exc:
+            logger.warning('LoadList LLM call to %s failed: %s', provider, exc)
+            continue
+
+        try:
+            content = completion.choices[0].message.content or '{}'
+            data = _extract_json_object(content)
+        except Exception as exc:
+            logger.warning('LoadList LLM JSON parse (%s) failed: %s', provider, exc)
+            continue
+
+        stops = _validate_llm_stops(data)
+        if not stops:
+            continue
+        return ExtractionResult(
+            provider=f'llm:{provider}:{deployment}',
+            raw_text=content[:20000],
+            stops=stops,
         )
-    except Exception as exc:
-        logger.warning('LoadList LLM call failed: %s', exc)
-        return None
 
-    try:
-        content = completion.choices[0].message.content or '{}'
-        data = json.loads(content)
-    except Exception as exc:
-        logger.warning('LoadList LLM JSON parse failed: %s', exc)
-        return None
+    return None
 
-    stops = _validate_llm_stops(data)
-    if not stops:
-        return None
-    return ExtractionResult(
-        provider=f'llm:{provider}:{deployment}',
-        raw_text=content[:20000],
-        stops=stops,
-    )
+
+def _extract_json_object(text: str) -> dict:
+    """Robustly parse JSON from an LLM response.
+
+    Gemini sometimes wraps output in ```json ... ``` fences even when asked
+    for strict JSON — strip common wrappers before json.loads.
+    """
+    s = (text or '').strip()
+    if s.startswith('```'):
+        # Drop first line (```json or ```) and trailing ```
+        parts = s.split('\n', 1)
+        s = parts[1] if len(parts) == 2 else s
+        if s.endswith('```'):
+            s = s[:-3]
+        s = s.strip()
+    # Some models emit trailing prose after the JSON object — cut at last '}'
+    if not s.startswith('{'):
+        start = s.find('{')
+        if start >= 0:
+            s = s[start:]
+    if s.count('}') and not s.endswith('}'):
+        s = s[: s.rfind('}') + 1]
+    return json.loads(s)
 
 
 def _validate_llm_stops(data: dict) -> list[ExtractedStop]:
@@ -222,6 +302,8 @@ def _validate_llm_stops(data: dict) -> list[ExtractedStop]:
             pallets=_coerce_int(item.get('pallets')),
             weight_kg=_coerce_float(item.get('weight_kg')),
             notes=_clean_str(item.get('notes'), 250),
+            time_window_start=_coerce_time(item.get('time_window_start')),
+            time_window_end=_coerce_time(item.get('time_window_end')),
         ))
     return out
 
@@ -472,6 +554,36 @@ def _coerce_float(value) -> Optional[float]:
         return n if 0 <= n <= 1_000_000 else None
     except (TypeError, ValueError):
         return None
+
+
+_TIME_RE = re.compile(r'(\d{1,2})[:.hu ]+(\d{2})')
+
+
+def _coerce_time(value) -> str:
+    """Normalize a time to 'HH:MM' or empty string.
+
+    Accepts '08:00', '8.30', '9h15', '17u30', '17 30', or already-normalized.
+    """
+    if value is None:
+        return ''
+    s = str(value).strip()
+    if not s:
+        return ''
+    m = _TIME_RE.search(s)
+    if not m:
+        # Bare hour like '8' -> '08:00'
+        try:
+            h = int(s)
+            if 0 <= h <= 23:
+                return f'{h:02d}:00'
+        except (TypeError, ValueError):
+            pass
+        return ''
+    h = int(m.group(1))
+    mi = int(m.group(2))
+    if not (0 <= h <= 23 and 0 <= mi <= 59):
+        return ''
+    return f'{h:02d}:{mi:02d}'
 
 
 def result_to_dicts(result: ExtractionResult) -> list[dict]:

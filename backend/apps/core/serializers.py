@@ -127,7 +127,8 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
             'invoice_start_number_verkoop', 'invoice_start_number_inkoop', 'invoice_start_number_credit',
             'primary_font', 'primary_font_data', 'secondary_font', 'secondary_font_data',
             # AI Settings
-            'ai_provider', 'ai_github_token', 'ai_openai_api_key',
+            'ai_provider', 'ai_gemini_api_key', 'ai_gemini_model',
+            'ai_github_token', 'ai_openai_api_key',
             'ai_azure_endpoint', 'ai_azure_api_key', 'ai_azure_deployment', 'ai_model',
             'ai_status',
             # Reminder Settings
@@ -145,6 +146,7 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
             'smtp_password': {'write_only': True},
             'oauth_client_secret': {'write_only': True},
             # AI keys should be write_only for security
+            'ai_gemini_api_key': {'write_only': True},
             'ai_github_token': {'write_only': True},
             'ai_openai_api_key': {'write_only': True},
             'ai_azure_api_key': {'write_only': True},
@@ -170,7 +172,9 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
             return {'configured': False, 'message': 'AI is uitgeschakeld'}
         
         has_key = False
-        if obj.ai_provider == 'github' and obj.ai_github_token:
+        if obj.ai_provider == 'gemini' and getattr(obj, 'ai_gemini_api_key', ''):
+            has_key = True
+        elif obj.ai_provider == 'github' and obj.ai_github_token:
             has_key = True
         elif obj.ai_provider == 'openai' and obj.ai_openai_api_key:
             has_key = True

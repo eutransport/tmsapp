@@ -1,7 +1,7 @@
 """
 Custom permission classes for TMS.
 """
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 
 class HasModulePermission(BasePermission):
@@ -27,6 +27,31 @@ class HasModulePermission(BasePermission):
         if not required:
             return True  # No permission configured on the view
 
+        return request.user.has_module_permission(required)
+
+
+class HasReadWriteModulePermission(BasePermission):
+    """
+    Permission that checks read/write module permissions separately.
+    - GET/HEAD/OPTIONS: requires ``module_permission_read``.
+    - Other methods: requires ``module_permission_write``.
+    Admins/superusers always pass. If an attribute is missing that side is allowed.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if request.user.is_superuser or request.user.rol == 'admin':
+            return True
+
+        if request.method in SAFE_METHODS:
+            required = getattr(view, 'module_permission_read', None)
+        else:
+            required = getattr(view, 'module_permission_write', None)
+
+        if not required:
+            return True
         return request.user.has_module_permission(required)
 
 

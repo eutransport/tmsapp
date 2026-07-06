@@ -63,6 +63,7 @@ urlpatterns = [
     path('api/pakmiddelen/', include('apps.pakmiddelen.urls')),
     path('api/tasks/', include('apps.tasks.urls')),
     path('api/loadlist/', include('apps.loadlist.urls')),
+    path('api/tolling/', include('apps.tolling.urls')),
 
     # Signed media files (HMAC-protected, valid in dev and prod)
     re_path(r'^files/(?P<path>.+)$', serve_signed_media, name='signed-media'),

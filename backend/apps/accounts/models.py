@@ -40,6 +40,10 @@ AVAILABLE_MODULE_PERMISSIONS = [
     ('view_pakmiddelen', 'Pakmiddelen Teruggavebonnen (alleen lezen)'),
     ('manage_pakmiddelen', 'Pakmiddelen Teruggavebonnen beheren'),
     ('manage_tasks', 'Taken toewijzen aan anderen'),
+    ('view_loadlist', 'Laadlijst (alleen lezen)'),
+    ('manage_loadlist', 'Laadlijst beheren'),
+    ('view_tolling', 'Tolheffing (alleen lezen)'),
+    ('manage_tolling', 'Tolheffing beheren'),
 ]
 
 # Dependencies: enabling a permission also requires these permissions
@@ -52,6 +56,8 @@ MODULE_PERMISSION_DEPENDENCIES = {
     'manage_all_planning': ['view_all_planning'],
     'manage_submitted_hours': ['view_submitted_hours'],
     'manage_pakmiddelen': ['view_pakmiddelen'],
+    'manage_loadlist': ['view_loadlist'],
+    'manage_tolling': ['view_tolling'],
 }
 
 VALID_MODULE_PERMISSIONS = {code for code, _ in AVAILABLE_MODULE_PERMISSIONS}

@@ -22,6 +22,8 @@ export interface LoadStop {
   pallets: number | null
   weight_kg: number | null
   notes: string
+  time_window_start: string | null   // 'HH:MM:SS' from Django TimeField
+  time_window_end: string | null
   lat: number | null
   lng: number | null
   geocode_confidence: string
@@ -36,12 +38,26 @@ export interface LoadList {
   start_address: string
   start_lat: number | null
   start_lng: number | null
+  start_time: string | null   // 'HH:MM:SS'
+  end_time: string | null
   photo_url: string | null
   extraction_provider: string
   total_distance_m: number | null
   total_duration_s: number | null
   stop_count: number
   stops: LoadStop[]
+  created_at: string
+  updated_at: string
+}
+
+export interface Depot {
+  id: string
+  name: string
+  address: string
+  lat: number | null
+  lng: number | null
+  is_default: boolean
+  is_active: boolean
   created_at: string
   updated_at: string
 }
@@ -56,6 +72,8 @@ export interface StopWrite {
   pallets?: number | null
   weight_kg?: number | null
   notes?: string
+  time_window_start?: string | null   // 'HH:MM'
+  time_window_end?: string | null
 }
 
 export const loadlistApi = {
@@ -69,11 +87,13 @@ export const loadlistApi = {
     return data
   },
 
-  upload: async (payload: { photo: File; name?: string; start_address?: string }): Promise<LoadList> => {
+  upload: async (payload: { photo: File; name?: string; start_address?: string; start_time?: string; end_time?: string }): Promise<LoadList> => {
     const form = new FormData()
     form.append('photo', payload.photo)
     if (payload.name) form.append('name', payload.name)
     if (payload.start_address) form.append('start_address', payload.start_address)
+    if (payload.start_time) form.append('start_time', payload.start_time)
+    if (payload.end_time) form.append('end_time', payload.end_time)
     const { data } = await api.post('/loadlist/lists/', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000,
@@ -81,7 +101,17 @@ export const loadlistApi = {
     return data
   },
 
-  update: async (id: string, patch: { name?: string; start_address?: string }): Promise<LoadList> => {
+  appendPhoto: async (id: string, photo: File): Promise<LoadList> => {
+    const form = new FormData()
+    form.append('photo', photo)
+    const { data } = await api.post(`/loadlist/lists/${id}/append/`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    })
+    return data
+  },
+
+  update: async (id: string, patch: { name?: string; start_address?: string; start_time?: string | null; end_time?: string | null }): Promise<LoadList> => {
     const { data } = await api.patch(`/loadlist/lists/${id}/`, patch)
     return data
   },
@@ -112,6 +142,25 @@ export const loadlistApi = {
   suggestAddress: async (q: string): Promise<AddressSuggestion[]> => {
     const { data } = await api.get('/loadlist/lists/suggest/', { params: { q } })
     return Array.isArray(data) ? data : []
+  },
+
+  // -- depots (admin manages, everyone reads) -----------------------------
+  depots: {
+    list: async (): Promise<Depot[]> => {
+      const { data } = await api.get('/loadlist/depots/')
+      return Array.isArray(data) ? data : (data.results ?? [])
+    },
+    create: async (payload: { name: string; address: string; is_default?: boolean; is_active?: boolean }): Promise<Depot> => {
+      const { data } = await api.post('/loadlist/depots/', payload)
+      return data
+    },
+    update: async (id: string, patch: Partial<{ name: string; address: string; is_default: boolean; is_active: boolean }>): Promise<Depot> => {
+      const { data } = await api.patch(`/loadlist/depots/${id}/`, patch)
+      return data
+    },
+    remove: async (id: string): Promise<void> => {
+      await api.delete(`/loadlist/depots/${id}/`)
+    },
   },
 }
 

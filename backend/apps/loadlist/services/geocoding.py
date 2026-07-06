@@ -56,8 +56,8 @@ def geocode(address: str, country_hint: str = '') -> Optional[GeocodeResult]:
     params = {
         'q': query,
         'format': 'jsonv2',
-        'limit': 1,
-        'addressdetails': 0,
+        'limit': 5,
+        'addressdetails': 1,
     }
     if country_hint:
         # ISO 3166-1 alpha-2 code; ignore anything longer as it might be a full name
@@ -90,7 +90,48 @@ def geocode(address: str, country_hint: str = '') -> Optional[GeocodeResult]:
         cache.set(cache_key, '__none__', CACHE_TTL)
         return None
 
-    top = data[0]
+    # Prefer a result whose postcode or city matches the query — otherwise
+    # Nominatim happily returns the wrong "Hoofdstraat" in a different town.
+    import re as _re
+    q_lower = query.lower()
+    q_postcode_m = _re.search(r'\b(\d{4})\s?[a-z]{2}\b', q_lower)
+    q_postcode4 = q_postcode_m.group(1) if q_postcode_m else None
+    # Extract city hint: everything after the postcode, or the last word chunk.
+    q_city = ''
+    if q_postcode_m:
+        tail = q_lower[q_postcode_m.end():].strip(' ,')
+        # Drop trailing country
+        tail = _re.sub(r'\b(nederland|netherlands|belgi[eë]|belgium|deutschland|germany)\b.*$', '', tail).strip()
+        q_city = tail
+
+    def score(entry: dict) -> int:
+        addr = entry.get('address') or {}
+        pc = str(addr.get('postcode', '')).lower().replace(' ', '')
+        city_fields = [
+            str(addr.get('city', '')).lower(),
+            str(addr.get('town', '')).lower(),
+            str(addr.get('village', '')).lower(),
+            str(addr.get('suburb', '')).lower(),
+            str(addr.get('municipality', '')).lower(),
+            str(addr.get('hamlet', '')).lower(),
+        ]
+        s = 0
+        if q_postcode4 and pc.startswith(q_postcode4):
+            s += 10  # postcode match is strongest signal
+        if q_city:
+            for c in city_fields:
+                if c and (c in q_city or q_city in c):
+                    s += 5
+                    break
+        # Prefer specific results (house/building) over vague ones.
+        cls = str(entry.get('class', ''))
+        typ = str(entry.get('type', ''))
+        if typ in ('house', 'building') or cls == 'building':
+            s += 2
+        return s
+
+    ranked = sorted(data, key=lambda e: (-score(e), -float(e.get('importance') or 0)))
+    top = ranked[0]
     try:
         lat = float(top['lat'])
         lng = float(top['lon'])

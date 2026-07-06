@@ -58,6 +58,7 @@ LOCAL_APPS = [
     'apps.pakmiddelen',
     'apps.tasks',
     'apps.loadlist',
+    'apps.tolling',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

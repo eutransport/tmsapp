@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from .models import LoadList, LoadStop
+from .models import Depot, LoadList, LoadStop
+
+
+class DepotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Depot
+        fields = ['id', 'name', 'address', 'lat', 'lng',
+                  'is_default', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class LoadStopSerializer(serializers.ModelSerializer):
@@ -13,6 +21,7 @@ class LoadStopSerializer(serializers.ModelSerializer):
             'address_raw', 'address_formatted',
             'postcode', 'city', 'country',
             'reference', 'colli', 'pallets', 'weight_kg', 'notes',
+            'time_window_start', 'time_window_end',
             'lat', 'lng', 'geocode_confidence', 'geocode_error',
         ]
         read_only_fields = [
@@ -29,6 +38,7 @@ class LoadStopWriteSerializer(serializers.ModelSerializer):
         fields = [
             'address_raw', 'postcode', 'city', 'country',
             'reference', 'colli', 'pallets', 'weight_kg', 'notes',
+            'time_window_start', 'time_window_end',
         ]
 
 
@@ -42,6 +52,7 @@ class LoadListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'status', 'status_message',
             'start_address', 'start_lat', 'start_lng',
+            'start_time', 'end_time',
             'photo_url', 'extraction_provider',
             'total_distance_m', 'total_duration_s',
             'stop_count', 'stops',
@@ -72,7 +83,7 @@ class LoadListCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LoadList
-        fields = ['name', 'start_address', 'photo']
+        fields = ['name', 'start_address', 'start_time', 'end_time', 'photo']
 
     def validate_photo(self, value):
         # DRF's ImageField already runs Pillow.verify(). Add a hard size cap

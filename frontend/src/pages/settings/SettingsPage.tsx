@@ -1016,14 +1016,54 @@ export default function SettingsPage() {
                   className="input w-full"
                 >
                   <option value="none">{t('settings.disabled')}</option>
+                  <option value="gemini">Google Gemini (Aanbevolen)</option>
                   <option value="github">{t('settings.githubModelsFree')}</option>
                   <option value="openai">{t('settings.openaiPaid')}</option>
                   <option value="azure">{t('settings.azureOpenai')}</option>
                 </select>
                 <p className="mt-1 text-xs text-gray-500">
-                  {t('settings.githubRecommended')}
+                  Gemini is snel, gratis (met ruime dag-quota) en heeft goede vision-ondersteuning. Als je meerdere providers configureert, wordt automatisch teruggevallen als de primaire faalt.
                 </p>
               </div>
+
+              {/* Gemini settings */}
+              {formData.ai_provider === 'gemini' && (
+                <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+                  <h3 className="font-medium text-gray-900">Google Gemini</h3>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Gemini API Key
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="AIza..."
+                      onChange={(e) => handleInputChange('ai_gemini_api_key', e.target.value)}
+                      className="input w-full font-mono"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Maak een gratis key op{' '}
+                      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        aistudio.google.com/apikey
+                      </a>.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Model
+                    </label>
+                    <select
+                      value={formData.ai_gemini_model || 'gemini-2.0-flash'}
+                      onChange={(e) => handleInputChange('ai_gemini_model', e.target.value)}
+                      className="input w-full"
+                    >
+                      <option value="gemini-2.0-flash">Gemini 2.0 Flash (snelst, aanbevolen)</option>
+                      <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                      <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                      <option value="gemini-1.5-pro">Gemini 1.5 Pro (grootste context)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               {/* GitHub Models settings */}
               {formData.ai_provider === 'github' && (

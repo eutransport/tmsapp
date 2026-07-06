@@ -94,6 +94,9 @@ const TasksPage = React.lazy(() => import('@/pages/tasks/TasksPage'))
 // Laadlijsten
 const LoadListPage = React.lazy(() => import('@/pages/loadlist/LoadListPage'))
 
+// Tolheffing (toll charging import)
+const TollingPage = React.lazy(() => import('@/pages/tolling/TollingPage'))
+
 // Notifications
 const NotificationsPage = React.lazy(() => import('@/pages/notifications/NotificationsPage'))
 
@@ -381,7 +384,10 @@ function App() {
         <Route path="/tasks" element={<TasksPage />} />
 
         {/* Laadlijsten */}
-        <Route path="/laadlijst" element={<LoadListPage />} />
+        <Route path="/laadlijst" element={<PermissionRoute permission="view_loadlist"><LoadListPage /></PermissionRoute>} />
+
+        {/* Tolheffing import */}
+        <Route path="/tolheffing" element={<PermissionRoute permission="view_tolling"><TollingPage /></PermissionRoute>} />
 
         {/* Spreadsheets (Ritregistratie) */}
         <Route path="/spreadsheets" element={<AdminRoute><SpreadsheetListPage /></AdminRoute>} />

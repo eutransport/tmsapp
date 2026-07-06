@@ -12,10 +12,10 @@ export interface User {
   mfa_enabled: boolean
   mfa_required: boolean
   module_permissions: string[]
-  nav_favorites?: string[]
   is_active: boolean
   date_joined: string
   last_login: string | null
+  nav_favorites?: string[]
 }
 
 export interface UserCreate {
@@ -85,7 +85,9 @@ export interface AppSettingsAdmin extends AppSettings {
   email_signature: string
   email_signature_image?: string | null
   // AI Settings
-  ai_provider: 'github' | 'openai' | 'azure' | 'none'
+  ai_provider: 'gemini' | 'github' | 'openai' | 'azure' | 'none'
+  ai_gemini_api_key?: string // Write-only
+  ai_gemini_model?: string
   ai_github_token?: string // Write-only
   ai_openai_api_key?: string // Write-only
   ai_azure_endpoint?: string

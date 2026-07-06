@@ -330,6 +330,16 @@
   .stack-sm > * + * { margin-top: 0.5rem; }
   .stack-lg > * + * { margin-top: 1.5rem; }
 
+  /* iOS safe-area padding for Headless UI Dialog modal wrappers.
+     Ensures the modal header / close button never sits under the
+     iPhone notch, status bar, or home indicator. */
+  [role="dialog"] .fixed.inset-0.overflow-y-auto > .flex.min-h-full {
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
   /* PWA Animations */
   @keyframes slide-up {
     from { opacity: 0; transform: translateY(20px); }

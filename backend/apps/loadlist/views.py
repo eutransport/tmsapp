@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import re
+from datetime import time as _time
 
 from django.db import transaction
 from rest_framework import status, viewsets
@@ -9,9 +11,13 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
+from rest_framework import permissions
 
-from .models import LoadList, LoadStop
+from apps.core.permissions import HasReadWriteModulePermission
+
+from .models import Depot, LoadList, LoadStop
 from .serializers import (
+    DepotSerializer,
     LoadListCreateSerializer,
     LoadListSerializer,
     LoadStopSerializer,
@@ -19,9 +25,90 @@ from .serializers import (
 )
 from .services.extraction import extract_stops_from_image
 from .services.geocoding import geocode, suggest as address_suggest
-from .services.routing import optimize
+from .services.osrm import road_matrix
+from .services.routing import optimize_with_windows
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_time_field(value) -> _time | None:
+    """Convert an 'HH:MM' string (from AI extraction) into a datetime.time."""
+    if not value:
+        return None
+    s = str(value).strip()
+    if len(s) < 4 or ':' not in s:
+        return None
+    try:
+        h, m = s.split(':', 1)
+        return _time(int(h), int(m[:2]))
+    except (ValueError, TypeError):
+        return None
+
+
+def _time_to_minutes(value) -> int | None:
+    """datetime.time -> minutes since midnight, or None."""
+    if value is None:
+        return None
+    try:
+        return value.hour * 60 + value.minute
+    except AttributeError:
+        return None
+
+
+# --- address cleaning for geocoder ------------------------------------------
+# OCR often prefixes lines with the row number ("01.", "10.", "@1."). Strip
+# that before sending to Nominatim, otherwise the search fails.
+_ROW_PREFIX_RE = re.compile(r'^\s*[@0-9OoIl]{1,3}[\.\)]\s*')
+_POSTCODE_NL_RE = re.compile(r'\b\d{4}\s?[A-Z]{2}\b', re.IGNORECASE)
+_HOUSENR_RE = re.compile(r'\b(\d{1,5}[A-Za-z]?)\b')
+
+
+def _clean_street(raw: str) -> str:
+    """Remove '01. ', '@1. ', '18) ' style prefixes and collapse whitespace."""
+    if not raw:
+        return ''
+    s = _ROW_PREFIX_RE.sub('', raw).strip()
+    # Also strip any embedded postcode from the "street" portion — we add it
+    # back separately in the geocode query.
+    s = _POSTCODE_NL_RE.sub('', s).strip(' ,')
+    return re.sub(r'\s+', ' ', s)
+
+
+def _build_geocode_queries(stop) -> list[str]:
+    """Return a list of candidate queries, most specific first."""
+    cleaned = _clean_street(stop.address_raw)
+    pc = (stop.postcode or '').strip().upper()
+    city = (stop.city or '').strip()
+    country = (stop.country or 'Netherlands').strip() or 'Netherlands'
+
+    queries: list[str] = []
+    # 1. Full: cleaned street + postcode + city
+    parts = [p for p in [cleaned, pc, city, country] if p]
+    if cleaned:
+        queries.append(', '.join(parts))
+    # 2. Postcode + house number + city (NL: near-unique)
+    house = None
+    if cleaned:
+        m = _HOUSENR_RE.search(cleaned)
+        if m:
+            house = m.group(1)
+    if pc and house:
+        queries.append(f'{pc} {house}, {country}')
+    # 3. Postcode + city (coarse fallback)
+    if pc and city:
+        queries.append(f'{pc} {city}, {country}')
+    # 4. Cleaned street + city
+    if cleaned and city:
+        queries.append(f'{cleaned}, {city}, {country}')
+    # De-dupe preserving order
+    seen: set[str] = set()
+    out: list[str] = []
+    for q in queries:
+        k = q.lower()
+        if k not in seen:
+            seen.add(k)
+            out.append(q)
+    return out
 
 
 class UploadThrottle(UserRateThrottle):
@@ -45,7 +132,9 @@ class LoadListViewSet(viewsets.ModelViewSet):
 
     Access is scoped to `request.user`. Admins can see all rows.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasReadWriteModulePermission]
+    module_permission_read = 'view_loadlist'
+    module_permission_write = 'manage_loadlist'
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     serializer_class = LoadListSerializer
 
@@ -102,6 +191,8 @@ class LoadListViewSet(viewsets.ModelViewSet):
                 owner=request.user,
                 name=serializer.validated_data.get('name', '') or '',
                 start_address=serializer.validated_data.get('start_address', '') or '',
+                start_time=serializer.validated_data.get('start_time'),
+                end_time=serializer.validated_data.get('end_time'),
                 photo=photo,
                 status='parsing',
             )
@@ -135,6 +226,8 @@ class LoadListViewSet(viewsets.ModelViewSet):
                     pallets=s.pallets,
                     weight_kg=s.weight_kg,
                     notes=s.notes,
+                    time_window_start=_parse_time_field(getattr(s, 'time_window_start', '')),
+                    time_window_end=_parse_time_field(getattr(s, 'time_window_end', '')),
                 )
                 for i, s in enumerate(result.stops)
             ])
@@ -158,7 +251,7 @@ class LoadListViewSet(viewsets.ModelViewSet):
 
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
-        allowed = {'name', 'start_address'}
+        allowed = {'name', 'start_address', 'start_time', 'end_time'}
         data = {k: v for k, v in request.data.items() if k in allowed}
         if 'name' in data:
             instance.name = (data['name'] or '').strip()[:120]
@@ -169,6 +262,10 @@ class LoadListViewSet(viewsets.ModelViewSet):
                 # Depot changed → cached coords no longer valid
                 instance.start_lat = None
                 instance.start_lng = None
+        if 'start_time' in data:
+            instance.start_time = _parse_time_field(data['start_time']) if data['start_time'] else None
+        if 'end_time' in data:
+            instance.end_time = _parse_time_field(data['end_time']) if data['end_time'] else None
         instance.save()
         return Response(LoadListSerializer(instance, context={'request': request}).data)
 
@@ -224,6 +321,74 @@ class LoadListViewSet(viewsets.ModelViewSet):
         )
         return Response(LoadStopSerializer(stop).data, status=201)
 
+    # -- append: upload additional photo, extend the same list --------------
+
+    @action(detail=True, methods=['post'], url_path='append',
+            parser_classes=[MultiPartParser, FormParser])
+    def append_photo(self, request, pk=None):
+        """Extract stops from another photo and append them to this list.
+        Used by the wizard to allow multiple uploads per laadlijst.
+        """
+        loadlist = self.get_object()
+        photo = request.FILES.get('photo')
+        if not photo:
+            return Response({'detail': 'Geen foto meegestuurd.'}, status=400)
+
+        try:
+            raw = photo.read()
+        except Exception as exc:
+            return Response({'detail': f'Kon bestand niet lezen: {exc}'}, status=400)
+
+        try:
+            result = extract_stops_from_image(raw)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=400)
+        except Exception:
+            logger.exception('LoadList append extraction crashed')
+            return Response({'detail': 'Verwerking mislukt.'}, status=500)
+
+        last = loadlist.stops.order_by('-original_sequence').first()
+        next_seq = (last.original_sequence + 1) if last else 0
+        current_count = loadlist.stops.count()
+        available = 200 - current_count
+        to_create = result.stops[:max(0, available)]
+
+        with transaction.atomic():
+            LoadStop.objects.bulk_create([
+                LoadStop(
+                    loadlist=loadlist,
+                    original_sequence=next_seq + i,
+                    address_raw=s.address_raw,
+                    postcode=s.postcode,
+                    city=s.city,
+                    country=s.country,
+                    reference=s.reference,
+                    colli=s.colli,
+                    pallets=s.pallets,
+                    weight_kg=s.weight_kg,
+                    notes=s.notes,
+                    time_window_start=_parse_time_field(getattr(s, 'time_window_start', '')),
+                    time_window_end=_parse_time_field(getattr(s, 'time_window_end', '')),
+                )
+                for i, s in enumerate(to_create)
+            ])
+            # New photo invalidates the current optimisation.
+            loadlist.status = 'parsed'
+            loadlist.status_message = (
+                f'{len(to_create)} stops toegevoegd (totaal {current_count + len(to_create)}).'
+            )
+            loadlist.total_distance_m = None
+            loadlist.total_duration_s = None
+            loadlist.save(update_fields=[
+                'status', 'status_message',
+                'total_distance_m', 'total_duration_s', 'updated_at',
+            ])
+
+        return Response(
+            LoadListSerializer(loadlist, context={'request': request}).data,
+            status=200,
+        )
+
     # -- optimize ------------------------------------------------------------
 
     @action(detail=True, methods=['post'])
@@ -260,13 +425,11 @@ class LoadListViewSet(viewsets.ModelViewSet):
         for stop in stops:
             if stop.lat is not None and stop.lng is not None:
                 continue
-            query_parts = [stop.address_raw]
-            if stop.postcode and stop.postcode not in stop.address_raw:
-                query_parts.append(stop.postcode)
-            if stop.city and stop.city not in stop.address_raw:
-                query_parts.append(stop.city)
-            query = ', '.join(p for p in query_parts if p)
-            gr = geocode(query, country_hint=stop.country)
+            gr = None
+            for query in _build_geocode_queries(stop):
+                gr = geocode(query, country_hint=stop.country or 'nl')
+                if gr:
+                    break
             if gr:
                 stop.lat = gr.lat
                 stop.lng = gr.lng
@@ -292,10 +455,26 @@ class LoadListViewSet(viewsets.ModelViewSet):
             )
             return Response({'detail': 'Geen enkel adres kon worden gevonden.'}, status=400)
 
+        # Build a road-distance matrix so the optimiser uses real driving
+        # distance (via OSRM) instead of bird's-eye — this prevents zigzag
+        # in dense urban clusters like Amsterdam/Schiphol.
+        depot_pt = (depot.lat, depot.lng)
+        stop_pts = [(s.lat, s.lng) for s in locatable]
+        dist_matrix, dur_matrix, matrix_source = road_matrix([depot_pt] + stop_pts)
+
         # Optimize
-        delivery_order, total_m = optimize(
-            (depot.lat, depot.lng),
-            [(s.lat, s.lng) for s in locatable],
+        delivery_order, total_m, total_s = optimize_with_windows(
+            depot_pt,
+            [
+                (
+                    (s.lat, s.lng),
+                    _time_to_minutes(s.time_window_start),
+                    _time_to_minutes(s.time_window_end),
+                )
+                for s in locatable
+            ],
+            distance_matrix=dist_matrix or None,
+            duration_matrix=dur_matrix or None,
         )
 
         # Assign sequences. delivery_order returns indices into `locatable`.
@@ -318,6 +497,37 @@ class LoadListViewSet(viewsets.ModelViewSet):
         if failed:
             msg += f' Niet gevonden: {len(failed)}.'
 
+        # Distance/time info
+        km = total_m / 1000.0
+        msg += f' Afstand: {km:.1f} km.'
+        service_min_per_stop = 10  # loss/opladen tijd per stop
+        drive_min = int(round(total_s / 60.0))
+        service_min = n * service_min_per_stop
+        total_min = drive_min + service_min
+        hours = total_min // 60
+        mins = total_min % 60
+        msg += f' Rijtijd ~{drive_min} min + {service_min} min lossen = {hours}u{mins:02d}.'
+
+        # Check against global start_time / end_time window if configured.
+        window_warning = None
+        if loadlist.start_time and loadlist.end_time:
+            available_min = (
+                loadlist.end_time.hour * 60 + loadlist.end_time.minute
+                - loadlist.start_time.hour * 60 - loadlist.start_time.minute
+            )
+            if available_min > 0 and total_min > available_min:
+                over = total_min - available_min
+                window_warning = (
+                    f'Let op: route duurt {hours}u{mins:02d}, dat is '
+                    f'{over} min langer dan het venster '
+                    f'{loadlist.start_time.strftime("%H:%M")}–'
+                    f'{loadlist.end_time.strftime("%H:%M")}.'
+                )
+                msg += ' ' + window_warning
+
+        if matrix_source == 'haversine':
+            msg += ' (Wegafstand niet beschikbaar; hemelsbrede schatting gebruikt.)'
+
         loadlist.total_distance_m = int(round(total_m))
         loadlist.status = 'optimized'
         loadlist.status_message = msg
@@ -326,4 +536,41 @@ class LoadListViewSet(viewsets.ModelViewSet):
             'status', 'status_message', 'updated_at',
         ])
 
+        # Refetch to bust the prefetch cache — otherwise the serializer would
+        # return the pre-mutation stops (missing the new sequences).
+        loadlist = LoadList.objects.prefetch_related('stops').get(id=loadlist.id)
         return Response(LoadListSerializer(loadlist, context={'request': request}).data)
+
+
+
+class IsAdminOrReadOnly(permissions.BasePermission):
+    """Everyone signed in can list depots; only admins/superusers may write."""
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return bool(
+            request.user.is_superuser
+            or getattr(request.user, 'rol', '') == 'admin'
+        )
+
+
+class DepotViewSet(viewsets.ModelViewSet):
+    """Named depots configured by admins, selectable by any user."""
+    permission_classes = [IsAdminOrReadOnly]
+    serializer_class = DepotSerializer
+    queryset = Depot.objects.all()
+
+    def get_queryset(self):
+        qs = Depot.objects.all()
+        # Non-admins only see active depots.
+        user = self.request.user
+        is_admin = bool(user.is_superuser or getattr(user, 'rol', '') == 'admin')
+        if not is_admin:
+            qs = qs.filter(is_active=True)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)

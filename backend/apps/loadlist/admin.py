@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import LoadList, LoadStop
+from .models import Depot, LoadList, LoadStop
+
+
+@admin.register(Depot)
+class DepotAdmin(admin.ModelAdmin):
+    list_display = ('name', 'address', 'is_default', 'is_active', 'created_by', 'created_at')
+    list_filter = ('is_default', 'is_active')
+    search_fields = ('name', 'address')
+    readonly_fields = ('id', 'lat', 'lng', 'created_at', 'updated_at')
 
 
 class LoadStopInline(admin.TabularInline):

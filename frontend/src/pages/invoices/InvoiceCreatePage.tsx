@@ -27,6 +27,7 @@ import { getMijnAdministraties, Administratie } from '@/api/administraties'
 import { getTimeEntries, markKilometerheffingGefactureerd } from '@/api/timetracking'
 import { getSpreadsheets } from '@/api/spreadsheets'
 import { getImportedEntries, ImportedTimeEntry } from '@/api/urenImport'
+import { tollingApi, TollingInvoicePreviewRow, TollingPeriod } from '@/api/tolling'
 import { getTolRegistraties, markTolGefactureerd, TolRegistratie } from '@/api/tolregistratie'
 import { 
   InvoiceTemplate, 
@@ -49,6 +50,7 @@ interface InvoiceLineData {
   timeEntryId?: string // If imported from time entry
   isInfoLine?: boolean // Info-only line (e.g. werktijden): no aantal/prijs/totaal rendered
   kilometerheffingTimeEntryId?: string // If this line represents a kilometerheffing for a TimeEntry
+  tollingLink?: { plate: string; period: TollingPeriod; year: number; index: number }
 }
 
 interface ChauffeurWeekGroup {
@@ -1716,6 +1718,7 @@ export default function InvoiceCreatePage() {
   const [error, setError] = useState<string | null>(null)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showSpreadsheetImportModal, setShowSpreadsheetImportModal] = useState(false)
+  const [showTollingImportModal, setShowTollingImportModal] = useState(false)
   const [showTolImportModal, setShowTolImportModal] = useState(false)
   const [showWorkTimes, setShowWorkTimes] = useState(false)
   const [batchDrafts, setBatchDrafts] = useState<BatchInvoiceDraft[]>([])
@@ -2407,6 +2410,48 @@ export default function InvoiceCreatePage() {
     setLines(prev => [...prev, ...entryLines, ...summaryLines])
   }
 
+  // Import tolling totals: appends one line per selected plate for the chosen month.
+  const handleImportTolling = (rows: TollingInvoicePreviewRow[]) => {
+    if (!rows.length) return
+    const omschrijvingCol = columns.find(c => c.type === 'text' || c.id === 'omschrijving' || c.id.includes('omschrijving'))
+    const aantalCol = columns.find(c => c.type === 'aantal' || c.id === 'aantal' || c.id.includes('aantal'))
+    const prijsCol = columns.find(c => c.type === 'prijs' || c.id === 'prijs' || c.id.includes('prijs') || c.id.includes('tarief'))
+    if (!omschrijvingCol || !prijsCol) {
+      alert('Sjabloon mist een omschrijving- of prijs-kolom')
+      return
+    }
+    const newLines: InvoiceLineData[] = rows.map(r => {
+      const kmRound = Math.round(r.total_km)
+      const omschrijving = r.ritnummer
+        ? `${r.plate_display} - ${r.ritnummer} (Totaal ${kmRound} KM)`
+        : `${r.plate_display} (Totaal ${kmRound} KM)`
+      const values: Record<string, number | string> = {}
+      columns.forEach(col => {
+        if (col.id === omschrijvingCol.id) values[col.id] = omschrijving
+        else if (aantalCol && col.id === aantalCol.id) values[col.id] = 1
+        else if (col.id === prijsCol.id) values[col.id] = Number(r.total_amount.toFixed(2))
+        else if (col.type === 'berekend') values[col.id] = 0
+        else if (col.type === 'text') values[col.id] = ''
+        else values[col.id] = 0
+      })
+      columns.forEach(col => {
+        if (col.type === 'berekend' && col.formule) {
+          values[col.id] = evaluateFormula(col.formule, values, defaults)
+        }
+      })
+      return {
+        id: generateId(),
+        values,
+        tollingLink: {
+          plate: r.plate_normalized,
+          period: (r.period || 'month') as TollingPeriod,
+          year: r.year,
+          index: r.index ?? r.month,
+        },
+      }
+    })
+    setLines(prev => [...prev, ...newLines])
+  }
   // Import spreadsheet ritregistratie entries
   const handleImportSpreadsheet = (spreadsheet: Spreadsheet) => {
     // Set week/chauffeur tracking from spreadsheet
@@ -2880,7 +2925,12 @@ export default function InvoiceCreatePage() {
         lineData.extra_data = { ...(lineData.extra_data || {}), kind: 'kilometerheffing', time_entry: line.kilometerheffingTimeEntryId }
       }
 
-      await createInvoiceLine(lineData)
+      const createdLine = await createInvoiceLine(lineData)
+      if (line.tollingLink) {
+        try {
+          await tollingApi.linkLine(createdLine.id, line.tollingLink.plate, { period: line.tollingLink.period, year: line.tollingLink.year, index: line.tollingLink.index })
+        } catch { /* niet-fataal: tolregels blijven 'open' */ }
+      }
     }
 
     const heffingIds = Array.from(new Set(
@@ -3261,6 +3311,14 @@ export default function InvoiceCreatePage() {
                 {t('invoices.importSpreadsheet')}
               </button>
               <button
+                onClick={() => setShowTollingImportModal(true)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                title="Importeer tolheffing per kenteken voor een maand"
+              >
+                <span className="text-base leading-none">€</span>
+                Tolheffing
+              </button>
+              <button
                 onClick={() => setShowTolImportModal(true)}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
               >
@@ -3585,6 +3643,12 @@ export default function InvoiceCreatePage() {
         onClose={() => setShowSpreadsheetImportModal(false)}
         onImport={handleImportSpreadsheet}
       />
+      {/* Tolling Import Modal */}
+      <TollingImportModal
+        isOpen={showTollingImportModal}
+        onClose={() => setShowTollingImportModal(false)}
+        onImport={rows => { handleImportTolling(rows); setShowTollingImportModal(false) }}
+      />
 
       {/* Tol Import Modal */}
       <TolImportModal
@@ -3593,6 +3657,204 @@ export default function InvoiceCreatePage() {
         onImport={handleImportTol}
         targets={tolTargets}
       />
+    </div>
+  )
+}
+
+
+// -------------- Tolling Import Modal --------------
+interface TollingImportModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onImport: (rows: TollingInvoicePreviewRow[]) => void
+}
+
+function TollingImportModal({ isOpen, onClose, onImport }: TollingImportModalProps) {
+  const now = new Date()
+  // ISO week helpers (Monday start, week 01 = week with 4 January)
+  const isoWeek = (d: Date): { year: number; week: number } => {
+    const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+    const dayNum = tmp.getUTCDay() || 7
+    tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum)
+    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1))
+    const week = Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+    return { year: tmp.getUTCFullYear(), week }
+  }
+  const weeksInYear = (y: number): number => {
+    const d = new Date(Date.UTC(y, 11, 28))
+    return isoWeek(d).week
+  }
+
+  const [period, setPeriod] = useState<TollingPeriod>('month')
+  const [year, setYear] = useState(now.getFullYear())
+  const [month, setMonth] = useState(now.getMonth() + 1)
+  const initialIso = isoWeek(now)
+  const [weekYear, setWeekYear] = useState(initialIso.year)
+  const [week, setWeek] = useState(initialIso.week)
+  const [rows, setRows] = useState<TollingInvoicePreviewRow[]>([])
+  const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [loading, setLoading] = useState(false)
+
+  const currentYear = period === 'month' ? year : weekYear
+  const currentIndex = period === 'month' ? month : week
+
+  useEffect(() => {
+    if (!isOpen) return
+    const load = async () => {
+      setLoading(true)
+      try {
+        const data = await tollingApi.invoicePreview({ period, year: currentYear, index: currentIndex })
+        setRows(data)
+        const s: Record<string, boolean> = {}
+        data.forEach(r => { s[r.plate_normalized] = true })
+        setSelected(s)
+      } catch {
+        setRows([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [isOpen, period, currentYear, currentIndex])
+
+  if (!isOpen) return null
+
+  const selectedRows = rows.filter(r => selected[r.plate_normalized])
+  const totalAmount = selectedRows.reduce((s, r) => s + (r.total_amount || 0), 0)
+  const totalKm = selectedRows.reduce((s, r) => s + (r.total_km || 0), 0)
+  const monthNames = ['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December']
+  const maxWeek = weeksInYear(weekYear)
+  const weekOptions = Array.from({ length: maxWeek }, (_, i) => i + 1)
+  const periodLabel = period === 'month'
+    ? `${monthNames[month - 1]} ${year}`
+    : `Week ${String(week).padStart(2, '0')} ${weekYear}`
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="fixed inset-0 bg-gray-500/75" onClick={onClose} />
+        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+          <div className="px-5 py-3 border-b flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Tolheffing importeren â€” {periodLabel}</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-700" type="button">Ã—</button>
+          </div>
+          <div className="px-5 py-3 border-b flex flex-wrap items-center gap-3">
+            {/* Period toggle */}
+            <div className="inline-flex rounded-md border border-gray-300 bg-white overflow-hidden">
+              {(['month', 'week'] as const).map(p => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPeriod(p)}
+                  className={`px-3 py-1.5 text-sm ${
+                    period === p ? 'bg-primary-600 text-white' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {p === 'month' ? 'Maand' : 'Week'}
+                </button>
+              ))}
+            </div>
+            {period === 'month' ? (
+              <>
+                <select value={month} onChange={e => setMonth(Number(e.target.value))} className="border border-gray-300 rounded-md px-2 py-1 text-sm">
+                  {monthNames.map((n, i) => <option key={i + 1} value={i + 1}>{n}</option>)}
+                </select>
+                <select value={year} onChange={e => setYear(Number(e.target.value))} className="border border-gray-300 rounded-md px-2 py-1 text-sm">
+                  {[year - 2, year - 1, year, year + 1].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </>
+            ) : (
+              <>
+                <label className="text-sm text-gray-700">Week</label>
+                <select
+                  value={week}
+                  onChange={e => setWeek(Number(e.target.value))}
+                  className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+                >
+                  {weekOptions.map(w => <option key={w} value={w}>{String(w).padStart(2, '0')}</option>)}
+                </select>
+                <select
+                  value={weekYear}
+                  onChange={e => {
+                    const newY = Number(e.target.value)
+                    setWeekYear(newY)
+                    const maxW = weeksInYear(newY)
+                    if (week > maxW) setWeek(maxW)
+                  }}
+                  className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+                >
+                  {[weekYear - 2, weekYear - 1, weekYear, weekYear + 1].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </>
+            )}
+            <div className="text-xs text-gray-500 ml-auto">Alleen niet-gefactureerde regels worden getoond.</div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="p-8 text-center text-gray-400">Laden…</div>
+            ) : rows.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 text-sm">Geen open tolheffing-regels voor {periodLabel.toLowerCase()}.</div>
+            ) : (
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-600 sticky top-0">
+                  <tr>
+                    <th className="w-8 px-3 py-2"></th>
+                    <th className="text-left px-3 py-2">Kenteken</th>
+                    <th className="text-left px-3 py-2">Ritnummer</th>
+                    <th className="text-right px-3 py-2">Events</th>
+                    <th className="text-right px-3 py-2">Totaal KM</th>
+                    <th className="text-right px-3 py-2">Totaal bedrag</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {rows.map(r => (
+                    <tr key={r.plate_normalized} className="hover:bg-gray-50">
+                      <td className="px-3 py-1.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!selected[r.plate_normalized]}
+                          onChange={e => setSelected(prev => ({ ...prev, [r.plate_normalized]: e.target.checked }))}
+                          className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                        />
+                      </td>
+                      <td className="px-3 py-1.5 font-medium">{r.plate_display}</td>
+                      <td className="px-3 py-1.5 text-gray-600">{r.ritnummer || '-'}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">{r.events_count}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {Number(r.total_km).toLocaleString('nl-NL', { maximumFractionDigits: 3 })}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(r.total_amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <div className="px-5 py-3 border-t bg-gray-50 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm text-gray-700">
+              Geselecteerd: <span className="font-medium">{selectedRows.length}</span> auto's ·{' '}
+              {Number(totalKm).toLocaleString('nl-NL', { maximumFractionDigits: 1 })} km ·{' '}
+              <span className="font-semibold text-primary-700">
+                {new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(totalAmount)}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-100">
+                Annuleren
+              </button>
+              <button
+                type="button"
+                disabled={selectedRows.length === 0}
+                onClick={() => onImport(selectedRows)}
+                className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-40"
+              >
+                Toevoegen aan factuur ({selectedRows.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

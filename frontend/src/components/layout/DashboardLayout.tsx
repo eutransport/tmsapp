@@ -91,7 +91,8 @@ const navigation: NavItem[] = [
   { name: 'nav.tachographComparison', href: '/tachograph/comparison', icon: ChartBarSquareIcon, roles: ['admin'] },
   { name: 'nav.reports', href: '/reports', icon: DocumentChartBarIcon, roles: ['admin', 'gebruiker', 'chauffeur'], permission: 'view_reports' },
   { name: 'nav.pakmiddelen', href: '/pakmiddelen', icon: EnvelopeIcon, roles: ['admin', 'gebruiker'], permission: 'view_pakmiddelen' },
-  { name: 'nav.laadlijst', href: '/laadlijst', icon: TruckIcon },
+  { name: 'nav.laadlijst', href: '/laadlijst', icon: TruckIcon, permission: 'view_loadlist' },
+  { name: 'nav.tolheffing', href: '/tolheffing', icon: CurrencyEuroIcon, permission: 'view_tolling' },
 ]
 
 const adminNavigation: NavItem[] = [
@@ -110,7 +111,7 @@ const navGroups: NavGroupDef[] = [
   { id: 'overview',     labelKey: 'nav.group.overview',     fallback: 'Overzicht',              hrefs: ['/', '/planning', '/notifications'] },
   { id: 'masterdata',   labelKey: 'nav.group.masterdata',   fallback: 'Basisgegevens',          hrefs: ['/companies', '/drivers', '/fleet', '/pakmiddelen'] },
   { id: 'hours',        labelKey: 'nav.group.hours',        fallback: 'Uren & verlof',          hrefs: ['/time-entries', '/my-hours', '/submitted-hours', '/uren-import', '/leave', '/leave/balances', '/leave/admin'] },
-  { id: 'registration', labelKey: 'nav.group.registration', fallback: 'Registraties',           hrefs: ['/toll', '/toll/admin', '/kilometerheffing', '/track-trace', '/tachograph', '/tachograph/comparison', '/laadlijst'] },
+  { id: 'registration', labelKey: 'nav.group.registration', fallback: 'Registraties',           hrefs: ['/toll', '/toll/admin', '/kilometerheffing', '/track-trace', '/tachograph', '/tachograph/comparison', '/laadlijst', '/tolheffing'] },
   { id: 'invoicing',    labelKey: 'nav.group.invoicing',    fallback: 'Facturatie',             hrefs: ['/invoices', '/invoices/templates', '/imports', '/revenue'] },
   { id: 'documents',    labelKey: 'nav.group.documents',    fallback: 'Documenten & rapporten', hrefs: ['/documents', '/tasks', '/reports', '/spreadsheets', '/spreadsheets/templates', '/maintenance'] },
   { id: 'admin',        labelKey: 'nav.group.admin',        fallback: 'Beheer',                 hrefs: ['/admin/users', '/settings'] },
@@ -159,7 +160,7 @@ export default function DashboardLayout() {
   useEffect(() => { setFavorites(user?.nav_favorites ?? []) }, [user?.nav_favorites])
   const toggleFavorite = useCallback((href: string) => {
     const current = user?.nav_favorites ?? []
-    const next = current.includes(href) ? current.filter(h => h !== href) : [...current, href]
+    const next = current.includes(href) ? current.filter((h: string) => h !== href) : [...current, href]
     setFavorites(next)
     authApi.updateProfile({ nav_favorites: next })
       .then(updated => setUser(updated))
