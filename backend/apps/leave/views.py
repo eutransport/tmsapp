@@ -240,7 +240,7 @@ class GlobalLeaveSettingsViewSet(viewsets.ModelViewSet):
                     lines = []
                     for lv in entry['leaves']:
                         lines.append(
-                            f"  â€¢ {lv['user_naam']} â€” {lv['leave_type']}\n"
+                            f"  • {lv['user_naam']} — {lv['leave_type']}\n"
                             f"    Van {lv['start_date']} t/m {lv['end_date']} "
                             f"({lv['hours_requested']} uur)"
                         )
@@ -478,7 +478,7 @@ class LeaveBalanceViewSet(viewsets.ModelViewSet):
         
         if vacation_delta == 0 and overtime_delta == 0:
             return Response(
-                {'error': 'Geef minstens Ã©Ã©n wijziging op (vacation_delta of overtime_delta).'},
+                {'error': 'Geef minstens één wijziging op (vacation_delta of overtime_delta).'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         

@@ -119,7 +119,11 @@
       "october": "October",
       "november": "November",
       "december": "December"
-    }
+    },
+    "choose": "Choose",
+    "createdAt": "Created at",
+    "dismiss": "Dismiss",
+    "uploading": "Uploading"
   },
   "auth": {
     "login": "Login",
@@ -185,7 +189,16 @@
     "users": "Users",
     "settings": "Settings",
     "profile": "Profile",
-    "tasks": "Tasks"
+    "tasks": "Tasks",
+    "addFavorite": "Add favorite",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "favorites": "Favorites",
+    "group": {
+      "other": "Other"
+    },
+    "openSidebar": "Open sidebar",
+    "removeFavorite": "Remove favorite"
   },
   "tasks": {
     "title": "Tasks",
@@ -253,6 +266,12 @@
       "reassigned": "Task reassigned",
       "reminderSent": "Reminder sent",
       "error": "Something went wrong"
+    },
+    "popup": {
+      "body": "Body",
+      "dismiss": "Dismiss",
+      "title": "Title",
+      "view": "View"
     }
   },
   "dashboard": {
@@ -305,7 +324,6 @@
     "noOnlineUsers": "No users online",
     "recentLogins": "Recent logins",
     "noRecentLogins": "No recent logins",
-    "recentActivity": "Recent activity",
     "pageOf": "Page {{page}} of {{total}}",
     "totalEntries": "total",
     "financialOverview": "Financial overview",
@@ -320,7 +338,11 @@
     "leaveThisMonth": "Leave this month",
     "noLeaveThisMonth": "No leave planned this month",
     "viewLeaveCalendar": "View leave calendar",
-    "leaveHours": "Leave hours"
+    "leaveHours": "Leave hours",
+    "financialPerAdministration": "Financial per administration",
+    "outstandingPerCompany": "Outstanding per company",
+    "company": "Company",
+    "openInvoices": "Open invoices"
   },
   "companies": {
     "title": "Companies",
@@ -548,7 +570,10 @@
       "endTimeRequired": "End time is required",
       "kmEndGreater": "KM end must be greater than KM start"
     },
-    "submittedHoursTab": "Submitted Hours"
+    "submittedHoursTab": "Submitted Hours",
+    "licensePlate": "License plate",
+    "pause": "Pause",
+    "ritnummer": "Ritnummer"
   },
   "weeklyHours": {
     "title": "Period Hours Overview",
@@ -784,7 +809,22 @@
     "comment": "Comment",
     "adminComment": "Admin comment",
     "editRequest": "Edit leave request",
-    "deleteConfirmation": "Are you sure you want to delete this approved leave? The hours will be restored."
+    "deleteConfirmation": "Are you sure you want to delete this approved leave? The hours will be restored.",
+    "autoApprove": "Auto approve",
+    "balanceOverview": "Balance overview",
+    "createRequest": "Create request",
+    "noSearchResults": "No search results",
+    "overlap": {
+      "countLabel": "Count label",
+      "infoBody": "Info body",
+      "noneBody": "None body",
+      "noneTitle": "None title",
+      "title": "Title",
+      "warningBody": "Warning body",
+      "warningTitle": "Warning title"
+    },
+    "searchEmployee": "Search employee",
+    "selectEmployee": "Select employee"
   },
   "invoices": {
     "title": "Invoices",
@@ -895,7 +935,17 @@
     "groupsSelectedTrips": "{{count}} groups selected ({{entries}} trips)",
     "importTrips": "Import ({{count}} trips)",
     "tripRegistrationSelected": "1 trip registration selected ({{count}} trips)",
-    "selectTripRegistration": "Select a trip registration to import"
+    "selectTripRegistration": "Select a trip registration to import",
+    "administratie": "Administratie",
+    "administratieAssigned": "Administratie assigned",
+    "assignAdministratie": "Assign administratie",
+    "assignAdministratieDesc": "Assign administratie desc",
+    "deleteMultipleConfirm": "Delete multiple confirm",
+    "selectAdministratie": "Select administratie",
+    "selectAdministratieError": "Select administratie error",
+    "shareNotSupported": "Share not supported",
+    "sharePdf": "Share pdf",
+    "viewPdf": "View pdf"
   },
   "templates": {
     "title": "Invoice Templates",
@@ -1024,8 +1074,21 @@
       "rowTextColor": "Row text color",
       "rowFont": "Row font",
       "preview": "Preview",
-      "loadingPreview": "Loading preview..."
-    }
+      "loadingPreview": "Loading preview...",
+      "customerCity": "Customer city",
+      "customerContact": "Customer contact",
+      "customerCountry": "Customer country",
+      "customerEmail": "Customer email",
+      "customerKvk": "Customer kvk",
+      "customerPhone": "Customer phone",
+      "customerZip": "Customer zip",
+      "customerZipCity": "Customer zip city",
+      "insertVariable": "Insert variable",
+      "multilineHint": "Multiline hint"
+    },
+    "copied": "Copied",
+    "exported": "Exported",
+    "imported": "Imported"
   },
   "users": {
     "title": "Users",
@@ -1063,8 +1126,8 @@
     "autoEnabled": "Automatically enabled (dependency)",
     "block": "Block",
     "activate": "Activate",
-    "disable2FA": "Disable 2FA"
-    ,"form": {
+    "disable2FA": "Disable 2FA",
+    "form": {
       "passwordPlaceholder": "Leave empty to keep current password"
     }
   },
@@ -1245,7 +1308,8 @@
     "reminderEmailPlaceholder": "Leave empty to use the company email address",
     "reminderEmailHint": "Optional. The company email address is used by default.",
     "reminderSignature": "Signature",
-    "reminderSignaturePlaceholder": "Optional signature at the bottom of reminder emails..."
+    "reminderSignaturePlaceholder": "Optional signature at the bottom of reminder emails...",
+    "linqoApiKeySaved": "Linqo api key saved"
   },
   "license": {
     "activation": "License Activation",
@@ -1455,7 +1519,10 @@
     "deleteOlderThan": "Delete notifications older than",
     "days": "days",
     "cleanupWarning": "This will also delete all associated read receipts. This action cannot be undone.",
-    "cleaning": "Cleaning up..."
+    "cleaning": "Cleaning up...",
+    "noSubscribedDevices": "No subscribed devices",
+    "notificationFailed": "Notification failed",
+    "titleAndBodyRequired": "Title and body required"
   },
   "activity": {
     "title": "Activities",
@@ -1478,7 +1545,9 @@
     "allActions": "All actions",
     "noActivity": "No activities found",
     "activities": "activities",
-    "pageOf": "Page {{page}} of {{total}}"
+    "pageOf": "Page {{page}} of {{total}}",
+    "clearFilters": "Clear filters",
+    "loading": "Loading"
   },
   "documents": {
     "title": "Documents",
@@ -1509,7 +1578,50 @@
     "dragAndDrop": "Drag and drop file here or click to select",
     "maxFileSize": "Maximum file size: {{size}}MB",
     "uploadViewSign": "Upload, view and sign PDF documents",
-    "uploadToStart": "Upload a PDF document to get started"
+    "uploadToStart": "Upload a PDF document to get started",
+    "backToDocuments": "Back to documents",
+    "clickToPlace": "Click to place",
+    "descriptionPlaceholder": "Description placeholder",
+    "differentSignature": "Different signature",
+    "documentTitle": "Document title",
+    "downloadOriginal": "Download original",
+    "downloadSigned": "Download signed",
+    "drawSignatureFirst": "Draw signature first",
+    "emailDocument": "Email document",
+    "emailPlaceholder": "Email placeholder",
+    "enterSignatureName": "Enter signature name",
+    "enterTitle": "Enter title",
+    "instruction1": "Instruction 1",
+    "instruction2": "Instruction 2",
+    "instruction3": "Instruction 3",
+    "instruction4": "Instruction 4",
+    "instructions": "Instructions",
+    "messageOptional": "Message optional",
+    "messagePlaceholder": "Message placeholder",
+    "notFound": "Not found",
+    "orDragHere": "Or drag here",
+    "page": "Page",
+    "pageOf": "Page {{page}} of {{total}}",
+    "pdfOnly": "Pdf only",
+    "placeSignatureFirst": "Place signature first",
+    "position": "Position",
+    "resignDocument": "Resign document",
+    "selectPdfFile": "Select pdf file",
+    "sendEmail": "Send email",
+    "signature": "Signature",
+    "signatureDetails": "Signature details",
+    "signatureNamePlaceholder": "Signature name placeholder",
+    "signedBy": "Signed by",
+    "signedDocumentSubject": "Signed document subject",
+    "signedOn": "Signed on",
+    "signError": "Sign error",
+    "signing": "Signing",
+    "subject": "Subject",
+    "titlePlaceholder": "Title placeholder",
+    "uploadError": "Upload error",
+    "uploadToSign": "Upload to sign",
+    "width": "Width",
+    "yourSignature": "Your signature"
   },
   "revenue": {
     "title": "Revenue",
@@ -1543,7 +1655,30 @@
     "income": "Income",
     "expenses": "Expenses",
     "profitOverview": "Profit Overview",
-    "loadError": "Failed to load revenue data"
+    "loadError": "Failed to load revenue data",
+    "basedOn": "Based on",
+    "collectedSubtitle": "Collected subtitle",
+    "creditInvoices": "Credit invoices",
+    "creditSubtitle": "Credit subtitle",
+    "detailOverview": "Detail overview",
+    "forecast": "Forecast",
+    "forecastExpenses": "Forecast expenses",
+    "forecastIncome": "Forecast income",
+    "forecastProfit": "Forecast profit",
+    "margin": "Margin",
+    "months": "Months",
+    "nextHalfYear": "Next half year",
+    "nextMonth": "Next month",
+    "nextQuarter": "Next quarter",
+    "nextYear": "Next year",
+    "noDataForYear": "No data for year",
+    "outstandingSubtitle": "Outstanding subtitle",
+    "totalCollected": "Total collected",
+    "totalOutstanding": "Total outstanding",
+    "trendBasis": "Trend basis",
+    "trendDown": "Trend down",
+    "trendStable": "Trend stable",
+    "trendUp": "Trend up"
   },
   "imports": {
     "title": "Import",
@@ -1599,7 +1734,91 @@
     "purchaseInvoice": "Purchase invoice",
     "salesInvoice": "Sales invoice",
     "creditNote": "Credit note",
-    "saveAsInvoice": "Save as invoice"
+    "saveAsInvoice": "Save as invoice",
+    "addFirstMailbox": "Add first mailbox",
+    "autoCreateCompany": "Auto create company",
+    "autoFetch": "Auto fetch",
+    "autoFetchEmails": "Auto fetch emails",
+    "backToEmailImport": "Back to email import",
+    "backToImports": "Back to imports",
+    "backToOverview": "Back to overview",
+    "bulkDeleteConfirm": "Bulk delete confirm",
+    "clickFolderButton": "Click folder button",
+    "clickToSelectField": "Click to select field",
+    "company": "Company",
+    "configureMailbox": "Configure mailbox",
+    "couldNotLoadFolders": "Could not load folders",
+    "credit": "Credit",
+    "creditDescription": "Credit description",
+    "defaultInvoiceType": "Default invoice type",
+    "defaultTypeNote": "Default type note",
+    "deleteImportConfirm": "Delete import confirm",
+    "deleteMailboxConfirm": "Delete mailbox confirm",
+    "documentType": "Document type",
+    "dontMove": "Dont move",
+    "editMailboxConfig": "Edit mailbox config",
+    "emailImportDescription": "Email import description",
+    "emailInvoiceImport": "Email invoice import",
+    "extractedData": "Extracted data",
+    "folderToMonitor": "Folder to monitor",
+    "generalSettings": "General settings",
+    "ifMailsMoved": "If mails moved",
+    "imapDescription": "Imap description",
+    "imapSettings": "Imap settings",
+    "importNotFound": "Import not found",
+    "intervalMinutes": "Interval minutes",
+    "intervalRange": "Interval range",
+    "leaveEmptyToKeep": "Leave empty to keep",
+    "leaveEmptyToKeepInFolder": "Leave empty to keep in folder",
+    "loadFolders": "Load folders",
+    "loadingPreview": "Loading preview",
+    "mailboxConfigurations": "Mailbox configurations",
+    "markAsReadAfter": "Mark as read after",
+    "moveToFolder": "Move to folder",
+    "ms365Description": "Ms 365 description",
+    "ms365OAuthSettings": "Ms 365 o auth settings",
+    "ms365PermissionsNote": "Ms 365 permissions note",
+    "newMailbox": "New mailbox",
+    "newMailboxConfig": "New mailbox config",
+    "noAttachments": "No attachments",
+    "noEmailsImported": "No emails imported",
+    "noExtractedData": "No extracted data",
+    "noInvoiceDetails": "No invoice details",
+    "noInvoicesImported": "No invoices imported",
+    "noLinesFound": "No lines found",
+    "noMailboxesConfigured": "No mailboxes configured",
+    "noPatternRecognized": "No pattern recognized",
+    "noSubject": "No subject",
+    "note": "Note",
+    "noTemplate": "No template",
+    "noTextAvailable": "No text available",
+    "onlyUnread": "Only unread",
+    "pattern": "Pattern",
+    "port": "Port",
+    "processingSettings": "Processing settings",
+    "protocol": "Protocol",
+    "purchase": "Purchase",
+    "purchaseDescription": "Purchase description",
+    "rawOcrText": "Raw ocr text",
+    "reextractLines": "Reextract lines",
+    "reference": "Reference",
+    "sales": "Sales",
+    "salesDescription": "Sales description",
+    "saveCorrections": "Save corrections",
+    "saveFirstToLoadFolders": "Save first to load folders",
+    "selectFolder": "Select folder",
+    "selectOnDocument": "Select on document",
+    "senderFilter": "Sender filter",
+    "sharedMailboxEmail": "Shared mailbox email",
+    "statusAwaitingReview": "Status awaiting review",
+    "subjectFilter": "Subject filter",
+    "supplierCustomer": "Supplier customer",
+    "template": "Template",
+    "toReview": "To review",
+    "username": "Username",
+    "useSSL": "Use ssl",
+    "vatAmount": "Vat amount",
+    "vatPercentage": "Vat percentage"
   },
   "profile": {
     "title": "Profile",
@@ -1635,7 +1854,12 @@
     "deleteFailed": "Failed to delete",
     "somethingWentWrong": "Something went wrong",
     "tryAgain": "Try again",
-    "sessionExpired": "Session expired. Please login again."
+    "sessionExpired": "Session expired. Please login again.",
+    "deleteError": "Delete error",
+    "downloadError": "Download error",
+    "emailError": "Email error",
+    "loadError": "Load error",
+    "saveError": "Save error"
   },
   "validation": {
     "required": "This field is required",
@@ -1776,7 +2000,7 @@
     "totalHours": "Total hours",
     "startKm": "Start KM",
     "endKm": "End KM",
-    "totalKm": "Total KM",
+    "totalKm": "Total km",
     "rateHour": "Rate hour",
     "rateKm": "Rate km",
     "subtotal": "Subtotal",
@@ -1808,12 +2032,9 @@
     "entriesFound": "entries found",
     "selectWeek": "Select week",
     "noWeeksAvailable": "No weeks with time entries found",
-    "week": "Week",
     "period": "Period",
     "drivers": "Drivers",
     "entries": "Entries",
-    "totalHours": "Total hours",
-    "totalKm": "Total km",
     "backToWeeks": "Back to weeks",
     "loadingWeeks": "Loading weeks..."
   },
@@ -2129,7 +2350,8 @@
       "exportCsv": "Export CSV",
       "exportExcel": "Export Excel",
       "exportPdf": "Export PDF",
-      "exportError": "Export failed"
+      "exportError": "Export failed",
+      "syncComplete": "Sync complete"
     },
     "comparison": {
       "title": "Hours Comparison",
@@ -2271,7 +2493,8 @@
         "step2": "Find 'Location' in permissions",
         "step3": "Set to 'Allow' and reload the page"
       }
-    }
+    },
+    "fmTrackUnavailable": "Fm track unavailable"
   },
   "banking": {
     "title": "Banking",
@@ -2368,5 +2591,63 @@
   "last_login": "Last login",
   "Ritregistratie": "Trip registration",
   "Weekoverzicht": "Weekly overview",
-  "reimport": "Reimport"
+  "reimport": "Reimport",
+  "dossiers": {
+    "addFiles": "Add files",
+    "addReaction": "Add reaction",
+    "addType": "Add type",
+    "allTypes": "All types",
+    "attachment": "Attachment",
+    "attachments": "Attachments",
+    "betreftHint": "Betreft hint",
+    "betreftRequired": "Betreft required",
+    "bijlageDownloadError": "Bijlage download error",
+    "bijlageLoadError": "Bijlage load error",
+    "content": "Content",
+    "deleteTypeConfirm": "Delete type confirm",
+    "empty": "Empty",
+    "internal": "Internal",
+    "internalReaction": "Internal reaction",
+    "inUse": "In use",
+    "manageTypes": "Manage types",
+    "newDossier": "New dossier",
+    "noReactions": "No reactions",
+    "noTypes": "No types",
+    "onderwerpRequired": "Onderwerp required",
+    "reactionPlaceholder": "Reaction placeholder",
+    "reactions": "Reactions",
+    "regarding": "Regarding",
+    "regardingDriver": "Regarding driver",
+    "regardingUser": "Regarding user",
+    "subject": "Subject",
+    "submittedBy": "Submitted by",
+    "title": "Title",
+    "totalItems": "Total items",
+    "type": "Type",
+    "typeInUseHint": "Type in use hint",
+    "typeName": "Type name",
+    "typeRequired": "Type required"
+  },
+  "hoursDetail": {
+    "date": "Date",
+    "endTime": "End time",
+    "loadError": "Load error",
+    "noEntries": "No entries",
+    "startTime": "Start time",
+    "title": "Title",
+    "totalEntries": "Total entries",
+    "totalHours": "Total hours",
+    "totalKm": "Total km",
+    "week": "Week"
+  },
+  "pakmiddelen": {
+    "subtitle": "Subtitle",
+    "tab": {
+      "config": "Config",
+      "mailhistory": "Mailhistory",
+      "overview": "Overview",
+      "ritnummers": "Ritnummers"
+    },
+    "title": "Title"
+  }
 }

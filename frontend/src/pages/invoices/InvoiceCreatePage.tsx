@@ -3734,8 +3734,8 @@ function TollingImportModal({ isOpen, onClose, onImport }: TollingImportModalPro
         <div className="fixed inset-0 bg-gray-500/75" onClick={onClose} />
         <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
           <div className="px-5 py-3 border-b flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Tolheffing importeren â€” {periodLabel}</h3>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-700" type="button">Ã—</button>
+            <h3 className="text-lg font-semibold">Tolheffing importeren — {periodLabel}</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-700" type="button">×</button>
           </div>
           <div className="px-5 py-3 border-b flex flex-wrap items-center gap-3">
             {/* Period toggle */}

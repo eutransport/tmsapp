@@ -351,7 +351,7 @@ def _process_date(date_str, process_date, driver_lookup, plate_lookup):
             fm_driver_name = drivers[0].get('name', '')
             tms_driver = _match_driver(fm_driver_name, driver_lookup)
         else:
-            # Got plate match Ã¢â‚¬â€ get the FM driver name for logging
+            # Got plate match — get the FM driver name for logging
             drivers = vehicle.get('drivers', [])
             fm_driver_name = drivers[0].get('name', '') if drivers else ''
 

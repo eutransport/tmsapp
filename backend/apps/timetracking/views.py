@@ -409,7 +409,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         """
         Get 4-week period hours overview for all users.
         Groups weeks into 4-week periods (1-4, 5-8, 9-12, ...).
-        Shows: user, period, year, worked hours, minimum hours (weeklyÃ—4), missed hours.
+        Shows: user, period, year, worked hours, minimum hours (weekly×4), missed hours.
         Only accessible by admins.
         """
         import math
@@ -438,7 +438,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         if driver_defaults:
             queryset = queryset.filter(user_id__in=[uid for uid in driver_defaults.keys()])
         else:
-            # No drivers with minimum hours configured â€” return empty
+            # No drivers with minimum hours configured — return empty
             return Response([])
         
         if jaar:
@@ -495,7 +495,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         for pkey, pd in period_data.items():
             worked_hours = round(pd['worked_hours'], 2)
             
-            # Minimum hours = driver weekly minimum Ã— 4
+            # Minimum hours = driver weekly minimum × 4
             weekly_min = driver_defaults.get(pd['user_id'], None)
             if weekly_min is not None:
                 minimum_hours = round(weekly_min * 4, 2)
@@ -636,7 +636,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         logger.debug(f"[ritnummer_hours_overview] chauffeur_km_lookup count={len(chauffeur_km_lookup)}, sample keys={list(chauffeur_km_lookup.keys())[:5]}")
 
         # Step 3: Query entries WITH gekoppeld_voertuig FK (normal case)
-        # No driver filter â€” this is a vehicle-based overview
+        # No driver filter — this is a vehicle-based overview
         vehicle_ids = list(vehicle_to_ritnummer.keys())
         
         fk_rows = ImportedTimeEntry.objects.filter(
@@ -660,7 +660,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             datum__year=jaar,
         ).values('kenteken_import', 'weeknummer', 'uren_factuur', 'km')
 
-        # Step 5: Build results â€” per ritnummer per week
+        # Step 5: Build results — per ritnummer per week
         week_totals = {}  # (ritnummer, weeknummer) -> { uren, km, count }
         
         # Process FK-matched entries
@@ -753,7 +753,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
     def monthly_hours_overview(self, request):
         """
         Get monthly hours overview for all users.
-        Groups by calendar month. Minimum hours = weekly minimum Ã— number of weeks in that month.
+        Groups by calendar month. Minimum hours = weekly minimum × number of weeks in that month.
         A month's week count is based on how many distinct ISO weeks have at least one working day
         falling in that month (using the date's month, not ISO week year).
         Only accessible by admins.
@@ -785,7 +785,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         if driver_defaults:
             queryset = queryset.filter(user_id__in=[uid for uid in driver_defaults.keys()])
         else:
-            # No drivers with minimum hours configured â€” return empty
+            # No drivers with minimum hours configured — return empty
             return Response([])
         
         if jaar:
@@ -901,7 +901,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         else:
             worked_hours = 0
         
-        # Get minimum hours: weekly default Ã— weeks in month
+        # Get minimum hours: weekly default × weeks in month
         from apps.drivers.models import Driver
         try:
             driver = Driver.objects.get(
@@ -1179,7 +1179,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         else:
             worked_hours = 0
         
-        # Get minimum hours from driver's weekly default Ã— 4
+        # Get minimum hours from driver's weekly default × 4
         from apps.drivers.models import Driver
         try:
             driver = Driver.objects.get(
@@ -1642,7 +1642,7 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
 
         file_obj = request.FILES.get('file')
         if not file_obj:
-            return Response({'error': 'Geen bestand geÃ¼pload.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Geen bestand geüpload.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not file_obj.name.endswith(('.xlsx', '.xls')):
             return Response(

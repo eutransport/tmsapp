@@ -119,7 +119,11 @@
       "october": "Oktober",
       "november": "November",
       "december": "December"
-    }
+    },
+    "choose": "Kiezen",
+    "createdAt": "Aangemaakt op",
+    "dismiss": "Sluiten",
+    "uploading": "Ing uploaden"
   },
   "auth": {
     "login": "Inloggen",
@@ -185,7 +189,16 @@
     "users": "Gebruikers",
     "settings": "Instellingen",
     "profile": "Profiel",
-    "tasks": "Taken"
+    "tasks": "Taken",
+    "addFavorite": "Favorite toevoegen",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "favorites": "Favorites",
+    "group": {
+      "other": "Other"
+    },
+    "openSidebar": "Openen sidebar",
+    "removeFavorite": "Verwijderen favorite"
   },
   "tasks": {
     "title": "Taken",
@@ -253,6 +266,12 @@
       "reassigned": "Taak opnieuw toegewezen",
       "reminderSent": "Herinnering verstuurd",
       "error": "Er ging iets mis"
+    },
+    "popup": {
+      "body": "Body",
+      "dismiss": "Sluiten",
+      "title": "Titel",
+      "view": "View"
     }
   },
   "dashboard": {
@@ -305,7 +324,6 @@
     "noOnlineUsers": "Geen gebruikers online",
     "recentLogins": "Recente logins",
     "noRecentLogins": "Geen recente logins",
-    "recentActivity": "Recente activiteit",
     "pageOf": "Pagina {{page}} van {{total}}",
     "totalEntries": "totaal",
     "financialOverview": "Financieel overzicht",
@@ -320,7 +338,11 @@
     "leaveThisMonth": "Verlof deze maand",
     "noLeaveThisMonth": "Geen verlof gepland deze maand",
     "viewLeaveCalendar": "Bekijk verlofkalender",
-    "leaveHours": "Verlofuren"
+    "leaveHours": "Verlofuren",
+    "financialPerAdministration": "Financieel per administratie",
+    "outstandingPerCompany": "Te vorderen per bedrijf",
+    "company": "Bedrijf",
+    "openInvoices": "Openstaande facturen"
   },
   "companies": {
     "title": "Bedrijven",
@@ -548,7 +570,10 @@
       "endTimeRequired": "Eindtijd is verplicht",
       "kmEndGreater": "KM eind moet groter zijn dan KM start"
     },
-    "submittedHoursTab": "Ingediende Uren"
+    "submittedHoursTab": "Ingediende Uren",
+    "licensePlate": "License plate",
+    "pause": "Pause",
+    "ritnummer": "Ritnummer"
   },
   "weeklyHours": {
     "title": "Periodeoverzicht Uren",
@@ -784,7 +809,22 @@
     "comment": "Opmerking",
     "adminComment": "Admin opmerking",
     "editRequest": "Verlofaanvraag bewerken",
-    "deleteConfirmation": "Weet je zeker dat je dit goedgekeurde verlof wilt verwijderen? De uren worden teruggestort."
+    "deleteConfirmation": "Weet je zeker dat je dit goedgekeurde verlof wilt verwijderen? De uren worden teruggestort.",
+    "autoApprove": "Automatisch approve",
+    "balanceOverview": "Balance overview",
+    "createRequest": "Create request",
+    "noSearchResults": "Geen zoeken results",
+    "overlap": {
+      "countLabel": "Count label",
+      "infoBody": "Info body",
+      "noneBody": "Geen ne body",
+      "noneTitle": "Geen ne titel",
+      "title": "Titel",
+      "warningBody": "Warning body",
+      "warningTitle": "Warning titel"
+    },
+    "searchEmployee": "Zoeken employee",
+    "selectEmployee": "Employee selecteren"
   },
   "invoices": {
     "title": "Facturen",
@@ -895,7 +935,17 @@
     "groupsSelectedTrips": "{{count}} groepen geselecteerd ({{entries}} ritten)",
     "importTrips": "Importeren ({{count}} ritten)",
     "tripRegistrationSelected": "1 ritregistratie geselecteerd ({{count}} ritten)",
-    "selectTripRegistration": "Selecteer een ritregistratie om te importeren"
+    "selectTripRegistration": "Selecteer een ritregistratie om te importeren",
+    "administratie": "Administratie",
+    "administratieAssigned": "Administratie assigned",
+    "assignAdministratie": "Assign administratie",
+    "assignAdministratieDesc": "Assign administratie desc",
+    "deleteMultipleConfirm": "Verwijderen multiple bevestigen",
+    "selectAdministratie": "Administratie selecteren",
+    "selectAdministratieError": "Fout bij selecteren administratie",
+    "shareNotSupported": "Share not supported",
+    "sharePdf": "Share pdf",
+    "viewPdf": "Pdf bekijken"
   },
   "templates": {
     "title": "Factuur Templates",
@@ -1024,8 +1074,21 @@
       "rowTextColor": "Rij tekstkleur",
       "rowFont": "Rij lettertype",
       "preview": "Voorbeeld",
-      "loadingPreview": "Laad preview..."
-    }
+      "loadingPreview": "Laad preview...",
+      "customerCity": "Klant city",
+      "customerContact": "Klant contact",
+      "customerCountry": "Klant country",
+      "customerEmail": "Klant e-mail",
+      "customerKvk": "Klant kvk",
+      "customerPhone": "Klant phone",
+      "customerZip": "Klant zip",
+      "customerZipCity": "Klant zip city",
+      "insertVariable": "Insert variable",
+      "multilineHint": "Tip: multiline"
+    },
+    "copied": "Copied",
+    "exported": "Exported",
+    "imported": "Imported"
   },
   "users": {
     "title": "Gebruikers",
@@ -1063,8 +1126,8 @@
     "autoEnabled": "Automatisch ingeschakeld (afhankelijkheid)",
     "block": "Blokkeren",
     "activate": "Activeren",
-    "disable2FA": "2FA uitschakelen"
-    ,"form": {
+    "disable2FA": "2FA uitschakelen",
+    "form": {
       "passwordPlaceholder": "Laat leeg om huidig wachtwoord te behouden"
     }
   },
@@ -1245,7 +1308,8 @@
     "reminderEmailPlaceholder": "Laat leeg om het bedrijfse-mailadres te gebruiken",
     "reminderEmailHint": "Optioneel. Standaard wordt het e-mailadres van het bedrijf gebruikt.",
     "reminderSignature": "Handtekening",
-    "reminderSignaturePlaceholder": "Optionele handtekening onderaan herinneringsmails..."
+    "reminderSignaturePlaceholder": "Optionele handtekening onderaan herinneringsmails...",
+    "linqoApiKeySaved": "Linqo api key saved"
   },
   "license": {
     "activation": "Licentie Activatie",
@@ -1455,7 +1519,10 @@
     "deleteOlderThan": "Verwijder notificaties ouder dan",
     "days": "dagen",
     "cleanupWarning": "Dit verwijdert ook alle bijbehorende leesbevestigingen. Deze actie kan niet ongedaan worden gemaakt.",
-    "cleaning": "Opschonen..."
+    "cleaning": "Opschonen...",
+    "noSubscribedDevices": "Geen subscribed devices",
+    "notificationFailed": "Geen tification failed",
+    "titleAndBodyRequired": "Titel and body verplicht"
   },
   "activity": {
     "title": "Activiteiten",
@@ -1478,7 +1545,9 @@
     "allActions": "Alle acties",
     "noActivity": "Geen activiteiten gevonden",
     "activities": "activiteiten",
-    "pageOf": "Pagina {{page}} van {{total}}"
+    "pageOf": "Pagina {{page}} van {{total}}",
+    "clearFilters": "Filters wissen",
+    "loading": "Laden..."
   },
   "documents": {
     "title": "Documenten",
@@ -1509,7 +1578,50 @@
     "dragAndDrop": "Sleep bestand hierheen of klik om te selecteren",
     "maxFileSize": "Maximale bestandsgrootte: {{size}}MB",
     "uploadViewSign": "Upload, bekijk en onderteken PDF documenten",
-    "uploadToStart": "Upload een PDF document om te beginnen"
+    "uploadToStart": "Upload een PDF document om te beginnen",
+    "backToDocuments": "Terug naar documenten",
+    "clickToPlace": "Click to place",
+    "descriptionPlaceholder": "Description",
+    "differentSignature": "Different handtekening",
+    "documentTitle": "Document titel",
+    "downloadOriginal": "Original downloaden",
+    "downloadSigned": "Ondertekend downloaden",
+    "drawSignatureFirst": "Draw handtekening first",
+    "emailDocument": "E-mail document",
+    "emailPlaceholder": "E-mail",
+    "enterSignatureName": "Enter handtekening name",
+    "enterTitle": "Enter titel",
+    "instruction1": "Instructie 1",
+    "instruction2": "Instructie 2",
+    "instruction3": "Instructie 3",
+    "instruction4": "Instructie 4",
+    "instructions": "Instructies",
+    "messageOptional": "Bericht optioneel",
+    "messagePlaceholder": "Bericht",
+    "notFound": "Geen t found",
+    "orDragHere": "Or drag here",
+    "page": "Pagina",
+    "pageOf": "Pagina {{page}} van {{total}}",
+    "pdfOnly": "Pdf only",
+    "placeSignatureFirst": "Place handtekening first",
+    "position": "Positie",
+    "resignDocument": "Resign document",
+    "selectPdfFile": "Pdf bestand selecteren",
+    "sendEmail": "E-mail versturen",
+    "signature": "Handtekening",
+    "signatureDetails": "Handtekening details",
+    "signatureNamePlaceholder": "Handtekening name",
+    "signedBy": "Ondertekend by",
+    "signedDocumentSubject": "Ondertekend document onderwerp",
+    "signedOn": "Ondertekend on",
+    "signError": "Fout bij ondertekenen",
+    "signing": "Ondertekenen",
+    "subject": "Onderwerp",
+    "titlePlaceholder": "Titel",
+    "uploadError": "Fout bij uploaden",
+    "uploadToSign": "To ondertekenen uploaden",
+    "width": "Breedte",
+    "yourSignature": "Your handtekening"
   },
   "revenue": {
     "title": "Omzet",
@@ -1543,7 +1655,30 @@
     "income": "Inkomsten",
     "expenses": "Uitgaven",
     "profitOverview": "Winst Overzicht",
-    "loadError": "Kon omzetgegevens niet laden"
+    "loadError": "Kon omzetgegevens niet laden",
+    "basedOn": "Based on",
+    "collectedSubtitle": "Collected subtitle",
+    "creditInvoices": "Credit facturen",
+    "creditSubtitle": "Credit subtitle",
+    "detailOverview": "Detail overview",
+    "forecast": "Forecast",
+    "forecastExpenses": "Forecast expenses",
+    "forecastIncome": "Forecast income",
+    "forecastProfit": "Forecast profit",
+    "margin": "Margin",
+    "months": "Months",
+    "nextHalfYear": "Volgende half jaar",
+    "nextMonth": "Volgende maand",
+    "nextQuarter": "Volgende quarter",
+    "nextYear": "Volgende jaar",
+    "noDataForYear": "Geen gegevens for jaar",
+    "outstandingSubtitle": "Outstanding subtitle",
+    "totalCollected": "Totaal collected",
+    "totalOutstanding": "Totaal outstanding",
+    "trendBasis": "Trend basis",
+    "trendDown": "Trend down",
+    "trendStable": "Trend stable",
+    "trendUp": "Trend up"
   },
   "imports": {
     "title": "Import",
@@ -1599,7 +1734,91 @@
     "purchaseInvoice": "Inkoopfactuur",
     "salesInvoice": "Verkoopfactuur",
     "creditNote": "Creditnota",
-    "saveAsInvoice": "Opslaan als factuur"
+    "saveAsInvoice": "Opslaan als factuur",
+    "addFirstMailbox": "First mailbox toevoegen",
+    "autoCreateCompany": "Automatisch create bedrijf",
+    "autoFetch": "Automatisch ophalen",
+    "autoFetchEmails": "Automatisch ophalen emails",
+    "backToEmailImport": "Terug naar e-mail import",
+    "backToImports": "Terug naar imports",
+    "backToOverview": "Terug naar overview",
+    "bulkDeleteConfirm": "Bulk verwijderen bevestigen",
+    "clickFolderButton": "Click map button",
+    "clickToSelectField": "Click to selecteren veld",
+    "company": "Bedrijf",
+    "configureMailbox": "Configure mailbox",
+    "couldNotLoadFolders": "Could not laden folders",
+    "credit": "Credit",
+    "creditDescription": "Credit omschrijving",
+    "defaultInvoiceType": "Standaard factuur type",
+    "defaultTypeNote": "Standaard type notitie",
+    "deleteImportConfirm": "Verwijderen import bevestigen",
+    "deleteMailboxConfirm": "Verwijderen mailbox bevestigen",
+    "documentType": "Document type",
+    "dontMove": "Dont move",
+    "editMailboxConfig": "Mailbox configuratie bewerken",
+    "emailImportDescription": "E-mail import omschrijving",
+    "emailInvoiceImport": "E-mail factuur import",
+    "extractedData": "Geextraheerd gegevens",
+    "folderToMonitor": "Map to controleren",
+    "generalSettings": "Algemeen instellingen",
+    "ifMailsMoved": "If mails moved",
+    "imapDescription": "Imap omschrijving",
+    "imapSettings": "Imap instellingen",
+    "importNotFound": "Import not found",
+    "intervalMinutes": "Interval minutes",
+    "intervalRange": "Interval range",
+    "leaveEmptyToKeep": "Leave leeg to keep",
+    "leaveEmptyToKeepInFolder": "Leave leeg to keep in map",
+    "loadFolders": "Laden folders",
+    "loadingPreview": "Laden... preview",
+    "mailboxConfigurations": "Mailbox configurations",
+    "markAsReadAfter": "Mark as read after",
+    "moveToFolder": "Move to map",
+    "ms365Description": "Ms 365 omschrijving",
+    "ms365OAuthSettings": "Ms 365 o auth instellingen",
+    "ms365PermissionsNote": "Ms 365 permissions notitie",
+    "newMailbox": "Nieuw mailbox",
+    "newMailboxConfig": "Nieuw mailbox configuratie",
+    "noAttachments": "Geen bijlagen",
+    "noEmailsImported": "Geen emails imported",
+    "noExtractedData": "Geen geextraheerd gegevens",
+    "noInvoiceDetails": "Geen factuur details",
+    "noInvoicesImported": "Geen facturen imported",
+    "noLinesFound": "Geen regels found",
+    "noMailboxesConfigured": "Geen mailboxen configured",
+    "noPatternRecognized": "Geen patroon herkend",
+    "noSubject": "Geen onderwerp",
+    "note": "Geen te",
+    "noTemplate": "Geen sjabloon",
+    "noTextAvailable": "Geen tekst available",
+    "onlyUnread": "Only ongelezen",
+    "pattern": "Patroon",
+    "port": "Poort",
+    "processingSettings": "Verwerking instellingen",
+    "protocol": "Protocol",
+    "purchase": "Inkoop",
+    "purchaseDescription": "Inkoop omschrijving",
+    "rawOcrText": "Ruwe ocr tekst",
+    "reextractLines": "Reextract regels",
+    "reference": "Referentie",
+    "sales": "Verkoop",
+    "salesDescription": "Verkoop omschrijving",
+    "saveCorrections": "Corrections opslaan",
+    "saveFirstToLoadFolders": "First to laden folders opslaan",
+    "selectFolder": "Map selecteren",
+    "selectOnDocument": "On document selecteren",
+    "senderFilter": "Er filter versturen",
+    "sharedMailboxEmail": "Gedeeld mailbox e-mail",
+    "statusAwaitingReview": "Status wachtend controle",
+    "subjectFilter": "Onderwerp filter",
+    "supplierCustomer": "Leverancier klant",
+    "template": "Sjabloon",
+    "toReview": "Te controleren",
+    "username": "Username",
+    "useSSL": "Use ssl",
+    "vatAmount": "Vat amount",
+    "vatPercentage": "Vat percentage"
   },
   "profile": {
     "title": "Profiel",
@@ -1635,7 +1854,12 @@
     "deleteFailed": "Verwijderen mislukt",
     "somethingWentWrong": "Er is iets misgegaan",
     "tryAgain": "Probeer het opnieuw",
-    "sessionExpired": "Sessie verlopen. Log opnieuw in."
+    "sessionExpired": "Sessie verlopen. Log opnieuw in.",
+    "deleteError": "Fout bij verwijderen",
+    "downloadError": "Fout bij downloaden",
+    "emailError": "Fout bij e-mail",
+    "loadError": "Fout bij laden",
+    "saveError": "Fout bij opslaan"
   },
   "validation": {
     "required": "Dit veld is verplicht",
@@ -1776,7 +2000,7 @@
     "totalHours": "Totaal uren",
     "startKm": "Begin KM",
     "endKm": "Eind KM",
-    "totalKm": "Totaal KM",
+    "totalKm": "Totaal km",
     "rateHour": "Tarief uur",
     "rateKm": "Tarief km",
     "subtotal": "Subtotaal",
@@ -1808,12 +2032,9 @@
     "entriesFound": "registraties gevonden",
     "selectWeek": "Selecteer week",
     "noWeeksAvailable": "Geen weken met urenregistraties gevonden",
-    "week": "Week",
     "period": "Periode",
     "drivers": "Chauffeurs",
     "entries": "Registraties",
-    "totalHours": "Totaal uren",
-    "totalKm": "Totaal km",
     "backToWeeks": "Terug naar weken",
     "loadingWeeks": "Weken ophalen..."
   },
@@ -2129,7 +2350,8 @@
       "exportCsv": "Exporteer CSV",
       "exportExcel": "Exporteer Excel",
       "exportPdf": "Exporteer PDF",
-      "exportError": "Exporteren mislukt"
+      "exportError": "Exporteren mislukt",
+      "syncComplete": "Sync complete"
     },
     "comparison": {
       "title": "Uren Vergelijking",
@@ -2271,7 +2493,8 @@
         "step2": "Zoek 'Locatie' in de machtigingen",
         "step3": "Stel in op 'Toestaan' en herlaad de pagina"
       }
-    }
+    },
+    "fmTrackUnavailable": "Fm track unavailable"
   },
   "banking": {
     "title": "Bankieren",
@@ -2368,5 +2591,63 @@
   "last_login": "Laatste login",
   "Ritregistratie": "Ritregistratie",
   "Weekoverzicht": "Weekoverzicht",
-  "reimport": "Opnieuw importeren"
+  "reimport": "Opnieuw importeren",
+  "dossiers": {
+    "addFiles": "Bestanden toevoegen",
+    "addReaction": "Reactie toevoegen",
+    "addType": "Type toevoegen",
+    "allTypes": "Alle types",
+    "attachment": "Bijlage",
+    "attachments": "Bijlagen",
+    "betreftHint": "Tip: betreft",
+    "betreftRequired": "Betreft verplicht",
+    "bijlageDownloadError": "Fout bij bijlage downloaden",
+    "bijlageLoadError": "Fout bij bijlage laden",
+    "content": "Inhoud",
+    "deleteTypeConfirm": "Verwijderen type bevestigen",
+    "empty": "Leeg",
+    "internal": "Intern",
+    "internalReaction": "Intern reactie",
+    "inUse": "In use",
+    "manageTypes": "Manage types",
+    "newDossier": "Nieuw dossier",
+    "noReactions": "Geen reacties",
+    "noTypes": "Geen types",
+    "onderwerpRequired": "Onderwerp verplicht",
+    "reactionPlaceholder": "Reactie",
+    "reactions": "Reacties",
+    "regarding": "Betreft",
+    "regardingDriver": "Betreft chauffeur",
+    "regardingUser": "Betreft gebruiker",
+    "subject": "Onderwerp",
+    "submittedBy": "Submitted by",
+    "title": "Titel",
+    "totalItems": "Totaal items",
+    "type": "Type",
+    "typeInUseHint": "Tip: type in use",
+    "typeName": "Type name",
+    "typeRequired": "Type verplicht"
+  },
+  "hoursDetail": {
+    "date": "Datum",
+    "endTime": "Eindtijd",
+    "loadError": "Fout bij laden",
+    "noEntries": "Geen entries",
+    "startTime": "Starttijd",
+    "title": "Titel",
+    "totalEntries": "Totaal invoer",
+    "totalHours": "Totaal uren",
+    "totalKm": "Totaal km",
+    "week": "Week"
+  },
+  "pakmiddelen": {
+    "subtitle": "Subtitle",
+    "tab": {
+      "config": "Configuratie",
+      "mailhistory": "Mailhistory",
+      "overview": "Overview",
+      "ritnummers": "Ritnummers"
+    },
+    "title": "Titel"
+  }
 }
