@@ -28,6 +28,7 @@ import { getTimeEntries, markKilometerheffingGefactureerd } from '@/api/timetrac
 import { getSpreadsheets } from '@/api/spreadsheets'
 import { getImportedEntries, ImportedTimeEntry } from '@/api/urenImport'
 import { tollingApi, TollingInvoicePreviewRow, TollingPeriod } from '@/api/tolling'
+import { getAllVehicles } from '@/api/fleet'
 import { getTolRegistraties, markTolGefactureerd, TolRegistratie } from '@/api/tolregistratie'
 import { 
   InvoiceTemplate, 
@@ -2212,6 +2213,14 @@ export default function InvoiceCreatePage() {
 
     // Combine all lines
     setLines(prev => [...prev, ...entryLines, ...summaryLines, ...kilometerheffingLines])
+
+    // Auto-fetch tolling for this week + all involved plates
+    if (sortedEntries.length > 0) {
+      const plates = Array.from(new Set(sortedEntries.map(e => e.kenteken).filter(Boolean))) as string[]
+      const autoYear = new Date(sortedEntries[0].datum).getFullYear()
+      const autoWeek = sortedEntries[0].weeknummer
+      void autoAddTollingForWeek(plates, autoYear, autoWeek)
+    }
   }
 
   // Import imported (Excel) entries with ritnummers from import, km from chauffeur, uren from import
@@ -2408,6 +2417,58 @@ export default function InvoiceCreatePage() {
     }
 
     setLines(prev => [...prev, ...entryLines, ...summaryLines])
+
+    // Auto-fetch tolling for this week + all involved plates
+    if (sortedEntries.length > 0) {
+      const plates = Array.from(new Set(
+        sortedEntries.map(e => e.kenteken_import || e.voertuig_kenteken).filter(Boolean)
+      )) as string[]
+      const autoYear = new Date(sortedEntries[0].datum).getFullYear()
+      const autoWeek = sortedEntries[0].weeknummer
+      void autoAddTollingForWeek(plates, autoYear, autoWeek)
+    }
+  }
+
+  // Auto-fetch tolling for the given week + plates and append matching lines.
+  // Runs silently after hours import so users don't need to open the tolling modal manually.
+  // "plates" from TimeEntry may actually contain fleet labels/ritnummers (e.g. "E&UTRANS1")
+  // instead of real license plates. We resolve them via fleet_vehicle.ritnummer -> kenteken
+  // before matching against tolling data (which always uses real plates).
+  const autoAddTollingForWeek = async (rawPlates: string[], year: number | null, week: number | null) => {
+    if (!year || !week || !rawPlates.length) return
+    const normalize = (v: string) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+    let candidates = new Set(rawPlates.map(normalize).filter(Boolean))
+    if (candidates.size === 0) return
+
+    // Resolve fleet labels / ritnummers to real license plates
+    try {
+      const vehicles = await getAllVehicles()
+      const expanded = new Set<string>(candidates)
+      vehicles.forEach(v => {
+        const normKenteken = normalize(v.kenteken)
+        const normRit = normalize(v.ritnummer)
+        // If input matches a ritnummer OR a kenteken, add the real kenteken too
+        if (normRit && candidates.has(normRit) && normKenteken) expanded.add(normKenteken)
+        if (normKenteken && candidates.has(normKenteken) && normRit) expanded.add(normRit)
+      })
+      candidates = expanded
+    } catch (err) {
+      console.warn('[auto-tolling] kon fleet vehicles niet laden voor mapping', err)
+    }
+
+    try {
+      const rows = await tollingApi.invoicePreview({ period: 'week', year, index: week })
+      const matched = rows.filter(r => candidates.has(r.plate_normalized) && r.total_amount > 0)
+      if (matched.length === 0) {
+        console.info(`[auto-tolling] geen tolheffing gevonden voor week ${week}/${year} en kentekens`, Array.from(candidates))
+        return
+      }
+      handleImportTolling(matched)
+      console.info(`[auto-tolling] ${matched.length} tolheffing regel(s) automatisch toegevoegd voor week ${week}/${year}`)
+    } catch (err) {
+      console.warn('[auto-tolling] preview failed', err)
+    }
   }
 
   // Import tolling totals: appends one line per selected plate for the chosen month.
@@ -2423,8 +2484,8 @@ export default function InvoiceCreatePage() {
     const newLines: InvoiceLineData[] = rows.map(r => {
       const kmRound = Math.round(r.total_km)
       const omschrijving = r.ritnummer
-        ? `${r.plate_display} - ${r.ritnummer} (Totaal ${kmRound} KM)`
-        : `${r.plate_display} (Totaal ${kmRound} KM)`
+        ? `Tolheffing - ${r.plate_display} - ${r.ritnummer} (Totaal ${kmRound} KM)`
+        : `Tolheffing - ${r.plate_display} (Totaal ${kmRound} KM)`
       const values: Record<string, number | string> = {}
       columns.forEach(col => {
         if (col.id === omschrijvingCol.id) values[col.id] = omschrijving

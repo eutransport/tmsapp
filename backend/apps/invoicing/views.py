@@ -609,6 +609,33 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         
         return response
     
+    @action(detail=True, methods=['get'], url_path='tolling_pdf')
+    def tolling_pdf(self, request, pk=None):
+        """PDF-overzicht van tolheffing-events die aan deze factuur gekoppeld zijn."""
+        from django.http import HttpResponse
+        from apps.tolling.pdf_generator import (
+            generate_tolling_events_pdf,
+            get_tolling_events_for_invoice,
+            build_tolling_pdf_filename,
+        )
+
+        invoice = self.get_object()
+        events = list(get_tolling_events_for_invoice(invoice))
+        if not events:
+            return Response(
+                {'error': 'Geen tolheffing-events gekoppeld aan deze factuur'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        pdf_content = generate_tolling_events_pdf(events, invoice=invoice)
+        response = HttpResponse(pdf_content, content_type='application/pdf')
+        filename = sanitize_filename(build_tolling_pdf_filename(events)) or 'tolheffing.pdf'
+        if request.query_params.get('download', 'false').lower() == 'true':
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        else:
+            response['Content-Disposition'] = f'inline; filename="{filename}"'
+        return response
+
     @action(detail=True, methods=['post'])
     def send_email(self, request, pk=None):
         """Send invoice via email. Supports single email, multiple emails, or mailing list."""
@@ -736,7 +763,24 @@ Met vriendelijke groet,
             pdf_content = generate_invoice_pdf(invoice)
             filename = f"factuur_{invoice.factuurnummer.replace('/', '-')}.pdf"
             email.attach(filename, pdf_content, 'application/pdf')
-            
+
+            # Attach tolling overview PDF when the invoice has tolling events
+            try:
+                from apps.tolling.pdf_generator import (
+                    generate_tolling_events_pdf,
+                    get_tolling_events_for_invoice,
+                    build_tolling_pdf_filename,
+                )
+                tolling_events = list(get_tolling_events_for_invoice(invoice))
+                if tolling_events:
+                    tolling_pdf = generate_tolling_events_pdf(tolling_events, invoice=invoice)
+                    tolling_filename = build_tolling_pdf_filename(tolling_events)
+                    email.attach(tolling_filename, tolling_pdf, 'application/pdf')
+            except Exception as tol_exc:
+                logger.warning(
+                    f"Kon tolheffing-bijlage niet genereren voor {invoice.factuurnummer}: {tol_exc}"
+                )
+
             email.send()
             
             # Update invoice status to verzonden if definitief
