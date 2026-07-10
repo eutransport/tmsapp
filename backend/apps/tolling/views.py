@@ -594,8 +594,19 @@ class PrivateTollRegistrationViewSet(viewsets.ModelViewSet):
     serializer_class = PrivateTollRegistrationSerializer
     permission_classes = [IsAuthenticated]
 
+    def _is_admin(self) -> bool:
+        return bool(getattr(self.request.user, 'is_admin', False))
+
     def get_queryset(self):
-        qs = PrivateTollRegistration.objects.filter(user=self.request.user)
+        # Admins mogen registraties voor andere gebruikers zien/beheren via ?user_id=.
+        if self._is_admin():
+            target_user_id = self.request.query_params.get('user_id') or self.request.data.get('user_id')
+            if target_user_id:
+                qs = PrivateTollRegistration.objects.filter(user_id=target_user_id)
+            else:
+                qs = PrivateTollRegistration.objects.filter(user=self.request.user)
+        else:
+            qs = PrivateTollRegistration.objects.filter(user=self.request.user)
         params = self.request.query_params
         period = (params.get('period') or '').lower()
         try:
@@ -636,7 +647,19 @@ class PrivateTollRegistrationViewSet(viewsets.ModelViewSet):
         })
 
     def perform_create(self, serializer):
-        reg = serializer.save(user=self.request.user)
+        # Admins mogen een registratie namens een andere gebruiker aanmaken via user_id.
+        target_user = self.request.user
+        if self._is_admin():
+            uid = self.request.data.get('user_id')
+            if uid:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                try:
+                    target_user = User.objects.get(id=uid)
+                except User.DoesNotExist:
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError({'user_id': 'Chauffeur niet gevonden.'})
+        reg = serializer.save(user=target_user)
         try:
             match_private_registration_to_events(reg)
         except Exception as exc:  # pragma: no cover

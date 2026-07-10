@@ -233,6 +233,7 @@ export interface PrivateTollListParams {
   year?: number
   index?: number
   plate?: string
+  user_id?: string
 }
 
 export const privateTollApi = {
@@ -247,11 +248,12 @@ export const privateTollApi = {
       query.index = params.index
     }
     if (params.plate) query.plate = params.plate
+    if (params.user_id) query.user_id = params.user_id
     const { data } = await api.get('/tolling/private/', { params: query })
     return data
   },
 
-  create: async (payload: Partial<PrivateTollRegistration>): Promise<PrivateTollRegistration> => {
+  create: async (payload: Partial<PrivateTollRegistration> & { user_id?: string }): Promise<PrivateTollRegistration> => {
     const { data } = await api.post('/tolling/private/', payload)
     return data
   },

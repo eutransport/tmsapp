@@ -24,7 +24,9 @@ import {
   PrivateTollListParams,
 } from '@/api/tolling'
 import { getVehiclesForDropdown } from '@/api/fleet'
-import { Vehicle } from '@/types'
+import { getUsers } from '@/api/users'
+import { useAuthStore } from '@/stores/authStore'
+import { Vehicle, User } from '@/types'
 
 type PeriodMode = 'all' | 'week' | 'month'
 
@@ -61,6 +63,9 @@ const emptyForm = () => {
 }
 
 export default function PrivateTollPage() {
+  const currentUser = useAuthStore(s => s.user)
+  const isAdmin = currentUser?.rol === 'admin'
+
   const [items, setItems] = useState<PrivateTollRegistration[]>([])
   const [count, setCount] = useState(0)
   const [numPages, setNumPages] = useState(1)
@@ -72,6 +77,11 @@ export default function PrivateTollPage() {
   const [year, setYear] = useState(now.getFullYear())
   const [monthIndex, setMonthIndex] = useState(now.getMonth() + 1)
   const [weekIndex, setWeekIndex] = useState(getIsoWeek(now).week)
+
+  // Admin: selecteer een chauffeur om diens registraties te zien/beheren.
+  // Lege string = eigen registraties.
+  const [selectedUserId, setSelectedUserId] = useState<string>('')
+  const [driverList, setDriverList] = useState<User[]>([])
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [showForm, setShowForm] = useState(false)
@@ -89,8 +99,9 @@ export default function PrivateTollPage() {
       p.year = year
       p.index = monthIndex
     }
+    if (isAdmin && selectedUserId) p.user_id = selectedUserId
     return p
-  }, [page, periodMode, year, monthIndex, weekIndex])
+  }, [page, periodMode, year, monthIndex, weekIndex, isAdmin, selectedUserId])
 
   const load = async () => {
     setLoading(true)
@@ -114,8 +125,19 @@ export default function PrivateTollPage() {
     })()
   }, [])
 
+  // Admin: laad chauffeurs (rol=chauffeur) voor de dropdown
+  useEffect(() => {
+    if (!isAdmin) return
+    (async () => {
+      try {
+        const res = await getUsers({ rol: 'chauffeur', page_size: 500, ordering: 'achternaam' })
+        setDriverList(res.results)
+      } catch { /* silent */ }
+    })()
+  }, [isAdmin])
+
   // Reset to page 1 when filter changes
-  useEffect(() => { setPage(1) }, [periodMode, year, monthIndex, weekIndex])
+  useEffect(() => { setPage(1) }, [periodMode, year, monthIndex, weekIndex, selectedUserId])
 
   const openNew = () => {
     setForm(emptyForm())
@@ -145,12 +167,15 @@ export default function PrivateTollPage() {
     }
     setSaving(true)
     try {
-      const payload = {
+      const payload: any = {
         datum: form.datum,
         begin_tijd: form.begin_tijd,
         eind_tijd: form.eind_tijd,
         license_plate_raw: form.license_plate_raw.toUpperCase().trim(),
         notitie: form.notitie,
+      }
+      if (isAdmin && selectedUserId && !form.id) {
+        payload.user_id = selectedUserId
       }
       let saved: PrivateTollRegistration
       if (form.id) {
@@ -188,10 +213,15 @@ export default function PrivateTollPage() {
     <div className="max-w-5xl mx-auto p-4 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Mijn privé tolheffing</h1>
+          <h1 className="text-xl font-semibold text-gray-900">
+            {isAdmin && selectedUserId
+              ? `Privé tolheffing — ${driverList.find(u => u.id === selectedUserId)?.full_name || 'Chauffeur'}`
+              : 'Mijn privé tolheffing'}
+          </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Registreer wanneer je een voertuig privé gebruikte. Deze uren worden automatisch
-            uit de doorbelasting gehouden.
+            {isAdmin && selectedUserId
+              ? 'Je dient deze registratie in namens de geselecteerde chauffeur.'
+              : 'Registreer wanneer je een voertuig privé gebruikte. Deze uren worden automatisch uit de doorbelasting gehouden.'}
           </p>
         </div>
         <button
@@ -203,6 +233,35 @@ export default function PrivateTollPage() {
           Nieuwe registratie
         </button>
       </div>
+
+      {/* Admin: chauffeur-selector */}
+      {isAdmin && (
+        <div className="rounded-md border bg-amber-50/60 p-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-amber-800 font-medium">Beheer:</span>
+          <span className="text-gray-700">Indienen namens</span>
+          <select
+            value={selectedUserId}
+            onChange={e => setSelectedUserId(e.target.value)}
+            className="px-2 py-1 border rounded"
+          >
+            <option value="">— mijzelf —</option>
+            {driverList.map(u => (
+              <option key={u.id} value={u.id}>
+                {u.full_name || u.username || u.email}
+              </option>
+            ))}
+          </select>
+          {selectedUserId && (
+            <button
+              type="button"
+              onClick={() => setSelectedUserId('')}
+              className="ml-1 text-xs text-amber-800 underline"
+            >
+              wissen
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Filter */}
       <div className="rounded-md border bg-white p-3 flex flex-wrap items-center gap-2 text-sm">
