@@ -212,10 +212,19 @@ export interface PrivateTollRegistration {
   matched_events_count: number
   matched_events_amount?: number
   matched_events_km?: number
+  matched_events?: PrivateTollMatchedEvent[]
   admin_invoiced?: boolean
   admin_invoiced_at?: string | null
   created_at: string
   updated_at: string
+}
+
+export interface PrivateTollMatchedEvent {
+  id: string
+  start_at: string
+  end_at: string
+  distance_km: number
+  amount: number
 }
 
 export interface PrivateTollListResponse {

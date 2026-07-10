@@ -179,26 +179,31 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
 def match_events_to_private_registrations(events_qs) -> int:
     """Voor elke event in `events_qs` zoek een matchende PrivateTollRegistration en markeer als privé.
 
-    Match-criterium: zelfde genormaliseerde kenteken + start_at valt op de datum
-    van de registratie en binnen [begin_tijd, eind_tijd] (lokaal). Bestaande privé-links
-    worden niet overschreven, en events die al aan een factuurregel gekoppeld zijn
-    worden overgeslagen.
+    Match-criterium: zelfde genormaliseerde kenteken + het event-interval [start_at, end_at]
+    overlapt met het datum-venster [begin_tijd, eind_tijd] van de registratie (lokaal).
+    Bestaande privé-links worden niet overschreven, en events die al aan een factuurregel
+    gekoppeld zijn worden overgeslagen.
     Retourneert aantal nieuw als privé gemarkeerde events.
     """
     tz = timezone.get_current_timezone()
     count = 0
     for ev in events_qs.filter(is_private=False, invoice_line__isnull=True).iterator():
         local_start = ev.start_at.astimezone(tz) if timezone.is_aware(ev.start_at) else ev.start_at
-        reg = (
-            PrivateTollRegistration.objects
-            .filter(
-                license_plate_normalized=ev.license_plate_normalized,
-                datum=local_start.date(),
-                begin_tijd__lte=local_start.time(),
-                eind_tijd__gte=local_start.time(),
-            )
-            .first()
+        local_end = ev.end_at.astimezone(tz) if (ev.end_at and timezone.is_aware(ev.end_at)) else ev.end_at
+        # Zoek registraties op zelfde kenteken die op de start-datum OF einde-datum vallen
+        # en waarvan het tijdvenster overlapt met het event-interval.
+        candidates = PrivateTollRegistration.objects.filter(
+            license_plate_normalized=ev.license_plate_normalized,
+            datum__in={local_start.date(), local_end.date() if local_end else local_start.date()},
         )
+        reg = None
+        for cand in candidates:
+            reg_start = timezone.make_aware(datetime.combine(cand.datum, cand.begin_tijd), tz)
+            reg_end = timezone.make_aware(datetime.combine(cand.datum, cand.eind_tijd), tz)
+            ev_end = ev.end_at if ev.end_at else ev.start_at
+            if ev.start_at < reg_end and ev_end > reg_start:
+                reg = cand
+                break
         if reg is not None:
             ev.is_private = True
             ev.private_registration = reg
@@ -208,12 +213,12 @@ def match_events_to_private_registrations(events_qs) -> int:
 
 
 def match_private_registration_to_events(reg: PrivateTollRegistration) -> int:
-    """Markeer alle bestaande, niet-gefactureerde events die matchen met `reg` als privé.
+    """Markeer alle bestaande, niet-gefactureerde events die overlappen met `reg` als privé.
 
+    Overlap: event.start_at < reg_end AND event.end_at > reg_start.
     Retourneert aantal nieuw als privé gemarkeerde events.
     """
     tz = timezone.get_current_timezone()
-    # Bereken datetime-venster voor deze registratie (lokale tijd)
     start_dt = timezone.make_aware(datetime.combine(reg.datum, reg.begin_tijd), tz)
     end_dt = timezone.make_aware(datetime.combine(reg.datum, reg.eind_tijd), tz)
     if end_dt <= start_dt:
@@ -221,8 +226,8 @@ def match_private_registration_to_events(reg: PrivateTollRegistration) -> int:
 
     qs = TollingEvent.objects.filter(
         license_plate_normalized=reg.license_plate_normalized,
-        start_at__gte=start_dt,
-        start_at__lte=end_dt,
+        start_at__lt=end_dt,
+        end_at__gt=start_dt,
         invoice_line__isnull=True,
     ).exclude(is_private=True)
     updated = qs.update(is_private=True, private_registration=reg)

@@ -34,6 +34,7 @@ class PrivateTollRegistrationSerializer(serializers.ModelSerializer):
     matched_events_count = serializers.SerializerMethodField()
     matched_events_amount = serializers.SerializerMethodField()
     matched_events_km = serializers.SerializerMethodField()
+    matched_events = serializers.SerializerMethodField()
 
     class Meta:
         model = PrivateTollRegistration
@@ -42,12 +43,14 @@ class PrivateTollRegistrationSerializer(serializers.ModelSerializer):
             'license_plate_raw', 'license_plate_normalized',
             'notitie',
             'matched_events_count', 'matched_events_amount', 'matched_events_km',
+            'matched_events',
             'admin_invoiced', 'admin_invoiced_at',
             'created_at', 'updated_at',
         )
         read_only_fields = (
             'id', 'license_plate_normalized',
             'matched_events_count', 'matched_events_amount', 'matched_events_km',
+            'matched_events',
             'admin_invoiced', 'admin_invoiced_at',
             'created_at', 'updated_at',
         )
@@ -64,6 +67,18 @@ class PrivateTollRegistrationSerializer(serializers.ModelSerializer):
         from decimal import Decimal
         total = sum((Decimal(e.distance_km or 0) for e in obj.matched_events.all()), Decimal('0'))
         return float(total)
+
+    def get_matched_events(self, obj):
+        return [
+            {
+                'id': str(e.id),
+                'start_at': e.start_at.isoformat() if e.start_at else None,
+                'end_at': e.end_at.isoformat() if e.end_at else None,
+                'distance_km': float(e.distance_km or 0),
+                'amount': float(e.amount or 0),
+            }
+            for e in obj.matched_events.all().order_by('start_at')
+        ]
 
     def validate(self, attrs):
         begin = attrs.get('begin_tijd') or getattr(self.instance, 'begin_tijd', None)

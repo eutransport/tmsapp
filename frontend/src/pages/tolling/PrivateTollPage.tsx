@@ -8,13 +8,15 @@
  * Bevat een formulier + overzicht met week/maand filter + pagination.
  * Elke gebruiker ziet enkel zijn/haar eigen registraties.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   PencilSquareIcon,
   PlusIcon,
   TrashIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
@@ -82,6 +84,26 @@ export default function PrivateTollPage() {
   // Lege string = eigen registraties.
   const [selectedUserId, setSelectedUserId] = useState<string>('')
   const [driverList, setDriverList] = useState<User[]>([])
+
+  // UI: welke rijen tonen hun gematchte events uitgeklapt
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const toggleExpanded = (id: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+  const fmtDateTime = (iso: string) => {
+    try {
+      const d = new Date(iso)
+      return d.toLocaleString('nl-NL', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
+    } catch { return iso }
+  }
+  const eur = (n: number) => `€ ${n.toFixed(2).replace('.', ',')}`
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [showForm, setShowForm] = useState(false)
@@ -430,16 +452,23 @@ export default function PrivateTollPage() {
               <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-500">Geen registraties in deze periode.</td></tr>
             ) : (
               items.map(r => (
-                <tr key={r.id} className="hover:bg-gray-50">
+                <Fragment key={r.id}>
+                <tr className="hover:bg-gray-50">
                   <td className="px-3 py-1.5 whitespace-nowrap">{r.datum}</td>
                   <td className="px-3 py-1.5 whitespace-nowrap">{r.begin_tijd.slice(0, 5)} — {r.eind_tijd.slice(0, 5)}</td>
                   <td className="px-3 py-1.5 whitespace-nowrap font-medium">{r.license_plate_raw}</td>
                   <td className="px-3 py-1.5 text-gray-600">{r.notitie || '—'}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">
                     {r.matched_events_count > 0 ? (
-                      <span className="inline-block px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-800 font-medium">
-                        {r.matched_events_count}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(r.id)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800 font-medium hover:bg-purple-200"
+                        title="Klik om gematchte tolregels te tonen"
+                      >
+                        {r.matched_events_count} · {eur(r.matched_events_amount || 0)}
+                        {expanded.has(r.id) ? <ChevronUpIcon className="h-3 w-3" /> : <ChevronDownIcon className="h-3 w-3" />}
+                      </button>
                     ) : (
                       <span className="text-gray-400">0</span>
                     )}
@@ -463,6 +492,37 @@ export default function PrivateTollPage() {
                     </button>
                   </td>
                 </tr>
+                {expanded.has(r.id) && r.matched_events && r.matched_events.length > 0 && (
+                  <tr key={`${r.id}-details`} className="bg-purple-50/40">                    <td colSpan={6} className="px-3 py-2">
+                      <table className="w-full text-xs">
+                        <thead className="text-gray-500">
+                          <tr>
+                            <th className="text-left font-medium px-2 py-1">Start</th>
+                            <th className="text-left font-medium px-2 py-1">Eind</th>
+                            <th className="text-right font-medium px-2 py-1">Afstand</th>
+                            <th className="text-right font-medium px-2 py-1">Bedrag</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-purple-100">
+                          {r.matched_events.map(ev => (
+                            <tr key={ev.id}>
+                              <td className="px-2 py-1 whitespace-nowrap text-gray-700">{fmtDateTime(ev.start_at)}</td>
+                              <td className="px-2 py-1 whitespace-nowrap text-gray-700">{fmtDateTime(ev.end_at)}</td>
+                              <td className="px-2 py-1 text-right tabular-nums">{ev.distance_km.toFixed(3)} km</td>
+                              <td className="px-2 py-1 text-right tabular-nums text-purple-800 font-medium">{eur(ev.amount)}</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-purple-100/60">
+                            <td className="px-2 py-1 font-medium text-gray-700" colSpan={2}>Totaal privé</td>
+                            <td className="px-2 py-1 text-right tabular-nums font-medium">{(r.matched_events_km || 0).toFixed(3)} km</td>
+                            <td className="px-2 py-1 text-right tabular-nums font-semibold text-purple-800">{eur(r.matched_events_amount || 0)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))
             )}
           </tbody>
@@ -513,9 +573,14 @@ export default function PrivateTollPage() {
             {r.notitie && <div className="mt-1 text-xs text-gray-500">{r.notitie}</div>}
             <div className="mt-2 flex items-center justify-between">
               {r.matched_events_count > 0 ? (
-                <span className="inline-block px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-800 font-medium">
-                  {r.matched_events_count} gematcht
-                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(r.id)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800 font-medium hover:bg-purple-200"
+                >
+                  {r.matched_events_count} gematcht · {eur(r.matched_events_amount || 0)}
+                  {expanded.has(r.id) ? <ChevronUpIcon className="h-3 w-3" /> : <ChevronDownIcon className="h-3 w-3" />}
+                </button>
               ) : (
                 <span className="text-xs text-gray-400">Geen match</span>
               )}
@@ -538,6 +603,26 @@ export default function PrivateTollPage() {
                 </button>
               </div>
             </div>
+            {expanded.has(r.id) && r.matched_events && r.matched_events.length > 0 && (
+              <div className="mt-2 rounded border border-purple-100 bg-purple-50/40 divide-y divide-purple-100">
+                {r.matched_events.map(ev => (
+                  <div key={ev.id} className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs">
+                    <div className="min-w-0">
+                      <div className="text-gray-700">{fmtDateTime(ev.start_at)}</div>
+                      <div className="text-gray-500">→ {fmtDateTime(ev.end_at)}</div>
+                    </div>
+                    <div className="text-right whitespace-nowrap">
+                      <div className="tabular-nums text-gray-700">{ev.distance_km.toFixed(3)} km</div>
+                      <div className="tabular-nums text-purple-800 font-medium">{eur(ev.amount)}</div>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-2 py-1.5 text-xs bg-purple-100/60">
+                  <span className="font-medium text-gray-700">Totaal privé</span>
+                  <span className="tabular-nums font-semibold text-purple-800">{eur(r.matched_events_amount || 0)}</span>
+                </div>
+              </div>
+            )}
           </div>
         ))}
 
