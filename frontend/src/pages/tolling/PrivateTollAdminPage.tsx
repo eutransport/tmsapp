@@ -19,6 +19,7 @@ import {
   PrivateTollAdminSummaryRow,
   PrivateTollRegistration,
 } from '@/api/tolling'
+import ConfirmDialog, { ConfirmState } from '@/components/common/ConfirmDialog'
 
 type PeriodMode = 'week' | 'month'
 
@@ -60,6 +61,7 @@ export default function PrivateTollAdminPage() {
   const [details, setDetails] = useState<Record<string, PrivateTollRegistration[]>>({})
   const [detailLoading, setDetailLoading] = useState<Record<string, boolean>>({})
   const [markingUserId, setMarkingUserId] = useState<string | null>(null)
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
 
   const currentIndex = periodMode === 'week' ? weekIndex : monthIndex
 
@@ -116,28 +118,33 @@ export default function PrivateTollAdminPage() {
   }
 
   const handleMark = async (row: PrivateTollAdminSummaryRow, invoiced: boolean) => {
-    if (invoiced && !window.confirm(
-      `Markeer alle ${row.registrations_count} privé-registratie(s) van ${row.user_name} voor ${label} als gefactureerd?`,
-    )) return
-    if (!invoiced && !window.confirm(
-      `Zet de markering "gefactureerd" ongedaan voor ${row.user_name} in ${label}?`,
-    )) return
-    setMarkingUserId(row.user_id)
-    try {
-      const res = await privateTollAdminApi.markInvoiced({
-        period: periodMode,
-        year,
-        index: currentIndex,
-        user_id: row.user_id,
-        invoiced,
-      })
-      toast.success(`${res.updated} registratie(s) bijgewerkt`)
-      await load()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Kon niet markeren')
-    } finally {
-      setMarkingUserId(null)
+    const doMark = async () => {
+      setMarkingUserId(row.user_id)
+      try {
+        const res = await privateTollAdminApi.markInvoiced({
+          period: periodMode,
+          year,
+          index: currentIndex,
+          user_id: row.user_id,
+          invoiced,
+        })
+        toast.success(`${res.updated} registratie(s) bijgewerkt`)
+        await load()
+      } catch (err: any) {
+        toast.error(err?.response?.data?.detail || 'Kon niet markeren')
+      } finally {
+        setMarkingUserId(null)
+      }
     }
+    setConfirmState({
+      title: invoiced ? 'Markeren als gefactureerd?' : 'Markering terugdraaien?',
+      message: invoiced
+        ? `Markeer alle ${row.registrations_count} privé-registratie(s) van ${row.user_name} voor ${label} als gefactureerd?`
+        : `Zet de markering "gefactureerd" ongedaan voor ${row.user_name} in ${label}?`,
+      confirmLabel: invoiced ? 'Markeren als gefactureerd' : 'Terugdraaien',
+      variant: invoiced ? 'info' : 'warning',
+      onConfirm: doMark,
+    })
   }
 
   const totalRegs = rows.reduce((s, r) => s + r.registrations_count, 0)
@@ -454,6 +461,7 @@ export default function PrivateTollAdminPage() {
           )
         })}
       </div>
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </div>
   )
 }

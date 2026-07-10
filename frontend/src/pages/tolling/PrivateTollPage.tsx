@@ -29,6 +29,7 @@ import { getVehiclesForDropdown } from '@/api/fleet'
 import { getUsers } from '@/api/users'
 import { useAuthStore } from '@/stores/authStore'
 import { Vehicle, User } from '@/types'
+import ConfirmDialog, { ConfirmState } from '@/components/common/ConfirmDialog'
 
 type PeriodMode = 'all' | 'week' | 'month'
 
@@ -87,6 +88,7 @@ export default function PrivateTollPage() {
 
   // UI: welke rijen tonen hun gematchte events uitgeklapt
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
   const toggleExpanded = (id: string) => {
     setExpanded(prev => {
       const next = new Set(prev)
@@ -104,6 +106,23 @@ export default function PrivateTollPage() {
     } catch { return iso }
   }
   const eur = (n: number) => `€ ${n.toFixed(2).replace('.', ',')}`
+
+  // Samenvatting van huidige pagina: open vs. gefactureerd
+  const summary = useMemo(() => {
+    let openCount = 0, openAmount = 0
+    let invCount = 0, invAmount = 0
+    for (const r of items) {
+      const amt = r.matched_events_amount || 0
+      if (r.admin_invoiced) {
+        invCount += 1
+        invAmount += amt
+      } else {
+        openCount += 1
+        openAmount += amt
+      }
+    }
+    return { openCount, openAmount, invCount, invAmount }
+  }, [items])
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [showForm, setShowForm] = useState(false)
@@ -218,14 +237,26 @@ export default function PrivateTollPage() {
   }
 
   const remove = async (r: PrivateTollRegistration) => {
-    if (!confirm(`Verwijder privé registratie ${r.datum} ${r.begin_tijd}-${r.eind_tijd} ${r.license_plate_raw}?`)) return
-    try {
-      await privateTollApi.remove(r.id)
-      toast.success('Verwijderd. Gekoppelde tolregels zijn ontkoppeld.')
-      await load()
-    } catch {
-      toast.error('Verwijderen mislukt')
-    }
+    setConfirmState({
+      title: 'Privé registratie verwijderen?',
+      message: (
+        <span>
+          Registratie <strong>{r.datum}</strong> {r.begin_tijd.slice(0, 5)}–{r.eind_tijd.slice(0, 5)}{' '}
+          voor <strong>{r.license_plate_raw}</strong> verwijderen? Gekoppelde tolregels worden ontkoppeld.
+        </span>
+      ),
+      confirmLabel: 'Verwijderen',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await privateTollApi.remove(r.id)
+          toast.success('Verwijderd. Gekoppelde tolregels zijn ontkoppeld.')
+          await load()
+        } catch {
+          toast.error('Verwijderen mislukt')
+        }
+      },
+    })
   }
 
   const weekOptions = Array.from({ length: 53 }, (_, i) => i + 1)
@@ -335,6 +366,36 @@ export default function PrivateTollPage() {
         </div>
       </div>
 
+      {/* Samenvatting: open vs. gefactureerd (op basis van huidige pagina) */}
+      {items.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="rounded-md border bg-amber-50 border-amber-200 p-3">
+            <div className="text-xs uppercase font-medium text-amber-800">Openstaand</div>
+            <div className="mt-1 flex items-baseline justify-between">
+              <span className="text-sm text-gray-700">
+                {summary.openCount} registratie{summary.openCount === 1 ? '' : 's'}
+              </span>
+              <span className="text-lg font-semibold text-amber-900 tabular-nums">
+                {eur(summary.openAmount)}
+              </span>
+            </div>
+            <div className="mt-0.5 text-xs text-amber-700">Nog niet door de beheerder verrekend.</div>
+          </div>
+          <div className="rounded-md border bg-emerald-50 border-emerald-200 p-3">
+            <div className="text-xs uppercase font-medium text-emerald-800">Gefactureerd</div>
+            <div className="mt-1 flex items-baseline justify-between">
+              <span className="text-sm text-gray-700">
+                {summary.invCount} registratie{summary.invCount === 1 ? '' : 's'}
+              </span>
+              <span className="text-lg font-semibold text-emerald-900 tabular-nums">
+                {eur(summary.invAmount)}
+              </span>
+            </div>
+            <div className="mt-0.5 text-xs text-emerald-700">Reeds door de beheerder afgehandeld.</div>
+          </div>
+        </div>
+      )}
+
       {/* Formulier */}
       {showForm && (
         <form onSubmit={submit} className="rounded-md border bg-white p-4 space-y-3">
@@ -442,14 +503,15 @@ export default function PrivateTollPage() {
               <th className="text-left px-3 py-2">Kenteken</th>
               <th className="text-left px-3 py-2">Notitie</th>
               <th className="text-right px-3 py-2">Gematcht</th>
+              <th className="text-center px-3 py-2">Status</th>
               <th className="text-right px-3 py-2">Acties</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
-              <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400">Laden…</td></tr>
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-400">Laden…</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-500">Geen registraties in deze periode.</td></tr>
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-500">Geen registraties in deze periode.</td></tr>
             ) : (
               items.map(r => (
                 <Fragment key={r.id}>
@@ -471,6 +533,20 @@ export default function PrivateTollPage() {
                       </button>
                     ) : (
                       <span className="text-gray-400">0</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5 text-center whitespace-nowrap">
+                    {r.admin_invoiced ? (
+                      <span
+                        className="inline-block px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800 font-medium"
+                        title={r.admin_invoiced_at ? `Gefactureerd op ${new Date(r.admin_invoiced_at).toLocaleDateString('nl-NL')}` : 'Gefactureerd'}
+                      >
+                        Gefactureerd
+                      </span>
+                    ) : (
+                      <span className="inline-block px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-800 font-medium">
+                        Open
+                      </span>
                     )}
                   </td>
                   <td className="px-3 py-1.5 text-right whitespace-nowrap">
@@ -568,7 +644,21 @@ export default function PrivateTollPage() {
                 <div className="font-medium text-gray-900">{r.datum}</div>
                 <div className="text-xs text-gray-600">{r.begin_tijd.slice(0, 5)} — {r.eind_tijd.slice(0, 5)}</div>
               </div>
-              <div className="text-sm font-mono font-medium">{r.license_plate_raw}</div>
+              <div className="flex flex-col items-end gap-1">
+                <div className="text-sm font-mono font-medium">{r.license_plate_raw}</div>
+                {r.admin_invoiced ? (
+                  <span
+                    className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-medium"
+                    title={r.admin_invoiced_at ? `Gefactureerd op ${new Date(r.admin_invoiced_at).toLocaleDateString('nl-NL')}` : 'Gefactureerd'}
+                  >
+                    Gefactureerd
+                  </span>
+                ) : (
+                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-medium">
+                    Open
+                  </span>
+                )}
+              </div>
             </div>
             {r.notitie && <div className="mt-1 text-xs text-gray-500">{r.notitie}</div>}
             <div className="mt-2 flex items-center justify-between">
@@ -650,6 +740,7 @@ export default function PrivateTollPage() {
           </div>
         )}
       </div>
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </div>
   )
 }

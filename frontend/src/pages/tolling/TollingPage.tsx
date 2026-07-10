@@ -24,6 +24,7 @@ import {
 } from '@heroicons/react/24/outline'
 
 import { tollingApi, TollingSummary, TollingVehicleRow } from '@/api/tolling'
+import ConfirmDialog, { ConfirmState } from '@/components/common/ConfirmDialog'
 
 const PAGE_SIZE = 15
 
@@ -225,6 +226,7 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
   const [page, setPage] = useState(1)
   const [exporting, setExporting] = useState<null | 'xlsx' | 'pdf'>(null)
   const [unmarking, setUnmarking] = useState(false)
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -277,17 +279,34 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
       index = iso.index
     }
     const label = period === 'month' ? `${year}/${index}` : `week ${index}/${year}`
-    if (!confirm(`Weet je zeker dat je "gefactureerd" wilt terugdraaien voor ${plateDisplay} — ${label}?`)) return
-    setUnmarking(true)
-    try {
-      const r = await tollingApi.markUninvoiced(plate, { period, year, index })
-      toast.success(`Teruggezet: ${r.unmarked} events; ${r.lines_deleted} factuurregels verwijderd.`)
-      await load()
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || 'Bijwerken mislukt')
-    } finally {
-      setUnmarking(false)
+    const doUnmark = async () => {
+      setUnmarking(true)
+      try {
+        const r = await tollingApi.markUninvoiced(plate, { period, year, index })
+        toast.success(`Teruggezet: ${r.unmarked} events; ${r.lines_deleted} factuurregels verwijderd.`)
+        await load()
+      } catch (e: any) {
+        toast.error(e?.response?.data?.detail || 'Bijwerken mislukt')
+      } finally {
+        setUnmarking(false)
+      }
     }
+    setConfirmState({
+      title: '"Gefactureerd" terugdraaien?',
+      message: (
+        <span>
+          Weet je zeker dat je "gefactureerd" wilt terugdraaien voor{' '}
+          <strong>{plateDisplay}</strong> — <strong>{label}</strong>?
+          <br />
+          <span className="text-xs text-gray-500">
+            De bijbehorende factuurregels worden verwijderd.
+          </span>
+        </span>
+      ),
+      confirmLabel: 'Terugdraaien',
+      variant: 'warning',
+      onConfirm: doUnmark,
+    })
   }
 
   return (
@@ -547,6 +566,7 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
           </>
         )}
       </div>
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </div>
   )
 }
