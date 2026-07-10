@@ -102,55 +102,114 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
 
     grand_km = Decimal('0')
     grand_amount = Decimal('0')
+    grand_weekday_km = Decimal('0')
+    grand_weekday_amount = Decimal('0')
+    grand_weekend_km = Decimal('0')
+    grand_weekend_amount = Decimal('0')
+    grand_private_km = Decimal('0')
+    grand_private_amount = Decimal('0')
+
+    def _is_weekend(ev) -> bool:
+        return bool(ev.start_at and ev.start_at.isoweekday() >= 6)
+
+    def _is_private(ev) -> bool:
+        return bool(getattr(ev, 'is_private', False))
 
     for plate in sorted(grouped.keys()):
         plate_events = sorted(grouped[plate], key=lambda e: e.start_at)
-        total_km = sum((Decimal(e.distance_km or 0) for e in plate_events), Decimal('0'))
-        total_amount = sum((Decimal(e.amount or 0) for e in plate_events), Decimal('0'))
+        billed_events = [e for e in plate_events if not _is_private(e)]
+        private_events = [e for e in plate_events if _is_private(e)]
+        total_km = sum((Decimal(e.distance_km or 0) for e in billed_events), Decimal('0'))
+        total_amount = sum((Decimal(e.amount or 0) for e in billed_events), Decimal('0'))
+        weekday_km = sum((Decimal(e.distance_km or 0) for e in billed_events if not _is_weekend(e)), Decimal('0'))
+        weekday_amount = sum((Decimal(e.amount or 0) for e in billed_events if not _is_weekend(e)), Decimal('0'))
+        weekend_km = total_km - weekday_km
+        weekend_amount = total_amount - weekday_amount
+        private_km = sum((Decimal(e.distance_km or 0) for e in private_events), Decimal('0'))
+        private_amount = sum((Decimal(e.amount or 0) for e in private_events), Decimal('0'))
         grand_km += total_km
         grand_amount += total_amount
+        grand_weekday_km += weekday_km
+        grand_weekday_amount += weekday_amount
+        grand_weekend_km += weekend_km
+        grand_weekend_amount += weekend_amount
+        grand_private_km += private_km
+        grand_private_amount += private_amount
 
-        header_text = f"Kenteken: {plate} &nbsp;&nbsp; ({len(plate_events)} events, {_format_km(total_km)} km, {_format_money(total_amount)})"
+        header_text = f"Kenteken: {plate} &nbsp;&nbsp; ({len(billed_events)} events, {_format_km(total_km)} km, {_format_money(total_amount)})"
         story.append(Paragraph(header_text, section_style))
 
-        data = [['Datum', 'Start', 'Eind', 'OBU', 'Afstand (km)', 'Bedrag']]
-        for ev in plate_events:
+        data = [['Datum', 'Type', 'Start', 'Eind', 'Afstand (km)', 'Bedrag']]
+        weekend_row_indices: list[int] = []
+        private_row_indices: list[int] = []
+        for idx, ev in enumerate(plate_events, start=1):
             start = ev.start_at
             end = ev.end_at
+            private = _is_private(ev)
+            weekend = _is_weekend(ev)
+            if private:
+                type_label = 'privé'
+                private_row_indices.append(idx)
+            elif weekend:
+                type_label = 'weekend'
+                weekend_row_indices.append(idx)
+            else:
+                type_label = 'doordeweeks'
             data.append([
                 start.strftime('%d-%m-%Y') if start else '',
+                type_label,
                 start.strftime('%H:%M') if start else '',
                 end.strftime('%H:%M') if end else '',
-                ev.obu or '',
                 _format_km(ev.distance_km),
                 _format_money(ev.amount),
             ])
-        data.append(['', '', '', 'Totaal', _format_km(total_km), _format_money(total_amount)])
+        # Subtotal rows: weekday (billed), weekend (billed), privé (not billed), totaal (billed)
+        show_private_subtotal = bool(private_events)
+        data.append(['', '', '', 'Totaal doordeweeks', _format_km(weekday_km), _format_money(weekday_amount)])
+        data.append(['', '', '', 'Totaal weekend', _format_km(weekend_km), _format_money(weekend_amount)])
+        if show_private_subtotal:
+            data.append(['', '', '', 'Privé (niet gefactureerd)', _format_km(private_km), _format_money(private_amount)])
+        data.append(['', '', '', 'Totaal gefactureerd', _format_km(total_km), _format_money(total_amount)])
 
         table = Table(
             data,
-            colWidths=[22 * mm, 15 * mm, 15 * mm, 40 * mm, 30 * mm, 30 * mm],
+            colWidths=[24 * mm, 24 * mm, 18 * mm, 18 * mm, 40 * mm, 32 * mm],
             repeatRows=1,
         )
-        table.setStyle(TableStyle([
+        subtotal_rows = 4 if show_private_subtotal else 3
+        style_cmds = [
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f2937')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
             ('ALIGN', (4, 0), (-1, -1), 'RIGHT'),
-            ('ALIGN', (0, 0), (2, -1), 'LEFT'),
-            ('ALIGN', (3, 0), (3, -1), 'LEFT'),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f9fafb')]),
-            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#f3f4f6')),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('LINEABOVE', (0, -1), (-1, -1), 0.5, colors.HexColor('#d1d5db')),
-            ('GRID', (0, 0), (-1, -2), 0.25, colors.HexColor('#e5e7eb')),
+            ('ALIGN', (0, 0), (3, -1), 'LEFT'),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1 - subtotal_rows), [colors.white, colors.HexColor('#f9fafb')]),
+            # Subtotal rows tinting
+            ('BACKGROUND', (0, -subtotal_rows), (-1, -subtotal_rows), colors.HexColor('#eff6ff')),   # weekday
+            ('BACKGROUND', (0, -subtotal_rows + 1), (-1, -subtotal_rows + 1), colors.HexColor('#fef3c7')),  # weekend
+            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#f3f4f6')),  # grand billed
+            ('FONTNAME', (0, -subtotal_rows), (-1, -1), 'Helvetica-Bold'),
+            ('LINEABOVE', (0, -subtotal_rows), (-1, -subtotal_rows), 0.5, colors.HexColor('#d1d5db')),
+            ('GRID', (0, 0), (-1, -1 - subtotal_rows), 0.25, colors.HexColor('#e5e7eb')),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('LEFTPADDING', (0, 0), (-1, -1), 4),
             ('RIGHTPADDING', (0, 0), (-1, -1), 4),
             ('TOPPADDING', (0, 0), (-1, -1), 3),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ]))
+        ]
+        if show_private_subtotal:
+            # Privé subtotal row (index -2 when private subtotal present)
+            style_cmds.append(('BACKGROUND', (0, -2), (-1, -2), colors.HexColor('#ede9fe')))
+            style_cmds.append(('TEXTCOLOR', (0, -2), (-1, -2), colors.HexColor('#5b21b6')))
+        # Tint weekend event rows lightly (amber)
+        for ri in weekend_row_indices:
+            style_cmds.append(('BACKGROUND', (0, ri), (-1, ri), colors.HexColor('#fef9c3')))
+        # Tint privé event rows (purple) — takes precedence over weekend
+        for ri in private_row_indices:
+            style_cmds.append(('BACKGROUND', (0, ri), (-1, ri), colors.HexColor('#ede9fe')))
+            style_cmds.append(('TEXTCOLOR', (0, ri), (-1, ri), colors.HexColor('#5b21b6')))
+        table.setStyle(TableStyle(style_cmds))
         story.append(table)
         story.append(Spacer(1, 4 * mm))
 
@@ -164,7 +223,28 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
     )
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph(
-        f"<b>Totaal alle kentekens:</b> {_format_km(grand_km)} km &nbsp;&nbsp; "
+        f"<b>Totaal doordeweeks (alle kentekens):</b> {_format_km(grand_weekday_km)} km &nbsp;&nbsp; "
+        f"<b>{_format_money(grand_weekday_amount)}</b>",
+        total_style,
+    ))
+    story.append(Paragraph(
+        f"<b>Totaal weekend (alle kentekens):</b> {_format_km(grand_weekend_km)} km &nbsp;&nbsp; "
+        f"<b>{_format_money(grand_weekend_amount)}</b>",
+        total_style,
+    ))
+    if grand_private_amount > 0 or grand_private_km > 0:
+        private_total_style = ParagraphStyle(
+            'TollingPrivateTotal',
+            parent=total_style,
+            textColor=colors.HexColor('#5b21b6'),
+        )
+        story.append(Paragraph(
+            f"<b>Privé (niet gefactureerd, alle kentekens):</b> {_format_km(grand_private_km)} km &nbsp;&nbsp; "
+            f"<b>{_format_money(grand_private_amount)}</b>",
+            private_total_style,
+        ))
+    story.append(Paragraph(
+        f"<b>Totaal gefactureerd (alle kentekens):</b> {_format_km(grand_km)} km &nbsp;&nbsp; "
         f"<b>{_format_money(grand_amount)}</b>",
         total_style,
     ))
@@ -174,11 +254,45 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
 
 
 def get_tolling_events_for_invoice(invoice):
-    """Retourneer TollingEvents die aan factuurregels van deze factuur zijn gekoppeld."""
+    """Retourneer TollingEvents die aan factuurregels van deze factuur zijn gekoppeld,
+    aangevuld met privé-events (is_private=True) voor dezelfde kenteken(s) in dezelfde ISO-week(en).
+
+    Privé-events worden niet doorbelast, maar wel meegestuurd in de bijlage-PDF
+    zodat de opdrachtgever ziet dat ze bekend zijn en bewust niet zijn gefactureerd.
+    """
     from .models import TollingEvent
-    return TollingEvent.objects.filter(
-        invoice_line__invoice=invoice
+    billed = list(
+        TollingEvent.objects.filter(invoice_line__invoice=invoice)
+        .order_by('license_plate_raw', 'start_at')
+    )
+    if not billed:
+        return billed
+    # Bepaal (plate_normalized, iso_year, iso_week) combinaties van gefactureerde events
+    plate_weeks: set[tuple[str, int, int]] = set()
+    plates: set[str] = set()
+    for ev in billed:
+        if not ev.start_at:
+            continue
+        iso_year, iso_week, _ = ev.start_at.isocalendar()
+        plate_weeks.add((ev.license_plate_normalized, iso_year, iso_week))
+        plates.add(ev.license_plate_normalized)
+    if not plate_weeks:
+        return billed
+    # Haal alle privé-events op voor betrokken kentekens en filter in Python op ISO-week
+    private_qs = TollingEvent.objects.filter(
+        is_private=True,
+        license_plate_normalized__in=plates,
     ).order_by('license_plate_raw', 'start_at')
+    private_extra = []
+    for ev in private_qs:
+        if not ev.start_at:
+            continue
+        iso_year, iso_week, _ = ev.start_at.isocalendar()
+        if (ev.license_plate_normalized, iso_year, iso_week) in plate_weeks:
+            private_extra.append(ev)
+    combined = billed + private_extra
+    combined.sort(key=lambda e: (e.license_plate_raw or '', e.start_at))
+    return combined
 
 
 def build_tolling_pdf_filename(events) -> str:

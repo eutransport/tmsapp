@@ -96,6 +96,8 @@ const LoadListPage = React.lazy(() => import('@/pages/loadlist/LoadListPage'))
 
 // Tolheffing (toll charging import)
 const TollingPage = React.lazy(() => import('@/pages/tolling/TollingPage'))
+const PrivateTollPage = React.lazy(() => import('@/pages/tolling/PrivateTollPage'))
+const PrivateTollAdminPage = React.lazy(() => import('@/pages/tolling/PrivateTollAdminPage'))
 
 // Notifications
 const NotificationsPage = React.lazy(() => import('@/pages/notifications/NotificationsPage'))
@@ -388,6 +390,10 @@ function App() {
 
         {/* Tolheffing import */}
         <Route path="/tolheffing" element={<PermissionRoute permission="view_tolling"><TollingPage /></PermissionRoute>} />
+
+        {/* Privé tolregistratie (chauffeur) */}
+        <Route path="/mijn-tolheffing" element={<PrivateTollPage />} />
+        <Route path="/beheer/prive-tolheffing" element={<PrivateTollAdminPage />} />
 
         {/* Spreadsheets (Ritregistratie) */}
         <Route path="/spreadsheets" element={<AdminRoute><SpreadsheetListPage /></AdminRoute>} />

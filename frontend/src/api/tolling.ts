@@ -15,6 +15,8 @@ export interface TollingEvent {
   invoice_line: string | null
   invoiced_at: string | null
   invoiced: boolean
+  is_private?: boolean
+  private_registration?: string | null
   created_at: string
 }
 
@@ -52,6 +54,10 @@ export interface TollingInvoicePreviewRow {
   total_km: number
   total_amount: number
   events_count: number
+  weekday_km: number
+  weekday_amount: number
+  weekend_km: number
+  weekend_amount: number
   period: 'month' | 'week'
   year: number
   index: number
@@ -162,6 +168,7 @@ export const tollingApi = {
     invoiceId: string,
     ref: TollingPeriodRef,
     plates: string[],
+    opts: { excludeWeekend?: boolean } = {},
   ): Promise<{ lines: Array<{ id: string; plate: string; ritnummer: string; total_km: number; total_amount: number; events_count: number }> }> => {
     const { data } = await api.post('/tolling/invoicing/add-to-invoice/', {
       invoice_id: invoiceId,
@@ -169,6 +176,7 @@ export const tollingApi = {
       year: ref.year,
       index: ref.index,
       plates,
+      exclude_weekend: opts.excludeWeekend === true,
     })
     return data
   },
@@ -177,6 +185,7 @@ export const tollingApi = {
     invoiceLineId: string,
     plate: string,
     ref: TollingPeriodRef,
+    opts: { excludeWeekend?: boolean } = {},
   ): Promise<{ linked: number }> => {
     const { data } = await api.post('/tolling/invoicing/link-line/', {
       invoice_line_id: invoiceLineId,
@@ -184,7 +193,127 @@ export const tollingApi = {
       period: ref.period,
       year: ref.year,
       index: ref.index,
+      exclude_weekend: opts.excludeWeekend === true,
     })
+    return data
+  },
+}
+
+// -------- Privé tolregistratie (chauffeur) --------
+
+export interface PrivateTollRegistration {
+  id: string
+  datum: string // YYYY-MM-DD
+  begin_tijd: string // HH:mm[:ss]
+  eind_tijd: string
+  license_plate_raw: string
+  license_plate_normalized: string
+  notitie: string
+  matched_events_count: number
+  matched_events_amount?: number
+  matched_events_km?: number
+  admin_invoiced?: boolean
+  admin_invoiced_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PrivateTollListResponse {
+  count: number
+  page: number
+  page_size: number
+  num_pages: number
+  results: PrivateTollRegistration[]
+}
+
+export interface PrivateTollListParams {
+  page?: number
+  pageSize?: number
+  period?: 'week' | 'month'
+  year?: number
+  index?: number
+  plate?: string
+}
+
+export const privateTollApi = {
+  list: async (params: PrivateTollListParams = {}): Promise<PrivateTollListResponse> => {
+    const query: Record<string, string | number> = {
+      page: params.page ?? 1,
+      page_size: params.pageSize ?? 20,
+    }
+    if (params.period && params.year != null && params.index != null) {
+      query.period = params.period
+      query.year = params.year
+      query.index = params.index
+    }
+    if (params.plate) query.plate = params.plate
+    const { data } = await api.get('/tolling/private/', { params: query })
+    return data
+  },
+
+  create: async (payload: Partial<PrivateTollRegistration>): Promise<PrivateTollRegistration> => {
+    const { data } = await api.post('/tolling/private/', payload)
+    return data
+  },
+
+  update: async (id: string, payload: Partial<PrivateTollRegistration>): Promise<PrivateTollRegistration> => {
+    const { data } = await api.patch(`/tolling/private/${id}/`, payload)
+    return data
+  },
+
+  remove: async (id: string): Promise<void> => {
+    await api.delete(`/tolling/private/${id}/`)
+  },
+}
+
+// -------- Admin: privé tolheffing per chauffeur --------
+
+export interface PrivateTollAdminSummaryRow {
+  user_id: string
+  user_name: string
+  user_email: string
+  registrations_count: number
+  matched_events_count: number
+  total_km: number
+  total_amount: number
+  invoiced_count: number
+  all_invoiced: boolean
+  any_invoiced: boolean
+  first_datum: string | null
+  last_datum: string | null
+}
+
+export interface PrivateTollAdminSummaryResponse {
+  period: 'week' | 'month'
+  year: number
+  index: number
+  label: string
+  start: string
+  end: string
+  results: PrivateTollAdminSummaryRow[]
+}
+
+export interface PrivateTollAdminParams {
+  period: 'week' | 'month'
+  year: number
+  index: number
+}
+
+export const privateTollAdminApi = {
+  summary: async (params: PrivateTollAdminParams): Promise<PrivateTollAdminSummaryResponse> => {
+    const { data } = await api.get('/tolling/private/admin-summary/', { params })
+    return data
+  },
+
+  detail: async (params: PrivateTollAdminParams & { user_id: string }): Promise<PrivateTollRegistration[]> => {
+    const { data } = await api.get('/tolling/private/admin-detail/', { params })
+    return data
+  },
+
+  markInvoiced: async (
+    payload: PrivateTollAdminParams & { user_id: string; invoiced: boolean },
+  ): Promise<{ updated: number; invoiced: boolean }> => {
+    const { data } = await api.post('/tolling/private/admin-mark-invoiced/', payload)
     return data
   },
 }

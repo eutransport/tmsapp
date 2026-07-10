@@ -20,9 +20,19 @@ from apps.core.permissions import HasReadWriteModulePermission
 from apps.fleet.models import Vehicle
 from apps.invoicing.models import Invoice, InvoiceLine
 
-from .models import TollingEvent, TollingImportBatch, normalize_plate
-from .serializers import TollingEventSerializer, TollingImportBatchSerializer
-from .services import export_events_pdf, export_events_xlsx, import_csv
+from .models import PrivateTollRegistration, TollingEvent, TollingImportBatch, normalize_plate
+from .serializers import (
+    PrivateTollRegistrationSerializer,
+    TollingEventSerializer,
+    TollingImportBatchSerializer,
+)
+from .services import (
+    export_events_pdf,
+    export_events_xlsx,
+    import_csv,
+    match_private_registration_to_events,
+    unmatch_private_registration,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -363,36 +373,51 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             period, year, index, start, end, label = _resolve_period(data)
         except ValueError as ex:
             return Response({'detail': str(ex)}, status=400)
-        rows = (
-            TollingEvent.objects
-            .filter(start_at__gte=start, start_at__lt=end, invoiced_at__isnull=True)
-            .values('license_plate_normalized')
-            .annotate(
-                total_km=Sum('distance_km'),
-                total_amount=Sum('amount'),
-                events_count=Sum(Value(1)),
-            )
-        )
-        vehicle_map: dict[str, Vehicle] = {normalize_plate(v.kenteken): v for v in Vehicle.objects.all()}
-        # Fetch any raw plate for display
-        raw_map: dict[str, str] = {}
-        for norm, raw in TollingEvent.objects.filter(
-            start_at__gte=start, start_at__lt=end, invoiced_at__isnull=True
-        ).values_list('license_plate_normalized', 'license_plate_raw'):
-            raw_map.setdefault(norm, raw)
+        # Per-plate totals + weekday/weekend split (Mon-Fri = weekday, Sat/Sun = weekend).
+        # Privé-gemarkeerde events tellen NIET mee — die worden niet doorbelast.
+        events_qs = TollingEvent.objects.filter(
+            start_at__gte=start, start_at__lt=end, invoiced_at__isnull=True,
+            is_private=False,
+        ).values_list('license_plate_normalized', 'license_plate_raw', 'start_at', 'distance_km', 'amount')
 
+        agg: dict[str, dict] = {}
+        raw_map: dict[str, str] = {}
+        tz = timezone.get_current_timezone()
+        for norm, raw, start_at, km, amount in events_qs:
+            raw_map.setdefault(norm, raw)
+            local_dt = start_at.astimezone(tz) if timezone.is_aware(start_at) else start_at
+            is_weekend = local_dt.isoweekday() >= 6  # 6=Sat, 7=Sun
+            bucket = agg.setdefault(norm, {
+                'total_km': Decimal('0'), 'total_amount': Decimal('0'), 'events_count': 0,
+                'weekday_km': Decimal('0'), 'weekday_amount': Decimal('0'),
+                'weekend_km': Decimal('0'), 'weekend_amount': Decimal('0'),
+            })
+            bucket['total_km'] += km or Decimal('0')
+            bucket['total_amount'] += amount or Decimal('0')
+            bucket['events_count'] += 1
+            if is_weekend:
+                bucket['weekend_km'] += km or Decimal('0')
+                bucket['weekend_amount'] += amount or Decimal('0')
+            else:
+                bucket['weekday_km'] += km or Decimal('0')
+                bucket['weekday_amount'] += amount or Decimal('0')
+
+        vehicle_map: dict[str, Vehicle] = {normalize_plate(v.kenteken): v for v in Vehicle.objects.all()}
         results = []
-        for r in rows:
-            norm = r['license_plate_normalized']
+        for norm, b in agg.items():
             v = vehicle_map.get(norm)
             results.append({
                 'plate_normalized': norm,
                 'plate_display': v.kenteken if v else raw_map.get(norm, norm),
                 'ritnummer': v.ritnummer if v else None,
                 'vehicle_id': str(v.id) if v else None,
-                'total_km': float(r['total_km'] or 0),
-                'total_amount': float(r['total_amount'] or 0),
-                'events_count': int(r['events_count'] or 0),
+                'total_km': float(b['total_km']),
+                'total_amount': float(b['total_amount']),
+                'events_count': b['events_count'],
+                'weekday_km': float(b['weekday_km']),
+                'weekday_amount': float(b['weekday_amount']),
+                'weekend_km': float(b['weekend_km']),
+                'weekend_amount': float(b['weekend_amount']),
                 'period': period,
                 'year': year,
                 'index': index,
@@ -431,12 +456,20 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         norm_plates = [normalize_plate(p) for p in plates if p]
         if not norm_plates:
             return Response({'detail': 'Geen kentekens opgegeven.'}, status=400)
+        exclude_weekend = str(request.data.get('exclude_weekend') or '').lower() in ('1', 'true', 'yes')
         events = list(
             TollingEvent.objects
             .filter(start_at__gte=start, start_at__lt=end,
                     invoiced_at__isnull=True,
+                    is_private=False,
                     license_plate_normalized__in=norm_plates)
         )
+        if exclude_weekend:
+            tz = timezone.get_current_timezone()
+            events = [
+                e for e in events
+                if (e.start_at.astimezone(tz) if timezone.is_aware(e.start_at) else e.start_at).isoweekday() < 6
+            ]
         by_plate: dict[str, list[TollingEvent]] = {}
         for e in events:
             by_plate.setdefault(e.license_plate_normalized, []).append(e)
@@ -523,15 +556,233 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             line = InvoiceLine.objects.get(id=line_id)
         except InvoiceLine.DoesNotExist:
             return Response({'detail': 'Factuurregel niet gevonden.'}, status=404)
+        exclude_weekend = str(request.data.get('exclude_weekend') or '').lower() in ('1', 'true', 'yes')
         events = list(
             TollingEvent.objects
             .filter(license_plate_normalized=norm,
                     start_at__gte=start, start_at__lt=end,
-                    invoiced_at__isnull=True)
+                    invoiced_at__isnull=True,
+                    is_private=False)
         )
+        if exclude_weekend:
+            tz = timezone.get_current_timezone()
+            events = [
+                e for e in events
+                if (e.start_at.astimezone(tz) if timezone.is_aware(e.start_at) else e.start_at).isoweekday() < 6
+            ]
         now = timezone.now()
         for e in events:
             e.invoice_line = line
             e.invoiced_at = now
         TollingEvent.objects.bulk_update(events, ['invoice_line', 'invoiced_at'])
         return Response({'linked': len(events)})
+
+
+class PrivateTollRegistrationViewSet(viewsets.ModelViewSet):
+    """CRUD voor privé-tolregistraties door chauffeurs.
+
+    Elke gebruiker ziet en beheert alleen zijn/haar eigen registraties.
+    Bij aanmaken/wijzigen worden bestaande TollingEvents die matchen op
+    kenteken + datum + tijdvenster automatisch als privé gemarkeerd.
+
+    Query params (list):
+      - period=week|month (default: geen filter)
+      - year, index (bij period)
+      - page, page_size (pagination, default 20)
+      - plate (optioneel: filter op genormaliseerd kenteken)
+    """
+    serializer_class = PrivateTollRegistrationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = PrivateTollRegistration.objects.filter(user=self.request.user)
+        params = self.request.query_params
+        period = (params.get('period') or '').lower()
+        try:
+            if period == 'week':
+                year = int(params.get('year'))
+                index = int(params.get('index'))
+                _, _, _, start, end, _ = _resolve_period({'period': 'week', 'year': year, 'index': index})
+                qs = qs.filter(datum__gte=start.date(), datum__lt=end.date())
+            elif period == 'month':
+                year = int(params.get('year'))
+                index = int(params.get('index'))
+                _, _, _, start, end, _ = _resolve_period({'period': 'month', 'year': year, 'index': index})
+                qs = qs.filter(datum__gte=start.date(), datum__lt=end.date())
+        except (TypeError, ValueError):
+            pass
+        plate = params.get('plate')
+        if plate:
+            qs = qs.filter(license_plate_normalized=normalize_plate(plate))
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset()
+        try:
+            page = max(1, int(request.query_params.get('page') or 1))
+            page_size = max(1, min(200, int(request.query_params.get('page_size') or 20)))
+        except ValueError:
+            page, page_size = 1, 20
+        total = qs.count()
+        start_ix = (page - 1) * page_size
+        end_ix = start_ix + page_size
+        items = qs[start_ix:end_ix]
+        return Response({
+            'count': total,
+            'page': page,
+            'page_size': page_size,
+            'num_pages': max(1, (total + page_size - 1) // page_size),
+            'results': self.get_serializer(items, many=True).data,
+        })
+
+    def perform_create(self, serializer):
+        reg = serializer.save(user=self.request.user)
+        try:
+            match_private_registration_to_events(reg)
+        except Exception as exc:  # pragma: no cover
+            logger.warning("match_private_registration_to_events faalt voor %s: %s", reg.id, exc)
+
+    def perform_update(self, serializer):
+        # Verwijder bestaande matches, opnieuw matchen na save
+        old_reg = self.get_object()
+        try:
+            unmatch_private_registration(old_reg)
+        except Exception as exc:  # pragma: no cover
+            logger.warning("unmatch faalt voor %s: %s", old_reg.id, exc)
+        reg = serializer.save()
+        try:
+            match_private_registration_to_events(reg)
+        except Exception as exc:  # pragma: no cover
+            logger.warning("match faalt voor %s: %s", reg.id, exc)
+
+    def perform_destroy(self, instance):
+        try:
+            unmatch_private_registration(instance)
+        except Exception as exc:  # pragma: no cover
+            logger.warning("unmatch bij delete faalt voor %s: %s", instance.id, exc)
+        instance.delete()
+
+    # ---------- Admin endpoints ----------
+
+    @action(detail=False, methods=['get'], url_path='admin-summary')
+    def admin_summary(self, request):
+        """Overzicht per chauffeur voor een periode (week/maand). Alleen admins.
+
+        Query params: period=week|month, year, index
+        Response: [{ user_id, user_name, registrations_count, matched_events_count,
+                     total_km, total_amount, all_invoiced, any_invoiced, first_datum, last_datum }]
+        """
+        if not getattr(request.user, 'is_admin', False):
+            return Response({'detail': 'Alleen admins.'}, status=403)
+        try:
+            period, year, index, start, end, label = _resolve_period(request.query_params)
+        except ValueError as ex:
+            return Response({'detail': str(ex)}, status=400)
+
+        regs = list(
+            PrivateTollRegistration.objects
+            .filter(datum__gte=start.date(), datum__lt=end.date())
+            .select_related('user')
+            .prefetch_related('matched_events')
+            .order_by('user__achternaam', 'user__voornaam', 'datum', 'begin_tijd')
+        )
+
+        per_user: dict = {}
+        for r in regs:
+            uid = str(r.user_id)
+            bucket = per_user.setdefault(uid, {
+                'user_id': uid,
+                'user_name': (getattr(r.user, 'full_name', None) or r.user.username) if r.user else 'Onbekend',
+                'user_email': getattr(r.user, 'email', '') or '',
+                'registrations_count': 0,
+                'matched_events_count': 0,
+                'total_km': Decimal('0'),
+                'total_amount': Decimal('0'),
+                'invoiced_count': 0,
+                'first_datum': r.datum,
+                'last_datum': r.datum,
+            })
+            bucket['registrations_count'] += 1
+            if r.admin_invoiced:
+                bucket['invoiced_count'] += 1
+            if r.datum < bucket['first_datum']:
+                bucket['first_datum'] = r.datum
+            if r.datum > bucket['last_datum']:
+                bucket['last_datum'] = r.datum
+            for ev in r.matched_events.all():
+                bucket['matched_events_count'] += 1
+                bucket['total_km'] += Decimal(ev.distance_km or 0)
+                bucket['total_amount'] += Decimal(ev.amount or 0)
+
+        results = []
+        for uid, b in per_user.items():
+            results.append({
+                'user_id': b['user_id'],
+                'user_name': b['user_name'],
+                'user_email': b['user_email'],
+                'registrations_count': b['registrations_count'],
+                'matched_events_count': b['matched_events_count'],
+                'total_km': float(b['total_km']),
+                'total_amount': float(b['total_amount']),
+                'invoiced_count': b['invoiced_count'],
+                'all_invoiced': b['invoiced_count'] > 0 and b['invoiced_count'] == b['registrations_count'],
+                'any_invoiced': b['invoiced_count'] > 0,
+                'first_datum': b['first_datum'].isoformat() if b['first_datum'] else None,
+                'last_datum': b['last_datum'].isoformat() if b['last_datum'] else None,
+            })
+        results.sort(key=lambda x: x['user_name'].lower())
+        return Response({
+            'period': period, 'year': year, 'index': index, 'label': label,
+            'start': start.date().isoformat(), 'end': end.date().isoformat(),
+            'results': results,
+        })
+
+    @action(detail=False, methods=['get'], url_path='admin-detail')
+    def admin_detail(self, request):
+        """Detail van alle registraties van 1 chauffeur voor een periode. Alleen admins.
+
+        Query params: period, year, index, user_id
+        """
+        if not getattr(request.user, 'is_admin', False):
+            return Response({'detail': 'Alleen admins.'}, status=403)
+        user_id = request.query_params.get('user_id')
+        if not user_id:
+            return Response({'detail': 'user_id vereist.'}, status=400)
+        try:
+            _period, _year, _index, start, end, _label = _resolve_period(request.query_params)
+        except ValueError as ex:
+            return Response({'detail': str(ex)}, status=400)
+        qs = (
+            PrivateTollRegistration.objects
+            .filter(user_id=user_id, datum__gte=start.date(), datum__lt=end.date())
+            .order_by('datum', 'begin_tijd')
+        )
+        return Response(self.get_serializer(qs, many=True).data)
+
+    @action(detail=False, methods=['post'], url_path='admin-mark-invoiced')
+    def admin_mark_invoiced(self, request):
+        """Markeer alle privé-registraties van een chauffeur voor een periode
+        als (niet-)gefactureerd. Alleen admins.
+
+        Body: { user_id, period, year, index, invoiced: bool }
+        """
+        if not getattr(request.user, 'is_admin', False):
+            return Response({'detail': 'Alleen admins.'}, status=403)
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'detail': 'user_id vereist.'}, status=400)
+        try:
+            _period, _year, _index, start, end, _label = _resolve_period(request.data)
+        except ValueError as ex:
+            return Response({'detail': str(ex)}, status=400)
+        invoiced = bool(request.data.get('invoiced', True))
+        qs = PrivateTollRegistration.objects.filter(
+            user_id=user_id, datum__gte=start.date(), datum__lt=end.date(),
+        )
+        now = timezone.now()
+        updated = qs.update(
+            admin_invoiced=invoiced,
+            admin_invoiced_at=now if invoiced else None,
+            admin_invoiced_by=request.user if invoiced else None,
+        )
+        return Response({'updated': updated, 'invoiced': invoiced})

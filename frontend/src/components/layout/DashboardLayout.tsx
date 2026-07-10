@@ -71,6 +71,8 @@ const navigation: NavItem[] = [
   { name: 'nav.urenImport', href: '/uren-import', icon: ArrowUpTrayIcon, roles: ['admin'], permission: 'view_uren_import' },
   { name: 'nav.tolregistratie', href: '/toll', icon: ReceiptPercentIcon, roles: ['admin', 'chauffeur'] },
   { name: 'nav.tolregistratieAdmin', href: '/toll/admin', icon: ClipboardDocumentListIcon, roles: ['admin'] },
+  { name: 'nav.privateToll', href: '/mijn-tolheffing', icon: ReceiptPercentIcon, roles: ['admin', 'chauffeur'] },
+  { name: 'nav.privateTollAdmin', href: '/beheer/prive-tolheffing', icon: ReceiptPercentIcon, roles: ['admin'] },
   { name: 'nav.kilometerheffing', href: '/kilometerheffing', icon: CurrencyEuroIcon, roles: ['admin', 'gebruiker'] },
   { name: 'nav.planning', href: '/planning', icon: CalendarIcon },
   { name: 'nav.leave', href: '/leave', icon: CalendarDaysIcon },

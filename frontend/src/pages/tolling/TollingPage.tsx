@@ -354,19 +354,72 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
         </div>
 
         {/* Totals summary */}
-        {data && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-            <MiniStat label="Events" value={String(data.events_count)} />
-            <MiniStat label="Totaal KM" value={kmFmt(data.total_km)} />
-            <MiniStat label="Totaal bedrag" value={currency(data.total_amount)} highlight />
-            <MiniStat
-              label="Gefactureerd"
-              value={data.invoiced_count > 0
-                ? `${data.invoiced_count} / ${data.events_count}`
-                : '—'}
-            />
-          </div>
-        )}
+        {data && (() => {
+          const billableEvents = data.events.filter(ev => !ev.is_private)
+          const privateEvents = data.events.filter(ev => ev.is_private)
+          const weekendEvents = billableEvents.filter(ev => {
+            const d = new Date(ev.start_at)
+            const dow = d.getDay() // 0=Sun, 6=Sat
+            return dow === 0 || dow === 6
+          })
+          const weekdayEvents = billableEvents.filter(ev => {
+            const d = new Date(ev.start_at)
+            const dow = d.getDay()
+            return dow !== 0 && dow !== 6
+          })
+          const privateKm = privateEvents.reduce((s, e) => s + Number(e.distance_km || 0), 0)
+          const privateAmount = privateEvents.reduce((s, e) => s + Number(e.amount || 0), 0)
+          const sumKm = (arr: typeof data.events) => arr.reduce((s, e) => s + Number(e.distance_km || 0), 0)
+          const sumAmount = (arr: typeof data.events) => arr.reduce((s, e) => s + Number(e.amount || 0), 0)
+          const weekdayKm = sumKm(weekdayEvents)
+          const weekdayAmount = sumAmount(weekdayEvents)
+          const weekendKm = sumKm(weekendEvents)
+          const weekendAmount = sumAmount(weekendEvents)
+          return (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                <MiniStat label="Events" value={String(data.events_count)} />
+                <MiniStat label="Totaal KM" value={kmFmt(data.total_km)} />
+                <MiniStat label="Totaal bedrag" value={currency(data.total_amount)} highlight />
+                <MiniStat
+                  label="Gefactureerd"
+                  value={data.invoiced_count > 0
+                    ? `${data.invoiced_count} / ${data.events_count}`
+                    : '—'}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-md border bg-blue-50/60 p-3">
+                  <div className="text-xs uppercase text-blue-700 font-semibold mb-1">Doordeweeks (ma-vr)</div>
+                  <div className="tabular-nums text-gray-800">
+                    {weekdayEvents.length} events &middot; {kmFmt(weekdayKm)} km
+                  </div>
+                  <div className="tabular-nums font-semibold text-blue-800">{currency(weekdayAmount)}</div>
+                </div>
+                <div className="rounded-md border bg-amber-50/60 p-3">
+                  <div className="text-xs uppercase text-amber-700 font-semibold mb-1">Weekend (za-zo)</div>
+                  <div className="tabular-nums text-gray-800">
+                    {weekendEvents.length} events &middot; {kmFmt(weekendKm)} km
+                  </div>
+                  <div className="tabular-nums font-semibold text-amber-800">{currency(weekendAmount)}</div>
+                </div>
+              </div>
+              {privateEvents.length > 0 ? (
+                <div className="rounded-md border bg-purple-50/60 p-3 text-sm">
+                  <div className="text-xs uppercase text-purple-700 font-semibold mb-1">Privé (niet gefactureerd)</div>
+                  <div className="tabular-nums text-gray-800">
+                    {privateEvents.length} events &middot; {kmFmt(privateKm)} km &middot; <span className="font-semibold text-purple-800">{currency(privateAmount)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed bg-purple-50/30 p-3 text-sm">
+                  <div className="text-xs uppercase text-purple-700 font-semibold mb-1">Privé (niet gefactureerd)</div>
+                  <div className="tabular-nums text-gray-500">0 events &middot; 0 km &middot; € 0,00</div>
+                </div>
+              )}
+            </>
+          )
+        })()}
 
         {loading ? (
           <div className="py-6 text-center text-gray-400">Laden…</div>
@@ -388,9 +441,26 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {pageEvents.map(ev => (
-                    <tr key={ev.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-1.5 whitespace-nowrap">{dateFmt(ev.start_at)}</td>
+                  {pageEvents.map(ev => {
+                    const d = new Date(ev.start_at)
+                    const isWeekend = d.getDay() === 0 || d.getDay() === 6
+                    const isPrivate = !!ev.is_private
+                    const rowBg = isPrivate ? 'bg-purple-50/60' : (isWeekend ? 'bg-amber-50/40' : '')
+                    return (
+                    <tr key={ev.id} className={`hover:bg-gray-50 ${rowBg}`}>
+                      <td className="px-3 py-1.5 whitespace-nowrap">
+                        {dateFmt(ev.start_at)}
+                        {isWeekend && (
+                          <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-medium uppercase">
+                            weekend
+                          </span>
+                        )}
+                        {isPrivate && (
+                          <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] bg-purple-100 text-purple-800 font-medium uppercase">
+                            privé
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-1.5 whitespace-nowrap">{dateFmt(ev.end_at)}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">
                         {Number(ev.distance_km).toLocaleString('nl-NL', { maximumFractionDigits: 3 })}
@@ -403,6 +473,10 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
                           <span className="inline-block px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">
                             Gefactureerd
                           </span>
+                        ) : isPrivate ? (
+                          <span className="inline-block px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-700">
+                            Privé
+                          </span>
                         ) : (
                           <span className="inline-block px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
                             Open
@@ -410,7 +484,8 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
                         )}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
                 <tfoot className="bg-gray-50 text-sm font-medium">
                   <tr>

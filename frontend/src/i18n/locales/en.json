@@ -184,6 +184,8 @@
     "tolheffing": "Toll import",
     "tolregistratie": "Toll Registration",
     "tolregistratieAdmin": "Toll Overview (Admin)",
+    "privateToll": "My Private Toll",
+    "privateTollAdmin": "Private Toll (admin)",
     "kilometerheffing": "Mileage Charge",
     "urenImport": "Hours Import",
     "users": "Users",

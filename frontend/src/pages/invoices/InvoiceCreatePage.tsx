@@ -51,7 +51,7 @@ interface InvoiceLineData {
   timeEntryId?: string // If imported from time entry
   isInfoLine?: boolean // Info-only line (e.g. werktijden): no aantal/prijs/totaal rendered
   kilometerheffingTimeEntryId?: string // If this line represents a kilometerheffing for a TimeEntry
-  tollingLink?: { plate: string; period: TollingPeriod; year: number; index: number }
+  tollingLink?: { plate: string; period: TollingPeriod; year: number; index: number; excludeWeekend?: boolean }
 }
 
 interface ChauffeurWeekGroup {
@@ -2464,15 +2464,28 @@ export default function InvoiceCreatePage() {
         console.info(`[auto-tolling] geen tolheffing gevonden voor week ${week}/${year} en kentekens`, Array.from(candidates))
         return
       }
-      handleImportTolling(matched)
-      console.info(`[auto-tolling] ${matched.length} tolheffing regel(s) automatisch toegevoegd voor week ${week}/${year}`)
+      // Ask about weekend if any weekend events exist among matched rows
+      let excludeWeekend = false
+      const hasWeekend = matched.some(r => (r.weekend_amount || 0) > 0 || (r.weekend_km || 0) > 0)
+      if (hasWeekend) {
+        const weekendKm = matched.reduce((s, r) => s + (r.weekend_km || 0), 0)
+        const weekendAmount = matched.reduce((s, r) => s + (r.weekend_amount || 0), 0)
+        const includeWeekend = window.confirm(
+          `Er zijn tolheffingskosten in het weekend gevonden voor week ${week}/${year}:\n` +
+          `${weekendKm.toFixed(2)} km — € ${weekendAmount.toFixed(2)}\n\n` +
+          `Klik OK om ook het weekend mee te nemen, of Annuleren om alleen doordeweeks te factureren.`
+        )
+        excludeWeekend = !includeWeekend
+      }
+      handleImportTolling(matched, excludeWeekend)
+      console.info(`[auto-tolling] ${matched.length} tolheffing regel(s) automatisch toegevoegd voor week ${week}/${year} (exclude_weekend=${excludeWeekend})`)
     } catch (err) {
       console.warn('[auto-tolling] preview failed', err)
     }
   }
 
   // Import tolling totals: appends one line per selected plate for the chosen month.
-  const handleImportTolling = (rows: TollingInvoicePreviewRow[]) => {
+  const handleImportTolling = (rows: TollingInvoicePreviewRow[], excludeWeekend: boolean = false) => {
     if (!rows.length) return
     const omschrijvingCol = columns.find(c => c.type === 'text' || c.id === 'omschrijving' || c.id.includes('omschrijving'))
     const aantalCol = columns.find(c => c.type === 'aantal' || c.id === 'aantal' || c.id.includes('aantal'))
@@ -2482,15 +2495,18 @@ export default function InvoiceCreatePage() {
       return
     }
     const newLines: InvoiceLineData[] = rows.map(r => {
-      const kmRound = Math.round(r.total_km)
+      const useKm = excludeWeekend ? (r.weekday_km ?? r.total_km) : r.total_km
+      const useAmount = excludeWeekend ? (r.weekday_amount ?? r.total_amount) : r.total_amount
+      const kmRound = Math.round(useKm)
+      const suffix = excludeWeekend ? ' - excl. weekend' : ''
       const omschrijving = r.ritnummer
-        ? `Tolheffing - ${r.plate_display} - ${r.ritnummer} (Totaal ${kmRound} KM)`
-        : `Tolheffing - ${r.plate_display} (Totaal ${kmRound} KM)`
+        ? `Tolheffing - ${r.plate_display} - ${r.ritnummer} (Totaal ${kmRound} KM${suffix})`
+        : `Tolheffing - ${r.plate_display} (Totaal ${kmRound} KM${suffix})`
       const values: Record<string, number | string> = {}
       columns.forEach(col => {
         if (col.id === omschrijvingCol.id) values[col.id] = omschrijving
         else if (aantalCol && col.id === aantalCol.id) values[col.id] = 1
-        else if (col.id === prijsCol.id) values[col.id] = Number(r.total_amount.toFixed(2))
+        else if (col.id === prijsCol.id) values[col.id] = Number(useAmount.toFixed(2))
         else if (col.type === 'berekend') values[col.id] = 0
         else if (col.type === 'text') values[col.id] = ''
         else values[col.id] = 0
@@ -2508,6 +2524,7 @@ export default function InvoiceCreatePage() {
           period: (r.period || 'month') as TollingPeriod,
           year: r.year,
           index: r.index ?? r.month,
+          excludeWeekend,
         },
       }
     })
@@ -2989,7 +3006,12 @@ export default function InvoiceCreatePage() {
       const createdLine = await createInvoiceLine(lineData)
       if (line.tollingLink) {
         try {
-          await tollingApi.linkLine(createdLine.id, line.tollingLink.plate, { period: line.tollingLink.period, year: line.tollingLink.year, index: line.tollingLink.index })
+          await tollingApi.linkLine(
+            createdLine.id,
+            line.tollingLink.plate,
+            { period: line.tollingLink.period, year: line.tollingLink.year, index: line.tollingLink.index },
+            { excludeWeekend: line.tollingLink.excludeWeekend === true },
+          )
         } catch { /* niet-fataal: tolregels blijven 'open' */ }
       }
     }
