@@ -598,11 +598,18 @@ class PrivateTollRegistrationViewSet(viewsets.ModelViewSet):
         return bool(getattr(self.request.user, 'is_admin', False))
 
     def get_queryset(self):
-        # Admins mogen registraties voor andere gebruikers zien/beheren via ?user_id=.
+        # Admins mogen registraties voor andere gebruikers zien/beheren.
+        # - Bij list kan een admin via ?user_id= filteren op een specifieke chauffeur;
+        #   zonder filter tonen we (net als voorheen) alleen de eigen registraties.
+        # - Bij detail-acties (retrieve/update/destroy) mag een admin bij elke
+        #   registratie kunnen, ongeacht eigenaar — anders leidt DELETE op een
+        #   registratie van een andere chauffeur tot een 404.
         if self._is_admin():
             target_user_id = self.request.query_params.get('user_id') or self.request.data.get('user_id')
             if target_user_id:
                 qs = PrivateTollRegistration.objects.filter(user_id=target_user_id)
+            elif getattr(self, 'action', None) in ('retrieve', 'update', 'partial_update', 'destroy'):
+                qs = PrivateTollRegistration.objects.all()
             else:
                 qs = PrivateTollRegistration.objects.filter(user=self.request.user)
         else:
