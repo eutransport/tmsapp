@@ -213,41 +213,8 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
         story.append(table)
         story.append(Spacer(1, 4 * mm))
 
-    total_style = ParagraphStyle(
-        'TollingGrandTotal',
-        parent=styles['Normal'],
-        fontSize=11,
-        alignment=TA_RIGHT,
-        textColor=colors.HexColor('#1f2937'),
-        spaceBefore=6,
-    )
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph(
-        f"<b>Totaal doordeweeks (alle kentekens):</b> {_format_km(grand_weekday_km)} km &nbsp;&nbsp; "
-        f"<b>{_format_money(grand_weekday_amount)}</b>",
-        total_style,
-    ))
-    story.append(Paragraph(
-        f"<b>Totaal weekend (alle kentekens):</b> {_format_km(grand_weekend_km)} km &nbsp;&nbsp; "
-        f"<b>{_format_money(grand_weekend_amount)}</b>",
-        total_style,
-    ))
-    if grand_private_amount > 0 or grand_private_km > 0:
-        private_total_style = ParagraphStyle(
-            'TollingPrivateTotal',
-            parent=total_style,
-            textColor=colors.HexColor('#5b21b6'),
-        )
-        story.append(Paragraph(
-            f"<b>Privé (niet gefactureerd, alle kentekens):</b> {_format_km(grand_private_km)} km &nbsp;&nbsp; "
-            f"<b>{_format_money(grand_private_amount)}</b>",
-            private_total_style,
-        ))
-    story.append(Paragraph(
-        f"<b>Totaal gefactureerd (alle kentekens):</b> {_format_km(grand_km)} km &nbsp;&nbsp; "
-        f"<b>{_format_money(grand_amount)}</b>",
-        total_style,
-    ))
+    # Grand totals per-plate zijn al zichtbaar in de tabel(len) hierboven; extra
+    # samenvatting onderaan is redundant en daarom bewust weggelaten.
 
     doc.build(story)
     return buffer.getvalue()
