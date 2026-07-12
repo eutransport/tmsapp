@@ -19,6 +19,10 @@ import {
   CurrencyEuroIcon,
   CalendarIcon,
   VariableIcon,
+  EyeIcon,
+  XMarkIcon,
+  MagnifyingGlassPlusIcon,
+  MagnifyingGlassMinusIcon,
 } from '@heroicons/react/24/outline'
 import {
   TemplateLayout,
@@ -1246,6 +1250,8 @@ export default function TemplateEditorPage() {
   const [layout, setLayout] = useState<TemplateLayout>(defaultLayout)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [previewZoom, setPreviewZoom] = useState(1)
 
   useEffect(() => {
     if (id) {
@@ -1305,28 +1311,38 @@ export default function TemplateEditorPage() {
   return (
     <div className="-mx-4 -my-6 sm:-mx-6 lg:-mx-8 min-h-screen bg-gray-100">
       {/* Header */}
-      <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/invoices/templates')} className="p-2 hover:bg-gray-100 rounded">
+      <div className="bg-white border-b px-4 sm:px-6 py-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <button onClick={() => navigate('/invoices/templates')} className="p-2 hover:bg-gray-100 rounded flex-shrink-0">
             <ArrowLeftIcon className="h-5 w-5" />
           </button>
-          <h1 className="text-xl font-semibold">
+          <h1 className="text-lg sm:text-xl font-semibold truncate">
             {isEditing ? t('templates.editTemplate') : t('templates.newTemplate')}
           </h1>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="px-4 py-2 bg-primary-500 text-white rounded hover:bg-primary-600 disabled:opacity-50"
-        >
-          {isSaving ? t('templates.editor.saving') : t('templates.editor.saveTemplate')}
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => { setPreviewZoom(1); setShowPreviewModal(true) }}
+            className="lg:hidden px-3 py-2 border border-gray-300 rounded hover:bg-gray-100 flex items-center gap-1 text-sm"
+            title={t('templates.editor.preview')}
+          >
+            <EyeIcon className="h-5 w-5" />
+            <span className="hidden sm:inline">{t('templates.editor.preview')}</span>
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="px-3 sm:px-4 py-2 bg-primary-500 text-white rounded hover:bg-primary-600 disabled:opacity-50 text-sm sm:text-base whitespace-nowrap"
+          >
+            {isSaving ? t('templates.editor.saving') : t('templates.editor.saveTemplate')}
+          </button>
+        </div>
       </div>
 
       {/* Content */}
-      <div className="flex">
+      <div className="flex flex-col lg:flex-row">
         {/* Editor Panel */}
-        <div className="w-1/2 p-6 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 73px)' }}>
+        <div className="w-full lg:w-1/2 p-4 sm:p-6 lg:overflow-y-auto" style={{ maxHeight: 'calc(100vh - 73px)' }}>
           {/* Basic info */}
           <div className="bg-white rounded-lg p-4 mb-4">
             <div className="grid grid-cols-2 gap-4">
@@ -1409,14 +1425,59 @@ export default function TemplateEditorPage() {
           </div>
         </div>
 
-        {/* Preview Panel */}
-        <div className="w-1/2 bg-gray-200 p-6 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 73px)' }}>
+        {/* Preview Panel (desktop only) */}
+        <div className="hidden lg:block w-1/2 bg-gray-200 p-6 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 73px)' }}>
           <h2 className="text-lg font-medium mb-4">{t('templates.editor.preview')}</h2>
           <div className="transform scale-75 origin-top">
             <PDFPreview layout={layout} templateName={templateName} />
           </div>
         </div>
       </div>
+
+      {/* Mobile Preview Modal */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex flex-col lg:hidden">
+          <div className="bg-white border-b px-4 py-3 flex items-center justify-between">
+            <h2 className="text-base font-medium">{t('templates.editor.preview')}</h2>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPreviewZoom((z) => Math.max(0.3, +(z - 0.1).toFixed(2)))}
+                className="p-2 hover:bg-gray-100 rounded"
+                title="Zoom uit"
+              >
+                <MagnifyingGlassMinusIcon className="h-5 w-5" />
+              </button>
+              <span className="text-xs w-12 text-center tabular-nums">{Math.round(previewZoom * 100)}%</span>
+              <button
+                onClick={() => setPreviewZoom((z) => Math.min(3, +(z + 0.1).toFixed(2)))}
+                className="p-2 hover:bg-gray-100 rounded"
+                title="Zoom in"
+              >
+                <MagnifyingGlassPlusIcon className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="p-2 hover:bg-gray-100 rounded ml-2"
+                title="Sluiten"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-auto bg-gray-200 p-4">
+            <div
+              className="mx-auto"
+              style={{
+                transform: `scale(${previewZoom})`,
+                transformOrigin: 'top center',
+                width: 'fit-content',
+              }}
+            >
+              <PDFPreview layout={layout} templateName={templateName} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
