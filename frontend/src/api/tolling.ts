@@ -26,6 +26,8 @@ export interface TollingVehicleRow {
   plate_display: string
   ritnummer: string | null
   vehicle_id: string | null
+  bedrijf_id: string | null
+  bedrijf_naam: string | null
   current_month_km: number
   current_month_amount: number
 }
@@ -72,6 +74,53 @@ export interface TollingPeriodRef {
   period: TollingPeriod
   year: number
   index: number
+}
+
+export interface TollingOpenWeek {
+  year: number
+  week: number
+  start: string        // YYYY-MM-DD
+  end: string          // YYYY-MM-DD (inclusive)
+  label: string
+  events_count: number
+  total_km: number
+  total_amount: number
+}
+
+export interface CreateTollingInvoicePayload {
+  plate: string
+  year: number
+  week_start: number
+  period_weeks: 1 | 2
+  template_id: string
+  bedrijf_id: string
+  administratie_id?: string | null
+  factuurdatum?: string  // YYYY-MM-DD
+  vervaldatum?: string   // YYYY-MM-DD
+  btw_percentage?: number
+  exclude_weekend?: boolean
+  cutoff_time?: string | null  // "HH:MM" local time
+}
+
+export interface CreateTollingInvoiceLine {
+  id: string
+  week: number
+  year: number
+  omschrijving: string
+  total_km: number
+  total_amount: number
+  events_count: number
+}
+
+export interface CreateTollingInvoiceResponse {
+  invoice_id: string
+  factuurnummer: string
+  status: string
+  subtotaal: number
+  btw_bedrag: number
+  totaal: number
+  lines: CreateTollingInvoiceLine[]
+  events_marked: number
 }
 
 export interface TollingImportBatch {
@@ -154,6 +203,29 @@ export const tollingApi = {
       `/tolling/vehicles/${encodeURIComponent(plate)}/mark-uninvoiced/`,
       { period: ref.period, year: ref.year, index: ref.index },
     )
+    return data
+  },
+
+  openWeeks: async (
+    plate: string,
+    opts: { excludeWeekend?: boolean; cutoffTime?: string | null } = {},
+  ): Promise<TollingOpenWeek[]> => {
+    const params: Record<string, string> = {}
+    if (opts.excludeWeekend !== undefined) {
+      params.exclude_weekend = opts.excludeWeekend ? 'true' : 'false'
+    }
+    if (opts.cutoffTime) params.cutoff_time = opts.cutoffTime
+    const { data } = await api.get(
+      `/tolling/vehicles/${encodeURIComponent(plate)}/open-weeks/`,
+      { params },
+    )
+    return data
+  },
+
+  createInvoiceForVehicle: async (
+    payload: CreateTollingInvoicePayload,
+  ): Promise<CreateTollingInvoiceResponse> => {
+    const { data } = await api.post('/tolling/invoicing/create-invoice/', payload)
     return data
   },
 

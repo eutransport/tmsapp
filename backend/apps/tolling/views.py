@@ -76,6 +76,26 @@ def _period_label(period: str, year: int, index: int) -> str:
     return f"Week {index:02d} {year}"
 
 
+def _parse_bool(value, default: bool = False) -> bool:
+    if value is None or value == '':
+        return default
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _parse_cutoff_time(value):
+    """Parse HH:MM (or HH:MM:SS) into a time object. Returns None if empty/invalid."""
+    if not value:
+        return None
+    from datetime import time as _time
+    txt = str(value).strip()
+    for fmt in ('%H:%M', '%H:%M:%S'):
+        try:
+            return datetime.strptime(txt, fmt).time()
+        except ValueError:
+            continue
+    return None
+
+
 def _resolve_period(data) -> tuple[str, int, int, datetime, datetime, str]:
     """Parse period/year/index from request data (query params or body).
 
@@ -195,9 +215,9 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         )
         agg_map = {row['license_plate_normalized']: row for row in agg_qs}
 
-        # Vehicles for enrichment (kenteken with dashes / ritnummer)
+        # Vehicles for enrichment (kenteken with dashes / ritnummer / bedrijf)
         vehicle_map: dict[str, Vehicle] = {}
-        for v in Vehicle.objects.all():
+        for v in Vehicle.objects.select_related('bedrijf').all():
             vehicle_map[normalize_plate(v.kenteken)] = v
 
         # Distinct plates with any events
@@ -210,12 +230,15 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         for norm, raw in seen.items():
             vehicle = vehicle_map.get(norm)
             monthly = agg_map.get(norm, {})
+            bedrijf = getattr(vehicle, 'bedrijf', None) if vehicle else None
             results.append({
                 'plate_normalized': norm,
                 'plate_raw': raw,
                 'plate_display': vehicle.kenteken if vehicle else raw,
                 'ritnummer': vehicle.ritnummer if vehicle else None,
                 'vehicle_id': str(vehicle.id) if vehicle else None,
+                'bedrijf_id': str(bedrijf.id) if bedrijf else None,
+                'bedrijf_naam': bedrijf.naam if bedrijf else None,
                 'current_month_km': float(monthly.get('current_month_km') or 0),
                 'current_month_amount': float(monthly.get('current_month_amount') or 0),
             })
@@ -270,6 +293,65 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             'invoiced_count': invoiced_count,
             'events': TollingEventSerializer(events, many=True).data,
         })
+
+    @action(detail=False, methods=['get'], url_path=r'(?P<plate>[^/]+)/open-weeks')
+    def open_weeks(self, request, plate: str = ''):
+        """List ISO-weeks for which this plate has unbilled (non-private) events.
+
+        Query params (optional filters):
+          - exclude_weekend=true|false (default true)   → skip Sat/Sun events
+          - cutoff_time=HH:MM (local time)              → skip events starting at/after this time
+
+        Returns [{year, week, start, end, label, events_count, total_km, total_amount}]
+        sorted from newest week first.
+        """
+        norm = normalize_plate(plate)
+        if not norm:
+            return Response({'detail': 'Kenteken vereist.'}, status=400)
+
+        exclude_weekend = _parse_bool(request.query_params.get('exclude_weekend'), default=True)
+        cutoff_time = _parse_cutoff_time(request.query_params.get('cutoff_time'))
+
+        events = list(
+            TollingEvent.objects
+            .filter(license_plate_normalized=norm, invoiced_at__isnull=True, is_private=False)
+            .values_list('start_at', 'distance_km', 'amount')
+        )
+        tz = timezone.get_current_timezone()
+        buckets: dict[tuple[int, int], dict] = {}
+        for start_at, km, amount in events:
+            if not start_at:
+                continue
+            local = start_at.astimezone(tz) if timezone.is_aware(start_at) else start_at
+            if exclude_weekend and local.isoweekday() >= 6:
+                continue
+            if cutoff_time is not None and local.time() >= cutoff_time:
+                continue
+            iso = local.isocalendar()
+            key = (iso[0], iso[1])
+            b = buckets.setdefault(key, {
+                'events_count': 0,
+                'total_km': Decimal('0'),
+                'total_amount': Decimal('0'),
+            })
+            b['events_count'] += 1
+            b['total_km'] += km or Decimal('0')
+            b['total_amount'] += amount or Decimal('0')
+
+        result = []
+        for (year, week), b in sorted(buckets.items(), key=lambda kv: kv[0], reverse=True):
+            start, end = _week_range(year, week)
+            result.append({
+                'year': year,
+                'week': week,
+                'start': start.date().isoformat(),
+                'end': (end - timedelta(seconds=1)).date().isoformat(),
+                'label': f"Week {week:02d} · {start.strftime('%d-%m')} t/m {(end - timedelta(days=1)).strftime('%d-%m-%Y')}",
+                'events_count': b['events_count'],
+                'total_km': float(b['total_km']),
+                'total_amount': float(b['total_amount']),
+            })
+        return Response(result)
 
     @action(detail=False, methods=['get'], url_path=r'(?P<plate>[^/]+)/export')
     def export(self, request, plate: str = ''):
@@ -576,6 +658,254 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             e.invoiced_at = now
         TollingEvent.objects.bulk_update(events, ['invoice_line', 'invoiced_at'])
         return Response({'linked': len(events)})
+
+    @action(detail=False, methods=['post'], url_path='create-invoice')
+    def create_invoice(self, request):
+        """Create a new invoice directly from tolheffing data for a single vehicle.
+
+        Body:
+          {
+            plate: normalized_plate,
+            year: 2026,
+            week_start: 27,
+            period_weeks: 1 | 2,
+            template_id: UUID,
+            bedrijf_id: UUID,
+            administratie_id: UUID | null,
+            factuurdatum: 'YYYY-MM-DD' (optional, default today),
+            vervaldatum: 'YYYY-MM-DD' (optional, default +30 days),
+            btw_percentage: number (optional, default 21)
+          }
+
+        Behaviour:
+          - Creates a concept Invoice with auto-generated factuurnummer.
+          - Creates 1 InvoiceLine per week ("Tolheffing week X (DD-MM t/m DD-MM)").
+          - Marks the related TollingEvents as invoiced (link to their week's line).
+          - Only unbilled (invoice_line=NULL) and non-private events are included.
+
+        Returns: { invoice_id, factuurnummer, totaal, lines: [...], events_marked }
+        """
+        from datetime import date as _date, timedelta as _td
+        from apps.core.models import Administratie
+        from apps.companies.models import Company
+        from apps.invoicing.models import Invoice, InvoiceLine, InvoiceTemplate, InvoiceStatus, InvoiceType
+        from apps.invoicing.views import InvoiceViewSet
+
+        data = request.data
+        plate = normalize_plate(data.get('plate') or '')
+        if not plate:
+            return Response({'detail': 'plate vereist.'}, status=400)
+        try:
+            year = int(data.get('year'))
+            week_start = int(data.get('week_start'))
+            period_weeks = int(data.get('period_weeks') or 1)
+        except (TypeError, ValueError):
+            return Response({'detail': 'year/week_start/period_weeks vereist (integers).'}, status=400)
+        if period_weeks not in (1, 2):
+            return Response({'detail': 'period_weeks moet 1 of 2 zijn.'}, status=400)
+        if not 1 <= week_start <= 53:
+            return Response({'detail': 'week_start moet 1-53 zijn.'}, status=400)
+
+        template_id = data.get('template_id')
+        bedrijf_id = data.get('bedrijf_id')
+        administratie_id = data.get('administratie_id') or None
+        if not bedrijf_id:
+            return Response({'detail': 'bedrijf_id vereist.'}, status=400)
+        try:
+            bedrijf = Company.objects.get(id=bedrijf_id)
+        except (Company.DoesNotExist, ValueError):
+            return Response({'detail': 'Bedrijf niet gevonden.'}, status=404)
+
+        template = None
+        if template_id:
+            try:
+                template = InvoiceTemplate.objects.get(id=template_id)
+            except (InvoiceTemplate.DoesNotExist, ValueError):
+                return Response({'detail': 'Template niet gevonden.'}, status=404)
+
+        administratie = None
+        if administratie_id:
+            try:
+                administratie = Administratie.objects.get(id=administratie_id)
+            except (Administratie.DoesNotExist, ValueError):
+                return Response({'detail': 'Administratie niet gevonden.'}, status=404)
+            user = request.user
+            if not (user.is_superuser or getattr(user, 'rol', None) == 'admin'):
+                if not administratie.allowed_users.filter(pk=user.pk).exists():
+                    return Response(
+                        {'detail': 'Geen rechten op deze administratie.'},
+                        status=403,
+                    )
+
+        # Dates
+        try:
+            factuurdatum = (
+                _date.fromisoformat(data.get('factuurdatum'))
+                if data.get('factuurdatum') else _date.today()
+            )
+            vervaldatum = (
+                _date.fromisoformat(data.get('vervaldatum'))
+                if data.get('vervaldatum') else factuurdatum + _td(days=30)
+            )
+        except (TypeError, ValueError):
+            return Response({'detail': 'factuurdatum/vervaldatum ongeldig (YYYY-MM-DD).'}, status=400)
+        try:
+            btw_percentage = Decimal(str(data.get('btw_percentage') or 21))
+        except Exception:
+            btw_percentage = Decimal('21')
+
+        # Filters
+        exclude_weekend = _parse_bool(data.get('exclude_weekend'), default=True)
+        cutoff_time = _parse_cutoff_time(data.get('cutoff_time'))
+        tz = timezone.get_current_timezone()
+
+        def _event_included(ev) -> bool:
+            if not ev.start_at:
+                return False
+            local = ev.start_at.astimezone(tz) if timezone.is_aware(ev.start_at) else ev.start_at
+            if exclude_weekend and local.isoweekday() >= 6:
+                return False
+            if cutoff_time is not None and local.time() >= cutoff_time:
+                return False
+            return True
+
+        # Compute weeks
+        weeks: list[tuple[int, int]] = []
+        y, w = year, week_start
+        for _ in range(period_weeks):
+            weeks.append((y, w))
+            monday = date.fromisocalendar(y, w, 1) + timedelta(days=7)
+            iso = monday.isocalendar()
+            y, w = iso[0], iso[1]
+
+        # Collect events per week (unbilled + non-private only, then apply filters)
+        events_by_week: dict[tuple[int, int], list[TollingEvent]] = {}
+        for (yr, wk) in weeks:
+            start, end = _week_range(yr, wk)
+            evs = list(
+                TollingEvent.objects.filter(
+                    license_plate_normalized=plate,
+                    invoiced_at__isnull=True,
+                    is_private=False,
+                    start_at__gte=start,
+                    start_at__lt=end,
+                ).order_by('start_at')
+            )
+            evs = [e for e in evs if _event_included(e)]
+            events_by_week[(yr, wk)] = evs
+        if not any(events_by_week.values()):
+            return Response(
+                {'detail': 'Geen openstaande tolheffing-events gevonden voor de gekozen week(en) na toepassen van de filters.'},
+                status=400,
+            )
+
+        # Vehicle info for line description
+        vehicle = next(
+            (v for v in Vehicle.objects.all() if normalize_plate(v.kenteken) == plate),
+            None,
+        )
+        plate_display = vehicle.kenteken if vehicle else (
+            events_by_week[weeks[0]][0].license_plate_raw if events_by_week[weeks[0]] else plate
+        )
+        ritnummer = vehicle.ritnummer if vehicle else ''
+
+        # Generate invoice number using the same logic as InvoiceViewSet
+        lookup_prefix, start_number = InvoiceViewSet._resolve_invoice_numbering(
+            'verkoop', administratie
+        )
+        next_num = InvoiceViewSet._compute_next_invoice_number(lookup_prefix, start_number)
+        factuurnummer = f"{lookup_prefix}-{next_num:04d}"
+
+        invoice = Invoice.objects.create(
+            factuurnummer=factuurnummer,
+            type=InvoiceType.VERKOOP,
+            status=InvoiceStatus.CONCEPT,
+            template=template,
+            bedrijf=bedrijf,
+            administratie=administratie,
+            factuurdatum=factuurdatum,
+            vervaldatum=vervaldatum,
+            btw_percentage=btw_percentage,
+            created_by=request.user,
+        )
+
+        # Create one line per week; skip empty weeks
+        created_lines = []
+        events_marked = 0
+        now = timezone.now()
+        volgorde = 0
+        for (yr, wk) in weeks:
+            evs = events_by_week.get((yr, wk)) or []
+            if not evs:
+                continue
+            total_km = sum((e.distance_km for e in evs), Decimal('0'))
+            total_amount = sum((e.amount for e in evs), Decimal('0'))
+            start, end = _week_range(yr, wk)
+            last_day = end - timedelta(days=1)
+            week_desc = (
+                f"Tolheffing week {wk:02d}-{yr} "
+                f"({start.strftime('%d-%m')} t/m {last_day.strftime('%d-%m-%Y')})"
+            )
+            if ritnummer:
+                week_desc += f" — {plate_display} {ritnummer}"
+            else:
+                week_desc += f" — {plate_display}"
+            volgorde += 1
+            line = InvoiceLine.objects.create(
+                invoice=invoice,
+                omschrijving=week_desc[:500],
+                aantal=Decimal('1'),
+                eenheid='stuk',
+                prijs_per_eenheid=total_amount.quantize(Decimal('0.01')),
+                volgorde=volgorde,
+                extra_data={
+                    'source': 'tolling',
+                    'plate': plate_display,
+                    'plate_normalized': plate,
+                    'ritnummer': ritnummer,
+                    'total_km': float(total_km),
+                    'period': 'week',
+                    'year': yr,
+                    'index': wk,
+                    'period_label': f"Week {wk:02d} {yr}",
+                    'events_count': len(evs),
+                    'exclude_weekend': exclude_weekend,
+                    'cutoff_time': cutoff_time.strftime('%H:%M') if cutoff_time else None,
+                },
+            )
+            for e in evs:
+                e.invoice_line = line
+                e.invoiced_at = now
+            TollingEvent.objects.bulk_update(evs, ['invoice_line', 'invoiced_at'])
+            events_marked += len(evs)
+            created_lines.append({
+                'id': str(line.id),
+                'week': wk,
+                'year': yr,
+                'omschrijving': week_desc,
+                'total_km': float(total_km),
+                'total_amount': float(total_amount),
+                'events_count': len(evs),
+            })
+
+        invoice.calculate_totals()
+        invoice.refresh_from_db()
+
+        logger.info(
+            "Tolling invoice created: %s for %s (%d weken, %d events) by %s",
+            factuurnummer, bedrijf.naam, len(created_lines), events_marked, request.user.email,
+        )
+
+        return Response({
+            'invoice_id': str(invoice.id),
+            'factuurnummer': factuurnummer,
+            'status': invoice.status,
+            'subtotaal': float(invoice.subtotaal),
+            'btw_bedrag': float(invoice.btw_bedrag),
+            'totaal': float(invoice.totaal),
+            'lines': created_lines,
+            'events_marked': events_marked,
+        })
 
 
 class PrivateTollRegistrationViewSet(viewsets.ModelViewSet):

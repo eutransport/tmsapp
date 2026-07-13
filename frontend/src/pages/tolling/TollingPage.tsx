@@ -20,11 +20,13 @@ import {
   ChevronUpIcon,
   CurrencyEuroIcon,
   DocumentArrowDownIcon,
+  DocumentTextIcon,
   TableCellsIcon,
 } from '@heroicons/react/24/outline'
 
 import { tollingApi, TollingSummary, TollingVehicleRow } from '@/api/tolling'
 import ConfirmDialog, { ConfirmState } from '@/components/common/ConfirmDialog'
+import CreateTollingInvoiceModal from '@/components/tolling/CreateTollingInvoiceModal'
 
 const PAGE_SIZE = 15
 
@@ -47,6 +49,7 @@ export default function TollingPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [invoiceModalRow, setInvoiceModalRow] = useState<TollingVehicleRow | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const reload = async () => {
@@ -158,9 +161,22 @@ export default function TollingPage() {
               onToggle={() =>
                 setExpanded(prev => ({ ...prev, [row.plate_normalized]: !prev[row.plate_normalized] }))
               }
+              onCreateInvoice={() => setInvoiceModalRow(row)}
             />
           ))}
         </div>
+      )}
+
+      {invoiceModalRow && (
+        <CreateTollingInvoiceModal
+          isOpen={!!invoiceModalRow}
+          row={invoiceModalRow}
+          onClose={() => setInvoiceModalRow(null)}
+          onCreated={() => {
+            setInvoiceModalRow(null)
+            reload()
+          }}
+        />
       )}
     </div>
   )
@@ -179,35 +195,62 @@ interface VehicleRowProps {
   row: TollingVehicleRow
   open: boolean
   onToggle: () => void
+  onCreateInvoice: () => void
 }
 
-function VehicleRow({ row, open, onToggle }: VehicleRowProps) {
+function VehicleRow({ row, open, onToggle, onCreateInvoice }: VehicleRowProps) {
   return (
     <div className="rounded-lg border bg-white overflow-hidden">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-left"
-      >
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="font-semibold text-gray-900">{row.plate_display}</span>
-            {row.ritnummer && (
-              <span className="text-xs uppercase tracking-wide text-gray-500">
-                {row.ritnummer}
-              </span>
-            )}
+      <div className="flex items-stretch">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-left"
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className="font-semibold text-gray-900">{row.plate_display}</span>
+              {row.ritnummer && (
+                <span className="text-xs uppercase tracking-wide text-gray-500">
+                  {row.ritnummer}
+                </span>
+              )}
+              {row.bedrijf_naam && (
+                <span className="text-xs text-primary-700 bg-primary-50 rounded px-1.5 py-0.5">
+                  {row.bedrijf_naam}
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-gray-500 mt-0.5">
+              Huidige maand: {kmFmt(row.current_month_km)} · {currency(row.current_month_amount)}
+            </div>
           </div>
-          <div className="text-xs text-gray-500 mt-0.5">
-            Huidige maand: {kmFmt(row.current_month_km)} · {currency(row.current_month_amount)}
-          </div>
-        </div>
-        {open ? (
-          <ChevronUpIcon className="h-5 w-5 text-gray-400 shrink-0" />
-        ) : (
-          <ChevronDownIcon className="h-5 w-5 text-gray-400 shrink-0" />
-        )}
-      </button>
+          {open ? (
+            <ChevronUpIcon className="h-5 w-5 text-gray-400 shrink-0" />
+          ) : (
+            <ChevronDownIcon className="h-5 w-5 text-gray-400 shrink-0" />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onCreateInvoice}
+          className="hidden sm:inline-flex items-center gap-1.5 px-3 border-l border-gray-200 text-sm text-primary-700 hover:bg-primary-50 hover:text-primary-800 transition-colors"
+          title="Factuur maken voor dit voertuig"
+        >
+          <DocumentTextIcon className="h-4 w-4" />
+          Factuur
+        </button>
+      </div>
+      <div className="sm:hidden border-t border-gray-100">
+        <button
+          type="button"
+          onClick={onCreateInvoice}
+          className="w-full inline-flex items-center justify-center gap-1.5 py-2 text-sm text-primary-700 hover:bg-primary-50"
+        >
+          <DocumentTextIcon className="h-4 w-4" />
+          Factuur maken
+        </button>
+      </div>
       {open && <VehicleDetail plate={row.plate_normalized} plateDisplay={row.plate_display} />}
     </div>
   )
