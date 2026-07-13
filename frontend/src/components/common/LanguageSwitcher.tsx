@@ -22,6 +22,15 @@ const EnglishFlag = () => (
   </svg>
 )
 
+const TurkishFlag = () => (
+  <svg className="w-5 h-4 rounded-sm" viewBox="0 0 640 480">
+    <rect width="640" height="480" fill="#e30a17" />
+    <circle cx="240" cy="240" r="96" fill="#fff" />
+    <circle cx="264" cy="240" r="76.8" fill="#e30a17" />
+    <path fill="#fff" d="m380.4 240 68.4-22.2-42.3 58.2v-72l42.3 58.2z" />
+  </svg>
+)
+
 interface Language {
   code: string
   name: string
@@ -31,6 +40,7 @@ interface Language {
 const languages: Language[] = [
   { code: 'nl', name: 'Nederlands', flag: <DutchFlag /> },
   { code: 'en', name: 'English', flag: <EnglishFlag /> },
+  { code: 'tr', name: 'Türkçe', flag: <TurkishFlag /> },
 ]
 
 export default function LanguageSwitcher() {
