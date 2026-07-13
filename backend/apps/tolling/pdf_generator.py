@@ -100,6 +100,21 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
         key = ev.license_plate_raw or ev.license_plate_normalized or 'onbekend'
         grouped[key].append(ev)
 
+    # Bepaal ritnummer per (genormaliseerd) kenteken via Vehicle-tabel, zodat
+    # we hetzelfde ritnummer op de PDF tonen als op de bijbehorende factuurregel
+    # (bv. "Tolheffing - 36-BNL-9 - E&UTRANS4 (Totaal 513 KM)").
+    ritnummer_by_norm: dict[str, str] = {}
+    try:
+        from apps.fleet.models import Vehicle
+        from .models import normalize_plate
+        norm_keys = {ev.license_plate_normalized for ev in events if ev.license_plate_normalized}
+        for v in Vehicle.objects.filter(ritnummer__gt=''):
+            key = normalize_plate(v.kenteken)
+            if key in norm_keys and v.ritnummer:
+                ritnummer_by_norm[key] = v.ritnummer
+    except Exception:  # pragma: no cover - defensief; PDF blijft werken zonder ritnummer
+        ritnummer_by_norm = {}
+
     grand_km = Decimal('0')
     grand_amount = Decimal('0')
     grand_weekday_km = Decimal('0')
@@ -136,7 +151,12 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
         grand_private_km += private_km
         grand_private_amount += private_amount
 
-        header_text = f"Kenteken: {plate} &nbsp;&nbsp; ({len(billed_events)} events, {_format_km(total_km)} km, {_format_money(total_amount)})"
+        header_text = f"Kenteken: {plate}"
+        norm_key = plate_events[0].license_plate_normalized if plate_events else ''
+        ritnummer = ritnummer_by_norm.get(norm_key, '')
+        if ritnummer:
+            header_text += f" &nbsp;&mdash;&nbsp; Ritnummer: {ritnummer}"
+        header_text += f" &nbsp;&nbsp; ({len(billed_events)} events, {_format_km(total_km)} km, {_format_money(total_amount)})"
         story.append(Paragraph(header_text, section_style))
 
         data = [['Datum', 'Type', 'Start', 'Eind', 'Afstand (km)', 'Bedrag']]
