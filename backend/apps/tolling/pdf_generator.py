@@ -283,13 +283,15 @@ def get_tolling_events_for_invoice(invoice):
 
 
 def build_tolling_pdf_filename(events) -> str:
-    """Bestandsnaam op basis van de meest voorkomende ISO-week binnen `events`.
+    """Bestandsnaam op basis van ritnummer(s) en meest voorkomende ISO-week.
 
-    Vorm: `tolheffing-week-<weeknummer>.pdf` (weeknummer altijd 2 cijfers).
-    Als er meerdere weken in zitten, wordt de week met het hoogste aantal events gekozen.
-    Fallback bij lege input: `tolheffing.pdf`.
+    Vorm: `tolheffing-<ritnummer>-week-<weeknummer>.pdf` als er één ritnummer is,
+    `tolheffing-<rit1>-<rit2>-week-<weeknummer>.pdf` bij meerdere (max 3 getoond,
+    daarna afgekort met "e.a."). Zonder bekend ritnummer: `tolheffing-week-<XX>.pdf`.
+    Bij lege input: `tolheffing.pdf`.
     """
     from collections import Counter
+    import re
 
     counter: Counter = Counter()
     for ev in events:
@@ -303,4 +305,40 @@ def build_tolling_pdf_filename(events) -> str:
         return 'tolheffing.pdf'
 
     (_year, week), _count = counter.most_common(1)[0]
+
+    # Verzamel ritnummers via Vehicle-tabel op basis van kentekens in events
+    ritnummers: list[str] = []
+    try:
+        from apps.fleet.models import Vehicle
+        from .models import normalize_plate
+        norm_keys = {ev.license_plate_normalized for ev in events if ev.license_plate_normalized}
+        rit_by_norm: dict[str, str] = {}
+        for v in Vehicle.objects.filter(ritnummer__gt=''):
+            key = normalize_plate(v.kenteken)
+            if key in norm_keys and v.ritnummer:
+                rit_by_norm[key] = v.ritnummer
+        # Volgorde: gebruik volgorde waarin kentekens voor het eerst voorkomen
+        seen: set[str] = set()
+        for ev in events:
+            key = ev.license_plate_normalized
+            if key and key not in seen:
+                seen.add(key)
+                rit = rit_by_norm.get(key)
+                if rit:
+                    ritnummers.append(rit)
+    except Exception:  # pragma: no cover - defensief
+        ritnummers = []
+
+    def _slug(s: str) -> str:
+        s = re.sub(r'[^A-Za-z0-9_-]+', '-', s).strip('-')
+        return s or ''
+
+    if ritnummers:
+        if len(ritnummers) <= 3:
+            rit_part = '-'.join(filter(None, (_slug(r) for r in ritnummers)))
+        else:
+            rit_part = '-'.join(filter(None, (_slug(r) for r in ritnummers[:3]))) + '-e.a.'
+        if rit_part:
+            return f"tolheffing-{rit_part}-week-{week:02d}.pdf"
+
     return f"tolheffing-week-{week:02d}.pdf"
