@@ -750,9 +750,12 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         except (TypeError, ValueError):
             return Response({'detail': 'factuurdatum/vervaldatum ongeldig (YYYY-MM-DD).'}, status=400)
         try:
-            btw_percentage = Decimal(str(data.get('btw_percentage') or 21))
+            btw_percentage = Decimal(str(data.get('btw_percentage') or 0))
         except Exception:
-            btw_percentage = Decimal('21')
+            btw_percentage = Decimal('0')
+        # Tolheffing wordt zonder BTW doorbelast (doorlopende post): forceer 0%
+        # onafhankelijk van wat de client meestuurt.
+        btw_percentage = Decimal('0')
 
         # Filters
         exclude_weekend = _parse_bool(data.get('exclude_weekend'), default=True)

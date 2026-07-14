@@ -152,9 +152,21 @@ class Invoice(models.Model):
         return f"{self.factuurnummer} - {self.bedrijf.naam}"
     
     def calculate_totals(self):
-        """Herbereken alle totalen."""
-        self.subtotaal = sum(line.totaal for line in self.lines.all())
-        self.btw_bedrag = self.subtotaal * (self.btw_percentage / 100)
+        """Herbereken alle totalen.
+
+        Tolheffing-regels (extra_data.source == 'tolling') tellen mee in het
+        subtotaal, maar worden uitgesloten van de BTW-grondslag. Tolheffing is
+        een doorlopende post die door de overheid zonder BTW wordt geheven en
+        wordt zo één-op-één doorbelast.
+        """
+        from decimal import Decimal
+        lines = list(self.lines.all())
+        self.subtotaal = sum((line.totaal for line in lines), Decimal('0'))
+        btw_base = sum(
+            (line.totaal for line in lines if (line.extra_data or {}).get('source') != 'tolling'),
+            Decimal('0'),
+        )
+        self.btw_bedrag = btw_base * (self.btw_percentage / 100)
         self.totaal = self.subtotaal + self.btw_bedrag
         # Creditfacturen: bedragen negatief opslaan
         if self.type == 'credit':

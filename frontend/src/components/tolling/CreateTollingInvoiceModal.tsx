@@ -92,7 +92,7 @@ export default function CreateTollingInvoiceModal({
   const [administratieId, setAdministratieId] = useState('')
   const [factuurdatum, setFactuurdatum] = useState(isoToday())
   const [vervaldatum, setVervaldatum] = useState(isoPlusDays(30))
-  const [btwPercentage, setBtwPercentage] = useState<number>(21)
+  // Tolheffing wordt altijd zonder BTW gefactureerd (doorlopende post).
   const [excludeWeekend, setExcludeWeekend] = useState<boolean>(true)
   const [cutoffEnabled, setCutoffEnabled] = useState<boolean>(false)
   const [cutoffTime, setCutoffTime] = useState<string>('20:00')
@@ -148,7 +148,6 @@ export default function CreateTollingInvoiceModal({
         setAdministratieId('')
         setFactuurdatum(isoToday())
         setVervaldatum(isoPlusDays(30))
-        setBtwPercentage(21)
         setExcludeWeekend(true)
         setCutoffEnabled(false)
         setCutoffTime('20:00')
@@ -251,7 +250,7 @@ export default function CreateTollingInvoiceModal({
         administratie_id: administratieId || null,
         factuurdatum,
         vervaldatum,
-        btw_percentage: btwPercentage,
+        btw_percentage: 0,
         exclude_weekend: excludeWeekend,
         cutoff_time: cutoffEnabled && cutoffTime ? cutoffTime : null,
       })
@@ -569,8 +568,8 @@ export default function CreateTollingInvoiceModal({
                           </select>
                         </div>
 
-                        {/* Datums + BTW */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Datums */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-gray-700 mb-1">Factuurdatum</label>
                             <input
@@ -589,17 +588,10 @@ export default function CreateTollingInvoiceModal({
                               className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
                             />
                           </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">BTW %</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={btwPercentage}
-                              onChange={e => setBtwPercentage(Number(e.target.value) || 0)}
-                              className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
-                            />
-                          </div>
                         </div>
+                        <p className="text-xs text-gray-500 -mt-1">
+                          Tolheffing wordt zonder BTW gefactureerd (doorlopende post).
+                        </p>
 
                         {/* Factuurnummer preview */}
                         {previewNumber && (

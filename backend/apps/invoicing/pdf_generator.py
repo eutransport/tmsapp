@@ -686,7 +686,16 @@ class InvoicePDFGenerator:
         """Bouw de totalen sectie."""
         elements = []
         
-        btw_pct = self.totals_config.get('btwPercentage', self.invoice.btw_percentage) or 21
+        # Toon het BTW-percentage zoals opgeslagen op de factuur (kan 0 zijn,
+        # bijv. bij tolheffing-facturen). Val alleen terug op template-config /
+        # 21% wanneer er echt geen waarde is ingesteld.
+        cfg_pct = self.totals_config.get('btwPercentage')
+        if cfg_pct is not None:
+            btw_pct = cfg_pct
+        elif self.invoice.btw_percentage is not None:
+            btw_pct = self.invoice.btw_percentage
+        else:
+            btw_pct = 21
         
         totals_data = []
         

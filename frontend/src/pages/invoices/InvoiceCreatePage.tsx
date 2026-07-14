@@ -2646,15 +2646,23 @@ export default function InvoiceCreatePage() {
   const calculateTotals = useMemo(() => {
     // Find the totaal/berekend column
     const totaalColumn = columns.find(c => c.type === 'berekend') || columns[columns.length - 1]
-    
+
     const subtotaal = lines.reduce((sum, line) => {
       const val = totaalColumn ? (line.values[totaalColumn.id] as number || 0) : 0
       return sum + val
     }, 0)
-    
-    const btw = subtotaal * (totalsConfig.btwPercentage / 100)
+
+    // BTW-grondslag: tolheffing-regels (tollingLink) worden uitgesloten,
+    // die kosten zijn een doorlopende post en worden zonder BTW doorbelast.
+    const btwBase = lines.reduce((sum, line) => {
+      if (line.tollingLink) return sum
+      const val = totaalColumn ? (line.values[totaalColumn.id] as number || 0) : 0
+      return sum + val
+    }, 0)
+
+    const btw = btwBase * (totalsConfig.btwPercentage / 100)
     const totaal = subtotaal + btw
-    
+
     return { subtotaal, btw, totaal }
   }, [lines, columns, totalsConfig])
 
@@ -2665,7 +2673,12 @@ export default function InvoiceCreatePage() {
       const val = totaalColumn ? (line.values[totaalColumn.id] as number || 0) : 0
       return sum + val
     }, 0)
-    const btw = subtotaal * (totalsConfig.btwPercentage / 100)
+    const btwBase = draftLines.reduce((sum, line) => {
+      if (line.tollingLink) return sum
+      const val = totaalColumn ? (line.values[totaalColumn.id] as number || 0) : 0
+      return sum + val
+    }, 0)
+    const btw = btwBase * (totalsConfig.btwPercentage / 100)
     const totaal = subtotaal + btw
     return { subtotaal, btw, totaal }
   }, [columns, totalsConfig])
