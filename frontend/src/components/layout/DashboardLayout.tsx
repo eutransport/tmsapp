@@ -36,6 +36,7 @@ import {
   EnvelopeIcon,
   ReceiptPercentIcon,
   StarIcon,
+  FolderIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
 } from '@heroicons/react/24/outline'
@@ -79,6 +80,7 @@ const navigation: NavItem[] = [
   { name: 'nav.leaveBalance', href: '/leave/balances', icon: ScaleIcon, roles: ['admin', 'gebruiker', 'chauffeur'], permission: 'view_leave_balances' },
   { name: 'nav.leaveRequests', href: '/leave/admin', icon: ClipboardDocumentCheckIcon, roles: ['admin'], permission: 'can_manage_leave_for_all' },
   { name: 'nav.documents', href: '/documents', icon: PencilSquareIcon },
+  { name: 'nav.filesExplorer', href: '/bestanden', icon: FolderIcon },
   { name: 'nav.tasks', href: '/tasks', icon: ClipboardDocumentCheckIcon },
   { name: 'nav.notifications', href: '/notifications', icon: BellIcon, roles: ['admin'], permission: 'view_notifications' },
   { name: 'nav.invoices', href: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'gebruiker'], permission: 'view_invoices' },
@@ -115,7 +117,7 @@ const navGroups: NavGroupDef[] = [
   { id: 'hours',        labelKey: 'nav.group.hours',        fallback: 'Uren & verlof',          hrefs: ['/time-entries', '/my-hours', '/submitted-hours', '/uren-import', '/leave', '/leave/balances', '/leave/admin'] },
   { id: 'registration', labelKey: 'nav.group.registration', fallback: 'Registraties',           hrefs: ['/toll', '/toll/admin', '/kilometerheffing', '/track-trace', '/tachograph', '/tachograph/comparison', '/laadlijst', '/tolheffing'] },
   { id: 'invoicing',    labelKey: 'nav.group.invoicing',    fallback: 'Facturatie',             hrefs: ['/invoices', '/invoices/templates', '/imports', '/revenue'] },
-  { id: 'documents',    labelKey: 'nav.group.documents',    fallback: 'Documenten & rapporten', hrefs: ['/documents', '/tasks', '/reports', '/spreadsheets', '/spreadsheets/templates', '/maintenance'] },
+  { id: 'documents',    labelKey: 'nav.group.documents',    fallback: 'Documenten & rapporten', hrefs: ['/documents', '/bestanden', '/tasks', '/reports', '/spreadsheets', '/spreadsheets/templates', '/maintenance'] },
   { id: 'admin',        labelKey: 'nav.group.admin',        fallback: 'Beheer',                 hrefs: ['/admin/users', '/settings'] },
 ]
 

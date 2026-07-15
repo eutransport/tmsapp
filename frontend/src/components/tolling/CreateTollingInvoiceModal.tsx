@@ -636,11 +636,43 @@ export default function CreateTollingInvoiceModal({
                     </div>
 
                     {pdfUrl ? (
-                      <iframe
-                        src={pdfUrl}
-                        title="Factuur voorbeeld"
-                        className="w-full h-[55vh] rounded-md border border-gray-200 bg-gray-50"
-                      />
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-xs text-gray-500">
+                            Voorbeeld van de gegenereerde PDF-factuur.
+                          </div>
+                          <div className="flex gap-2">
+                            <a
+                              href={pdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                              Openen in nieuw tabblad
+                            </a>
+                            <a
+                              href={pdfUrl}
+                              download={`Factuur-${created.factuurnummer}.pdf`}
+                              className="inline-flex items-center rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
+                            >
+                              Downloaden
+                            </a>
+                          </div>
+                        </div>
+                        {/* Op desktop tonen we de iframe inline. Mobiele browsers
+                           (met name iOS) renderen PDF's vaak niet betrouwbaar in
+                           een iframe — daar valt de gebruiker terug op de knoppen
+                           hierboven. */}
+                        <iframe
+                          src={pdfUrl}
+                          title="Factuur voorbeeld"
+                          className="hidden md:block w-full h-[55vh] rounded-md border border-gray-200 bg-gray-50"
+                        />
+                        <div className="md:hidden rounded-md border border-dashed border-gray-300 bg-gray-50 px-3 py-6 text-center text-xs text-gray-500">
+                          PDF-voorbeeld wordt op mobiel niet inline getoond.<br />
+                          Gebruik "Openen in nieuw tabblad" of "Downloaden".
+                        </div>
+                      </div>
                     ) : (
                       <div className="h-[40vh] flex items-center justify-center text-gray-400 border border-dashed rounded-md">
                         Voorbeeld wordt geladen…

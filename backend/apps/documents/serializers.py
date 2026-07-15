@@ -229,3 +229,5 @@ class EmailDocumentSerializer(serializers.Serializer):
         allow_blank=True,
         help_text='Bericht in de e-mail (optioneel)'
     )
+
+

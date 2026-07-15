@@ -150,3 +150,154 @@ class SignedDocument(models.Model):
     @property
     def is_pdf(self):
         return self.file_extension == 'pdf'
+
+
+# ============================================================================
+# File Explorer (mappen + bestanden met permissies + full-text index)
+# ============================================================================
+
+
+def file_entry_upload_path(instance, filename):
+    """Bestandslocatie voor uploads binnen de file-explorer."""
+    ext = filename.split('.')[-1] if '.' in filename else 'bin'
+    ext = ext.lower()[:16]
+    fname = f"{uuid.uuid4().hex}.{ext}"
+    return os.path.join('documents', 'files', fname)
+
+
+class Folder(models.Model):
+    """Map in de bestandsverkenner. Boomstructuur via self-referential parent."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, verbose_name='Naam')
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='children',
+        verbose_name='Bovenliggende map',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_folders',
+        verbose_name='Aangemaakt door',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Map'
+        verbose_name_plural = 'Mappen'
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['parent', 'name'],
+                name='folder_unique_name_per_parent',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['parent']),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def get_ancestors(self):
+        """Lijst met alle bovenliggende mappen (van root naar direct parent)."""
+        ancestors = []
+        current = self.parent
+        # Bescherming tegen kapotte data
+        max_depth = 50
+        while current is not None and max_depth > 0:
+            ancestors.append(current)
+            current = current.parent
+            max_depth -= 1
+        ancestors.reverse()
+        return ancestors
+
+    def path(self) -> str:
+        parts = [a.name for a in self.get_ancestors()] + [self.name]
+        return '/' + '/'.join(parts)
+
+
+class FolderPermission(models.Model):
+    """Expliciete toegang tot een map voor een gebruiker.
+
+    Admin/superuser hebben altijd toegang, ongeacht deze records.
+    De aanmaker van de map heeft ook altijd toegang.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    folder = models.ForeignKey(
+        Folder,
+        on_delete=models.CASCADE,
+        related_name='permissions',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='folder_permissions',
+    )
+    can_edit = models.BooleanField(
+        default=True,
+        verbose_name='Mag wijzigen',
+        help_text='Bestanden uploaden/verwijderen en submappen aanmaken. Uit = alleen bekijken.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Map-toegang'
+        verbose_name_plural = 'Map-toegangen'
+        constraints = [
+            models.UniqueConstraint(fields=['folder', 'user'], name='folder_permission_unique'),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} → {self.folder_id}"
+
+
+class FileEntry(models.Model):
+    """Geüpload bestand in een map (of in de root wanneer folder=NULL)."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    folder = models.ForeignKey(
+        Folder,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='files',
+        verbose_name='Map',
+    )
+    name = models.CharField(max_length=255, verbose_name='Weergavenaam')
+    original_filename = models.CharField(max_length=255, verbose_name='Originele bestandsnaam')
+    file = models.FileField(upload_to=file_entry_upload_path, verbose_name='Bestand')
+    size = models.PositiveBigIntegerField(default=0, verbose_name='Grootte (bytes)')
+    mime_type = models.CharField(max_length=127, blank=True, verbose_name='MIME-type')
+    extension = models.CharField(max_length=16, blank=True, verbose_name='Extensie')
+    content_text = models.TextField(
+        blank=True,
+        verbose_name='Geïndexeerde tekst',
+        help_text='Uit het document geëxtraheerde tekst voor zoeken (pdf/docx/xlsx/csv/txt).',
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='uploaded_file_entries',
+        verbose_name='Geüpload door',
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Bestand'
+        verbose_name_plural = 'Bestanden'
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['folder']),
+            models.Index(fields=['extension']),
+        ]
+
+    def __str__(self):
+        return self.name
+

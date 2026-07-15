@@ -108,6 +108,9 @@ const DocumentUploadPage = lazyNamed(() => import('@/pages/documents'), 'Documen
 const DocumentDetailPage = lazyNamed(() => import('@/pages/documents'), 'DocumentDetailPage')
 const DocumentSignPage = lazyNamed(() => import('@/pages/documents'), 'DocumentSignPage')
 
+// Files explorer (bestandsverkenner)
+const FilesExplorerPage = React.lazy(() => import('@/pages/files/FilesExplorerPage'))
+
 // Spreadsheets
 const SpreadsheetListPage = React.lazy(() => import('@/pages/spreadsheets/SpreadsheetListPage'))
 const SpreadsheetEditorPage = React.lazy(() => import('@/pages/spreadsheets/SpreadsheetEditorPage'))
@@ -411,6 +414,9 @@ function App() {
         <Route path="/documents/upload" element={<DocumentUploadPage />} />
         <Route path="/documents/:id" element={<DocumentDetailPage />} />
         <Route path="/documents/:id/sign" element={<DocumentSignPage />} />
+
+        {/* Bestandsverkenner */}
+        <Route path="/bestanden" element={<FilesExplorerPage />} />
       </Route>
       
       {/* Catch all - redirect to home */}
