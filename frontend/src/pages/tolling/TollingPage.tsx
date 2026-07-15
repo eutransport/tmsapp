@@ -44,11 +44,23 @@ function dateFmt(iso: string): string {
   })
 }
 
+function companyKey(row: TollingVehicleRow): string {
+  if (row.bedrijf_id) return `id:${row.bedrijf_id}`
+  if (row.bedrijf_naam) return `name:${row.bedrijf_naam}`
+  return '__none__'
+}
+
+function companyLabel(row: TollingVehicleRow): string {
+  return row.bedrijf_naam || 'Zonder bedrijf'
+}
+
 export default function TollingPage() {
   const [rows, setRows] = useState<TollingVehicleRow[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [selectedCompanyKeys, setSelectedCompanyKeys] = useState<string[]>([])
+  const [showMoreCompanies, setShowMoreCompanies] = useState(false)
   const [invoiceModalRow, setInvoiceModalRow] = useState<TollingVehicleRow | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -87,15 +99,31 @@ export default function TollingPage() {
     }
   }
 
+  const companyOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const row of rows) {
+      map.set(companyKey(row), companyLabel(row))
+    }
+    return Array.from(map.entries())
+      .map(([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'nl-NL'))
+  }, [rows])
+
+  const filteredRows = useMemo(() => {
+    if (selectedCompanyKeys.length === 0) return rows
+    const allowed = new Set(selectedCompanyKeys)
+    return rows.filter(r => allowed.has(companyKey(r)))
+  }, [rows, selectedCompanyKeys])
+
   const totals = useMemo(() => {
-    return rows.reduce(
+    return filteredRows.reduce(
       (acc, r) => ({
         km: acc.km + (r.current_month_km || 0),
         amount: acc.amount + (r.current_month_amount || 0),
       }),
       { km: 0, amount: 0 },
     )
-  }, [rows])
+  }, [filteredRows])
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4">
@@ -140,10 +168,61 @@ export default function TollingPage() {
       </header>
 
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatCard label="Auto's met events" value={String(rows.length)} />
+        <StatCard label="Auto's met events" value={String(filteredRows.length)} />
         <StatCard label="KM huidige maand" value={kmFmt(totals.km)} />
         <StatCard label="Bedrag huidige maand" value={currency(totals.amount)} />
       </section>
+
+      {companyOptions.length > 0 && (
+        <section className="rounded-lg border bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-xs font-medium text-gray-500 uppercase mr-0.5">Bedrijf:</span>
+            <button
+              type="button"
+              onClick={() => setSelectedCompanyKeys([])}
+              className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                selectedCompanyKeys.length === 0
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Alle bedrijven
+            </button>
+            {(showMoreCompanies ? companyOptions : companyOptions.slice(0, 10)).map(opt => {
+              const active = selectedCompanyKeys.includes(opt.key)
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() =>
+                    setSelectedCompanyKeys(prev =>
+                      prev.includes(opt.key)
+                        ? prev.filter(k => k !== opt.key)
+                        : [...prev, opt.key],
+                    )
+                  }
+                  className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                    active
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+            {companyOptions.length > 10 && (
+              <button
+                type="button"
+                onClick={() => setShowMoreCompanies(v => !v)}
+                className="px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium text-primary-600 hover:bg-primary-50 transition-colors"
+              >
+                {showMoreCompanies ? 'Minder tonen' : 'Meer tonen'}
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {loading ? (
         <div className="py-10 text-center text-gray-400">Laden…</div>
@@ -151,9 +230,13 @@ export default function TollingPage() {
         <div className="rounded-lg border border-dashed border-gray-300 p-10 text-center text-gray-500">
           Nog geen tolheffing-regels geïmporteerd. Klik op “CSV importeren” om te beginnen.
         </div>
+      ) : filteredRows.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-gray-300 p-10 text-center text-gray-500">
+          Geen resultaten voor de geselecteerde bedrijven.
+        </div>
       ) : (
         <div className="space-y-2">
-          {rows.map(row => (
+          {filteredRows.map(row => (
             <VehicleRow
               key={row.plate_normalized}
               row={row}
