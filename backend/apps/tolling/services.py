@@ -310,7 +310,7 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
             cell = ws.cell(row=row_idx, column=col)
             cell.fill = private_fill
             cell.font = private_font
-    ws.append(['', 'Totaal gefactureerd', '', float(total_km), float(total_amount), ''])
+    ws.append(['', 'Totaal tolkosten', '', float(total_km), float(total_amount), ''])
     for col_idx, width in enumerate([20, 20, 14, 15, 15, 15], start=1):
         ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = width
     out = io.BytesIO()
@@ -386,7 +386,7 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
     has_private = private_km > 0 or private_amount > 0
     if has_private:
         data.append(['', 'Privé (niet doorbelast)', '', f'{float(private_km):.3f}', f'{float(private_amount):.2f}', ''])
-    data.append(['', 'Totaal gefactureerd', '', f'{float(total_km):.3f}', f'{float(total_amount):.2f}', ''])
+    data.append(['', 'Totaal tolkosten', '', f'{float(total_km):.3f}', f'{float(total_amount):.2f}', ''])
 
     tbl = Table(data, repeatRows=1, hAlign='LEFT')
     subtotal_rows = 4 if has_private else 3
