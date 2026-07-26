@@ -85,7 +85,7 @@ export default function CreateTollingInvoiceModal({
   const [loadingRefs, setLoadingRefs] = useState(false)
 
   // Form state
-  const [periodWeeks, setPeriodWeeks] = useState<1 | 2>(1)
+  const [periodWeeks, setPeriodWeeks] = useState<1 | 2 | 3 | 4>(1)
   const [weekKey, setWeekKey] = useState<string>('') // "year-week"
   const [templateId, setTemplateId] = useState('')
   const [bedrijfId, setBedrijfId] = useState('')
@@ -204,22 +204,25 @@ export default function CreateTollingInvoiceModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Determine the two weeks that will be invoiced (for label)
+  // Determine the weeks that will be invoiced (chronological consecutive open weeks)
   const selectedWeeks = useMemo(() => {
     if (!weekKey) return [] as TollingOpenWeek[]
     const [ys, ws] = weekKey.split('-').map(Number)
     const idx = openWeeks.findIndex(w => w.year === ys && w.week === ws)
     if (idx === -1) return []
-    if (periodWeeks === 1) return [openWeeks[idx]]
-    // Try to find next chronological week (year, week+1) among openWeeks
-    // Simplest: look for a week whose start-date is exactly 7 days after this one's end+1.
-    const first = openWeeks[idx]
-    const firstStart = new Date(first.start)
-    const nextExpectedStart = new Date(firstStart)
-    nextExpectedStart.setDate(nextExpectedStart.getDate() + 7)
-    const nextKey = nextExpectedStart.toISOString().slice(0, 10)
-    const second = openWeeks.find(w => w.start === nextKey)
-    return second ? [first, second] : [first]
+    const result: TollingOpenWeek[] = [openWeeks[idx]]
+    let prev = openWeeks[idx]
+    for (let i = 1; i < periodWeeks; i++) {
+      const prevStart = new Date(prev.start)
+      const nextExpected = new Date(prevStart)
+      nextExpected.setDate(nextExpected.getDate() + 7)
+      const nextKey = nextExpected.toISOString().slice(0, 10)
+      const next = openWeeks.find(w => w.start === nextKey)
+      if (!next) break
+      result.push(next)
+      prev = next
+    }
+    return result
   }, [weekKey, openWeeks, periodWeeks])
 
   const selectedTotal = useMemo(
@@ -402,7 +405,7 @@ export default function CreateTollingInvoiceModal({
                         <div>
                           <label className="block text-xs font-medium text-gray-700 mb-1">Factuurperiode</label>
                           <div className="inline-flex rounded-md border border-gray-300 bg-white overflow-hidden">
-                            {([1, 2] as const).map(n => (
+                            {([1, 2, 3, 4] as const).map(n => (
                               <button
                                 key={n}
                                 type="button"
@@ -413,7 +416,7 @@ export default function CreateTollingInvoiceModal({
                                     : 'text-gray-700 hover:bg-gray-50'
                                 }`}
                               >
-                                {n === 1 ? '1 week' : '2 weken'}
+                                {n === 1 ? '1 week' : n === 4 ? 'Maand (4 weken)' : `${n} weken`}
                               </button>
                             ))}
                           </div>
@@ -473,7 +476,9 @@ export default function CreateTollingInvoiceModal({
                         {/* Week keuze */}
                         <div>
                           <label className="block text-xs font-medium text-gray-700 mb-1">
-                            {periodWeeks === 1 ? 'Kies week' : 'Kies startweek (2 weken vanaf hier)'}
+                            {periodWeeks === 1
+                              ? 'Kies week'
+                              : `Kies startweek (${periodWeeks} weken vanaf hier)`}
                           </label>
                           {openWeeks.length === 0 ? (
                             <div className="rounded-md border border-dashed border-gray-300 px-3 py-4 text-center text-sm text-gray-500">
@@ -509,9 +514,10 @@ export default function CreateTollingInvoiceModal({
                                   <span className="tabular-nums">{currency(selectedTotal)}</span>
                                 </li>
                               </ul>
-                              {periodWeeks === 2 && selectedWeeks.length === 1 && (
+                              {periodWeeks > 1 && selectedWeeks.length < periodWeeks && (
                                 <div className="mt-1 text-xs text-amber-700">
-                                  Let op: er is geen openstaande volgweek gevonden; alleen 1 week wordt gefactureerd.
+                                  Let op: er zijn geen aaneensluitende openstaande volgweken gevonden;
+                                  alleen {selectedWeeks.length} week/weken worden gefactureerd.
                                 </div>
                               )}
                             </div>

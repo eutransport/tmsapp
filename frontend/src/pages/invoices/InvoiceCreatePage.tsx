@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import toast from 'react-hot-toast'
 import {
   ArrowLeftIcon,
   PlusIcon,
@@ -3175,8 +3176,14 @@ export default function InvoiceCreatePage() {
 
       await persistInvoiceLines(invoiceId, lines)
 
-      // Navigate back
-      navigate(reimportId ? `/invoices/${reimportId}/edit` : '/invoices')
+      // Blijf op de pagina i.p.v. terug te navigeren, zodat je meerdere
+      // facturen achter elkaar kan aanmaken. Alleen bij re-import navigeren
+      // we door omdat de originele factuur bewerkt is.
+      if (reimportId) {
+        navigate(`/invoices/${reimportId}/edit`)
+      } else {
+        toast.success(t('invoices.saved', 'Factuur opgeslagen'))
+      }
     } catch (err: any) {
       // Parse error message from Error object or API response
       const errorMessage = err.message || err.response?.data?.detail || 
@@ -3753,6 +3760,25 @@ export default function InvoiceCreatePage() {
         onImport={handleImportTol}
         targets={tolTargets}
       />
+
+      {/* Bottom save bar (mirror of top button) */}
+      <div className="sticky bottom-0 z-10 -mx-4 sm:mx-0 border-t border-gray-200 bg-white/95 backdrop-blur px-4 py-3 flex flex-wrap items-center justify-end gap-3 shadow-[0_-2px_6px_rgba(0,0,0,0.05)]">
+        <button
+          type="button"
+          onClick={() => navigate('/invoices')}
+          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+        >
+          {t('common.cancel', 'Annuleren')}
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={isSaving || isBatchMode || !selectedTemplate || !selectedCompany || !selectedAdministratie}
+          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+        >
+          {isSaving && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
+          {isBatchMode ? 'Batch actief: opslaan via tabs hieronder' : t('invoices.saveInvoice')}
+        </button>
+      </div>
     </div>
   )
 }

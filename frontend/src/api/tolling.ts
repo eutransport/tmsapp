@@ -91,7 +91,7 @@ export interface CreateTollingInvoicePayload {
   plate: string
   year: number
   week_start: number
-  period_weeks: 1 | 2
+  period_weeks: 1 | 2 | 3 | 4
   template_id: string
   bedrijf_id: string
   administratie_id?: string | null

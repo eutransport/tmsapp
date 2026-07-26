@@ -819,8 +819,8 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             period_weeks = int(data.get('period_weeks') or 1)
         except (TypeError, ValueError):
             return Response({'detail': 'year/week_start/period_weeks vereist (integers).'}, status=400)
-        if period_weeks not in (1, 2):
-            return Response({'detail': 'period_weeks moet 1 of 2 zijn.'}, status=400)
+        if period_weeks < 1 or period_weeks > 4:
+            return Response({'detail': 'period_weeks moet 1, 2, 3 of 4 zijn.'}, status=400)
         if not 1 <= week_start <= 53:
             return Response({'detail': 'week_start moet 1-53 zijn.'}, status=400)
 
