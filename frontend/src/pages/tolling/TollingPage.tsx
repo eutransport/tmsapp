@@ -27,6 +27,8 @@ import {
 } from '@heroicons/react/24/outline'
 
 import { tollingApi, TollingSummary, TollingVehicleRow } from '@/api/tolling'
+import { getMailingContacts } from '@/api/companies'
+import type { MailingListContact } from '@/types'
 import ConfirmDialog, { ConfirmState } from '@/components/common/ConfirmDialog'
 import CreateTollingInvoiceModal from '@/components/tolling/CreateTollingInvoiceModal'
 import EmailProfileSelector from '@/components/EmailProfileSelector'
@@ -337,7 +339,7 @@ function VehicleRow({ row, open, onToggle, onCreateInvoice }: VehicleRowProps) {
           Factuur maken
         </button>
       </div>
-      {open && <VehicleDetail plate={row.plate_normalized} plateDisplay={row.plate_display} />}
+      {open && <VehicleDetail plate={row.plate_normalized} plateDisplay={row.plate_display} bedrijfId={row.bedrijf_id} />}
     </div>
   )
 }
@@ -345,9 +347,10 @@ function VehicleRow({ row, open, onToggle, onCreateInvoice }: VehicleRowProps) {
 interface VehicleDetailProps {
   plate: string
   plateDisplay: string
+  bedrijfId: string | null
 }
 
-function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
+function VehicleDetail({ plate, plateDisplay, bedrijfId }: VehicleDetailProps) {
   const [period, setPeriod] = useState<'week' | 'month'>('month')
   const [offset, setOffset] = useState(0)
   const [data, setData] = useState<TollingSummary | null>(null)
@@ -362,6 +365,8 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
   const [emailBody, setEmailBody] = useState('')
   const [emailProfileId, setEmailProfileId] = useState<string>('')
   const [emailSending, setEmailSending] = useState(false)
+  const [mailingContacts, setMailingContacts] = useState<MailingListContact[]>([])
+  const [selectedContactEmails, setSelectedContactEmails] = useState<Set<string>>(new Set())
 
   const load = async () => {
     setLoading(true)
@@ -515,7 +520,15 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
                   `Beste,\n\nIn de bijlage vind je het tolheffing overzicht voor ${plateDisplay} (${data.label}).\n\nMet vriendelijke groet,`
                 )
                 setEmailProfileId('')
+                setSelectedContactEmails(new Set())
                 setEmailModal({ fmt: 'pdf' })
+                if (bedrijfId) {
+                  getMailingContacts(bedrijfId)
+                    .then(cs => setMailingContacts(cs.filter(c => c.is_active)))
+                    .catch(() => setMailingContacts([]))
+                } else {
+                  setMailingContacts([])
+                }
               }}
               disabled={!data || data.events.length === 0}
               title="Overzicht mailen"
@@ -759,7 +772,49 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Ontvangers (komma-gescheiden)
+                  Ontvangers uit mailinglijst
+                </label>
+                {mailingContacts.length === 0 ? (
+                  <p className="text-xs text-gray-500 italic">
+                    {bedrijfId
+                      ? 'Geen actieve contacten in de mailinglijst van dit bedrijf.'
+                      : 'Geen bedrijf gekoppeld aan dit kenteken.'}
+                  </p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto rounded-md border border-gray-200 bg-gray-50 p-2 space-y-1">
+                    {mailingContacts.map(c => {
+                      const checked = selectedContactEmails.has(c.email)
+                      return (
+                        <label
+                          key={c.id}
+                          className="flex items-center gap-2 text-sm cursor-pointer hover:bg-white rounded px-1 py-0.5"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setSelectedContactEmails(prev => {
+                                const next = new Set(prev)
+                                if (next.has(c.email)) next.delete(c.email)
+                                else next.add(c.email)
+                                return next
+                              })
+                            }}
+                          />
+                          <span className="font-medium text-gray-900">{c.naam}</span>
+                          <span className="text-gray-500">&lt;{c.email}&gt;</span>
+                          {c.functie && (
+                            <span className="text-xs text-gray-400">— {c.functie}</span>
+                          )}
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Extra ontvangers (komma-gescheiden)
                 </label>
                 <input
                   type="text"
@@ -810,12 +865,15 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
                 type="button"
                 className="btn btn-primary btn-sm"
                 onClick={async () => {
-                  const recipients = emailRecipients
+                  const manual = emailRecipients
                     .split(/[;,]/)
                     .map(s => s.trim())
                     .filter(Boolean)
+                  const recipients = Array.from(
+                    new Set<string>([...selectedContactEmails, ...manual]),
+                  )
                   if (recipients.length === 0) {
-                    toast.error('Vul minstens één e-mailadres in.')
+                    toast.error('Vul minstens één e-mailadres in of kies een contact.')
                     return
                   }
                   setEmailSending(true)
