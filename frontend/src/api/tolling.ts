@@ -206,6 +206,25 @@ export const tollingApi = {
     return data
   },
 
+  emailExport: async (
+    plate: string,
+    payload: {
+      recipients: string[]
+      subject?: string
+      body?: string
+      fmt: 'pdf' | 'xlsx'
+      period: 'week' | 'month'
+      offset: number
+      email_profile_id?: string
+    },
+  ): Promise<{ sent: boolean; recipients: string[]; filename: string }> => {
+    const { data } = await api.post(
+      `/tolling/vehicles/${encodeURIComponent(plate)}/email-export/`,
+      payload,
+    )
+    return data
+  },
+
   openWeeks: async (
     plate: string,
     opts: { excludeWeekend?: boolean; cutoffTime?: string | null } = {},

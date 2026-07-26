@@ -394,6 +394,124 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         resp['Content-Disposition'] = f'attachment; filename="tolheffing_{safe_plate}_{period}_{year}_{idx}.xlsx"'
         return resp
 
+    @action(detail=False, methods=['post'], url_path=r'(?P<plate>[^/]+)/email-export')
+    def email_export(self, request, plate: str = ''):
+        """E-mail the tolling overview (PDF or XLSX) as attachment.
+
+        Body: {
+            recipients: ["a@b.nl", ...],
+            subject: str,
+            body: str,
+            fmt: 'pdf'|'xlsx',
+            period: 'month'|'week',
+            offset: int,
+            email_profile_id?: str,
+        }
+        """
+        recipients_raw = request.data.get('recipients') or []
+        if isinstance(recipients_raw, str):
+            recipients = [x.strip() for x in recipients_raw.replace(';', ',').split(',') if x.strip()]
+        else:
+            recipients = [str(x).strip() for x in recipients_raw if str(x).strip()]
+        if not recipients:
+            return Response({'detail': 'Geen ontvangers opgegeven.'}, status=400)
+
+        subject = (request.data.get('subject') or '').strip()
+        body = request.data.get('body') or ''
+        fmt = (request.data.get('fmt') or 'pdf').lower()
+        if fmt not in ('pdf', 'xlsx'):
+            return Response({'detail': "Ongeldig formaat (verwacht 'pdf' of 'xlsx')."}, status=400)
+        period = request.data.get('period') or 'month'
+        try:
+            offset = int(request.data.get('offset') or 0)
+        except (TypeError, ValueError):
+            offset = 0
+        profile_id = request.data.get('email_profile_id') or None
+
+        norm = normalize_plate(plate)
+        now = timezone.now().astimezone(timezone.get_current_timezone())
+        if period == 'week':
+            iso = now.isocalendar()
+            year, idx = _shift_week(iso[0], iso[1], offset)
+            start, end = _week_range(year, idx)
+        else:
+            year, idx = _shift_month(now.year, now.month, offset)
+            start, end = _month_range(year, idx)
+        events = list(
+            TollingEvent.objects
+            .filter(license_plate_normalized=norm, start_at__gte=start, start_at__lt=end)
+            .order_by('start_at')
+        )
+        if not events:
+            return Response({'detail': 'Geen tolgebeurtenissen in de gekozen periode.'}, status=400)
+
+        plate_display = events[0].license_plate_raw
+        for v in Vehicle.objects.all():
+            if normalize_plate(v.kenteken) == norm:
+                plate_display = v.kenteken
+                break
+        label = _period_label(period, year, idx)
+        safe_plate = ''.join(c for c in plate_display if c.isalnum() or c in '-_') or 'tolheffing'
+        filename = f'tolheffing_{safe_plate}_{period}_{year}_{idx}.{fmt}'
+
+        if fmt == 'pdf':
+            file_bytes = export_events_pdf(events, plate_display, label)
+            mime = 'application/pdf'
+        else:
+            file_bytes = export_events_xlsx(events, plate_display, label)
+            mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+        if not subject:
+            subject = f'Tolheffing overzicht {plate_display} — {label}'
+        if not body:
+            body = (
+                f'Beste,\n\nIn de bijlage vind je het tolheffing overzicht voor '
+                f'{plate_display} ({label}).\n\nMet vriendelijke groet,'
+            )
+
+        from django.core.mail import EmailMessage, get_connection
+        from apps.core.views import get_smtp_config
+        try:
+            smtp_host, smtp_port, smtp_username, smtp_password, smtp_use_tls, from_email, _sig, _src = \
+                get_smtp_config(profile_id, request.user)
+        except (ValueError, PermissionError) as exc:
+            return Response({'detail': str(exc)}, status=400)
+        if not smtp_host:
+            return Response(
+                {'detail': 'SMTP is niet geconfigureerd. Stel dit eerst in via Instellingen.'},
+                status=400,
+            )
+        try:
+            connection = get_connection(
+                host=smtp_host,
+                port=smtp_port,
+                username=(smtp_username or '').strip(),
+                password=smtp_password or '',
+                use_tls=smtp_use_tls,
+                fail_silently=False,
+            )
+            email = EmailMessage(
+                subject=subject,
+                body=body,
+                from_email=from_email,
+                to=recipients,
+                connection=connection,
+            )
+            email.attach(filename, file_bytes, mime)
+            email.send(fail_silently=False)
+        except Exception as exc:
+            logger.error('Fout bij verzenden tolheffing mail: %s', exc)
+            return Response(
+                {'detail': 'Mail kon niet worden verzonden. Controleer de mailconfiguratie.'},
+                status=500,
+            )
+
+        return Response({
+            'sent': True,
+            'recipients': recipients,
+            'filename': filename,
+        })
+
     @action(detail=False, methods=['post'], url_path=r'(?P<plate>[^/]+)/mark-uninvoiced')
     def mark_uninvoiced(self, request, plate: str = ''):
         """Remove invoiced marker for events of a plate in given period; deletes InvoiceLine if still linked.

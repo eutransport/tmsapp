@@ -21,12 +21,15 @@ import {
   CurrencyEuroIcon,
   DocumentArrowDownIcon,
   DocumentTextIcon,
+  EnvelopeIcon,
   TableCellsIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline'
 
 import { tollingApi, TollingSummary, TollingVehicleRow } from '@/api/tolling'
 import ConfirmDialog, { ConfirmState } from '@/components/common/ConfirmDialog'
 import CreateTollingInvoiceModal from '@/components/tolling/CreateTollingInvoiceModal'
+import EmailProfileSelector from '@/components/EmailProfileSelector'
 
 const PAGE_SIZE = 15
 
@@ -353,6 +356,12 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
   const [exporting, setExporting] = useState<null | 'xlsx' | 'pdf'>(null)
   const [unmarking, setUnmarking] = useState(false)
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
+  const [emailModal, setEmailModal] = useState<null | { fmt: 'pdf' | 'xlsx' }>(null)
+  const [emailRecipients, setEmailRecipients] = useState('')
+  const [emailSubject, setEmailSubject] = useState('')
+  const [emailBody, setEmailBody] = useState('')
+  const [emailProfileId, setEmailProfileId] = useState<string>('')
+  const [emailSending, setEmailSending] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -494,6 +503,25 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
             >
               <DocumentArrowDownIcon className="h-4 w-4 mr-1" />
               {exporting === 'pdf' ? '…' : 'PDF'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                if (!data) return
+                setEmailRecipients('')
+                setEmailSubject(`Tolheffing overzicht ${plateDisplay} — ${data.label}`)
+                setEmailBody(
+                  `Beste,\n\nIn de bijlage vind je het tolheffing overzicht voor ${plateDisplay} (${data.label}).\n\nMet vriendelijke groet,`
+                )
+                setEmailProfileId('')
+                setEmailModal({ fmt: 'pdf' })
+              }}
+              disabled={!data || data.events.length === 0}
+              title="Overzicht mailen"
+            >
+              <EnvelopeIcon className="h-4 w-4 mr-1" />
+              Mail
             </button>
           </div>
         </div>
@@ -693,6 +721,130 @@ function VehicleDetail({ plate, plateDisplay }: VehicleDetailProps) {
         )}
       </div>
       <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
+      {emailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <h3 className="text-base font-semibold text-gray-900">
+                Tolheffing overzicht mailen
+              </h3>
+              <button
+                type="button"
+                className="p-1 text-gray-500 hover:text-gray-800"
+                onClick={() => setEmailModal(null)}
+                disabled={emailSending}
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-3 px-4 py-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Bijlage</label>
+                <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+                  {(['pdf', 'xlsx'] as const).map(f => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setEmailModal({ fmt: f })}
+                      className={`px-3 py-1.5 text-sm ${
+                        emailModal.fmt === f
+                          ? 'bg-primary-600 text-white'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {f.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Ontvangers (komma-gescheiden)
+                </label>
+                <input
+                  type="text"
+                  className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                  value={emailRecipients}
+                  onChange={e => setEmailRecipients(e.target.value)}
+                  placeholder="naam@bedrijf.nl, ander@voorbeeld.nl"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Onderwerp</label>
+                <input
+                  type="text"
+                  className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                  value={emailSubject}
+                  onChange={e => setEmailSubject(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Bericht</label>
+                <textarea
+                  className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                  rows={5}
+                  value={emailBody}
+                  onChange={e => setEmailBody(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Mailprofiel (optioneel)
+                </label>
+                <EmailProfileSelector
+                  value={emailProfileId}
+                  onChange={setEmailProfileId}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t px-4 py-3">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setEmailModal(null)}
+                disabled={emailSending}
+              >
+                Annuleren
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={async () => {
+                  const recipients = emailRecipients
+                    .split(/[;,]/)
+                    .map(s => s.trim())
+                    .filter(Boolean)
+                  if (recipients.length === 0) {
+                    toast.error('Vul minstens één e-mailadres in.')
+                    return
+                  }
+                  setEmailSending(true)
+                  try {
+                    const r = await tollingApi.emailExport(plate, {
+                      recipients,
+                      subject: emailSubject,
+                      body: emailBody,
+                      fmt: emailModal.fmt,
+                      period,
+                      offset,
+                      email_profile_id: emailProfileId || undefined,
+                    })
+                    toast.success(`Mail verzonden naar ${r.recipients.length} ontvanger(s).`)
+                    setEmailModal(null)
+                  } catch (e: any) {
+                    toast.error(e?.response?.data?.detail || 'Mail versturen mislukt')
+                  } finally {
+                    setEmailSending(false)
+                  }
+                }}
+                disabled={emailSending}
+              >
+                {emailSending ? 'Versturen…' : 'Verstuur'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
