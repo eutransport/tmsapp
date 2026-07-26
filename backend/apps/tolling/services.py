@@ -5,7 +5,7 @@ import csv
 import io
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
 from decimal import Decimal, InvalidOperation
 
 from django.db import IntegrityError, transaction
@@ -59,7 +59,7 @@ def _parse_datetime(value: str) -> datetime | None:
             v_iso = v
         dt = datetime.fromisoformat(v_iso)
         if dt.tzinfo is None:
-            dt = timezone.make_aware(dt, timezone.utc)
+            dt = timezone.make_aware(dt, dt_timezone.utc)
         return dt
     except ValueError:
         pass
