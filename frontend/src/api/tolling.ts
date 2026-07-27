@@ -208,6 +208,26 @@ export const tollingApi = {
     return data
   },
 
+  deleteEventsForPlate: async (
+    plate: string,
+  ): Promise<{ deleted: number; invoiced_deleted: number; invoice_lines_affected: number }> => {
+    const { data } = await api.post(
+      `/tolling/vehicles/${encodeURIComponent(plate)}/delete-events/`,
+    )
+    return data
+  },
+
+  deleteAllEvents: async (): Promise<{
+    deleted: number
+    invoiced_deleted: number
+    invoice_lines_affected: number
+  }> => {
+    const { data } = await api.post('/tolling/vehicles/delete-all/', {
+      confirm: 'DELETE_ALL',
+    })
+    return data
+  },
+
   emailExport: async (
     plate: string,
     payload: {

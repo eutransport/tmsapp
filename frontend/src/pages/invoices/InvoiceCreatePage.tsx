@@ -2499,27 +2499,9 @@ export default function InvoiceCreatePage() {
         return
       }
 
-      // Als er niets buiten de tijden valt EN wel binnen, direct toevoegen.
-      if (withMoney.length > 0 && unmatched.length === 0) {
-        const rows: TollingInvoicePreviewRow[] = withMoney.map(r => ({
-          plate_normalized: r.plate_normalized,
-          plate_display: r.plate_display,
-          ritnummer: r.ritnummer,
-          vehicle_id: null,
-          total_km: r.total_km,
-          total_amount: r.total_amount,
-          events_count: r.events_count,
-          weekday_km: 0, weekday_amount: 0, weekend_km: 0, weekend_amount: 0,
-          period: 'week', year: new Date().getFullYear(), index: 0, label: '', month: 0,
-          event_ids: r.event_ids,
-        }))
-        handleImportTolling(rows, false)
-        console.info(`[auto-tolling] strikte match: ${withMoney.length} kenteken(s) toegevoegd (geen buiten-tijden events).`)
-        return
-      }
-
-      // Er zijn events binnen én/of buiten de tijden → toon de review-modal
-      // zodat de gebruiker zelf kan beslissen wat er op de factuur komt.
+      // Toon altijd de review-modal met het overzicht van gekoppelde
+      // (én eventueel niet-gekoppelde) tolheffing-events, zodat de
+      // gebruiker altijd ziet welke ritten worden meegenomen op de factuur.
       setTollingReview({
         matched: withMoney.map(r => ({
           plate_normalized: r.plate_normalized,
@@ -2529,6 +2511,7 @@ export default function InvoiceCreatePage() {
           total_amount: r.total_amount,
           events_count: r.events_count,
           event_ids: r.event_ids,
+          events: (r as any).events,
         })),
         unmatched: unmatched as ModalUnmatchedEvent[],
         bufferMinutes: buffer_minutes ?? bufferMinutes,

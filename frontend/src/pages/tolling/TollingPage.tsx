@@ -23,6 +23,7 @@ import {
   DocumentTextIcon,
   EnvelopeIcon,
   TableCellsIcon,
+  TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
 
@@ -67,7 +68,78 @@ export default function TollingPage() {
   const [selectedCompanyKeys, setSelectedCompanyKeys] = useState<string[]>([])
   const [showMoreCompanies, setShowMoreCompanies] = useState(false)
   const [invoiceModalRow, setInvoiceModalRow] = useState<TollingVehicleRow | null>(null)
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
+  const [deletingPlate, setDeletingPlate] = useState<string | null>(null)
+  const [deletingAll, setDeletingAll] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const askDeletePlate = (row: TollingVehicleRow) => {
+    setConfirmState({
+      title: `Alle tolheffingen van ${row.plate_display} verwijderen?`,
+      message: (
+        <span>
+          Alle geïmporteerde tolheffing-events voor <strong>{row.plate_display}</strong> worden
+          definitief verwijderd. Gekoppelde factuurregels blijven bestaan maar verliezen hun
+          onderliggende events. Deze actie kan niet ongedaan worden gemaakt.
+        </span>
+      ),
+      confirmLabel: 'Verwijderen',
+      variant: 'danger',
+      onConfirm: async () => {
+        setDeletingPlate(row.plate_normalized)
+        try {
+          const res = await tollingApi.deleteEventsForPlate(row.plate_normalized)
+          if (res.invoiced_deleted > 0) {
+            toast.success(
+              `${res.deleted} events verwijderd (${res.invoiced_deleted} waren gefactureerd, ${res.invoice_lines_affected} factuurregels aangepast).`,
+              { duration: 6000 },
+            )
+          } else {
+            toast.success(`${res.deleted} events verwijderd.`)
+          }
+          await reload()
+        } catch (e: any) {
+          toast.error(e?.response?.data?.detail || 'Verwijderen mislukt')
+        } finally {
+          setDeletingPlate(null)
+        }
+      },
+    })
+  }
+
+  const askDeleteAll = () => {
+    setConfirmState({
+      title: 'ALLE tolheffingen verwijderen?',
+      message: (
+        <span>
+          Je staat op het punt om <strong>alle geïmporteerde tolheffing-events</strong> te
+          verwijderen — voor alle kentekens. Gekoppelde factuurregels blijven bestaan maar verliezen
+          hun onderliggende events. Deze actie kan niet ongedaan worden gemaakt.
+        </span>
+      ),
+      confirmLabel: 'Alles verwijderen',
+      variant: 'danger',
+      onConfirm: async () => {
+        setDeletingAll(true)
+        try {
+          const res = await tollingApi.deleteAllEvents()
+          if (res.invoiced_deleted > 0) {
+            toast.success(
+              `${res.deleted} events verwijderd (${res.invoiced_deleted} waren gefactureerd, ${res.invoice_lines_affected} factuurregels aangepast).`,
+              { duration: 6000 },
+            )
+          } else {
+            toast.success(`${res.deleted} events verwijderd.`)
+          }
+          await reload()
+        } catch (e: any) {
+          toast.error(e?.response?.data?.detail || 'Verwijderen mislukt')
+        } finally {
+          setDeletingAll(false)
+        }
+      },
+    })
+  }
 
   const reload = async () => {
     setLoading(true)
@@ -169,6 +241,18 @@ export default function TollingPage() {
             <ArrowUpTrayIcon className="h-4 w-4 mr-1.5" />
             {uploading ? 'Bezig…' : 'CSV importeren'}
           </button>
+          {rows.length > 0 && (
+            <button
+              type="button"
+              className="inline-flex items-center px-3 py-2 rounded-md text-sm font-medium border border-red-300 text-red-700 bg-white hover:bg-red-50 disabled:opacity-50"
+              onClick={askDeleteAll}
+              disabled={deletingAll || loading}
+              title="Verwijder alle geïmporteerde tolheffing-events"
+            >
+              <TrashIcon className="h-4 w-4 mr-1.5" />
+              {deletingAll ? 'Bezig…' : 'Alles verwijderen'}
+            </button>
+          )}
         </div>
       </header>
 
@@ -250,6 +334,8 @@ export default function TollingPage() {
                 setExpanded(prev => ({ ...prev, [row.plate_normalized]: !prev[row.plate_normalized] }))
               }
               onCreateInvoice={() => setInvoiceModalRow(row)}
+              onDelete={() => askDeletePlate(row)}
+              deleting={deletingPlate === row.plate_normalized}
             />
           ))}
         </div>
@@ -266,6 +352,11 @@ export default function TollingPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        state={confirmState}
+        onClose={() => setConfirmState(null)}
+      />
     </div>
   )
 }
@@ -284,9 +375,11 @@ interface VehicleRowProps {
   open: boolean
   onToggle: () => void
   onCreateInvoice: () => void
+  onDelete: () => void
+  deleting: boolean
 }
 
-function VehicleRow({ row, open, onToggle, onCreateInvoice }: VehicleRowProps) {
+function VehicleRow({ row, open, onToggle, onCreateInvoice, onDelete, deleting }: VehicleRowProps) {
   return (
     <div className="rounded-lg border bg-white overflow-hidden">
       <div className="flex items-stretch">
@@ -328,15 +421,33 @@ function VehicleRow({ row, open, onToggle, onCreateInvoice }: VehicleRowProps) {
           <DocumentTextIcon className="h-4 w-4" />
           Factuur
         </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={deleting}
+          className="hidden sm:inline-flex items-center justify-center px-3 border-l border-gray-200 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors disabled:opacity-50"
+          title="Alle tolheffingen van dit voertuig verwijderen"
+        >
+          <TrashIcon className="h-4 w-4" />
+        </button>
       </div>
-      <div className="sm:hidden border-t border-gray-100">
+      <div className="sm:hidden border-t border-gray-100 grid grid-cols-2 divide-x divide-gray-100">
         <button
           type="button"
           onClick={onCreateInvoice}
-          className="w-full inline-flex items-center justify-center gap-1.5 py-2 text-sm text-primary-700 hover:bg-primary-50"
+          className="inline-flex items-center justify-center gap-1.5 py-2 text-sm text-primary-700 hover:bg-primary-50"
         >
           <DocumentTextIcon className="h-4 w-4" />
-          Factuur maken
+          Factuur
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={deleting}
+          className="inline-flex items-center justify-center gap-1.5 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+        >
+          <TrashIcon className="h-4 w-4" />
+          Verwijderen
         </button>
       </div>
       {open && <VehicleDetail plate={row.plate_normalized} plateDisplay={row.plate_display} bedrijfId={row.bedrijf_id} />}

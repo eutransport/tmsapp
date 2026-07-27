@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Iterable
 
+from django.db import transaction
 from django.db.models import DecimalField, Sum, Value, Q
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse
@@ -512,6 +513,71 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             'filename': filename,
         })
 
+    @action(detail=False, methods=['post'], url_path=r'(?P<plate>[^/]+)/delete-events')
+    def delete_events(self, request, plate: str = ''):
+        """Verwijder ALLE TollingEvents voor één kenteken.
+
+        Gekoppelde InvoiceLine's blijven bestaan (FK is SET_NULL). Returnt
+        aantallen zodat de UI kan waarschuwen als er reeds gefactureerde
+        events tussen zaten.
+        """
+        norm = normalize_plate(plate)
+        if not norm:
+            return Response({'detail': 'Kenteken vereist.'}, status=400)
+        qs = TollingEvent.objects.filter(license_plate_normalized=norm)
+        total = qs.count()
+        if total == 0:
+            return Response({'deleted': 0, 'invoiced_deleted': 0, 'invoice_lines_affected': 0})
+        invoiced = qs.filter(invoiced_at__isnull=False).count()
+        line_ids = set(
+            qs.filter(invoice_line_id__isnull=False).values_list('invoice_line_id', flat=True)
+        )
+        with transaction.atomic():
+            qs.delete()
+        logger.info(
+            "Tolling delete-events: plate=%s deleted=%d invoiced=%d lines_touched=%d by=%s",
+            norm, total, invoiced, len(line_ids),
+            getattr(request.user, 'email', request.user),
+        )
+        return Response({
+            'deleted': total,
+            'invoiced_deleted': invoiced,
+            'invoice_lines_affected': len(line_ids),
+        })
+
+    @action(detail=False, methods=['post'], url_path='delete-all')
+    def delete_all(self, request):
+        """Verwijder ALLE TollingEvents (alle kentekens).
+
+        Body: { confirm: "DELETE_ALL" }  — extra guardrail tegen ongelukken.
+        Gekoppelde InvoiceLine's blijven bestaan (FK is SET_NULL).
+        """
+        if request.data.get('confirm') != 'DELETE_ALL':
+            return Response(
+                {'detail': 'Ontbrekende bevestiging (confirm="DELETE_ALL").'},
+                status=400,
+            )
+        qs = TollingEvent.objects.all()
+        total = qs.count()
+        if total == 0:
+            return Response({'deleted': 0, 'invoiced_deleted': 0, 'invoice_lines_affected': 0})
+        invoiced = qs.filter(invoiced_at__isnull=False).count()
+        line_ids = set(
+            qs.filter(invoice_line_id__isnull=False).values_list('invoice_line_id', flat=True)
+        )
+        with transaction.atomic():
+            qs.delete()
+        logger.warning(
+            "Tolling delete-all: deleted=%d invoiced=%d lines_touched=%d by=%s",
+            total, invoiced, len(line_ids),
+            getattr(request.user, 'email', request.user),
+        )
+        return Response({
+            'deleted': total,
+            'invoiced_deleted': invoiced,
+            'invoice_lines_affected': len(line_ids),
+        })
+
     @action(detail=False, methods=['post'], url_path=r'(?P<plate>[^/]+)/mark-uninvoiced')
     def mark_uninvoiced(self, request, plate: str = ''):
         """Remove invoiced marker for events of a plate in given period; deletes InvoiceLine if still linked.
@@ -835,12 +901,21 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                     'events_count': 0,
                     'days': set(),
                     'event_ids': [],
+                    'events': [],
                 })
                 bucket['total_km'] += e.distance_km or Decimal('0')
                 bucket['total_amount'] += e.amount or Decimal('0')
                 bucket['events_count'] += 1
                 bucket['days'].add(start_at.astimezone(tz).date().isoformat())
                 bucket['event_ids'].append(str(e.id))
+                bucket['events'].append({
+                    'id': str(e.id),
+                    'start_at': start_at.isoformat(),
+                    'end_at': end_at.isoformat() if e.end_at else None,
+                    'distance_km': float(e.distance_km or 0),
+                    'amount': float(e.amount or 0),
+                    'obu': e.obu or '',
+                })
             else:
                 unmatched.append({
                     'id': str(e.id),
@@ -865,6 +940,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 'events_count': b['events_count'],
                 'days': sorted(b['days']),
                 'event_ids': b['event_ids'],
+                'events': sorted(b['events'], key=lambda x: x['start_at']),
             })
         matched.sort(key=lambda x: x['plate_display'])
 

@@ -5,7 +5,7 @@ import csv
 import io
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from django.db import IntegrityError, transaction
@@ -48,28 +48,48 @@ def _looks_european(value: str) -> bool:
 
 
 def _parse_datetime(value: str) -> datetime | None:
+    """Parse een timestamp uit de CSV.
+
+    Regel: als de string GEEN expliciete tijdzone-info bevat (bijv. 'Z',
+    '+02:00', '-05:00') wordt de tijd geïnterpreteerd als **lokale tijd**
+    (`settings.TIME_ZONE`, doorgaans Europe/Amsterdam voor deze deploy).
+    Alleen wanneer de string zelf tijdzone-info draagt wordt die
+    gerespecteerd en omgezet naar UTC bij opslag.
+
+    Achtergrond: tolheffing-CSV's (DKV/AS24/etc.) gebruiken standaard
+    lokale tijd zonder tz-suffix. Python 3.11's `datetime.fromisoformat`
+    accepteert óók `'YYYY-MM-DD HH:MM:SS'`; dat leverde eerder een stille
+    UTC-interpretatie op → duplicate imports met 2-uur-shift. Nu is de
+    default consistent: geen tz-info = lokaal.
+    """
     if not value:
         return None
     v = value.strip()
-    # Try ISO 8601 (with Z)
+    dt: datetime | None = None
+    # 1) ISO 8601 (met of zonder Z)
     try:
         if v.endswith('Z'):
             v_iso = v[:-1] + '+00:00'
         else:
             v_iso = v
         dt = datetime.fromisoformat(v_iso)
-        if dt.tzinfo is None:
-            dt = timezone.make_aware(dt, dt_timezone.utc)
-        return dt
     except ValueError:
-        pass
-    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%d-%m-%Y %H:%M:%S', '%d/%m/%Y %H:%M:%S'):
-        try:
-            dt = datetime.strptime(v, fmt)
-            return timezone.make_aware(dt, timezone.get_current_timezone())
-        except ValueError:
-            continue
-    return None
+        dt = None
+    # 2) Fallback-formaten (Europees / Amerikaans)
+    if dt is None:
+        for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S',
+                    '%d-%m-%Y %H:%M:%S', '%d/%m/%Y %H:%M:%S'):
+            try:
+                dt = datetime.strptime(v, fmt)
+                break
+            except ValueError:
+                continue
+    if dt is None:
+        return None
+    # 3) Als er geen tijdzone bij de string zat → interpreteer als lokaal.
+    if dt.tzinfo is None:
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return dt
 
 
 def _sniff_reader(raw: bytes) -> csv.DictReader:

@@ -4,7 +4,7 @@
  * kiezen om alleen de binnen-tijden events te factureren, of ook de events
  * buiten de tijden mee te nemen.
  */
-import { Fragment, useMemo } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import {
   XMarkIcon,
@@ -25,6 +25,15 @@ export interface UnmatchedEvent {
   reason: 'outside_time_range' | 'no_range_for_plate'
 }
 
+export interface MatchedEventDetail {
+  id: string
+  start_at: string
+  end_at: string | null
+  distance_km: number
+  amount: number
+  obu: string
+}
+
 export interface MatchedTollingRow {
   plate_normalized: string
   plate_display: string
@@ -33,6 +42,7 @@ export interface MatchedTollingRow {
   total_amount: number
   events_count: number
   event_ids?: string[]
+  events?: MatchedEventDetail[]
 }
 
 interface Props {
@@ -87,6 +97,38 @@ export default function UnmatchedTollingModal({
   const hasMatched = matched.length > 0
   const hasUnmatched = unmatched.length > 0
 
+  // Flat list met per-event details voor de "Details"-tab.
+  const matchedEventDetails = useMemo(() => {
+    const rows: Array<{
+      plate_display: string
+      ritnummer: string | null
+      start_at: string
+      end_at: string | null
+      distance_km: number
+      amount: number
+      obu: string
+    }> = []
+    for (const r of matched) {
+      if (!r.events || r.events.length === 0) continue
+      for (const e of r.events) {
+        rows.push({
+          plate_display: r.plate_display,
+          ritnummer: r.ritnummer,
+          start_at: e.start_at,
+          end_at: e.end_at,
+          distance_km: e.distance_km,
+          amount: e.amount,
+          obu: e.obu,
+        })
+      }
+    }
+    rows.sort((a, b) => a.start_at.localeCompare(b.start_at))
+    return rows
+  }, [matched])
+
+  const hasEventDetails = matchedEventDetails.length > 0
+  const [tab, setTab] = useState<'overview' | 'details'>('overview')
+
   return (
     <Transition appear show={open} as={Fragment}>
       <Dialog as="div" className="relative z-[100]" onClose={onClose}>
@@ -102,8 +144,7 @@ export default function UnmatchedTollingModal({
           <div className="fixed inset-0 bg-black/40" />
         </Transition.Child>
 
-        <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-3 sm:p-4">
+        <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-4">
             <Transition.Child
               as={Fragment}
               enter="ease-out duration-200"
@@ -113,13 +154,19 @@ export default function UnmatchedTollingModal({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-3xl transform overflow-hidden rounded-xl bg-white shadow-2xl">
+              <Dialog.Panel className="w-full max-w-3xl transform overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 flex flex-col max-h-[90vh]">
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
+                <div className="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-primary-50 to-white px-5 py-3 shrink-0">
                   <div className="flex items-center gap-2">
-                    <ExclamationTriangleIcon className="h-5 w-5 text-amber-500" />
+                    {hasUnmatched ? (
+                      <ExclamationTriangleIcon className="h-5 w-5 text-amber-500" />
+                    ) : (
+                      <CheckCircleIcon className="h-5 w-5 text-emerald-600" />
+                    )}
                     <Dialog.Title className="text-base font-semibold text-gray-900">
-                      Tolheffing buiten rit-tijden gevonden
+                      {hasUnmatched
+                        ? 'Tolheffing gevonden — controleer buiten-tijden events'
+                        : 'Tolheffing gevonden — controleer koppeling'}
                     </Dialog.Title>
                   </div>
                   <button
@@ -132,14 +179,51 @@ export default function UnmatchedTollingModal({
                   </button>
                 </div>
 
+                {/* Tabs */}
+                {hasEventDetails && (
+                  <div className="border-b border-gray-200 bg-white px-5 shrink-0">
+                    <nav className="-mb-px flex gap-4" aria-label="Tabs">
+                      <button
+                        type="button"
+                        onClick={() => setTab('overview')}
+                        className={`whitespace-nowrap border-b-2 px-1 py-2 text-sm font-medium transition-colors ${
+                          tab === 'overview'
+                            ? 'border-primary-600 text-primary-700'
+                            : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                        }`}
+                      >
+                        Overzicht
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTab('details')}
+                        className={`whitespace-nowrap border-b-2 px-1 py-2 text-sm font-medium transition-colors ${
+                          tab === 'details'
+                            ? 'border-primary-600 text-primary-700'
+                            : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                        }`}
+                      >
+                        Details
+                        <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">
+                          {matchedEventDetails.length}
+                        </span>
+                      </button>
+                    </nav>
+                  </div>
+                )}
+
                 {/* Body */}
-                <div className="max-h-[70vh] overflow-y-auto px-5 py-4 space-y-4">
+                <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
+                  {tab === 'overview' && (
+                    <>
                   <p className="text-sm text-gray-600">
                     De tolheffing is strikt gematcht op de begin- en eindtijd van elke rit
                     {bufferMinutes > 0 && (
                       <span className="text-gray-500"> (± {bufferMinutes} min buffer)</span>
                     )}.
-                    Kies hieronder wat er op de factuur moet komen.
+                    {hasUnmatched
+                      ? ' Kies hieronder wat er op de factuur moet komen.'
+                      : ' Alle events vielen binnen de ritranges. Bevestig hieronder om ze aan de factuur toe te voegen.'}
                   </p>
 
                   {/* Samenvatting binnen tijden */}
@@ -242,10 +326,52 @@ export default function UnmatchedTollingModal({
                       Geen tolheffing gevonden voor deze uren.
                     </div>
                   )}
+                    </>
+                  )}
+
+                  {tab === 'details' && hasEventDetails && (
+                    <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+                      <div className="border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs uppercase tracking-wide text-gray-600">
+                        Alle {matchedEventDetails.length} gekoppelde tolheffing-events (chronologisch)
+                      </div>
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-white text-gray-600 sticky top-0 shadow-sm">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-semibold">Kenteken</th>
+                            <th className="px-3 py-2 text-left font-semibold">Rit</th>
+                            <th className="px-3 py-2 text-left font-semibold">Datum / tijd</th>
+                            <th className="px-3 py-2 text-right font-semibold">KM</th>
+                            <th className="px-3 py-2 text-right font-semibold">Bedrag</th>
+                            <th className="px-3 py-2 text-left font-semibold hidden sm:table-cell">OBU</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {matchedEventDetails.map((e, i) => (
+                            <tr key={i} className="hover:bg-emerald-50/40">
+                              <td className="px-3 py-1.5 font-medium text-gray-900">{e.plate_display}</td>
+                              <td className="px-3 py-1.5 text-gray-700">{e.ritnummer || '—'}</td>
+                              <td className="px-3 py-1.5 text-gray-700 tabular-nums">{fmtDateTime(e.start_at)}</td>
+                              <td className="px-3 py-1.5 text-right text-gray-700 tabular-nums">{fmtKm(e.distance_km)}</td>
+                              <td className="px-3 py-1.5 text-right font-semibold text-gray-900 tabular-nums">{fmtMoney(e.amount)}</td>
+                              <td className="px-3 py-1.5 text-gray-500 hidden sm:table-cell text-[11px]">{e.obu || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50">
+                          <tr className="font-semibold text-gray-800">
+                            <td className="px-3 py-2" colSpan={3}>Totaal</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{fmtKm(matchedTotals.km)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(matchedTotals.amount)}</td>
+                            <td className="hidden sm:table-cell" />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 {/* Footer met acties */}
-                <div className="flex flex-col-reverse gap-2 border-t border-gray-200 bg-gray-50 px-5 py-3 sm:flex-row sm:justify-end">
+                <div className="flex flex-col-reverse gap-2 border-t border-gray-200 bg-gray-50 px-5 py-3 sm:flex-row sm:justify-end shrink-0">
                   <button
                     type="button"
                     onClick={onClose}
@@ -268,13 +394,14 @@ export default function UnmatchedTollingModal({
                       onClick={onConfirmStrict}
                       className="inline-flex justify-center rounded-md border border-transparent bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700"
                     >
-                      Alleen binnen tijden ({fmtMoney(matchedTotals.amount)})
+                      {hasUnmatched
+                        ? `Alleen binnen tijden (${fmtMoney(matchedTotals.amount)})`
+                        : `Toevoegen aan factuur (${fmtMoney(matchedTotals.amount)})`}
                     </button>
                   )}
                 </div>
               </Dialog.Panel>
             </Transition.Child>
-          </div>
         </div>
       </Dialog>
     </Transition>
