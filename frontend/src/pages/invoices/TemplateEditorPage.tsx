@@ -43,6 +43,12 @@ import {
   updateTemplate,
 } from '@/api/invoices'
 import { settingsApi } from '@/api/settings'
+import {
+  ModernConfigEditor,
+  ModernPreview,
+  DEFAULT_MODERN_CONFIG,
+} from './ModernTemplateEditor'
+import type { AppSettings } from '@/types'
 
 // Default styling
 const defaultFieldStyle: TemplateFieldStyle = {
@@ -1252,6 +1258,14 @@ export default function TemplateEditorPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [previewZoom, setPreviewZoom] = useState(1)
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null)
+
+  useEffect(() => {
+    settingsApi.getPublic().then(setAppSettings).catch(() => { /* preview only */ })
+  }, [])
+
+  const layoutStyle: 'legacy' | 'modern' = layout.layoutStyle === 'modern' ? 'modern' : 'legacy'
+  const modernConfig = { ...DEFAULT_MODERN_CONFIG, ...(layout.modern || {}) }
 
   useEffect(() => {
     if (id) {
@@ -1379,58 +1393,124 @@ export default function TemplateEditorPage() {
             </div>
           </div>
 
-          {/* Sections */}
+          {/* Layout style toggle */}
           <div className="bg-white rounded-lg p-4 mb-4">
-            <SectionEditor
-              title={t('templates.editor.headerSection')}
-              section={layout.header}
-              onChange={(header) => setLayout({ ...layout, header })}
-            />
-            <SectionEditor
-              title={t('templates.editor.subheaderSection')}
-              section={layout.subheader}
-              onChange={(subheader) => setLayout({ ...layout, subheader })}
-            />
+            <h3 className="font-medium mb-2">Layout stijl</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { v: 'legacy', l: 'Klassiek', d: 'Volledig aanpasbaar (huidige stijl)' },
+                { v: 'modern', l: 'Modern (strak)', d: '10 kleurpresets, minimalistisch' },
+              ] as const).map(opt => (
+                <label
+                  key={opt.v}
+                  className={`flex flex-col gap-0.5 rounded-md border p-3 cursor-pointer ${
+                    layoutStyle === opt.v
+                      ? 'border-primary-500 ring-2 ring-primary-200 bg-primary-50'
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="layoutStyle"
+                      checked={layoutStyle === opt.v}
+                      onChange={() =>
+                        setLayout({
+                          ...layout,
+                          layoutStyle: opt.v,
+                          modern: layout.modern || DEFAULT_MODERN_CONFIG,
+                        })
+                      }
+                    />
+                    <span className="font-medium text-sm">{opt.l}</span>
+                  </div>
+                  <span className="text-xs text-gray-500 ml-6">{opt.d}</span>
+                </label>
+              ))}
+            </div>
           </div>
 
-          {/* Columns */}
-          <div className="bg-white rounded-lg p-4 mb-4">
-            <ColumnEditor
-              columns={layout.columns}
-              onChange={(columns) => setLayout({ ...layout, columns })}
-            />
-          </div>
+          {layoutStyle === 'modern' ? (
+            <div className="bg-white rounded-lg p-4 mb-4">
+              <ModernConfigEditor
+                config={modernConfig}
+                onChange={(next) => setLayout({ ...layout, layoutStyle: 'modern', modern: next })}
+                logoUrl={appSettings?.logo_url ?? null}
+                onLogoChanged={(newLogoUrl) =>
+                  setAppSettings((prev) => (prev ? { ...prev, logo_url: newLogoUrl } : prev))
+                }
+              />
+            </div>
+          ) : (
+            <>
+              {/* Sections */}
+              <div className="bg-white rounded-lg p-4 mb-4">
+                <SectionEditor
+                  title={t('templates.editor.headerSection')}
+                  section={layout.header}
+                  onChange={(header) => setLayout({ ...layout, header })}
+                />
+                <SectionEditor
+                  title={t('templates.editor.subheaderSection')}
+                  section={layout.subheader}
+                  onChange={(subheader) => setLayout({ ...layout, subheader })}
+                />
+              </div>
 
-          {/* Defaults & Totals */}
-          <div className="bg-white rounded-lg p-4 mb-4">
-            <DefaultsEditor
-              defaults={layout.defaults}
-              totals={layout.totals}
-              onDefaultsChange={(defaults) => setLayout({ ...layout, defaults })}
-              onTotalsChange={(totals) => setLayout({ ...layout, totals })}
-            />
-            <TableStyleEditor
-              tableStyle={layout.tableStyle || defaultTableStyle}
-              onChange={(tableStyle) => setLayout({ ...layout, tableStyle })}
-            />
-          </div>
+              {/* Columns */}
+              <div className="bg-white rounded-lg p-4 mb-4">
+                <ColumnEditor
+                  columns={layout.columns}
+                  onChange={(columns) => setLayout({ ...layout, columns })}
+                />
+              </div>
 
-          {/* Footer */}
-          <div className="bg-white rounded-lg p-4">
-            <SectionEditor
-              title={t('templates.editor.footerSection')}
-              section={layout.footer}
-              onChange={(footer) => setLayout({ ...layout, footer })}
-            />
-          </div>
+              {/* Defaults & Totals */}
+              <div className="bg-white rounded-lg p-4 mb-4">
+                <DefaultsEditor
+                  defaults={layout.defaults}
+                  totals={layout.totals}
+                  onDefaultsChange={(defaults) => setLayout({ ...layout, defaults })}
+                  onTotalsChange={(totals) => setLayout({ ...layout, totals })}
+                />
+                <TableStyleEditor
+                  tableStyle={layout.tableStyle || defaultTableStyle}
+                  onChange={(tableStyle) => setLayout({ ...layout, tableStyle })}
+                />
+              </div>
+
+              {/* Footer */}
+              <div className="bg-white rounded-lg p-4">
+                <SectionEditor
+                  title={t('templates.editor.footerSection')}
+                  section={layout.footer}
+                  onChange={(footer) => setLayout({ ...layout, footer })}
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {/* Preview Panel (desktop only) */}
         <div className="hidden lg:block w-1/2 bg-gray-200 p-6 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 73px)' }}>
           <h2 className="text-lg font-medium mb-4">{t('templates.editor.preview')}</h2>
-          <div className="transform scale-75 origin-top">
-            <PDFPreview layout={layout} templateName={templateName} />
-          </div>
+          {layoutStyle === 'modern' ? (
+            <ModernPreview
+              config={modernConfig}
+              companyName={appSettings?.company_name}
+              companyAddress={appSettings?.company_address}
+              companyPhone={appSettings?.company_phone}
+              companyEmail={appSettings?.company_email}
+              companyIban={appSettings?.company_iban}
+              companyKvk={appSettings?.company_kvk}
+              companyBtw={appSettings?.company_btw}
+              logoUrl={appSettings?.logo_url ?? null}
+            />
+          ) : (
+            <div className="transform scale-75 origin-top">
+              <PDFPreview layout={layout} templateName={templateName} />
+            </div>
+          )}
         </div>
       </div>
 

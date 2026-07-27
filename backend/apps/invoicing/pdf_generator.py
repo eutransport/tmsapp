@@ -731,6 +731,15 @@ class InvoicePDFGenerator:
 
 
 def generate_invoice_pdf(invoice):
-    """Helper functie om PDF te genereren voor een factuur."""
+    """Helper functie om PDF te genereren voor een factuur.
+
+    Dispatch: bij `template.layout['layoutStyle'] == 'modern'` gebruiken we de
+    nieuwe strakke layout. Anders valt hij terug op de bestaande, volledig
+    configureerbare template-layout (backwards compatible).
+    """
+    layout = (invoice.template.layout if invoice.template else None) or {}
+    if layout.get('layoutStyle') == 'modern':
+        from .pdf_generator_modern import ModernInvoicePDFGenerator
+        return ModernInvoicePDFGenerator(invoice).generate()
     generator = InvoicePDFGenerator(invoice)
     return generator.generate()

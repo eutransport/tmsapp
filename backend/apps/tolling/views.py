@@ -628,6 +628,253 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         results.sort(key=lambda x: x['plate_display'])
         return Response(results)
 
+    @action(detail=False, methods=['post'], url_path='match-by-hours')
+    def match_by_hours(self, request):
+        """Match tolling-events strikt op kenteken + tijd-range per dag.
+
+        Bedoeld voor factuur-generatie op basis van geïmporteerde uren: alleen
+        events waarvan `start_at` binnen een rit-tijdrange valt worden meegeteld.
+
+        Body:
+          {
+            "ranges": [
+              {"plate": "50-BXN-5", "date": "2026-07-20",
+               "start_time": "06:00", "end_time": "16:30"},
+              ...
+            ],
+            "buffer_minutes": 30            # optioneel, default 30
+          }
+
+        Response:
+          {
+            "matched": [
+              {
+                "plate_normalized": "...",
+                "plate_display": "...",
+                "ritnummer": "...",
+                "total_km": 924.0,
+                "total_amount": 185.85,
+                "events_count": 12,
+                "days": ["2026-07-20", ...]
+              }
+            ],
+            "unmatched": [
+              {
+                "plate_display": "...",
+                "plate_normalized": "...",
+                "start_at": "...", "end_at": "...",
+                "distance_km": 12.3, "amount": 2.45,
+                "obu": "...",
+                "reason": "outside_time_range" | "no_range_for_plate"
+              }
+            ]
+          }
+
+        Alle events zijn `invoiced_at IS NULL` en `is_private=False`.
+        Kenteken input wordt genormaliseerd (upper + [A-Z0-9] only).
+        Fleet-labels (bv. "E&UTRANS1") worden via Vehicle.ritnummer → kenteken
+        vertaald zodat de tol-CSV (echte kentekens) matcht.
+        """
+        raw_ranges = request.data.get('ranges') or []
+        if not isinstance(raw_ranges, list) or not raw_ranges:
+            return Response({'detail': 'ranges is verplicht (lijst).'}, status=400)
+
+        try:
+            buffer_minutes = int(request.data.get('buffer_minutes', 30) or 0)
+        except (TypeError, ValueError):
+            buffer_minutes = 30
+        if buffer_minutes < 0:
+            buffer_minutes = 0
+        if buffer_minutes > 240:
+            buffer_minutes = 240
+        buffer = timedelta(minutes=buffer_minutes)
+
+        tz = timezone.get_current_timezone()
+
+        # Bouw eerst een lookup: normalized_plate -> Vehicle. Zo kunnen we
+        # fleet-labels als "E&UTRANS1" mappen naar het echte kenteken.
+        vehicle_map: dict[str, Vehicle] = {}
+        for v in Vehicle.objects.all():
+            kn = normalize_plate(v.kenteken)
+            if kn:
+                vehicle_map[kn] = v
+            rn = normalize_plate(v.ritnummer)
+            if rn:
+                vehicle_map.setdefault(rn, v)
+
+        # Parse alle ranges en groepeer per (normalized) kenteken. Elk range
+        # element wordt een (start_dt, end_dt) tuple.
+        def _parse_time(val):
+            if not val:
+                return None
+            s = str(val).strip()
+            for fmt in ('%H:%M:%S', '%H:%M', '%H.%M'):
+                try:
+                    return datetime.strptime(s, fmt).time()
+                except ValueError:
+                    continue
+            return None
+
+        def _parse_date(val):
+            if not val:
+                return None
+            s = str(val).strip()[:10]
+            for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y'):
+                try:
+                    return datetime.strptime(s, fmt).date()
+                except ValueError:
+                    continue
+            return None
+
+        ranges_by_plate: dict[str, list[tuple[datetime, datetime]]] = {}
+        overall_min: datetime | None = None
+        overall_max: datetime | None = None
+        skipped_ranges: list[dict] = []
+
+        for item in raw_ranges:
+            if not isinstance(item, dict):
+                continue
+            raw_plate = item.get('plate') or ''
+            norm = normalize_plate(raw_plate)
+            if not norm:
+                continue
+            # Normaliseer naar het echte kenteken indien de input een
+            # ritnummer/label is.
+            veh = vehicle_map.get(norm)
+            if veh:
+                real_norm = normalize_plate(veh.kenteken)
+                if real_norm:
+                    norm = real_norm
+
+            d = _parse_date(item.get('date'))
+            if not d:
+                continue
+            st = _parse_time(item.get('start_time'))
+            et = _parse_time(item.get('end_time'))
+            # STRIKT: als een van beide tijden ontbreekt, weigeren we de range.
+            # Anders zouden we de hele dag matchen wat tot foutieve facturatie
+            # kan leiden. We melden dit terug zodat de gebruiker weet dat er
+            # ritten zijn zonder begin/eindtijd.
+            if st is None or et is None:
+                skipped_ranges.append({
+                    'plate': raw_plate,
+                    'plate_normalized': norm,
+                    'date': d.isoformat(),
+                    'start_time': item.get('start_time') or None,
+                    'end_time': item.get('end_time') or None,
+                    'reason': 'missing_time',
+                })
+                continue
+
+            start_dt = timezone.make_aware(datetime.combine(d, st), tz) - buffer
+            # Nachtdienst: eind vóór start → volgende dag
+            if et < st:
+                end_dt = timezone.make_aware(datetime.combine(d + timedelta(days=1), et), tz) + buffer
+            else:
+                end_dt = timezone.make_aware(datetime.combine(d, et), tz) + buffer
+
+            ranges_by_plate.setdefault(norm, []).append((start_dt, end_dt))
+            if overall_min is None or start_dt < overall_min:
+                overall_min = start_dt
+            if overall_max is None or end_dt > overall_max:
+                overall_max = end_dt
+
+        if not ranges_by_plate or overall_min is None or overall_max is None:
+            return Response({
+                'detail': 'Geen bruikbare ranges (mogelijk missen begin/eindtijden).',
+                'skipped_ranges': skipped_ranges,
+            }, status=400)
+
+        norm_plates = list(ranges_by_plate.keys())
+
+        # Haal alle relevante events op in één query.
+        events_qs = TollingEvent.objects.filter(
+            license_plate_normalized__in=norm_plates,
+            start_at__gte=overall_min - timedelta(days=1),
+            start_at__lt=overall_max + timedelta(days=1),
+            invoiced_at__isnull=True,
+            is_private=False,
+        ).order_by('license_plate_normalized', 'start_at')
+
+        matched_agg: dict[str, dict] = {}
+        unmatched: list[dict] = []
+
+        for e in events_qs:
+            plate_norm = e.license_plate_normalized
+            ranges = ranges_by_plate.get(plate_norm)
+            veh = vehicle_map.get(plate_norm)
+            plate_display = veh.kenteken if veh else e.license_plate_raw
+            ritnummer = veh.ritnummer if veh else ''
+
+            start_at = e.start_at
+            # Sommige DB-rijen kunnen naive zijn — dan localizen.
+            if timezone.is_naive(start_at):
+                start_at = timezone.make_aware(start_at, tz)
+            end_at = e.end_at or start_at
+            if timezone.is_naive(end_at):
+                end_at = timezone.make_aware(end_at, tz)
+
+            fits = False
+            if ranges:
+                # Interval-overlap check: het event overlapt met een rit-range
+                # als event.start < range.end EN event.end > range.start.
+                # Zo tellen ook events mee die net vóór de starttijd
+                # beginnen maar hoofdzakelijk tijdens de rit lopen.
+                for rs, re_ in ranges:
+                    if start_at <= re_ and end_at >= rs:
+                        fits = True
+                        break
+
+            if fits:
+                bucket = matched_agg.setdefault(plate_norm, {
+                    'plate_normalized': plate_norm,
+                    'plate_display': plate_display,
+                    'ritnummer': ritnummer,
+                    'total_km': Decimal('0'),
+                    'total_amount': Decimal('0'),
+                    'events_count': 0,
+                    'days': set(),
+                    'event_ids': [],
+                })
+                bucket['total_km'] += e.distance_km or Decimal('0')
+                bucket['total_amount'] += e.amount or Decimal('0')
+                bucket['events_count'] += 1
+                bucket['days'].add(start_at.astimezone(tz).date().isoformat())
+                bucket['event_ids'].append(str(e.id))
+            else:
+                unmatched.append({
+                    'id': str(e.id),
+                    'plate_display': plate_display,
+                    'plate_normalized': plate_norm,
+                    'start_at': start_at.isoformat(),
+                    'end_at': e.end_at.isoformat() if e.end_at else None,
+                    'distance_km': float(e.distance_km or 0),
+                    'amount': float(e.amount or 0),
+                    'obu': e.obu or '',
+                    'reason': 'outside_time_range' if ranges else 'no_range_for_plate',
+                })
+
+        matched = []
+        for norm, b in matched_agg.items():
+            matched.append({
+                'plate_normalized': b['plate_normalized'],
+                'plate_display': b['plate_display'],
+                'ritnummer': b['ritnummer'],
+                'total_km': float(b['total_km']),
+                'total_amount': float(b['total_amount'].quantize(Decimal('0.01'))),
+                'events_count': b['events_count'],
+                'days': sorted(b['days']),
+                'event_ids': b['event_ids'],
+            })
+        matched.sort(key=lambda x: x['plate_display'])
+
+        return Response({
+            'matched': matched,
+            'unmatched': unmatched,
+            'buffer_minutes': buffer_minutes,
+            'skipped_ranges': skipped_ranges,
+        })
+
     @action(detail=False, methods=['post'], url_path='add-to-invoice')
     def add_to_invoice(self, request):
         """Add tolling totals to an invoice as new lines.
@@ -742,8 +989,32 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         the line id only becomes known after the invoice is saved.
         Body: { invoice_line_id, plate, period='month'|'week', year, index }
         Legacy fallback: { ..., year, month }.
+        Nieuw: { invoice_line_id, event_ids: [uuid, ...] } → link exact deze events.
         """
         line_id = request.data.get('invoice_line_id')
+        try:
+            line = InvoiceLine.objects.get(id=line_id)
+        except InvoiceLine.DoesNotExist:
+            return Response({'detail': 'Factuurregel niet gevonden.'}, status=404)
+
+        # Nieuw pad: directe event-lijst (van match-by-hours).
+        raw_event_ids = request.data.get('event_ids')
+        if isinstance(raw_event_ids, list) and raw_event_ids:
+            events = list(
+                TollingEvent.objects.filter(
+                    id__in=raw_event_ids,
+                    invoiced_at__isnull=True,
+                    is_private=False,
+                )
+            )
+            now = timezone.now()
+            for e in events:
+                e.invoice_line = line
+                e.invoiced_at = now
+            TollingEvent.objects.bulk_update(events, ['invoice_line', 'invoiced_at'])
+            return Response({'linked': len(events)})
+
+        # Legacy pad: op basis van periode.
         plate = request.data.get('plate') or ''
         try:
             period, year, index, start, end, period_label = _resolve_period(request.data)
@@ -752,10 +1023,6 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         norm = normalize_plate(plate)
         if not norm:
             return Response({'detail': 'plate vereist.'}, status=400)
-        try:
-            line = InvoiceLine.objects.get(id=line_id)
-        except InvoiceLine.DoesNotExist:
-            return Response({'detail': 'Factuurregel niet gevonden.'}, status=404)
         exclude_weekend = str(request.data.get('exclude_weekend') or '').lower() in ('1', 'true', 'yes')
         events = list(
             TollingEvent.objects

@@ -31,6 +31,10 @@ import { getImportedEntries, ImportedTimeEntry } from '@/api/urenImport'
 import { tollingApi, TollingInvoicePreviewRow, TollingPeriod } from '@/api/tolling'
 import { getAllVehicles } from '@/api/fleet'
 import { getTolRegistraties, markTolGefactureerd, TolRegistratie } from '@/api/tolregistratie'
+import UnmatchedTollingModal, {
+  MatchedTollingRow as ModalMatchedRow,
+  UnmatchedEvent as ModalUnmatchedEvent,
+} from '@/components/invoices/UnmatchedTollingModal'
 import { 
   InvoiceTemplate, 
   Company, 
@@ -52,7 +56,7 @@ interface InvoiceLineData {
   timeEntryId?: string // If imported from time entry
   isInfoLine?: boolean // Info-only line (e.g. werktijden): no aantal/prijs/totaal rendered
   kilometerheffingTimeEntryId?: string // If this line represents a kilometerheffing for a TimeEntry
-  tollingLink?: { plate: string; period: TollingPeriod; year: number; index: number; excludeWeekend?: boolean }
+  tollingLink?: { plate: string; period: TollingPeriod; year: number; index: number; excludeWeekend?: boolean; eventIds?: string[] }
 }
 
 interface ChauffeurWeekGroup {
@@ -1713,7 +1717,14 @@ export default function InvoiceCreatePage() {
   const [weekNumber, setWeekNumber] = useState<number | null>(null)
   const [weekYear, setWeekYear] = useState<number | null>(null)
   const [chauffeur, setChauffeur] = useState<string | null>(null)
-  
+
+  // Modal-state voor tolheffing-review na strikte tijd-match.
+  const [tollingReview, setTollingReview] = useState<{
+    matched: ModalMatchedRow[]
+    unmatched: ModalUnmatchedEvent[]
+    bufferMinutes: number
+  } | null>(null)
+
   // UI state
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -2156,7 +2167,9 @@ export default function InvoiceCreatePage() {
       // DOT is percentage mode: only add DOT line (no KM line)
       // DOT = percentage of subtotal of uren
       if (defaults.dotPrijs > 0) {
-        const dotBedrag = entriesSubtotaal * (defaults.dotPrijs / 100)
+        // Ronde het DOT-bedrag altijd af op 2 decimalen om JS floating-point
+        // artefacten als 389.44399999999996 te voorkomen.
+        const dotBedrag = Math.round(entriesSubtotaal * (defaults.dotPrijs / 100) * 100) / 100
         summaryLines.push(createSummaryLine(
           `Totaal DOT (${defaults.dotPrijs}%)`,
           1,
@@ -2405,7 +2418,8 @@ export default function InvoiceCreatePage() {
 
     if (defaults.dotIsPercentage) {
       if (defaults.dotPrijs > 0) {
-        const dotBedrag = entriesSubtotaal * (defaults.dotPrijs / 100)
+        // Ronde het DOT-bedrag altijd af op 2 decimalen (JS floating-point fix).
+        const dotBedrag = Math.round(entriesSubtotaal * (defaults.dotPrijs / 100) * 100) / 100
         summaryLines.push(createSummaryLine(`Totaal DOT (${defaults.dotPrijs}%)`, 1, dotBedrag))
       }
     } else {
@@ -2419,15 +2433,165 @@ export default function InvoiceCreatePage() {
 
     setLines(prev => [...prev, ...entryLines, ...summaryLines])
 
-    // Auto-fetch tolling for this week + all involved plates
+    // Auto-fetch tolling voor deze uren — STRIKT op begin/eindtijd per dag per kenteken.
+    // Als een event buiten de rit-tijden valt, krijgt de user een prompt om het
+    // alsnog mee te nemen of over te slaan.
     if (sortedEntries.length > 0) {
-      const plates = Array.from(new Set(
-        sortedEntries.map(e => e.kenteken_import || e.voertuig_kenteken).filter(Boolean)
-      )) as string[]
-      const autoYear = new Date(sortedEntries[0].datum).getFullYear()
-      const autoWeek = sortedEntries[0].weeknummer
-      void autoAddTollingForWeek(plates, autoYear, autoWeek)
+      void autoAddTollingByHours(
+        sortedEntries.map(e => ({
+          kenteken_import: e.kenteken_import,
+          voertuig_kenteken: e.voertuig_kenteken,
+          datum: e.datum,
+          begintijd_rit: e.begintijd_rit,
+          eindtijd_rit: e.eindtijd_rit,
+        }))
+      )
     }
+  }
+
+  // NIEUW: strikte match op begin/eindtijd per dag per kenteken.
+  // Alleen tol-events die binnen de rit-tijdrange vallen (± buffer) tellen mee.
+  // Ongematchte events worden getoond zodat de gebruiker kan beslissen of hij
+  // ze alsnog wil meenemen.
+  const autoAddTollingByHours = async (
+    entries: Array<{
+      kenteken_import?: string | null
+      voertuig_kenteken?: string | null
+      datum: string
+      begintijd_rit?: string | null
+      eindtijd_rit?: string | null
+    }>,
+    bufferMinutes: number = 0,
+  ) => {
+    if (!entries.length) return
+
+    const ranges = entries
+      .map(e => {
+        const plate = (e.kenteken_import || e.voertuig_kenteken || '').trim()
+        if (!plate) return null
+        const d = new Date(e.datum)
+        if (Number.isNaN(d.getTime())) return null
+        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        return {
+          plate,
+          date: iso,
+          start_time: e.begintijd_rit || null,
+          end_time: e.eindtijd_rit || null,
+        }
+      })
+      .filter(Boolean) as Array<{ plate: string; date: string; start_time: string | null; end_time: string | null }>
+
+    if (ranges.length === 0) return
+
+    try {
+      const { matched, unmatched, buffer_minutes, skipped_ranges } = await tollingApi.matchByHours(ranges, bufferMinutes)
+      if (skipped_ranges && skipped_ranges.length > 0) {
+        console.warn(
+          `[auto-tolling] ${skipped_ranges.length} rit(ten) overgeslagen wegens ontbrekende begin/eindtijd:`,
+          skipped_ranges,
+        )
+      }
+      const withMoney = matched.filter(r => r.total_amount > 0)
+
+      // Geen matched en geen unmatched → helemaal geen tolheffing gevonden.
+      if (withMoney.length === 0 && unmatched.length === 0) {
+        console.info('[auto-tolling] geen tolheffing gevonden voor deze uren', { ranges })
+        return
+      }
+
+      // Als er niets buiten de tijden valt EN wel binnen, direct toevoegen.
+      if (withMoney.length > 0 && unmatched.length === 0) {
+        const rows: TollingInvoicePreviewRow[] = withMoney.map(r => ({
+          plate_normalized: r.plate_normalized,
+          plate_display: r.plate_display,
+          ritnummer: r.ritnummer,
+          vehicle_id: null,
+          total_km: r.total_km,
+          total_amount: r.total_amount,
+          events_count: r.events_count,
+          weekday_km: 0, weekday_amount: 0, weekend_km: 0, weekend_amount: 0,
+          period: 'week', year: new Date().getFullYear(), index: 0, label: '', month: 0,
+          event_ids: r.event_ids,
+        }))
+        handleImportTolling(rows, false)
+        console.info(`[auto-tolling] strikte match: ${withMoney.length} kenteken(s) toegevoegd (geen buiten-tijden events).`)
+        return
+      }
+
+      // Er zijn events binnen én/of buiten de tijden → toon de review-modal
+      // zodat de gebruiker zelf kan beslissen wat er op de factuur komt.
+      setTollingReview({
+        matched: withMoney.map(r => ({
+          plate_normalized: r.plate_normalized,
+          plate_display: r.plate_display,
+          ritnummer: r.ritnummer,
+          total_km: r.total_km,
+          total_amount: r.total_amount,
+          events_count: r.events_count,
+          event_ids: r.event_ids,
+        })),
+        unmatched: unmatched as ModalUnmatchedEvent[],
+        bufferMinutes: buffer_minutes ?? bufferMinutes,
+      })
+    } catch (err) {
+      console.warn('[auto-tolling] match-by-hours failed', err)
+    }
+  }
+
+  // Callback vanuit de UnmatchedTollingModal — voegt de gekozen tolheffing
+  // regels toe aan de factuur en sluit de modal.
+  const applyTollingReview = (includeUnmatched: boolean) => {
+    if (!tollingReview) return
+    const { matched, unmatched } = tollingReview
+
+    const asPreviewRow = (
+      plateNorm: string, display: string, ritnr: string | null,
+      km: number, amount: number, count: number,
+      eventIds?: string[],
+    ): TollingInvoicePreviewRow => ({
+      plate_normalized: plateNorm,
+      plate_display: display,
+      ritnummer: ritnr,
+      vehicle_id: null,
+      total_km: km,
+      total_amount: Number(amount.toFixed(2)),
+      events_count: count,
+      weekday_km: 0, weekday_amount: 0, weekend_km: 0, weekend_amount: 0,
+      period: 'week', year: new Date().getFullYear(), index: 0, label: '', month: 0,
+      event_ids: eventIds,
+    })
+
+    const byPlate = new Map<string, TollingInvoicePreviewRow>(
+      matched.map(r => [r.plate_normalized, asPreviewRow(
+        r.plate_normalized, r.plate_display, r.ritnummer,
+        r.total_km, r.total_amount, r.events_count,
+        r.event_ids,
+      )])
+    )
+
+    if (includeUnmatched) {
+      for (const u of unmatched) {
+        const row = byPlate.get(u.plate_normalized)
+        if (row) {
+          row.total_km += u.distance_km || 0
+          row.total_amount = Number((row.total_amount + (u.amount || 0)).toFixed(2))
+          row.events_count += 1
+          if (row.event_ids) row.event_ids = [...row.event_ids, u.id]
+          else row.event_ids = [u.id]
+        } else {
+          byPlate.set(u.plate_normalized, asPreviewRow(
+            u.plate_normalized, u.plate_display, null,
+            u.distance_km || 0, u.amount || 0, 1,
+            [u.id],
+          ))
+        }
+      }
+    }
+
+    if (byPlate.size > 0) {
+      handleImportTolling(Array.from(byPlate.values()), false)
+    }
+    setTollingReview(null)
   }
 
   // Auto-fetch tolling for the given week + plates and append matching lines.
@@ -2526,6 +2690,7 @@ export default function InvoiceCreatePage() {
           year: r.year,
           index: r.index ?? r.month,
           excludeWeekend,
+          eventIds: r.event_ids,
         },
       }
     })
@@ -2806,7 +2971,8 @@ export default function InvoiceCreatePage() {
     const summaryLines: InvoiceLineData[] = []
     if (defaults.dotIsPercentage) {
       if (defaults.dotPrijs > 0) {
-        const dotBedrag = entriesSubtotaal * (defaults.dotPrijs / 100)
+        // Ronde het DOT-bedrag altijd af op 2 decimalen (JS floating-point fix).
+        const dotBedrag = Math.round(entriesSubtotaal * (defaults.dotPrijs / 100) * 100) / 100
         summaryLines.push(createSummaryLine(`Totaal DOT (${defaults.dotPrijs}%)`, 1, dotBedrag))
       }
     } else {
@@ -3020,12 +3186,17 @@ export default function InvoiceCreatePage() {
       const createdLine = await createInvoiceLine(lineData)
       if (line.tollingLink) {
         try {
-          await tollingApi.linkLine(
-            createdLine.id,
-            line.tollingLink.plate,
-            { period: line.tollingLink.period, year: line.tollingLink.year, index: line.tollingLink.index },
-            { excludeWeekend: line.tollingLink.excludeWeekend === true },
-          )
+          // Strikte match (via matchByHours) → link exact deze event-IDs.
+          if (line.tollingLink.eventIds && line.tollingLink.eventIds.length > 0) {
+            await tollingApi.linkLineByEvents(createdLine.id, line.tollingLink.eventIds)
+          } else {
+            await tollingApi.linkLine(
+              createdLine.id,
+              line.tollingLink.plate,
+              { period: line.tollingLink.period, year: line.tollingLink.year, index: line.tollingLink.index },
+              { excludeWeekend: line.tollingLink.excludeWeekend === true },
+            )
+          }
         } catch { /* niet-fataal: tolregels blijven 'open' */ }
       }
     }
@@ -3183,6 +3354,24 @@ export default function InvoiceCreatePage() {
         navigate(`/invoices/${reimportId}/edit`)
       } else {
         toast.success(t('invoices.saved', 'Factuur opgeslagen'))
+        // Reset het formulier zodat je direct een volgende factuur kan maken.
+        // Bewust NIET gereset: selectedTemplate, selectedCompany, selectedAdministratie,
+        // invoiceType — die wil je meestal hergebruiken voor de volgende factuur.
+        setLines([])
+        setOpmerkingen('')
+        setDotPercentageOverride('')
+        setWeekNumber(null)
+        setWeekYear(null)
+        setChauffeur(null)
+        setTollingReview(null)
+        const today = new Date().toISOString().split('T')[0]
+        const due = new Date(); due.setDate(due.getDate() + 30)
+        setFactuurdatum(today)
+        setVervaldatum(due.toISOString().split('T')[0])
+        // Nieuw factuurnummer ophalen zodat de volgende factuur een uniek nummer krijgt.
+        void loadNextInvoiceNumber(invoiceType, selectedAdministratie || null)
+        // Scroll terug naar de top voor duidelijkheid.
+        try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch { /* noop */ }
       }
     } catch (err: any) {
       // Parse error message from Error object or API response
@@ -3759,6 +3948,17 @@ export default function InvoiceCreatePage() {
         onClose={() => setShowTolImportModal(false)}
         onImport={handleImportTol}
         targets={tolTargets}
+      />
+
+      {/* Tolheffing review na strikte tijd-match (mooiere popup i.p.v. window.confirm) */}
+      <UnmatchedTollingModal
+        open={tollingReview !== null}
+        onClose={() => setTollingReview(null)}
+        matched={tollingReview?.matched ?? []}
+        unmatched={tollingReview?.unmatched ?? []}
+        bufferMinutes={tollingReview?.bufferMinutes ?? 30}
+        onConfirmStrict={() => applyTollingReview(false)}
+        onConfirmIncludeAll={() => applyTollingReview(true)}
       />
 
       {/* Bottom save bar (mirror of top button) */}

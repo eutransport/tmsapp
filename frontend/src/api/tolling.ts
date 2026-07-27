@@ -66,6 +66,8 @@ export interface TollingInvoicePreviewRow {
   label: string
   /** @deprecated use `index` when period === 'month' */
   month: number
+  /** Optioneel — als aanwezig wordt link-line direct op deze event-IDs uitgevoerd (strikte match). */
+  event_ids?: string[]
 }
 
 export type TollingPeriod = 'month' | 'week'
@@ -255,6 +257,45 @@ export const tollingApi = {
     return data
   },
 
+  /**
+   * Match tolling-events STRIKT op kenteken + tijdrange per dag.
+   * Alleen events waarvan `start_at` binnen een van de opgegeven ranges valt
+   * (plus optionele buffer, default 30 min) tellen mee.
+   * Terug: `matched` (te factureren) + `unmatched` (buiten range → controle).
+   */
+  matchByHours: async (
+    ranges: Array<{ plate: string; date: string; start_time: string | null; end_time: string | null }>,
+    bufferMinutes: number = 30,
+  ): Promise<{
+    matched: TollingInvoicePreviewRow[]
+    unmatched: Array<{
+      id: string
+      plate_display: string
+      plate_normalized: string
+      start_at: string
+      end_at: string | null
+      distance_km: number
+      amount: number
+      obu: string
+      reason: 'outside_time_range' | 'no_range_for_plate'
+    }>
+    buffer_minutes: number
+    skipped_ranges?: Array<{
+      plate: string
+      plate_normalized: string
+      date: string
+      start_time: string | null
+      end_time: string | null
+      reason: 'missing_time'
+    }>
+  }> => {
+    const { data } = await api.post('/tolling/invoicing/match-by-hours/', {
+      ranges,
+      buffer_minutes: bufferMinutes,
+    })
+    return data
+  },
+
   addToInvoice: async (
     invoiceId: string,
     ref: TollingPeriodRef,
@@ -285,6 +326,18 @@ export const tollingApi = {
       year: ref.year,
       index: ref.index,
       exclude_weekend: opts.excludeWeekend === true,
+    })
+    return data
+  },
+
+  /** Link een factuurregel direct aan specifieke TollingEvent IDs (strikte match). */
+  linkLineByEvents: async (
+    invoiceLineId: string,
+    eventIds: string[],
+  ): Promise<{ linked: number }> => {
+    const { data } = await api.post('/tolling/invoicing/link-line/', {
+      invoice_line_id: invoiceLineId,
+      event_ids: eventIds,
     })
     return data
   },

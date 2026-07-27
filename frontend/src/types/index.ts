@@ -59,6 +59,13 @@ export interface AppSettings {
   primary_color: string
   login_background_color: string
   company_name: string
+  // Publieke bedrijfsgegevens (voor factuur-preview e.d.)
+  company_address?: string
+  company_phone?: string
+  company_email?: string
+  company_kvk?: string
+  company_btw?: string
+  company_iban?: string
 }
 
 export interface AppSettingsAdmin extends AppSettings {
@@ -320,6 +327,41 @@ export interface TemplateTableStyle {
   rowFont: string
 }
 
+// Modern (strakke) layout configuratie
+export type ModernPresetKey =
+  | 'nexora'
+  | 'movento'
+  | 'rapido'
+  | 'greenway'
+  | 'northline'
+  | 'flextrans'
+  | 'boxway'
+  | 'speedo'
+  | 'prime'
+  | 'elevate'
+
+export type LogoMode =
+  | 'logo-only'
+  | 'text-only'
+  | 'logo-left-text-right'
+  | 'logo-top-text-bottom'
+
+export type ModernVariant = 'classic' | 'band' | 'stacked' | 'minimal'
+
+export interface ModernLayoutConfig {
+  preset: ModernPresetKey
+  accentColor: string        // hex, overschrijft preset kleur
+  logoMode: LogoMode
+  variant?: ModernVariant    // structurele layout-variant
+  companyNameOverride?: string
+  thankYouText?: string      // bijv. "Bedankt voor uw vertrouwen!" (leeg = verbergen)
+  typeLabels?: {
+    verkoop?: string
+    credit?: string
+    inkoop?: string
+  }
+}
+
 // Volledige template layout
 export interface TemplateLayout {
   header: TemplateSection
@@ -329,6 +371,10 @@ export interface TemplateLayout {
   defaults: TemplateDefaults
   totals: TemplateTotals
   tableStyle?: TemplateTableStyle
+  // Nieuw: kies tussen bestaande volledig-configureerbare 'legacy' layout
+  // (default, backwards compatible) of nieuwe strakke 'modern' layout.
+  layoutStyle?: 'legacy' | 'modern'
+  modern?: ModernLayoutConfig
 }
 
 export interface InvoiceTemplate {

@@ -86,6 +86,12 @@ class AppSettingsSerializer(serializers.ModelSerializer):
             'primary_color',
             'login_background_color',
             'company_name',
+            'company_address',
+            'company_phone',
+            'company_email',
+            'company_kvk',
+            'company_btw',
+            'company_iban',
         ]
     
     def get_logo_url(self, obj):
