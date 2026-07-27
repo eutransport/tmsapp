@@ -269,14 +269,30 @@ class ModernInvoicePDFGenerator:
 
     # ---- helpers ---------------------------------------------------------
     def _load_logo(self, max_w_pt: float, max_h_pt: float):
-        """Return a reportlab Image scaled to fit the given box (in points)."""
-        logo_field = getattr(self.app_settings, 'logo', None)
+        """Return a reportlab Image scaled to fit the given box (in points).
+
+        Regel:
+        - Als de factuur aan een Administratie is gekoppeld, gebruiken we
+          UITSLUITEND het logo van die administratie. Geen logo op de admin?
+          Dan komt er ook géén logo op de factuur (geen stille terugval op
+          AppSettings). Zo blijft het gedrag voorspelbaar: leeg = leeg.
+        - Alleen als er geen administratie gekoppeld is, valt Modern terug
+          op AppSettings.logo (bestaand gedrag voor oude facturen).
+        Legacy PDF-template blijft ongewijzigd.
+        """
+        admin = getattr(self.invoice, 'administratie', None)
+        if admin is not None:
+            candidates = [getattr(admin, 'logo', None)]
+        else:
+            candidates = [getattr(self.app_settings, 'logo', None)]
         path = None
-        try:
-            if logo_field and getattr(logo_field, 'path', None) and os.path.exists(logo_field.path):
-                path = logo_field.path
-        except Exception:
-            path = None
+        for logo_field in candidates:
+            try:
+                if logo_field and getattr(logo_field, 'path', None) and os.path.exists(logo_field.path):
+                    path = logo_field.path
+                    break
+            except Exception:
+                continue
         if not path:
             return None
         try:
@@ -293,12 +309,53 @@ class ModernInvoicePDFGenerator:
         except Exception:
             return None
 
+    def _bedrijf(self, name: str) -> str:
+        """Zelfde admin-first / AppSettings-fallback helper als de legacy
+        generator. Gebruikt voor bedrijfsnaam / adres / contact / IBAN etc.
+        """
+        admin = getattr(self.invoice, 'administratie', None)
+        mapping = {
+            'naam':            ('naam',            'company_name'),
+            'address':         ('adres_regel',     'company_address'),
+            'postcode_plaats': ('postcode_plaats', None),
+            'phone':           ('telefoon',        'company_phone'),
+            'email':           ('email',           'company_email'),
+            'iban':            ('iban',            'company_iban'),
+            'kvk':             ('kvk',             'company_kvk'),
+            'btw':             ('btw',             'company_btw'),
+        }
+        admin_attr, settings_attr = mapping.get(name, (None, None))
+        if admin is not None and admin_attr:
+            val = getattr(admin, admin_attr, '') or ''
+            val = str(val).strip()
+            if val:
+                return val
+        if settings_attr:
+            val = getattr(self.app_settings, settings_attr, '') or ''
+            return str(val).strip()
+        return ''
+
     def _company_name(self) -> str:
-        return (
-            (self.modern.get('companyNameOverride') or '').strip()
-            or (self.app_settings.company_name or '').strip()
-            or ''
-        )
+        """Bedrijfsnaam-regel:
+        - Als er een administratie gekoppeld is → gebruik ALTIJD admin.naam.
+          De template-'companyNameOverride' wordt dan genegeerd, zodat het
+          kiezen van een andere administratie meteen de juiste naam op de
+          PDF geeft (geen 'stale' override uit het template).
+        - Zonder administratie: gebruik companyNameOverride als gezet,
+          anders AppSettings.company_name.
+        """
+        admin = getattr(self.invoice, 'administratie', None)
+        if admin is not None:
+            naam = (admin.naam or '').strip()
+            if naam:
+                return naam
+            # admin zonder naam is theoretisch onmogelijk (verplicht veld),
+            # maar val voor de zekerheid terug op AppSettings.
+            return (self.app_settings.company_name or '').strip()
+        override = (self.modern.get('companyNameOverride') or '').strip()
+        if override:
+            return override
+        return (self.app_settings.company_name or '').strip()
 
     def _invoice_type_label(self) -> str:
         return self.type_labels.get(self.invoice.type, self.type_labels['verkoop'])
@@ -322,8 +379,24 @@ class ModernInvoicePDFGenerator:
 
         # ---- Left: bedrijfsnaam + adres ----
         name = self._company_name()
-        addr_raw = (self.app_settings.company_address or '').strip()
-        addr_lines = [l.strip() for l in addr_raw.splitlines() if l.strip()]
+        # Als een administratie is gekoppeld met adres-velden: gebruik die als
+        # gestructureerde adres-regels. Anders val terug op de vrij-tekst
+        # company_address uit AppSettings.
+        admin = getattr(self.invoice, 'administratie', None)
+        addr_lines = []
+        if admin is not None:
+            adres_regel = (admin.adres_regel or '').strip()
+            pc_plaats = (admin.postcode_plaats or '').strip()
+            land = (admin.land or '').strip()
+            if adres_regel:
+                addr_lines.append(adres_regel)
+            if pc_plaats:
+                addr_lines.append(pc_plaats)
+            if land:
+                addr_lines.append(land)
+        if not addr_lines:
+            addr_raw = (self.app_settings.company_address or '').strip()
+            addr_lines = [l.strip() for l in addr_raw.splitlines() if l.strip()]
 
         left_flow = []
         if name:
@@ -337,36 +410,57 @@ class ModernInvoicePDFGenerator:
         for line in addr_lines:
             left_flow.append(Paragraph(line, text_style))
         contact_bits = []
-        if self.app_settings.company_phone:
-            contact_bits.append(self.app_settings.company_phone)
-        if self.app_settings.company_email:
-            contact_bits.append(self.app_settings.company_email)
+        phone = self._bedrijf('phone')
+        email = self._bedrijf('email')
+        if phone:
+            contact_bits.append(phone)
+        if email:
+            contact_bits.append(email)
         if contact_bits:
             left_flow.append(Paragraph(' · '.join(contact_bits), text_style))
 
         # ---- Right: IBAN / KVK / BTW als key-value rijtjes ----
         pay_rows = []
-        if self.app_settings.company_iban:
-            pay_rows.append(('IBAN', self.app_settings.company_iban))
-        if self.app_settings.company_kvk:
-            pay_rows.append(('KVK', self.app_settings.company_kvk))
-        if self.app_settings.company_btw:
-            pay_rows.append(('BTW', self.app_settings.company_btw))
+        iban = self._bedrijf('iban')
+        kvk = self._bedrijf('kvk')
+        btw = self._bedrijf('btw')
+        if iban:
+            pay_rows.append(('IBAN', iban))
+        if kvk:
+            pay_rows.append(('KVK', kvk))
+        if btw:
+            pay_rows.append(('BTW', btw))
 
         if pay_rows:
+            # Right-aligned styles voor de sleutel/waarde-cellen
+            label_style_r = ParagraphStyle(
+                'ModStripLabelRight', parent=label_style, alignment=2,  # 2 = TA_RIGHT
+            )
+            text_style_r = ParagraphStyle(
+                'ModStripTextRight', parent=text_style, alignment=2,
+            )
             data = []
             for label, value in pay_rows:
                 data.append([
-                    Paragraph(label, label_style),
-                    Paragraph(f':&nbsp;&nbsp;{value}', text_style),
+                    Paragraph(label, label_style_r),
+                    Paragraph(f'<b>{value}</b>', text_style_r),
                 ])
-            right_flow = [Table(data, colWidths=[1.2 * cm, None], style=TableStyle([
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                ('TOPPADDING', (0, 0), (-1, -1), 0),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ]))]
+            # Rechter tabel: label-kolom smal, waarde-kolom breder, beide
+            # rechts uitgelijnd binnen de strip.
+            inner_right = Table(
+                data,
+                colWidths=[1.2 * cm, 5.2 * cm],
+                hAlign='RIGHT',
+                style=TableStyle([
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+                ]),
+            )
+            right_flow = [inner_right]
         else:
             right_flow = []
 
@@ -381,6 +475,8 @@ class ModernInvoicePDFGenerator:
             ('RIGHTPADDING', (0, 0), (-1, -1), 12 if is_dark else 0),
             ('TOPPADDING', (0, 0), (-1, -1), 10 if is_dark else 4),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 10 if is_dark else 6),
+            # Rechter kolom-inhoud rechts uitlijnen
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
         ]
         if is_dark:
             strip_style.append(('BACKGROUND', (0, 0), (-1, -1), self.accent))
@@ -708,12 +804,15 @@ class ModernInvoicePDFGenerator:
         # bij alle varianten behalve 'minimal' — daar tonen we ze hier onderaan.
         if self.variant == 'minimal':
             pay_rows = []
-            if self.app_settings.company_iban:
-                pay_rows.append(('IBAN', self.app_settings.company_iban))
-            if self.app_settings.company_kvk:
-                pay_rows.append(('KVK', self.app_settings.company_kvk))
-            if self.app_settings.company_btw:
-                pay_rows.append(('BTW', self.app_settings.company_btw))
+            iban = self._bedrijf('iban')
+            kvk = self._bedrijf('kvk')
+            btw = self._bedrijf('btw')
+            if iban:
+                pay_rows.append(('IBAN', iban))
+            if kvk:
+                pay_rows.append(('KVK', kvk))
+            if btw:
+                pay_rows.append(('BTW', btw))
 
             if pay_rows:
                 cells = []

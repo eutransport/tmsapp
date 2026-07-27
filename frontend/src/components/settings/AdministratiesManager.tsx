@@ -13,12 +13,16 @@ import {
   ArrowPathIcon,
   BuildingOffice2Icon,
   UsersIcon,
+  PhotoIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import {
   listAdministraties,
   createAdministratie,
   updateAdministratie,
   deleteAdministratie,
+  uploadAdministratieLogo,
+  deleteAdministratieLogo,
   type Administratie,
   type AdministratieWrite,
 } from '@/api/administraties'
@@ -37,6 +41,17 @@ interface FormState {
   invoice_start_number_verkoop: number
   invoice_start_number_inkoop: number
   invoice_start_number_credit: number
+  // Bedrijfsgegevens (verschijnen op factuur — leeg = fallback op AppSettings)
+  straat: string
+  huisnummer: string
+  postcode: string
+  plaats: string
+  land: string
+  kvk: string
+  btw: string
+  iban: string
+  telefoon: string
+  email: string
 }
 
 const emptyForm = (): FormState => ({
@@ -49,6 +64,16 @@ const emptyForm = (): FormState => ({
   invoice_start_number_verkoop: 1,
   invoice_start_number_inkoop: 1,
   invoice_start_number_credit: 1,
+  straat: '',
+  huisnummer: '',
+  postcode: '',
+  plaats: '',
+  land: '',
+  kvk: '',
+  btw: '',
+  iban: '',
+  telefoon: '',
+  email: '',
 })
 
 export default function AdministratiesManager() {
@@ -66,6 +91,12 @@ export default function AdministratiesManager() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm())
   const [saving, setSaving] = useState(false)
+  // Logo upload state — bijgehouden buiten form omdat het via een aparte
+  // multipart-endpoint na de hoofd-save wordt geüpload.
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null)
+  const [existingLogoUrl, setExistingLogoUrl] = useState<string | null>(null)
+  const [logoShouldDelete, setLogoShouldDelete] = useState(false)
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
@@ -91,9 +122,20 @@ export default function AdministratiesManager() {
     }
   }
 
+  const resetLogoState = () => {
+    setLogoFile(null)
+    setLogoPreviewUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    setExistingLogoUrl(null)
+    setLogoShouldDelete(false)
+  }
+
   const openCreate = () => {
     setEditingId(null)
     setForm(emptyForm())
+    resetLogoState()
     setModalOpen(true)
   }
 
@@ -109,7 +151,19 @@ export default function AdministratiesManager() {
       invoice_start_number_verkoop: adm.invoice_start_number_verkoop ?? 1,
       invoice_start_number_inkoop: adm.invoice_start_number_inkoop ?? 1,
       invoice_start_number_credit: adm.invoice_start_number_credit ?? 1,
+      straat: adm.straat ?? '',
+      huisnummer: adm.huisnummer ?? '',
+      postcode: adm.postcode ?? '',
+      plaats: adm.plaats ?? '',
+      land: adm.land ?? '',
+      kvk: adm.kvk ?? '',
+      btw: adm.btw ?? '',
+      iban: adm.iban ?? '',
+      telefoon: adm.telefoon ?? '',
+      email: adm.email ?? '',
     })
+    resetLogoState()
+    setExistingLogoUrl(adm.logo_url ?? null)
     setModalOpen(true)
   }
 
@@ -117,6 +171,34 @@ export default function AdministratiesManager() {
     setModalOpen(false)
     setEditingId(null)
     setForm(emptyForm())
+    resetLogoState()
+  }
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null
+    if (!file) return
+    // Max 2MB — zelfde limiet als backend
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Logo mag maximaal 2MB zijn')
+      return
+    }
+    setLogoFile(file)
+    setLogoShouldDelete(false)
+    setLogoPreviewUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev)
+      return URL.createObjectURL(file)
+    })
+  }
+
+  const handleLogoRemove = () => {
+    if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl)
+    setLogoPreviewUrl(null)
+    setLogoFile(null)
+    if (existingLogoUrl) {
+      // Bestaand logo → markeer voor delete bij opslaan
+      setLogoShouldDelete(true)
+      setExistingLogoUrl(null)
+    }
   }
 
   const handleSave = async () => {
@@ -142,13 +224,41 @@ export default function AdministratiesManager() {
         invoice_start_number_verkoop: form.invoice_start_number_verkoop || 1,
         invoice_start_number_inkoop: form.invoice_start_number_inkoop || 1,
         invoice_start_number_credit: form.invoice_start_number_credit || 1,
+        straat: form.straat.trim(),
+        huisnummer: form.huisnummer.trim(),
+        postcode: form.postcode.trim(),
+        plaats: form.plaats.trim(),
+        land: form.land.trim(),
+        kvk: form.kvk.trim(),
+        btw: form.btw.trim(),
+        iban: form.iban.trim().replace(/\s+/g, ''),
+        telefoon: form.telefoon.trim(),
+        email: form.email.trim(),
       }
+      let savedId: string
       if (editingId) {
         await updateAdministratie(editingId, payload)
+        savedId = editingId
         setSuccess('Administratie bijgewerkt')
       } else {
-        await createAdministratie(payload)
+        const created = await createAdministratie(payload)
+        savedId = created.id
         setSuccess('Administratie aangemaakt')
+      }
+      // Logo verwerken (na hoofd-save zodat id bestaat)
+      if (logoShouldDelete && editingId) {
+        try {
+          await deleteAdministratieLogo(savedId)
+        } catch {
+          // niet fataal — hoofdrecord is opgeslagen
+        }
+      }
+      if (logoFile) {
+        try {
+          await uploadAdministratieLogo(savedId, logoFile)
+        } catch {
+          setError('Administratie opgeslagen, maar logo upload mislukte')
+        }
       }
       closeModal()
       await loadData()
@@ -280,7 +390,7 @@ export default function AdministratiesManager() {
       {/* Create / Edit Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <h2 className="text-base font-semibold text-gray-900">
@@ -325,6 +435,176 @@ export default function AdministratiesManager() {
                   onChange={e => setForm(f => ({ ...f, beschrijving: e.target.value }))}
                   placeholder="Optionele toelichting"
                 />
+              </div>
+
+              {/* Bedrijfsgegevens (verschijnen op de factuur) */}
+              <div className="border-t border-gray-200 pt-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <DocumentTextIcon className="h-4 w-4 text-gray-500" />
+                  <h3 className="text-sm font-semibold text-gray-800">Bedrijfsgegevens</h3>
+                </div>
+                <p className="text-xs text-gray-500 mb-3">
+                  Deze gegevens worden gebruikt als afzender op facturen van deze administratie.
+                  Leeg laten valt terug op de algemene instellingen.
+                </p>
+
+                {/* Logo upload */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Logo</label>
+                  <div className="flex items-center gap-4">
+                    <div className="h-20 w-32 border border-gray-200 rounded-lg bg-gray-50 flex items-center justify-center overflow-hidden">
+                      {logoPreviewUrl ? (
+                        <img src={logoPreviewUrl} alt="Logo preview" className="max-h-full max-w-full object-contain" />
+                      ) : existingLogoUrl ? (
+                        <img src={existingLogoUrl} alt="Huidig logo" className="max-h-full max-w-full object-contain" />
+                      ) : (
+                        <PhotoIcon className="h-8 w-8 text-gray-300" />
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="btn-secondary text-xs cursor-pointer inline-flex items-center gap-1.5">
+                        <PhotoIcon className="h-3.5 w-3.5" />
+                        {logoFile || existingLogoUrl ? 'Logo vervangen' : 'Logo kiezen'}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+                          className="hidden"
+                          onChange={handleLogoChange}
+                        />
+                      </label>
+                      {(logoFile || existingLogoUrl) && (
+                        <button
+                          type="button"
+                          onClick={handleLogoRemove}
+                          className="text-xs text-red-600 hover:text-red-700 inline-flex items-center gap-1"
+                        >
+                          <TrashIcon className="h-3.5 w-3.5" />
+                          Verwijderen
+                        </button>
+                      )}
+                      <p className="text-[11px] text-gray-400">JPEG, PNG, GIF, WEBP of SVG · max 2MB</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Adres */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Straat</label>
+                    <input
+                      type="text"
+                      className="input-field w-full"
+                      value={form.straat}
+                      onChange={e => setForm(f => ({ ...f, straat: e.target.value }))}
+                      maxLength={255}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Huisnummer</label>
+                    <input
+                      type="text"
+                      className="input-field w-full"
+                      value={form.huisnummer}
+                      onChange={e => setForm(f => ({ ...f, huisnummer: e.target.value }))}
+                      maxLength={20}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Postcode</label>
+                    <input
+                      type="text"
+                      className="input-field w-full"
+                      value={form.postcode}
+                      onChange={e => setForm(f => ({ ...f, postcode: e.target.value }))}
+                      maxLength={10}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Plaats</label>
+                    <input
+                      type="text"
+                      className="input-field w-full"
+                      value={form.plaats}
+                      onChange={e => setForm(f => ({ ...f, plaats: e.target.value }))}
+                      maxLength={100}
+                    />
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Land</label>
+                  <input
+                    type="text"
+                    className="input-field w-full"
+                    value={form.land}
+                    onChange={e => setForm(f => ({ ...f, land: e.target.value }))}
+                    placeholder="bijv. Nederland"
+                    maxLength={100}
+                  />
+                </div>
+
+                {/* KVK / BTW */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">KVK-nummer</label>
+                    <input
+                      type="text"
+                      className="input-field w-full"
+                      value={form.kvk}
+                      onChange={e => setForm(f => ({ ...f, kvk: e.target.value }))}
+                      maxLength={20}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">BTW-nummer</label>
+                    <input
+                      type="text"
+                      className="input-field w-full"
+                      value={form.btw}
+                      onChange={e => setForm(f => ({ ...f, btw: e.target.value }))}
+                      placeholder="NL123456789B01"
+                      maxLength={20}
+                    />
+                  </div>
+                </div>
+
+                {/* IBAN */}
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">IBAN</label>
+                  <input
+                    type="text"
+                    className="input-field w-full"
+                    value={form.iban}
+                    onChange={e => setForm(f => ({ ...f, iban: e.target.value }))}
+                    placeholder="NL91ABNA0417164300"
+                    maxLength={34}
+                  />
+                </div>
+
+                {/* Telefoon / Email */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Telefoon</label>
+                    <input
+                      type="text"
+                      className="input-field w-full"
+                      value={form.telefoon}
+                      onChange={e => setForm(f => ({ ...f, telefoon: e.target.value }))}
+                      maxLength={30}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">E-mail</label>
+                    <input
+                      type="email"
+                      className="input-field w-full"
+                      value={form.email}
+                      onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                      maxLength={254}
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Bedrijven */}

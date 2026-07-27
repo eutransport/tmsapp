@@ -2,7 +2,6 @@
  * Modern (strakke) factuur-layout: presets, editor en preview.
  * Wordt getoond in `TemplateEditorPage` wanneer `layoutStyle === 'modern'`.
  */
-import { useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type {
   ModernLayoutConfig,
@@ -11,7 +10,6 @@ import type {
   ModernVariant,
   InvoiceTemplate,
 } from '@/types'
-import { settingsApi } from '@/api/settings'
 
 export interface ModernPreset {
   key: ModernPresetKey
@@ -92,102 +90,21 @@ function normalizeLogoUrl(raw: string | null | undefined): string | null {
 export function ModernConfigEditor({
   config,
   onChange,
-  logoUrl,
-  onLogoChanged,
+  logoUrl: _logoUrl,
+  onLogoChanged: _onLogoChanged,
 }: ModernConfigEditorProps) {
   const update = (patch: Partial<ModernLayoutConfig>) => onChange({ ...config, ...patch })
   const updateLabel = (key: 'verkoop' | 'credit' | 'inkoop', value: string) =>
     onChange({ ...config, typeLabels: { ...config.typeLabels, [key]: value } })
 
-  const normalizedLogoUrl = normalizeLogoUrl(logoUrl)
-
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
-
-  const handleLogoFile = async (file: File | null | undefined) => {
-    if (!file) return
-    setUploading(true)
-    setUploadError(null)
-    try {
-      const updated = await settingsApi.uploadLogo(file)
-      const clean = normalizeLogoUrl(updated.logo_url ?? null)
-      const url = clean
-        ? clean + (clean.includes('?') ? '&' : '?') + 'v=' + Date.now()
-        : null
-      onLogoChanged?.(url)
-    } catch (err) {
-      console.error('Logo upload mislukt', err)
-      setUploadError('Upload mislukt. Controleer bestand en rechten.')
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-  }
-
-  const handleLogoDelete = async () => {
-    if (!confirm('Weet je zeker dat je het logo wilt verwijderen?')) return
-    setUploading(true)
-    setUploadError(null)
-    try {
-      const updated = await settingsApi.deleteLogo()
-      onLogoChanged?.(normalizeLogoUrl(updated.logo_url ?? null))
-    } catch (err) {
-      console.error('Logo verwijderen mislukt', err)
-      setUploadError('Verwijderen mislukt.')
-    } finally {
-      setUploading(false)
-    }
-  }
-
   return (
     <div className="space-y-5">
-      <div>
-        <h3 className="font-medium mb-2">Bedrijfslogo</h3>
-        <div className="flex items-start gap-3">
-          <div className="h-24 w-40 rounded border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
-            {normalizedLogoUrl ? (
-              <img src={normalizedLogoUrl} alt="logo" className="max-h-full max-w-full object-contain" />
-            ) : (
-              <span className="text-xs text-gray-400">Geen logo</span>
-            )}
-          </div>
-          <div className="flex-1">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/svg+xml,image/webp"
-              className="hidden"
-              onChange={e => handleLogoFile(e.target.files?.[0])}
-            />
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="px-3 py-1.5 text-sm rounded bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60"
-              >
-                {uploading ? 'Bezig…' : logoUrl ? 'Logo vervangen' : 'Logo uploaden'}
-              </button>
-              {logoUrl && (
-                <button
-                  type="button"
-                  onClick={handleLogoDelete}
-                  disabled={uploading}
-                  className="px-3 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-60"
-                >
-                  Verwijderen
-                </button>
-              )}
-            </div>
-            <p className="mt-1 text-xs text-gray-500">
-              Wordt globaal opgeslagen (Instellingen &rarr; Bedrijf). PNG met transparantie werkt het best.
-            </p>
-            {uploadError && (
-              <p className="mt-1 text-xs text-red-600">{uploadError}</p>
-            )}
-          </div>
-        </div>
+      {/* Info: logo & bedrijfsnaam komen automatisch uit de administratie */}
+      <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+        Het logo en de bedrijfsnaam op de factuur worden automatisch bepaald door
+        de gekozen <b>administratie</b>. Als een administratie geen logo/naam heeft,
+        valt het terug op de algemene instellingen (Instellingen &rarr; Bedrijf).
+        Beheer dit onder <b>Instellingen &rarr; Administraties</b>.
       </div>
 
       <div>
@@ -316,8 +233,12 @@ export function ModernConfigEditor({
           value={config.companyNameOverride || ''}
           onChange={e => update({ companyNameOverride: e.target.value })}
           className="w-full border rounded p-2 text-sm"
-          placeholder="Leeg = gebruik de naam uit Instellingen"
+          placeholder="Leeg = neem de naam van de gekozen administratie"
         />
+        <p className="mt-1 text-xs text-gray-500">
+          Laat leeg om automatisch de <b>naam van de administratie</b> te gebruiken
+          (of de algemene bedrijfsnaam als er geen administratie is gekoppeld).
+        </p>
       </div>
 
       <div>

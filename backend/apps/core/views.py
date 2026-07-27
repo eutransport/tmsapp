@@ -1424,3 +1424,83 @@ class AdministratieViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='upload-logo',
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def upload_logo(self, request, pk=None):
+        """Upload logo voor deze administratie. Zelfde validaties als
+        AppSettings.upload_logo — max 2MB, JPEG/PNG/GIF/WEBP/SVG, magic-byte
+        check, SVG-sanitatie tegen XSS."""
+        administratie = self.get_object()
+        if 'logo' not in request.FILES:
+            return Response({'error': 'Geen bestand geüpload'}, status=status.HTTP_400_BAD_REQUEST)
+
+        uploaded_file = request.FILES['logo']
+
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml']
+        if uploaded_file.content_type not in allowed_types:
+            return Response(
+                {'error': 'Ongeldig bestandstype. Alleen JPEG, PNG, GIF, WEBP en SVG zijn toegestaan.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        max_size = 2 * 1024 * 1024
+        if uploaded_file.size > max_size:
+            return Response(
+                {'error': 'Bestand is te groot. Maximum grootte is 2MB.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        uploaded_file.seek(0)
+        header = uploaded_file.read(16)
+        uploaded_file.seek(0)
+        valid_signatures = [
+            b'\xff\xd8\xff',
+            b'\x89PNG\r\n\x1a\n',
+            b'GIF87a', b'GIF89a',
+            b'RIFF',
+            b'<?xml', b'<svg',
+        ]
+        if not any(header.startswith(sig) for sig in valid_signatures):
+            if b'<svg' not in header and b'<?xml' not in header:
+                return Response(
+                    {'error': 'Bestandsinhoud komt niet overeen met bestandstype.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        if uploaded_file.content_type == 'image/svg+xml':
+            from .security import sanitize_svg
+            from django.core.files.base import ContentFile
+            uploaded_file.seek(0)
+            raw = uploaded_file.read()
+            sanitized = sanitize_svg(raw)
+            uploaded_file = ContentFile(sanitized, name=uploaded_file.name)
+
+        # Verwijder oud logo van disk indien aanwezig
+        if administratie.logo:
+            try:
+                administratie.logo.delete(save=False)
+            except Exception:
+                pass
+        administratie.logo = uploaded_file
+        administratie.save(update_fields=['logo', 'updated_at'])
+        serializer = self.get_serializer(administratie)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='delete-logo')
+    def delete_logo(self, request, pk=None):
+        """Verwijder het logo van deze administratie."""
+        administratie = self.get_object()
+        if administratie.logo:
+            try:
+                administratie.logo.delete(save=False)
+            except Exception:
+                pass
+            administratie.logo = None
+            administratie.save(update_fields=['logo', 'updated_at'])
+        serializer = self.get_serializer(administratie)
+        return Response(serializer.data)
+

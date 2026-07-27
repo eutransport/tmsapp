@@ -31,6 +31,18 @@ export interface Administratie {
   invoice_start_number_verkoop: number
   invoice_start_number_inkoop: number
   invoice_start_number_credit: number
+  // Bedrijfsgegevens per administratie (verschijnen op de factuur)
+  logo_url?: string | null
+  straat?: string
+  huisnummer?: string
+  postcode?: string
+  plaats?: string
+  land?: string
+  kvk?: string
+  btw?: string
+  iban?: string
+  telefoon?: string
+  email?: string
   created_by_name: string
   created_at: string
   updated_at: string
@@ -46,6 +58,17 @@ export interface AdministratieWrite {
   invoice_start_number_verkoop?: number
   invoice_start_number_inkoop?: number
   invoice_start_number_credit?: number
+  // Bedrijfsgegevens (allemaal optioneel — leeg = fallback op AppSettings.company_*)
+  straat?: string
+  huisnummer?: string
+  postcode?: string
+  plaats?: string
+  land?: string
+  kvk?: string
+  btw?: string
+  iban?: string
+  telefoon?: string
+  email?: string
 }
 
 /** Admin: list all administraties */
@@ -93,4 +116,20 @@ export async function getMijnBedrijven(): Promise<Company[]> {
 export async function getMijnAdministraties(): Promise<Administratie[]> {
   const response = await api.get('/core/administraties/mijn-administraties/')
   return response.data.results ?? response.data
+}
+
+/** Admin: upload logo voor een administratie (multipart). */
+export async function uploadAdministratieLogo(id: string, file: File): Promise<Administratie> {
+  const form = new FormData()
+  form.append('logo', file)
+  const response = await api.post(`/core/administraties/${id}/upload-logo/`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
+}
+
+/** Admin: verwijder logo van een administratie. */
+export async function deleteAdministratieLogo(id: string): Promise<Administratie> {
+  const response = await api.post(`/core/administraties/${id}/delete-logo/`)
+  return response.data
 }

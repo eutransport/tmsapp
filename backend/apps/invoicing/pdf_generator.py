@@ -128,6 +128,44 @@ class InvoicePDFGenerator:
         
         return content
     
+    def _bedrijf(self, name: str) -> str:
+        """Haal een 'afzender' bedrijfsveld op met admin-preferentie.
+
+        Als de factuur aan een Administratie is gekoppeld én het gevraagde
+        veld op de administratie is ingevuld, gebruik dat. Anders val terug
+        op AppSettings.company_*. Dit garandeert non-breaking gedrag voor
+        bestaande facturen zonder administratie of met lege admin-velden.
+        """
+        admin = getattr(self.invoice, 'administratie', None)
+        # Mapping van logische naam → (Administratie-attribuut, AppSettings-attribuut)
+        mapping = {
+            'naam':            ('naam',        'company_name'),
+            'straat':          ('straat',      None),
+            'huisnummer':      ('huisnummer',  None),
+            'postcode':        ('postcode',    None),
+            'plaats':          ('plaats',      None),
+            'land':            ('land',        None),
+            'adres':           ('adres_regel', 'company_address'),
+            'postcode_plaats': ('postcode_plaats', None),
+            'kvk':             ('kvk',         'company_kvk'),
+            'btw':             ('btw',         'company_btw'),
+            'iban':            ('iban',        'company_iban'),
+            'telefoon':        ('telefoon',    None),
+            'email':           ('email',       None),
+        }
+        admin_attr, settings_attr = mapping.get(name, (None, None))
+        # Admin-waarde eerst
+        if admin is not None and admin_attr:
+            val = getattr(admin, admin_attr, '') or ''
+            val = str(val).strip()
+            if val:
+                return val
+        # Fallback op AppSettings.company_*
+        if settings_attr:
+            val = getattr(self.app_settings, settings_attr, '') or ''
+            return str(val).strip()
+        return ''
+
     def _replace_variable(self, var_name):
         """Replace a variable name with actual value."""
         klant = self.invoice.bedrijf
@@ -148,10 +186,22 @@ class InvoicePDFGenerator:
             'klant.telefoon': klant.telefoon or '',
             'klant.email': klant.email or '',
             'klant.contactpersoon': klant.contactpersoon or '',
-            'bedrijf.naam': self.app_settings.company_name or '',
-            'bedrijf.adres': self.app_settings.company_address or '',
-            'bedrijf.kvk': self.app_settings.company_kvk or '',
-            'bedrijf.btw': self.app_settings.company_btw or '',
+            # 'bedrijf.*' = afzender (jouw eigen bedrijf). Waarden komen bij
+            # voorkeur uit de gekozen administratie, met fallback naar
+            # AppSettings.company_* (bestaand gedrag).
+            'bedrijf.naam':            self._bedrijf('naam'),
+            'bedrijf.adres':           self._bedrijf('adres'),
+            'bedrijf.straat':          self._bedrijf('straat'),
+            'bedrijf.huisnummer':      self._bedrijf('huisnummer'),
+            'bedrijf.postcode':        self._bedrijf('postcode'),
+            'bedrijf.plaats':          self._bedrijf('plaats'),
+            'bedrijf.land':            self._bedrijf('land'),
+            'bedrijf.postcode_plaats': self._bedrijf('postcode_plaats'),
+            'bedrijf.kvk':             self._bedrijf('kvk'),
+            'bedrijf.btw':             self._bedrijf('btw'),
+            'bedrijf.iban':            self._bedrijf('iban'),
+            'bedrijf.telefoon':        self._bedrijf('telefoon'),
+            'bedrijf.email':           self._bedrijf('email'),
         }
         return var_map.get(var_name, f'{{{var_name}}}')
 
@@ -405,14 +455,17 @@ class InvoicePDFGenerator:
         """Build payment information section."""
         elements = []
         
-        # Betaalinformatie from app settings
+        # Betaalinformatie: admin-preferentie met fallback op AppSettings
         footer_text = []
-        if self.app_settings.company_iban:
-            footer_text.append(f"<b>IBAN:</b> {self.app_settings.company_iban}")
-        if self.app_settings.company_kvk:
-            footer_text.append(f"<b>KVK:</b> {self.app_settings.company_kvk}")
-        if self.app_settings.company_btw:
-            footer_text.append(f"<b>BTW:</b> {self.app_settings.company_btw}")
+        iban = self._bedrijf('iban')
+        kvk = self._bedrijf('kvk')
+        btw = self._bedrijf('btw')
+        if iban:
+            footer_text.append(f"<b>IBAN:</b> {iban}")
+        if kvk:
+            footer_text.append(f"<b>KVK:</b> {kvk}")
+        if btw:
+            footer_text.append(f"<b>BTW:</b> {btw}")
         
         if footer_text:
             elements.append(Paragraph(" | ".join(footer_text), self.styles['SmallText']))
