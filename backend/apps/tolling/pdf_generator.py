@@ -1,5 +1,6 @@
 """PDF generator voor tolheffing-overzicht (bijlage bij factuur)."""
 import io
+import re
 from collections import defaultdict
 from decimal import Decimal
 from typing import Iterable
@@ -26,6 +27,86 @@ def _format_money(value) -> str:
 
 def _format_km(value) -> str:
     return f"{Decimal(value or 0):.2f}".replace('.', ',')
+
+
+def _fmt_nl(n: float) -> str:
+    """Nederlandse notatie met 2 decimalen en duizendtal-punt."""
+    return f"{n:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _extract_registered_km_from_invoice(invoice) -> float:
+    """Som van rit-km uit factuurregels (omschrijving eindigt op '(<n> km)')."""
+    if invoice is None:
+        return 0.0
+    rit_re = re.compile(r'\(\s*(\d+(?:[.,]\d+)?)\s*km\s*\)\s*$', re.IGNORECASE)
+    total = 0.0
+    try:
+        lines = list(invoice.lines.all())
+    except Exception:
+        return 0.0
+    for line in lines:
+        omschr = (line.omschrijving or '')
+        if not omschr:
+            continue
+        if omschr.lower().startswith('rit'):
+            m = rit_re.search(omschr)
+            if m:
+                try:
+                    total += float(m.group(1).replace(',', '.'))
+                except ValueError:
+                    pass
+    return total
+
+
+def _build_km_summary_panel(invoice, events):
+    """3 sky-gekleurde kaartjes: totaal geregistreerd, totaal tolheffing, percentage.
+    Retourneert lege lijst als niet beide waardes > 0.
+    """
+    totaal_km = _extract_registered_km_from_invoice(invoice)
+    # Tolheffing-km: som van gefactureerde (niet-privé) events
+    tolheffing_km = 0.0
+    try:
+        for ev in events:
+            if getattr(ev, 'is_private', False):
+                continue
+            tolheffing_km += float(ev.distance_km or 0)
+    except Exception:
+        tolheffing_km = 0.0
+    if totaal_km <= 0 or tolheffing_km <= 0:
+        return []
+    pct = (tolheffing_km / totaal_km) * 100.0
+
+    label_style = ParagraphStyle(
+        'KmLabel', fontName='Helvetica', fontSize=8,
+        textColor=colors.HexColor('#0369a1'), alignment=TA_CENTER, leading=10,
+    )
+    value_style = ParagraphStyle(
+        'KmValue', fontName='Helvetica-Bold', fontSize=13,
+        textColor=colors.HexColor('#0c4a6e'), alignment=TA_CENTER, leading=15,
+    )
+
+    def cell(label, value):
+        return [Paragraph(label, label_style), Spacer(1, 1 * mm), Paragraph(value, value_style)]
+
+    data = [[
+        cell('Totaal geregistreerd', f"{_fmt_nl(totaal_km)} km"),
+        cell('Totaal tolheffing', f"{_fmt_nl(tolheffing_km)} km"),
+        cell('Percentage', f"{_fmt_nl(pct)} %"),
+    ]]
+    col_w = (180 * mm) / 3
+    tbl = Table(data, colWidths=[col_w, col_w, col_w])
+    tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#e0f2fe')),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#bae6fd')),
+        ('LINEBEFORE', (1, 0), (1, -1), 0.5, colors.HexColor('#bae6fd')),
+        ('LINEBEFORE', (2, 0), (2, -1), 0.5, colors.HexColor('#bae6fd')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    return [tbl, Spacer(1, 5 * mm)]
 
 
 def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
@@ -88,6 +169,13 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
         subtitle_parts.append(company_name)
     if subtitle_parts:
         story.append(Paragraph(' &mdash; '.join(subtitle_parts), subtitle_style))
+
+    # Km-verhouding paneel (3 sky-gekleurde kaartjes), alleen als er zowel
+    # rit-km als tolheffing-km bekend zijn. Rit-km halen we uit de factuur-
+    # regels (dezelfde regex als in de factuur-PDF). Tolheffing-km uit events.
+    km_summary_flowables = _build_km_summary_panel(invoice, events)
+    if km_summary_flowables:
+        story.extend(km_summary_flowables)
 
     if not events:
         story.append(Paragraph('Geen tolheffing-events gekoppeld aan deze factuur.', styles['Normal']))

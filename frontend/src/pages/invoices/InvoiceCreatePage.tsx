@@ -545,13 +545,26 @@ function TimeEntryImportModal({
   const loadImportedEntries = async () => {
     setIsLoadingImported(true)
     try {
-      // Load imported entries and chauffeur entries in parallel
-      const [importedData, chauffeurData] = await Promise.all([
+      // Load imported entries + ALL ingediende chauffeur entries (paginated fetch:
+      // backend cap is 100 per page, dus we lopen tot next=null om alle km's te kennen)
+      const fetchAllChauffeurEntries = async (): Promise<TimeEntry[]> => {
+        const all: TimeEntry[] = []
+        let page = 1
+        // Cap op 50 pagina's (=5000 records) als safety net
+        for (let i = 0; i < 50; i++) {
+          const resp = await getTimeEntries({ status: 'ingediend', page_size: 100, page, ordering: '-datum' })
+          all.push(...resp.results)
+          if (!resp.next) break
+          page++
+        }
+        return all
+      }
+      const [importedData, chauffeurEntriesAll] = await Promise.all([
         getImportedEntries(),
-        getTimeEntries({ status: 'ingediend', page_size: 1000, ordering: '-datum' }),
+        fetchAllChauffeurEntries(),
       ])
 
-      setChauffeurEntriesForMatch(chauffeurData.results)
+      setChauffeurEntriesForMatch(chauffeurEntriesAll)
 
       // Group imported entries by week + chauffeur
       const groups: Record<string, ImportedChauffeurWeekGroup> = {}
@@ -1723,6 +1736,7 @@ export default function InvoiceCreatePage() {
     matched: ModalMatchedRow[]
     unmatched: ModalUnmatchedEvent[]
     bufferMinutes: number
+    totalRegisteredKm?: number
   } | null>(null)
 
   // UI state
@@ -2289,7 +2303,14 @@ export default function InvoiceCreatePage() {
     // Regels zonder ritlijst (of 'Geen inzet') én 0 km zijn geen inzet en mogen niet gefactureerd worden
     const isGeenInzetImported = (e: ImportedTimeEntry) => {
       const rit = String(e.ritlijst || '').trim().toLowerCase()
-      const km = e.user ? (chauffeurEntries.find(c => c.user === e.user && c.datum === e.datum)?.totaal_km || 0) : 0
+      // Match op ritnummer als beschikbaar (meerdere rits per dag), anders fallback op user+datum
+      const km = e.user
+        ? (
+            chauffeurEntries.find(c => c.user === e.user && c.datum === e.datum && String(c.ritnummer || '') === String(e.ritlijst || ''))?.totaal_km
+            ?? chauffeurEntries.find(c => c.user === e.user && c.datum === e.datum)?.totaal_km
+            ?? 0
+          )
+        : 0
       return (rit === '' || rit === 'geen inzet') && km === 0
     }
     const validEntries = entries.filter(e => !isNietGereden(e) && !isGeenInzetImported(e))
@@ -2311,10 +2332,15 @@ export default function InvoiceCreatePage() {
       if (first.user) setChauffeur(first.user)
     }
 
-    // Build lookup for chauffeur km by user+datum
+    // Build lookup for chauffeur km: primair op user|datum|ritnummer
+    // (zodat meerdere rits per dag correct worden gematched), fallback op user|datum
     const chauffeurKmMap: Record<string, number> = {}
+    const chauffeurKmMapByDay: Record<string, number> = {}
     chauffeurEntries.forEach(e => {
-      chauffeurKmMap[`${e.user}|${e.datum}`] = e.totaal_km || 0
+      chauffeurKmMap[`${e.user}|${e.datum}|${e.ritnummer || ''}`] = e.totaal_km || 0
+      // Voor fallback: som km per dag zodat je bij missende ritnummer-match toch km krijgt
+      const dayKey = `${e.user}|${e.datum}`
+      chauffeurKmMapByDay[dayKey] = (chauffeurKmMapByDay[dayKey] || 0) + (e.totaal_km || 0)
     })
 
     let totalKm = 0
@@ -2346,7 +2372,9 @@ export default function InvoiceCreatePage() {
       const values: Record<string, number | string> = {}
 
       const uren = roundUren(Number(entry.uren_factuur))
-      const km = entry.user ? (chauffeurKmMap[`${entry.user}|${entry.datum}`] || 0) : 0
+      const kmExact = entry.user ? chauffeurKmMap[`${entry.user}|${entry.datum}|${entry.ritlijst || ''}`] : undefined
+      const kmFallback = entry.user ? (chauffeurKmMapByDay[`${entry.user}|${entry.datum}`] || 0) : 0
+      const km = kmExact !== undefined ? kmExact : kmFallback
 
       totalUren += uren
       totalKm += km
@@ -2444,7 +2472,8 @@ export default function InvoiceCreatePage() {
           datum: e.datum,
           begintijd_rit: e.begintijd_rit,
           eindtijd_rit: e.eindtijd_rit,
-        }))
+        })),
+        totalKm,
       )
     }
   }
@@ -2461,6 +2490,7 @@ export default function InvoiceCreatePage() {
       begintijd_rit?: string | null
       eindtijd_rit?: string | null
     }>,
+    totalRegisteredKm?: number,
     bufferMinutes: number = 0,
   ) => {
     if (!entries.length) return
@@ -2515,6 +2545,7 @@ export default function InvoiceCreatePage() {
         })),
         unmatched: unmatched as ModalUnmatchedEvent[],
         bufferMinutes: buffer_minutes ?? bufferMinutes,
+        totalRegisteredKm,
       })
     } catch (err) {
       console.warn('[auto-tolling] match-by-hours failed', err)
@@ -3009,7 +3040,13 @@ export default function InvoiceCreatePage() {
     }
     const isGeenInzetImported = (e: ImportedTimeEntry) => {
       const rit = String(e.ritlijst || '').trim().toLowerCase()
-      const km = e.user ? (chauffeurEntries.find(c => c.user === e.user && c.datum === e.datum)?.totaal_km || 0) : 0
+      const km = e.user
+        ? (
+            chauffeurEntries.find(c => c.user === e.user && c.datum === e.datum && String(c.ritnummer || '') === String(e.ritlijst || ''))?.totaal_km
+            ?? chauffeurEntries.find(c => c.user === e.user && c.datum === e.datum)?.totaal_km
+            ?? 0
+          )
+        : 0
       return (rit === '' || rit === 'geen inzet') && km === 0
     }
 
@@ -3023,8 +3060,11 @@ export default function InvoiceCreatePage() {
     const resolvedChauffeurNaam = first ? (first.user_naam || null) : null
 
     const chauffeurKmMap: Record<string, number> = {}
+    const chauffeurKmMapByDay: Record<string, number> = {}
     chauffeurEntries.forEach(e => {
-      chauffeurKmMap[`${e.user}|${e.datum}`] = e.totaal_km || 0
+      chauffeurKmMap[`${e.user}|${e.datum}|${e.ritnummer || ''}`] = e.totaal_km || 0
+      const dayKey = `${e.user}|${e.datum}`
+      chauffeurKmMapByDay[dayKey] = (chauffeurKmMapByDay[dayKey] || 0) + (e.totaal_km || 0)
     })
 
     let totalKm = 0
@@ -3050,7 +3090,9 @@ export default function InvoiceCreatePage() {
     const entryLines: InvoiceLineData[] = sortedEntries.flatMap(entry => {
       const values: Record<string, number | string> = {}
       const uren = roundUren(Number(entry.uren_factuur))
-      const km = entry.user ? (chauffeurKmMap[`${entry.user}|${entry.datum}`] || 0) : 0
+      const kmExact = entry.user ? chauffeurKmMap[`${entry.user}|${entry.datum}|${entry.ritlijst || ''}`] : undefined
+      const kmFallback = entry.user ? (chauffeurKmMapByDay[`${entry.user}|${entry.datum}`] || 0) : 0
+      const km = kmExact !== undefined ? kmExact : kmFallback
       totalKm += km
 
       columns.forEach(col => {
@@ -3940,6 +3982,7 @@ export default function InvoiceCreatePage() {
         matched={tollingReview?.matched ?? []}
         unmatched={tollingReview?.unmatched ?? []}
         bufferMinutes={tollingReview?.bufferMinutes ?? 30}
+        totalRegisteredKm={tollingReview?.totalRegisteredKm}
         onConfirmStrict={() => applyTollingReview(false)}
         onConfirmIncludeAll={() => applyTollingReview(true)}
       />

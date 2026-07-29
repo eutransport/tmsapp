@@ -55,6 +55,8 @@ interface Props {
   onConfirmStrict: () => void
   /** Ook alle events buiten tijden meenemen. */
   onConfirmIncludeAll: () => void
+  /** Totaal geregistreerde km op de factuur (uit de rit-regels). Optioneel. */
+  totalRegisteredKm?: number
 }
 
 const fmtMoney = (n: number) =>
@@ -80,6 +82,7 @@ export default function UnmatchedTollingModal({
   bufferMinutes,
   onConfirmStrict,
   onConfirmIncludeAll,
+  totalRegisteredKm,
 }: Props) {
   const matchedTotals = useMemo(() => {
     const km = matched.reduce((s, r) => s + (r.total_km || 0), 0)
@@ -264,6 +267,33 @@ export default function UnmatchedTollingModal({
                             </tr>
                           </tbody>
                         </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Km-samenvatting: geregistreerd vs tolheffing + percentage */}
+                  {hasMatched && typeof totalRegisteredKm === 'number' && totalRegisteredKm > 0 && (
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                      <h3 className="text-sm font-semibold text-sky-900 mb-2">Kilometer-verhouding</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                        <div className="rounded border border-sky-200 bg-white px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-sky-700">Totaal geregistreerd</div>
+                          <div className="text-lg font-semibold text-sky-900 tabular-nums">
+                            {totalRegisteredKm.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km
+                          </div>
+                        </div>
+                        <div className="rounded border border-sky-200 bg-white px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-sky-700">Totaal tolheffing</div>
+                          <div className="text-lg font-semibold text-sky-900 tabular-nums">
+                            {matchedTotals.km.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km
+                          </div>
+                        </div>
+                        <div className="rounded border border-sky-200 bg-white px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-sky-700">Tolheffing / geregistreerd</div>
+                          <div className="text-lg font-semibold text-sky-900 tabular-nums">
+                            {((matchedTotals.km / totalRegisteredKm) * 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}

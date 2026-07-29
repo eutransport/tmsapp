@@ -439,6 +439,9 @@ class InvoicePDFGenerator:
         # Factuurregels tabel
         elements.extend(self._build_lines_table())
         
+        # KM-samenvatting (alleen als er zowel rit-km als tolheffing-km zijn)
+        elements.extend(self._build_km_summary())
+        
         # Totalen
         elements.extend(self._build_totals())
         
@@ -735,6 +738,69 @@ class InvoicePDFGenerator:
         
         return elements
     
+    def _extract_km_totals(self):
+        """Bereken totaal geregistreerde km (rit-regels) en totaal tolheffing-km
+        uit de factuur-regels op basis van hun omschrijving.
+        Returns (totaal_km, tolheffing_km) beiden als float; 0.0 als niets gevonden.
+        """
+        totaal_km = 0.0
+        tolheffing_km = 0.0
+        # Rit-regels: pakken '(<getal> km)' aan het eind. Case-insensitive.
+        rit_re = re.compile(r'\(\s*(\d+(?:[.,]\d+)?)\s*km\s*\)\s*$', re.IGNORECASE)
+        # Tolheffing-regel: 'Totaal <getal> KM' ergens in de tekst.
+        tol_re = re.compile(r'Totaal\s+(\d+(?:[.,]\d+)?)\s*km', re.IGNORECASE)
+        try:
+            lines = list(self.invoice.lines.all())
+        except Exception:
+            lines = []
+        for line in lines:
+            omschr = (line.omschrijving or '')
+            if not omschr:
+                continue
+            low = omschr.lower()
+            if low.startswith('tolheffing'):
+                m = tol_re.search(omschr)
+                if m:
+                    try:
+                        tolheffing_km += float(m.group(1).replace(',', '.'))
+                    except ValueError:
+                        pass
+            elif low.startswith('rit'):
+                m = rit_re.search(omschr)
+                if m:
+                    try:
+                        totaal_km += float(m.group(1).replace(',', '.'))
+                    except ValueError:
+                        pass
+        return totaal_km, tolheffing_km
+
+    def _build_km_summary(self):
+        """Kleine km-samenvatting boven de totalen (alleen als er zowel rit-km
+        als tolheffing-km op de factuur staan)."""
+        totaal_km, tolheffing_km = self._extract_km_totals()
+        if totaal_km <= 0 or tolheffing_km <= 0:
+            return []
+        pct = (tolheffing_km / totaal_km) * 100.0
+        # Nederlandse notatie met 2 decimalen
+        def fmt(n):
+            return f"{n:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        rows = [
+            ['Totaal geregistreerde km:', f"{fmt(totaal_km)} km"],
+            ['Totaal tolheffing km:', f"{fmt(tolheffing_km)} km"],
+            ['Tolheffing / geregistreerd:', f"{fmt(pct)} %"],
+        ]
+        tbl = Table(rows, colWidths=[12*cm, 5*cm])
+        tbl.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#4b5563')),
+            ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ]))
+        return [tbl, Spacer(1, 4*mm)]
+
     def _build_totals(self):
         """Bouw de totalen sectie."""
         elements = []
