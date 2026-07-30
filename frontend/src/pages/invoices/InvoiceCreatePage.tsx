@@ -545,24 +545,53 @@ function TimeEntryImportModal({
   const loadImportedEntries = async () => {
     setIsLoadingImported(true)
     try {
-      // Load imported entries + ALL ingediende chauffeur entries (paginated fetch:
-      // backend cap is 100 per page, dus we lopen tot next=null om alle km's te kennen)
-      const fetchAllChauffeurEntries = async (): Promise<TimeEntry[]> => {
+      // 1) Haal eerst de imported (Excel) entries op — die geven ons de
+      //    exacte set (chauffeur, datumrange) waarvoor we km's nodig hebben.
+      const importedData = await getImportedEntries()
+
+      // 2) Bepaal per chauffeur de min/max datum, zodat we de chauffeur-
+      //    TimeEntries strak filteren i.p.v. de eerste ~5000 nieuwste
+      //    op te halen (dat mist oudere data in productie).
+      const perUserRange: Record<string, { min: string; max: string }> = {}
+      importedData.forEach((e) => {
+        if (!e.user || !e.datum) return
+        const cur = perUserRange[e.user]
+        if (!cur) {
+          perUserRange[e.user] = { min: e.datum, max: e.datum }
+        } else {
+          if (e.datum < cur.min) cur.min = e.datum
+          if (e.datum > cur.max) cur.max = e.datum
+        }
+      })
+
+      const fetchChauffeurEntriesForUser = async (
+        userId: string,
+        datumMin: string,
+        datumMax: string,
+      ): Promise<TimeEntry[]> => {
         const all: TimeEntry[] = []
         let page = 1
-        // Cap op 50 pagina's (=5000 records) als safety net
         for (let i = 0; i < 50; i++) {
-          const resp = await getTimeEntries({ status: 'ingediend', page_size: 100, page, ordering: '-datum' })
+          const resp = await getTimeEntries({
+            status: 'ingediend',
+            user: userId,
+            datum__gte: datumMin,
+            datum__lte: datumMax,
+            page_size: 100,
+            page,
+            ordering: '-datum',
+          })
           all.push(...resp.results)
           if (!resp.next) break
           page++
         }
         return all
       }
-      const [importedData, chauffeurEntriesAll] = await Promise.all([
-        getImportedEntries(),
-        fetchAllChauffeurEntries(),
-      ])
+
+      const perUserFetches = Object.entries(perUserRange).map(([uid, r]) =>
+        fetchChauffeurEntriesForUser(uid, r.min, r.max),
+      )
+      const chauffeurEntriesAll = (await Promise.all(perUserFetches)).flat()
 
       setChauffeurEntriesForMatch(chauffeurEntriesAll)
 
