@@ -19,6 +19,7 @@ from reportlab.platypus import (
 )
 
 from apps.core.models import AppSettings
+from django.utils import timezone as dj_timezone
 
 
 def _format_money(value) -> str:
@@ -213,7 +214,10 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
     grand_private_amount = Decimal('0')
 
     def _is_weekend(ev) -> bool:
-        return bool(ev.start_at and ev.start_at.isoweekday() >= 6)
+        if not ev.start_at:
+            return False
+        local = dj_timezone.localtime(ev.start_at)
+        return local.isoweekday() >= 6
 
     def _is_private(ev) -> bool:
         return bool(getattr(ev, 'is_private', False))
@@ -251,8 +255,8 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
         weekend_row_indices: list[int] = []
         private_row_indices: list[int] = []
         for idx, ev in enumerate(plate_events, start=1):
-            start = ev.start_at
-            end = ev.end_at
+            start = dj_timezone.localtime(ev.start_at) if ev.start_at else None
+            end = dj_timezone.localtime(ev.end_at) if ev.end_at else None
             private = _is_private(ev)
             weekend = _is_weekend(ev)
             if private:

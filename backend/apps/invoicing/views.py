@@ -636,6 +636,47 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             response['Content-Disposition'] = f'inline; filename="{filename}"'
         return response
 
+    @action(detail=True, methods=['get'], url_path='tolling_summary')
+    def tolling_summary(self, request, pk=None):
+        """JSON-overzicht van tolheffing-events voor deze factuur.
+
+        Retourneert alle gefactureerde events (privé wordt uitgesloten) plus totalen.
+        """
+        from decimal import Decimal
+        from apps.tolling.pdf_generator import get_tolling_events_for_invoice
+
+        invoice = self.get_object()
+        events = list(get_tolling_events_for_invoice(invoice))
+        billed = [e for e in events if not getattr(e, 'is_private', False)]
+        billed.sort(key=lambda e: (e.start_at or e.created_at))
+
+        event_rows = []
+        total_km = Decimal('0')
+        total_kosten = Decimal('0')
+        for ev in billed:
+            km = Decimal(ev.distance_km or 0)
+            kosten = Decimal(ev.amount or 0)
+            total_km += km
+            total_kosten += kosten
+            event_rows.append({
+                'id': str(ev.id),
+                'start_at': ev.start_at.isoformat() if ev.start_at else None,
+                'end_at': ev.end_at.isoformat() if ev.end_at else None,
+                'license_plate': ev.license_plate_raw or ev.license_plate_normalized or '',
+                'km': float(km),
+                'kosten': float(kosten),
+            })
+
+        return Response({
+            'has_events': bool(event_rows),
+            'events': event_rows,
+            'totals': {
+                'km': float(total_km),
+                'kosten': float(total_kosten),
+                'count': len(event_rows),
+            },
+        })
+
     @action(detail=True, methods=['post'])
     def send_email(self, request, pk=None):
         """Send invoice via email. Supports single email, multiple emails, or mailing list."""

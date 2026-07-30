@@ -327,6 +327,45 @@ export async function sharePdf(id: string, invoiceNumber?: string): Promise<bool
   return false
 }
 
+export interface TollingSummaryEvent {
+  id: string
+  start_at: string | null
+  end_at: string | null
+  license_plate: string
+  km: number
+  kosten: number
+}
+
+export interface TollingSummary {
+  has_events: boolean
+  events: TollingSummaryEvent[]
+  totals: { km: number; kosten: number; count: number }
+}
+
+export async function getTollingSummary(id: string): Promise<TollingSummary> {
+  const response = await api.get(`/invoicing/invoices/${id}/tolling_summary/`)
+  return response.data
+}
+
+export async function downloadTollingPdf(id: string, invoiceNumber?: string): Promise<void> {
+  const url = `/invoicing/invoices/${id}/tolling_pdf/?download=true`
+  const response = await api.get(url, { responseType: 'blob' })
+  const contentDisposition = response.headers['content-disposition']
+  let filename = `tolheffing_${(invoiceNumber || id).replace(/\//g, '-')}.pdf`
+  if (contentDisposition) {
+    const match = contentDisposition.match(/filename="?([^";\n]+)"?/)
+    if (match) filename = match[1]
+  }
+  const blob = new Blob([response.data], { type: 'application/pdf' })
+  const link = document.createElement('a')
+  link.href = window.URL.createObjectURL(blob)
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(link.href)
+}
+
 export async function sendInvoiceEmail(
   id: string,
   email?: string,

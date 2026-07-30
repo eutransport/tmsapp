@@ -22,6 +22,7 @@ import {
   ChevronDownIcon,
   PaperClipIcon,
   BuildingOfficeIcon,
+  MapIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/stores/authStore'
@@ -46,6 +47,7 @@ import {
 import { getCompanies, getMailingContacts } from '@/api/companies'
 import { getMijnBedrijven, getMijnAdministraties, Administratie } from '@/api/administraties'
 import EmailProfileSelector from '@/components/EmailProfileSelector'
+import TollingSummaryModal from '@/components/invoices/TollingSummaryModal'
 import clsx from '@/utils/clsx'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -105,6 +107,7 @@ export default function InvoicesPage() {
   const [bulkAssignAdminId, setBulkAssignAdminId] = useState<string>('')
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
+  const [tollingModalInvoice, setTollingModalInvoice] = useState<Invoice | null>(null)
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   // Cache of full invoice records for selected ids, so we keep totals/types
@@ -895,6 +898,15 @@ export default function InvoicesPage() {
                           title={t('invoices.sharePdf')}
                         >
                           <ShareIcon className="h-4 w-4" />
+                        </button>
+
+                        {/* Tolling summary */}
+                        <button
+                          onClick={() => setTollingModalInvoice(invoice)}
+                          className="p-1 text-sky-600 hover:text-sky-900 hover:bg-sky-50 rounded"
+                          title="Toloverzicht"
+                        >
+                          <MapIcon className="h-4 w-4" />
                         </button>
                         
                         {/* Edit button */}
@@ -1725,6 +1737,14 @@ export default function InvoicesPage() {
           </div>
         )
       })()}
+
+      {tollingModalInvoice && (
+        <TollingSummaryModal
+          invoiceId={tollingModalInvoice.id}
+          invoiceNumber={tollingModalInvoice.factuurnummer}
+          onClose={() => setTollingModalInvoice(null)}
+        />
+      )}
     </div>
   )
 }
