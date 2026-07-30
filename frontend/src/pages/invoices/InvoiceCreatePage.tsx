@@ -2374,7 +2374,12 @@ export default function InvoiceCreatePage() {
       const uren = roundUren(Number(entry.uren_factuur))
       const kmExact = entry.user ? chauffeurKmMap[`${entry.user}|${entry.datum}|${entry.ritlijst || ''}`] : undefined
       const kmFallback = entry.user ? (chauffeurKmMapByDay[`${entry.user}|${entry.datum}`] || 0) : 0
-      const km = kmExact !== undefined ? kmExact : kmFallback
+      // 3e fallback: km uit de Excel-import zelf (source-of-truth als de
+      // chauffeur-app TimeEntry ontbreekt of nog in 'concept' staat op productie)
+      const kmImport = Number(entry.km || 0)
+      const km = kmExact !== undefined && kmExact > 0
+        ? kmExact
+        : (kmFallback > 0 ? kmFallback : kmImport)
 
       totalUren += uren
       totalKm += km
@@ -3092,7 +3097,11 @@ export default function InvoiceCreatePage() {
       const uren = roundUren(Number(entry.uren_factuur))
       const kmExact = entry.user ? chauffeurKmMap[`${entry.user}|${entry.datum}|${entry.ritlijst || ''}`] : undefined
       const kmFallback = entry.user ? (chauffeurKmMapByDay[`${entry.user}|${entry.datum}`] || 0) : 0
-      const km = kmExact !== undefined ? kmExact : kmFallback
+      // 3e fallback: km uit de Excel-import zelf
+      const kmImport = Number(entry.km || 0)
+      const km = kmExact !== undefined && kmExact > 0
+        ? kmExact
+        : (kmFallback > 0 ? kmFallback : kmImport)
       totalKm += km
 
       columns.forEach(col => {
