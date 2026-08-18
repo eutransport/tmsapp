@@ -278,6 +278,55 @@ def _execute_weekly_hours_summary(params):
     return _execute_time_entries_by_week(params)
 
 
+def _execute_imported_hours(params):
+    """Overzicht van geïmporteerde urenregels (uren import) met filters op
+    jaar, chauffeur en datum van/tot."""
+    from apps.timetracking.models import ImportedTimeEntry
+
+    user_id = params.get('user_id')
+    year = params.get('year')
+    date_from = params.get('date_from')
+    date_to = params.get('date_to')
+
+    qs = ImportedTimeEntry.objects.select_related('user').all()
+    if user_id:
+        qs = qs.filter(user_id=user_id)
+    if year:
+        qs = qs.filter(datum__year=int(year))
+    if date_from:
+        qs = qs.filter(datum__gte=date_from)
+    if date_to:
+        qs = qs.filter(datum__lte=date_to)
+
+    columns = [
+        'Chauffeur', 'Weeknummer', 'Datum', 'Kenteken', 'Ritlijst', 'KM',
+        'Begintijd rit', 'Eindtijd rit', 'Uren', 'Pauze', 'Netto uren',
+        'Uren factuur', 'Factuur bedrag',
+    ]
+    rows = []
+    for entry in qs.order_by('user__achternaam', '-datum', 'kenteken_import'):
+        if entry.user:
+            chauffeur = entry.user.get_full_name() if hasattr(entry.user, 'get_full_name') else str(entry.user)
+        else:
+            chauffeur = 'Niet gekoppeld'
+        rows.append([
+            chauffeur,
+            entry.weeknummer,
+            str(entry.datum),
+            entry.kenteken_import,
+            entry.ritlijst or '',
+            str(entry.km),
+            str(entry.begintijd_rit) if entry.begintijd_rit else '',
+            str(entry.eindtijd_rit) if entry.eindtijd_rit else '',
+            str(entry.uren),
+            _format_duration(entry.pauze),
+            str(entry.netto_uren),
+            str(entry.uren_factuur),
+            str(entry.factuur_bedrag),
+        ])
+    return columns, rows, 'Geïmporteerde uren overzicht'
+
+
 def _execute_vehicle_overview(params):
     """Overzicht van alle voertuigen."""
     from apps.fleet.models import Vehicle
@@ -702,6 +751,7 @@ EXECUTOR_MAP = {
     'time_entries_by_user': _execute_time_entries_by_user,
     'time_entries_by_week': _execute_time_entries_by_week,
     'weekly_hours_summary': _execute_weekly_hours_summary,
+    'imported_hours': _execute_imported_hours,
     'vehicle_overview': _execute_vehicle_overview,
     'vehicle_maintenance': _execute_vehicle_maintenance,
     'driver_overview': _execute_driver_overview,

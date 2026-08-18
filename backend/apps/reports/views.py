@@ -141,6 +141,20 @@ REPORT_TYPE_METADATA = [
         ],
     },
     {
+        'value': ReportType.IMPORTED_HOURS,
+        'label': 'Geïmporteerde uren overzicht',
+        'description': (
+            'Overzicht van de geïmporteerde uren (uren import) met filters op '
+            'jaar, chauffeur en datum van/tot.'
+        ),
+        'parameters': [
+            {'name': 'year', 'label': 'Jaar', 'type': 'year', 'required': False},
+            {'name': 'user_id', 'label': 'Chauffeur', 'type': 'user', 'required': False},
+            {'name': 'date_from', 'label': 'Datum van', 'type': 'date', 'required': False},
+            {'name': 'date_to', 'label': 'Datum t/m', 'type': 'date', 'required': False},
+        ],
+    },
+    {
         'value': ReportType.VEHICLE_OVERVIEW,
         'label': 'Voertuigen overzicht',
         'description': 'Overzicht van alle voertuigen in de vloot.',
