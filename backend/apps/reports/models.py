@@ -27,6 +27,7 @@ class ReportType(models.TextChoices):
     TIME_ENTRIES_BY_USER = 'time_entries_by_user', 'Urenregistraties per gebruiker'
     TIME_ENTRIES_BY_WEEK = 'time_entries_by_week', 'Urenregistraties per week'
     WEEKLY_HOURS_SUMMARY = 'weekly_hours_summary', 'Wekelijkse uren samenvatting'
+    IMPORTED_HOURS = 'imported_hours', 'Geïmporteerde uren overzicht'
 
     # Vehicle / fleet reports
     VEHICLE_OVERVIEW = 'vehicle_overview', 'Voertuigen overzicht'
