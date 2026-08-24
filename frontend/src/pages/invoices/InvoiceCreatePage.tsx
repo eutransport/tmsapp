@@ -498,17 +498,37 @@ function TimeEntryImportModal({
   const loadTimeEntries = async () => {
     setIsLoading(true)
     try {
-      // Get all submitted time entries (admin sees all)
-      const response = await getTimeEntries({
-        status: 'ingediend',
-        page_size: 1000,
-        ordering: '-datum',
-      })
-      
+      // Beperk de ophaal tot maximaal 6 weken terug (vanaf maandag van de
+      // huidige ISO-week). We pagineren i.p.v. te leunen op een vaste
+      // page_size-cap, zodat álle weken binnen dit venster verschijnen in de
+      // weekfilter (voorheen kwamen door de 1000-rijen-cap in productie maar
+      // ~2 weken terug beschikbaar).
+      const monday = new Date()
+      const day = monday.getDay() // 0 = zondag, 1 = maandag, ...
+      const diffToMonday = (day === 0 ? -6 : 1) - day
+      monday.setDate(monday.getDate() + diffToMonday - 6 * 7)
+      const datumMin = monday.toISOString().slice(0, 10)
+
+      // Get submitted time entries (admin sees all) van de laatste 6 weken
+      const allResults: TimeEntry[] = []
+      let page = 1
+      for (let i = 0; i < 100; i++) {
+        const response = await getTimeEntries({
+          status: 'ingediend',
+          datum__gte: datumMin,
+          page_size: 100,
+          page,
+          ordering: '-datum',
+        })
+        allResults.push(...response.results)
+        if (!response.next) break
+        page++
+      }
+
       // Group by week + chauffeur
       const groups: Record<string, ChauffeurWeekGroup> = {}
       
-      response.results.forEach((entry) => {
+      allResults.forEach((entry) => {
         const jaar = new Date(entry.datum).getFullYear()
         const key = `${jaar}-${entry.weeknummer}-${entry.user}`
         
