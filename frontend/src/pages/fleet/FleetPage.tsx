@@ -22,6 +22,7 @@ import {
   VehicleFilters,
   VehicleCreate,
   VehicleUpdate,
+  KentekenConflict,
 } from '@/api/fleet'
 import { getAllCompanies } from '@/api/companies'
 import Pagination, { PageSize } from '@/components/common/Pagination'
@@ -83,20 +84,22 @@ function ConfirmDialog({
   cancelText,
   loadingText,
   isLoading = false,
+  variant = 'danger',
 }: {
   isOpen: boolean
   onClose: () => void
   onConfirm: () => void
   title: string
-  message: string
+  message: React.ReactNode
   confirmText?: string
   cancelText?: string
   loadingText?: string
   isLoading?: boolean
+  variant?: 'danger' | 'primary'
 }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
-      <p className="text-gray-600 mb-6">{message}</p>
+      <div className="text-gray-600 mb-6">{message}</div>
       <div className="flex justify-end gap-3">
         <button
           onClick={onClose}
@@ -107,7 +110,11 @@ function ConfirmDialog({
         </button>
         <button
           onClick={onConfirm}
-          className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+          className={`px-4 py-2 text-white rounded-lg disabled:opacity-50 ${
+            variant === 'primary'
+              ? 'bg-primary-600 hover:bg-primary-700'
+              : 'bg-red-600 hover:bg-red-700'
+          }`}
           disabled={isLoading}
         >
           {isLoading ? loadingText : confirmText}
@@ -323,6 +330,14 @@ export default function FleetPage() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
+  // Kenteken staat al actief in de vloot: vragen of de oude regel (met het
+  // oude ritnummer) op inactief gezet mag worden.
+  const [plateConflict, setPlateConflict] = useState<{
+    conflict: KentekenConflict
+    mode: 'create' | 'update'
+    data: VehicleCreate | VehicleUpdate
+    id?: string
+  } | null>(null)
 
   // Helper to extract error message
   const getErrorMessage = (err: any, defaultMsg: string): string => {
@@ -401,36 +416,48 @@ export default function FleetPage() {
     }
   }
 
-  // Handle create
-  const handleCreate = async (data: VehicleCreate | VehicleUpdate) => {
+  // Opslaan van een nieuw of bestaand voertuig. Staat het kenteken al actief
+  // in de vloot, dan komt er een 400 met `kenteken_conflict` terug en vragen
+  // we of de oude regel op inactief gezet mag worden.
+  const saveVehicle = async (
+    mode: 'create' | 'update',
+    data: VehicleCreate | VehicleUpdate,
+    id?: string,
+  ) => {
     setIsActionLoading(true)
     try {
-      await createVehicle(data as VehicleCreate)
+      if (mode === 'create') {
+        await createVehicle(data as VehicleCreate)
+      } else if (id) {
+        await updateVehicle(id, data as VehicleUpdate)
+      }
+      setPlateConflict(null)
       setShowCreateModal(false)
-      showSuccess(t('fleet.vehicleCreated'))
+      setShowEditModal(false)
+      setSelectedVehicle(null)
+      showSuccess(t(mode === 'create' ? 'fleet.vehicleCreated' : 'fleet.vehicleUpdated'))
       fetchVehicles()
     } catch (err: any) {
-      setError(getErrorMessage(err, t('common.error')))
+      const conflict: KentekenConflict | undefined = err?.response?.data?.kenteken_conflict
+      if (conflict) {
+        setPlateConflict({ conflict, mode, data, id })
+      } else {
+        setError(getErrorMessage(err, t('common.error')))
+      }
     } finally {
       setIsActionLoading(false)
     }
   }
 
+  // Handle create
+  const handleCreate = async (data: VehicleCreate | VehicleUpdate) => {
+    await saveVehicle('create', data)
+  }
+
   // Handle update
   const handleUpdate = async (data: VehicleCreate | VehicleUpdate) => {
     if (!selectedVehicle) return
-    setIsActionLoading(true)
-    try {
-      await updateVehicle(selectedVehicle.id, data as VehicleUpdate)
-      setShowEditModal(false)
-      setSelectedVehicle(null)
-      showSuccess(t('fleet.vehicleUpdated'))
-      fetchVehicles()
-    } catch (err: any) {
-      setError(getErrorMessage(err, t('common.error')))
-    } finally {
-      setIsActionLoading(false)
-    }
+    await saveVehicle('update', data, selectedVehicle.id)
   }
 
   // Handle delete
@@ -788,6 +815,47 @@ export default function FleetPage() {
           />
         )}
       </Modal>
+
+      {/* Kenteken staat al actief: aanbieden om de oude regel over te zetten */}
+      <ConfirmDialog
+        isOpen={!!plateConflict}
+        onClose={() => setPlateConflict(null)}
+        onConfirm={() => {
+          if (!plateConflict) return
+          saveVehicle(
+            plateConflict.mode,
+            { ...plateConflict.data, vervang_actief: true },
+            plateConflict.id,
+          )
+        }}
+        title="Kenteken staat al actief"
+        message={
+          plateConflict ? (
+            <span>
+              <strong>{plateConflict.conflict.kenteken}</strong> staat al actief in de vloot
+              {plateConflict.conflict.ritnummer && (
+                <> op ritnummer <strong>{plateConflict.conflict.ritnummer}</strong></>
+              )}
+              . Wil je die regel op inactief zetten en verdergaan
+              {plateConflict.data.ritnummer && (
+                <> met ritnummer <strong>{plateConflict.data.ritnummer}</strong></>
+              )}
+              ?
+              <span className="block mt-2 text-sm text-gray-500">
+                De oude regel blijft bestaan, zodat eerdere tolheffing en uren onder het oude
+                ritnummer zichtbaar blijven.
+              </span>
+            </span>
+          ) : (
+            ''
+          )
+        }
+        confirmText="Ja, overzetten"
+        cancelText={t('common.cancel')}
+        loadingText={t('common.saving')}
+        isLoading={isActionLoading}
+        variant="primary"
+      />
 
       {/* Delete Confirm Modal */}
       <ConfirmDialog

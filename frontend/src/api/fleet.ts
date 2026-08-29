@@ -12,9 +12,20 @@ export interface VehicleCreate {
   bedrijf: string
   minimum_weken_per_jaar?: number | null
   actief?: boolean
+  /** Zet de bestaande actieve regel met hetzelfde kenteken op inactief. */
+  vervang_actief?: boolean
 }
 
 export interface VehicleUpdate extends Partial<VehicleCreate> {}
+
+/** Meegestuurd bij een 400 als het kenteken al actief in de vloot staat. */
+export interface KentekenConflict {
+  id: string
+  kenteken: string
+  ritnummer: string
+  type_wagen: string
+  bedrijf_naam: string
+}
 
 // Vehicle weeks overview
 export interface VehicleWeeksOverview {

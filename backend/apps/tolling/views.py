@@ -28,6 +28,7 @@ from .serializers import (
     TollingImportBatchSerializer,
 )
 from .services import (
+    build_vehicle_lookup,
     export_events_pdf,
     export_events_xlsx,
     import_csv,
@@ -277,9 +278,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
 
         # Huidige vloot: alleen als terugval voor regels zonder momentopname
         # (geïmporteerd voordat het kenteken in de vloot stond).
-        vehicle_map: dict[str, Vehicle] = {}
-        for v in Vehicle.objects.select_related('bedrijf').order_by('actief', 'created_at'):
-            vehicle_map[normalize_plate(v.kenteken)] = v
+        vehicle_map = build_vehicle_lookup()
 
         # Alle combinaties kenteken + ritnummer die ooit zijn geïmporteerd.
         combos: dict[tuple, dict] = {}
@@ -493,10 +492,9 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             events_qs = events_qs.filter(ritnummer=ritnummer.strip())
         events = list(events_qs.order_by('start_at'))
         plate_display = events[0].license_plate_raw if events else plate
-        for v in Vehicle.objects.all():
-            if normalize_plate(v.kenteken) == norm:
-                plate_display = v.kenteken
-                break
+        vehicle = build_vehicle_lookup().get(norm)
+        if vehicle is not None:
+            plate_display = vehicle.kenteken
 
         label = _period_label(period, year, idx)
         safe_plate = ''.join(c for c in plate_display if c.isalnum() or c in '-_') or 'tolheffing'
@@ -565,10 +563,9 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             return Response({'detail': 'Geen tolgebeurtenissen in de gekozen periode.'}, status=400)
 
         plate_display = events[0].license_plate_raw
-        for v in Vehicle.objects.all():
-            if normalize_plate(v.kenteken) == norm:
-                plate_display = v.kenteken
-                break
+        vehicle = build_vehicle_lookup().get(norm)
+        if vehicle is not None:
+            plate_display = vehicle.kenteken
         label = _period_label(period, year, idx)
         safe_plate = ''.join(c for c in plate_display if c.isalnum() or c in '-_') or 'tolheffing'
         filename = f'tolheffing_{safe_plate}_{period}_{year}_{idx}.{fmt}'
@@ -798,7 +795,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 bucket['weekday_km'] += km or Decimal('0')
                 bucket['weekday_amount'] += amount or Decimal('0')
 
-        vehicle_map: dict[str, Vehicle] = {normalize_plate(v.kenteken): v for v in Vehicle.objects.all()}
+        vehicle_map = build_vehicle_lookup()
         results = []
         for norm, b in agg.items():
             v = vehicle_map.get(norm)
@@ -889,11 +886,8 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
 
         # Bouw eerst een lookup: normalized_plate -> Vehicle. Zo kunnen we
         # fleet-labels als "E&UTRANS1" mappen naar het echte kenteken.
-        vehicle_map: dict[str, Vehicle] = {}
-        for v in Vehicle.objects.all():
-            kn = normalize_plate(v.kenteken)
-            if kn:
-                vehicle_map[kn] = v
+        vehicle_map: dict[str, Vehicle] = build_vehicle_lookup()
+        for v in Vehicle.objects.order_by('actief', 'created_at'):
             rn = normalize_plate(v.ritnummer)
             if rn:
                 vehicle_map.setdefault(rn, v)
@@ -1127,7 +1121,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         for e in events:
             by_plate.setdefault(e.license_plate_normalized, []).append(e)
 
-        vehicle_map: dict[str, Vehicle] = {normalize_plate(v.kenteken): v for v in Vehicle.objects.all()}
+        vehicle_map = build_vehicle_lookup()
         max_order = (
             InvoiceLine.objects.filter(invoice=invoice).order_by('-volgorde').values_list('volgorde', flat=True).first()
             or 0
@@ -1397,10 +1391,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             )
 
         # Vehicle info for line description
-        vehicle = next(
-            (v for v in Vehicle.objects.all() if normalize_plate(v.kenteken) == plate),
-            None,
-        )
+        vehicle = build_vehicle_lookup().get(plate)
         plate_display = vehicle.kenteken if vehicle else (
             events_by_week[weeks[0]][0].license_plate_raw if events_by_week[weeks[0]] else plate
         )
@@ -1819,10 +1810,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             'bedrijf_id', 'bedrijf__naam',
         )
 
-        vehicle_map = {
-            normalize_plate(v.kenteken): v
-            for v in Vehicle.objects.select_related('bedrijf').all()
-        }
+        vehicle_map = build_vehicle_lookup()
 
         agg: dict[tuple, dict] = {}
         for norm, raw, start_at, km, amount, ritnummer, bedrijf_id, bedrijf_naam in events:
