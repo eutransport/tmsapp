@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -28,13 +29,29 @@ class ImportResult:
 
 
 def _parse_decimal(value: str) -> Decimal | None:
+    """Parse een bedrag of afstand uit de CSV.
+
+    Ondersteunt zowel Europese notatie (1.234,56) als Amerikaanse (1,234.56)
+    en negeert valutatekens, (non-breaking) spaties en andere opmaak. Zonder
+    deze normalisatie werden zulke regels stilzwijgend als 'ongeldig'
+    overgeslagen.
+    """
     if value is None:
         return None
-    v = str(value).strip().replace('.', '').replace(',', '.') if _looks_european(value) else str(value).strip()
-    if not v:
+    s = str(value).replace('\u00a0', ' ').strip()
+    if not s:
         return None
+    # Alles behalve cijfers, scheidingstekens en teken verwijderen (€, EUR, spaties, ...).
+    s = re.sub(r'[^0-9,.+-]', '', s)
+    if not s or s in ('-', '+', '.', ','):
+        return None
+    if _looks_european(s):
+        s = s.replace('.', '').replace(',', '.')
+    else:
+        # Komma kan hier alleen duizendtalscheiding zijn.
+        s = s.replace(',', '')
     try:
-        return Decimal(v)
+        return Decimal(s)
     except InvalidOperation:
         return None
 
@@ -333,6 +350,163 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
     ws.append(['', 'Totaal tolkosten', '', float(total_km), float(total_amount), ''])
     for col_idx, width in enumerate([20, 20, 14, 15, 15, 15], start=1):
         ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = width
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Dachser-export
+# ---------------------------------------------------------------------------
+
+DACHSER_HEADER_FILL = '002060'   # donkerblauw
+DACHSER_HEADER_FONT = 'FFC000'   # goud/geel
+DACHSER_LOGO_BLUE = (12, 77, 162)
+
+DACHSER_COLUMNS = [
+    ('Route', 'route', 12),
+    ('Carrier', 'carrier', 16),
+    ('Country', 'country', 12),
+    ('License plate', 'license_plate', 18),
+    ('Total tol kilometers', 'total_km', 24),
+    ('Amount EUR.', 'amount', 16),
+    ('Date', 'date', 13),
+]
+
+
+def _dachser_logo_bytes() -> bytes | None:
+    """Lever de logo-afbeelding voor bovenaan de Dachser-export.
+
+    Als `apps/tolling/assets/dachser_logo.png` bestaat wordt die gebruikt.
+    Anders wordt het woordmerk met Pillow getekend, zodat de export ook
+    zonder los logobestand een afbeelding bovenaan heeft.
+    """
+    import os
+
+    custom = os.path.join(os.path.dirname(__file__), 'assets', 'dachser_logo.png')
+    if os.path.exists(custom):
+        try:
+            with open(custom, 'rb') as fh:
+                return fh.read()
+        except OSError:
+            logger.warning('Kon dachser_logo.png niet lezen, val terug op gegenereerd logo')
+
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        return None
+
+    width, height = 640, 170
+    img = Image.new('RGB', (width, height), 'white')
+    draw = ImageDraw.Draw(img)
+
+    def _font(size: int):
+        for path in (
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+            '/usr/local/lib/python3.12/site-packages/reportlab/fonts/VeraBd.ttf',
+        ):
+            if os.path.exists(path):
+                try:
+                    return ImageFont.truetype(path, size)
+                except OSError:
+                    continue
+        return ImageFont.load_default()
+
+    draw.text((6, 4), 'DACHSER', font=_font(84), fill=DACHSER_LOGO_BLUE)
+    draw.text((8, 104), 'Intelligent Logistics', font=_font(44), fill=(20, 20, 20))
+
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return buf.getvalue()
+
+
+def build_dachser_export_xlsx(rows: list[dict]) -> bytes:
+    """Bouw het Dachser-exportbestand.
+
+    `rows` bevat dicts met de keys: route, carrier, country, license_plate,
+    total_km (float), amount (float) en date (datetime.date).
+    Opmaak: logo bovenaan, donkerblauwe koprij met gouden vette tekst,
+    randen rond alle cellen en een autofilter per kolom.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Toll'
+
+    logo_rows = 5
+    header_row = logo_rows + 1
+
+    logo = _dachser_logo_bytes()
+    if logo:
+        try:
+            from openpyxl.drawing.image import Image as XlsxImage
+
+            img = XlsxImage(io.BytesIO(logo))
+            # ~5 rijen hoog houden, breedte proportioneel meeschalen
+            target_height = 96
+            if img.height:
+                ratio = target_height / img.height
+                img.width = int(img.width * ratio)
+                img.height = target_height
+            img.anchor = 'A1'
+            ws.add_image(img)
+        except Exception:  # pragma: no cover - logo mag de export nooit blokkeren
+            logger.exception('Kon logo niet invoegen in Dachser-export')
+
+    for r in range(1, logo_rows + 1):
+        ws.row_dimensions[r].height = 20
+
+    header_fill = PatternFill(start_color=DACHSER_HEADER_FILL,
+                              end_color=DACHSER_HEADER_FILL, fill_type='solid')
+    header_font = Font(bold=True, color=DACHSER_HEADER_FONT, size=11)
+    thin = Side(style='thin', color='000000')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    # Donkerblauwe balk boven de koprij (zoals in het voorbeeldbestand)
+    for col_idx in range(1, len(DACHSER_COLUMNS) + 1):
+        ws.cell(row=logo_rows, column=col_idx).fill = header_fill
+
+    for col_idx, (label, _key, width) in enumerate(DACHSER_COLUMNS, start=1):
+        cell = ws.cell(row=header_row, column=col_idx, value=label)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='left', vertical='center')
+        cell.border = border
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+    ws.row_dimensions[header_row].height = 20
+
+    for offset, row in enumerate(rows):
+        excel_row = header_row + 1 + offset
+        values = [
+            row.get('route') or '',
+            row.get('carrier') or '',
+            row.get('country') or 'NL',
+            row.get('license_plate') or '',
+            float(row.get('total_km') or 0),
+            float(row.get('amount') or 0),
+            row.get('date'),
+        ]
+        for col_idx, value in enumerate(values, start=1):
+            cell = ws.cell(row=excel_row, column=col_idx, value=value)
+            cell.border = border
+            if col_idx == 5:
+                cell.number_format = '#,##0.00'
+                cell.alignment = Alignment(horizontal='right')
+            elif col_idx == 6:
+                cell.number_format = '#,##0.00'
+                cell.alignment = Alignment(horizontal='right')
+            elif col_idx == 7:
+                cell.number_format = 'dd-mm-yyyy'
+                cell.alignment = Alignment(horizontal='left')
+
+    last_row = header_row + max(len(rows), 1)
+    last_col = get_column_letter(len(DACHSER_COLUMNS))
+    ws.auto_filter.ref = f'A{header_row}:{last_col}{last_row}'
+    ws.freeze_panes = f'A{header_row + 1}'
+
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()

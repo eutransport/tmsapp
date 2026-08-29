@@ -1057,7 +1057,7 @@ export default function InvoicesPage() {
                 )}
                 
                 {/* Row 3: icon-only action buttons */}
-                <div className="flex items-center gap-0.5 mt-1 pt-1 border-t border-gray-100">
+                <div className="flex flex-wrap items-center gap-0.5 mt-1 pt-1 border-t border-gray-100">
                   <button
                     onClick={() => { setSelectedInvoice(invoice); setShowDetailModal(true) }}
                     className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded"
@@ -1088,6 +1088,14 @@ export default function InvoicesPage() {
                     title={t('invoices.sharePdf')}
                   >
                     <ShareIcon className="h-4 w-4" />
+                  </button>
+                  {/* Tolling summary */}
+                  <button
+                    onClick={() => setTollingModalInvoice(invoice)}
+                    className="p-1.5 text-sky-600 hover:bg-sky-50 rounded"
+                    title="Toloverzicht"
+                  >
+                    <MapIcon className="h-4 w-4" />
                   </button>
                   {!isReadOnly && (
                     <button

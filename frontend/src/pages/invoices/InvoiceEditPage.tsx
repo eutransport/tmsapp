@@ -26,6 +26,20 @@ function formatCurrency(value: number): string {
   }).format(value)
 }
 
+// Extract a readable message from a DRF error response
+function extractApiError(err: any): string | null {
+  const data = err?.response?.data
+  if (!data) return null
+  if (typeof data === 'string') return data
+  if (data.detail) return String(data.detail)
+  if (Array.isArray(data.non_field_errors)) return data.non_field_errors.join(' ')
+  const first = Object.entries(data)[0]
+  if (!first) return null
+  const [field, value] = first
+  const text = Array.isArray(value) ? value.join(' ') : String(value)
+  return field === 'non_field_errors' ? text : `${field}: ${text}`
+}
+
 export default function InvoiceEditPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -96,6 +110,10 @@ export default function InvoiceEditPage() {
   }
 
   const { subtotaal, btw, totaal } = calculateTotals()
+
+  // Once an invoice leaves 'concept' the backend only accepts status,
+  // opmerkingen, bijlage and administratie changes.
+  const isConcept = invoice?.status === 'concept'
 
   // Update line locally only (called on every keystroke). Prevents cursor jumping
   // because we don't replace the input value with a server response mid-edit.
@@ -185,23 +203,39 @@ export default function InvoiceEditPage() {
     setError(null)
 
     try {
+      // Build payload with only changed fields. The backend only accepts
+      // status/opmerkingen/bijlage/administratie once an invoice leaves concept,
+      // so vervaldatum and btw_percentage are only sent for concept invoices.
+      const payload: Record<string, any> = {}
+
+      if (opmerkingen !== (invoice.opmerkingen || '')) {
+        payload.opmerkingen = opmerkingen
+      }
+      if (isConcept) {
+        if (vervaldatum && vervaldatum !== invoice.vervaldatum) {
+          payload.vervaldatum = vervaldatum
+        }
+        if (Number(btwPercentage) !== Number(invoice.btw_percentage)) {
+          payload.btw_percentage = btwPercentage
+        }
+      }
+
+      // Save field changes first, while the invoice still has its old status
+      if (Object.keys(payload).length > 0) {
+        await updateInvoice(id, payload)
+      }
+
       // Update status if changed
       if (status !== invoice.status) {
         await changeStatus(id, status)
       }
-      
-      // Update invoice details
-      await updateInvoice(id, {
-        vervaldatum,
-        btw_percentage: btwPercentage,
-        opmerkingen: opmerkingen || undefined,
-      })
-      
+
       toast.success(t('invoices.invoiceUpdated'))
       navigate('/invoices')
     } catch (err: any) {
-      setError(err.response?.data?.detail || t('errors.saveFailed'))
-      toast.error(t('errors.saveFailed'))
+      const message = extractApiError(err) || t('errors.saveFailed')
+      setError(message)
+      toast.error(message)
     } finally {
       setIsSaving(false)
     }
@@ -520,7 +554,8 @@ export default function InvoiceEditPage() {
                   type="date"
                   value={vervaldatum}
                   onChange={(e) => setVervaldatum(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2"
+                  disabled={!isConcept}
+                  className={`w-full border rounded-lg px-3 py-2 ${!isConcept ? 'bg-gray-50 text-gray-500' : ''}`}
                 />
               </div>
 
@@ -532,8 +567,14 @@ export default function InvoiceEditPage() {
                   type="number"
                   value={btwPercentage}
                   onChange={(e) => setBtwPercentage(parseFloat(e.target.value) || 0)}
-                  className="w-full border rounded-lg px-3 py-2"
+                  disabled={!isConcept}
+                  className={`w-full border rounded-lg px-3 py-2 ${!isConcept ? 'bg-gray-50 text-gray-500' : ''}`}
                 />
+                {!isConcept && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Vervaldatum en BTW zijn alleen te wijzigen zolang de factuur de status Concept heeft.
+                  </p>
+                )}
               </div>
 
               <div>

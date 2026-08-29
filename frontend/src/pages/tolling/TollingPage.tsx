@@ -9,11 +9,13 @@
  *   to reset that status.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
   ArrowUpTrayIcon,
+  ArrowUturnLeftIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -22,16 +24,25 @@ import {
   DocumentArrowDownIcon,
   DocumentTextIcon,
   EnvelopeIcon,
+  PencilSquareIcon,
   TableCellsIcon,
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
 
-import { tollingApi, TollingSummary, TollingVehicleRow } from '@/api/tolling'
+import {
+  tollingApi,
+  TollingInvoiceRow,
+  TollingListPeriod,
+  TollingSummary,
+  TollingVehicleList,
+  TollingVehicleRow,
+} from '@/api/tolling'
 import { getMailingContacts } from '@/api/companies'
 import type { MailingListContact } from '@/types'
 import ConfirmDialog, { ConfirmState } from '@/components/common/ConfirmDialog'
 import CreateTollingInvoiceModal from '@/components/tolling/CreateTollingInvoiceModal'
+import DachserExportModal from '@/components/tolling/DachserExportModal'
 import EmailProfileSelector from '@/components/EmailProfileSelector'
 
 const PAGE_SIZE = 15
@@ -60,14 +71,63 @@ function companyLabel(row: TollingVehicleRow): string {
   return row.bedrijf_naam || 'Zonder bedrijf'
 }
 
+/* ---------------------- periode-selectie ---------------------- */
+
+const PERIOD_OPTIONS: { value: TollingListPeriod; label: string }[] = [
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Maand' },
+  { value: 'quarter', label: 'Kwartaal' },
+  { value: 'year', label: 'Jaar' },
+  { value: 'all', label: 'Alles' },
+]
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/** Leesbare titel van de geselecteerde periode, bv. "Augustus 2026". */
+function periodTitle(meta: TollingVehicleList | null, period: TollingListPeriod): string {
+  if (period === 'all') return 'Alles tot nu toe'
+  if (!meta) return '…'
+  switch (period) {
+    case 'week':
+      return `Week ${String(meta.index).padStart(2, '0')} · ${meta.year}`
+    case 'quarter':
+      return `Kwartaal ${meta.index} · ${meta.year}`
+    case 'year':
+      return String(meta.year)
+    default: {
+      if (!meta.date_from) return String(meta.year)
+      const d = new Date(`${meta.date_from}T00:00:00`)
+      return capitalize(d.toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' }))
+    }
+  }
+}
+
+/** Subtitel met het exacte datumbereik. */
+function periodRange(meta: TollingVehicleList | null): string {
+  if (!meta?.date_from || !meta?.date_to) return 'Alle geïmporteerde regels'
+  const fmt = (iso: string) =>
+    new Date(`${iso}T00:00:00`).toLocaleDateString('nl-NL', {
+      day: 'numeric', month: 'short', year: 'numeric',
+    })
+  return `${fmt(meta.date_from)} t/m ${fmt(meta.date_to)}`
+}
+
 export default function TollingPage() {
   const [rows, setRows] = useState<TollingVehicleRow[]>([])
+  const [meta, setMeta] = useState<TollingVehicleList | null>(null)
+  const [period, setPeriod] = useState<TollingListPeriod>('month')
+  const [offset, setOffset] = useState(0)
+  const [hideEmpty, setHideEmpty] = useState(true)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [selectedCompanyKeys, setSelectedCompanyKeys] = useState<string[]>([])
   const [showMoreCompanies, setShowMoreCompanies] = useState(false)
   const [invoiceModalRow, setInvoiceModalRow] = useState<TollingVehicleRow | null>(null)
+  const [invoicesRefresh, setInvoicesRefresh] = useState(0)
+  const [dachserOpen, setDachserOpen] = useState(false)
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
   const [deletingPlate, setDeletingPlate] = useState<string | null>(null)
   const [deletingAll, setDeletingAll] = useState(false)
@@ -144,7 +204,9 @@ export default function TollingPage() {
   const reload = async () => {
     setLoading(true)
     try {
-      setRows(await tollingApi.listVehicles())
+      const data = await tollingApi.listVehicles({ period, offset })
+      setMeta(data)
+      setRows(data.rows)
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || 'Kon lijst niet laden')
     } finally {
@@ -152,7 +214,12 @@ export default function TollingPage() {
     }
   }
 
-  useEffect(() => { reload() }, [])
+  useEffect(() => { reload() /* eslint-disable-next-line */ }, [period, offset])
+
+  const changePeriod = (value: TollingListPeriod) => {
+    setPeriod(value)
+    setOffset(0)
+  }
 
   const onFile = async (f: File | null) => {
     if (!f) return
@@ -186,21 +253,30 @@ export default function TollingPage() {
       .sort((a, b) => a.label.localeCompare(b.label, 'nl-NL'))
   }, [rows])
 
-  const filteredRows = useMemo(() => {
+  const companyRows = useMemo(() => {
     if (selectedCompanyKeys.length === 0) return rows
     const allowed = new Set(selectedCompanyKeys)
     return rows.filter(r => allowed.has(companyKey(r)))
   }, [rows, selectedCompanyKeys])
 
+  /** Auto's zonder tolheffing in de gekozen periode worden standaard verborgen. */
+  const filteredRows = useMemo(
+    () => (hideEmpty ? companyRows.filter(r => r.period_events > 0) : companyRows),
+    [companyRows, hideEmpty],
+  )
+
+  const emptyCount = companyRows.length - companyRows.filter(r => r.period_events > 0).length
+
   const totals = useMemo(() => {
-    return filteredRows.reduce(
+    return companyRows.reduce(
       (acc, r) => ({
-        km: acc.km + (r.current_month_km || 0),
-        amount: acc.amount + (r.current_month_amount || 0),
+        vehicles: acc.vehicles + (r.period_events > 0 ? 1 : 0),
+        km: acc.km + (r.period_km || 0),
+        amount: acc.amount + (r.period_amount || 0),
       }),
-      { km: 0, amount: 0 },
+      { vehicles: 0, km: 0, amount: 0 },
     )
-  }, [filteredRows])
+  }, [companyRows])
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4">
@@ -215,7 +291,7 @@ export default function TollingPage() {
             een factuur worden gezet.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <input
             ref={fileRef}
             type="file"
@@ -241,6 +317,15 @@ export default function TollingPage() {
             <ArrowUpTrayIcon className="h-4 w-4 mr-1.5" />
             {uploading ? 'Bezig…' : 'CSV importeren'}
           </button>
+          <button
+            type="button"
+            className="inline-flex items-center rounded-md bg-[#002060] px-3 py-2 text-sm font-medium text-white hover:bg-[#00184a]"
+            onClick={() => setDachserOpen(true)}
+            title="Exporteer tolheffing per bedrijf naar Excel"
+          >
+            <TableCellsIcon className="h-4 w-4 mr-1.5" />
+            Exporteer per bedrijf
+          </button>
           {rows.length > 0 && (
             <button
               type="button"
@@ -256,10 +341,81 @@ export default function TollingPage() {
         </div>
       </header>
 
+      {/* Periode-selectie: week / maand / kwartaal / jaar / alles + navigatie */}
+      <section className="rounded-lg border bg-white px-4 py-3 space-y-3">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-xs font-medium text-gray-500 uppercase mr-0.5">Periode:</span>
+          {PERIOD_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => changePeriod(opt.value)}
+              className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                period === opt.value
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setOffset(o => o - 1)}
+            disabled={period === 'all' || loading}
+            className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            title="Vorige periode"
+          >
+            <ChevronLeftIcon className="h-4 w-4" />
+          </button>
+          <div className="min-w-0 flex-1 sm:flex-none sm:min-w-[16rem] text-center sm:text-left">
+            <div className="text-sm font-semibold text-gray-900">
+              {periodTitle(meta, period)}
+            </div>
+            <div className="text-xs text-gray-500">{periodRange(meta)}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOffset(o => o + 1)}
+            disabled={period === 'all' || loading}
+            className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            title="Volgende periode"
+          >
+            <ChevronRightIcon className="h-4 w-4" />
+          </button>
+          {offset !== 0 && period !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setOffset(0)}
+              className="px-2 py-1 rounded-lg text-xs font-medium text-primary-700 hover:bg-primary-50"
+            >
+              Naar nu
+            </button>
+          )}
+          {emptyCount > 0 && (
+            <label className="ml-auto flex items-center gap-1.5 text-xs text-gray-600">
+              <input
+                type="checkbox"
+                checked={!hideEmpty}
+                onChange={e => setHideEmpty(!e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-gray-300"
+              />
+              Toon ook {emptyCount} auto{emptyCount === 1 ? '' : "'s"} zonder tolheffing
+            </label>
+          )}
+        </div>
+      </section>
+
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatCard label="Auto's met events" value={String(filteredRows.length)} />
-        <StatCard label="KM huidige maand" value={kmFmt(totals.km)} />
-        <StatCard label="Bedrag huidige maand" value={currency(totals.amount)} />
+        <StatCard label="Auto's met events" value={String(totals.vehicles)} />
+        <StatCard label={`KM ${periodTitle(meta, period).toLowerCase()}`} value={kmFmt(totals.km)} />
+        <StatCard
+          label={`Bedrag ${periodTitle(meta, period).toLowerCase()}`}
+          value={currency(totals.amount)}
+        />
       </section>
 
       {companyOptions.length > 0 && (
@@ -321,7 +477,8 @@ export default function TollingPage() {
         </div>
       ) : filteredRows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 p-10 text-center text-gray-500">
-          Geen resultaten voor de geselecteerde bedrijven.
+          Geen tolheffing gevonden voor <strong>{periodTitle(meta, period)}</strong>
+          {selectedCompanyKeys.length > 0 && ' bij de geselecteerde bedrijven'}.
         </div>
       ) : (
         <div className="space-y-2">
@@ -329,6 +486,7 @@ export default function TollingPage() {
             <VehicleRow
               key={row.plate_normalized}
               row={row}
+              periodLabel={periodTitle(meta, period)}
               open={!!expanded[row.plate_normalized]}
               onToggle={() =>
                 setExpanded(prev => ({ ...prev, [row.plate_normalized]: !prev[row.plate_normalized] }))
@@ -341,6 +499,8 @@ export default function TollingPage() {
         </div>
       )}
 
+      <TollingInvoicesSection refreshKey={invoicesRefresh} />
+
       {invoiceModalRow && (
         <CreateTollingInvoiceModal
           isOpen={!!invoiceModalRow}
@@ -348,16 +508,288 @@ export default function TollingPage() {
           onClose={() => setInvoiceModalRow(null)}
           onCreated={() => {
             setInvoiceModalRow(null)
+            setInvoicesRefresh(n => n + 1)
             reload()
           }}
         />
       )}
+
+      <DachserExportModal isOpen={dachserOpen} onClose={() => setDachserOpen(false)} />
 
       <ConfirmDialog
         state={confirmState}
         onClose={() => setConfirmState(null)}
       />
     </div>
+  )
+}
+
+/* ------------------------------------------------------------------ *
+ * Overzicht van facturen die via de knop "Factuur" zijn aangemaakt.
+ * Mobiel = kaarten, desktop = tabel. Per factuur kan een creditfactuur
+ * worden gemaakt (met een nummer uit de credit-nummerreeks).
+ * ------------------------------------------------------------------ */
+function invoiceStatusClass(status: string): string {
+  switch (status) {
+    case 'concept': return 'bg-gray-100 text-gray-700'
+    case 'definitief': return 'bg-blue-100 text-blue-700'
+    case 'verzonden': return 'bg-indigo-100 text-indigo-700'
+    case 'betaald': return 'bg-green-100 text-green-700'
+    case 'vervallen': return 'bg-red-100 text-red-700'
+    default: return 'bg-gray-100 text-gray-700'
+  }
+}
+
+function dateOnlyFmt(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('nl-NL', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
+
+function TollingInvoicesSection({ refreshKey }: { refreshKey: number }) {
+  const [invoices, setInvoices] = useState<TollingInvoiceRow[]>([])
+  const [loadingInvoices, setLoadingInvoices] = useState(true)
+  const [creditingId, setCreditingId] = useState<string | null>(null)
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
+  const [showAll, setShowAll] = useState(false)
+
+  const load = async () => {
+    setLoadingInvoices(true)
+    try {
+      setInvoices(await tollingApi.listInvoices({ limit: 200 }))
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || 'Kon facturen niet laden')
+    } finally {
+      setLoadingInvoices(false)
+    }
+  }
+
+  useEffect(() => { load() /* eslint-disable-next-line */ }, [refreshKey])
+
+  const createCredit = async (inv: TollingInvoiceRow, force = false) => {
+    setCreditingId(inv.id)
+    try {
+      const res = await tollingApi.createCreditInvoice({ invoice_id: inv.id, force })
+      toast.success(`Creditfactuur ${res.factuurnummer} aangemaakt voor ${inv.factuurnummer}.`)
+      await load()
+    } catch (e: any) {
+      if (e?.response?.status === 409) {
+        const detail = e.response.data?.detail || 'Er bestaat al een creditfactuur.'
+        setConfirmState({
+          title: 'Toch nog een creditfactuur maken?',
+          message: <span>{detail}</span>,
+          confirmLabel: 'Ja, aanmaken',
+          variant: 'danger',
+          onConfirm: async () => { await createCredit(inv, true) },
+        })
+      } else {
+        toast.error(e?.response?.data?.detail || 'Creditfactuur maken mislukt')
+      }
+    } finally {
+      setCreditingId(null)
+    }
+  }
+
+  const askCredit = (inv: TollingInvoiceRow) => {
+    setConfirmState({
+      title: `Creditfactuur maken voor ${inv.factuurnummer}?`,
+      message: (
+        <span>
+          Er wordt een nieuwe creditfactuur aangemaakt met een eigen nummer uit de
+          credit-nummerreeks. Alle regels van <strong>{inv.factuurnummer}</strong> worden
+          gekopieerd en negatief geboekt.
+        </span>
+      ),
+      confirmLabel: 'Creditfactuur maken',
+      onConfirm: async () => { await createCredit(inv) },
+    })
+  }
+
+  const visible = showAll ? invoices : invoices.slice(0, 10)
+
+  return (
+    <section className="rounded-lg border bg-white">
+      <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-gray-900">Gemaakte facturen</h2>
+          <p className="text-xs text-gray-500">Facturen die via de knop “Factuur” zijn aangemaakt.</p>
+        </div>
+        <button
+          onClick={load}
+          disabled={loadingInvoices}
+          className="shrink-0 inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <ArrowPathIcon className={`h-4 w-4 ${loadingInvoices ? 'animate-spin' : ''}`} />
+          <span className="hidden sm:inline">Vernieuwen</span>
+        </button>
+      </div>
+
+      {loadingInvoices ? (
+        <div className="p-6 text-center text-sm text-gray-500">Laden…</div>
+      ) : invoices.length === 0 ? (
+        <div className="p-6 text-center text-sm text-gray-500">
+          Nog geen facturen vanuit tolheffing aangemaakt.
+        </div>
+      ) : (
+        <>
+          {/* Mobiel: kaarten */}
+          <ul className="sm:hidden divide-y">
+            {visible.map(inv => (
+              <li key={inv.id} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-sm font-semibold text-gray-900">{inv.factuurnummer}</span>
+                      {inv.type === 'credit' && (
+                        <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700">
+                          Credit
+                        </span>
+                      )}
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${invoiceStatusClass(inv.status)}`}>
+                        {inv.status}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 truncate text-xs text-gray-600">
+                      {inv.bedrijf_naam || 'Zonder bedrijf'}
+                    </div>
+                  </div>
+                  <div className={`shrink-0 text-right text-sm font-semibold ${inv.totaal < 0 ? 'text-orange-600' : 'text-gray-900'}`}>
+                    {currency(inv.totaal)}
+                  </div>
+                </div>
+
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                  <span>{dateOnlyFmt(inv.factuurdatum)}</span>
+                  {inv.plates.length > 0 && <span>{inv.plates.join(', ')}</span>}
+                  {inv.weeks.length > 0 && <span>{inv.weeks.join(', ')}</span>}
+                </div>
+
+                {inv.credit_of && (
+                  <div className="mt-1 text-[11px] text-orange-600">
+                    Credit van {inv.credit_of.factuurnummer}
+                  </div>
+                )}
+                {inv.credits.length > 0 && (
+                  <div className="mt-1 text-[11px] text-gray-600">
+                    Gecrediteerd: {inv.credits.map(c => c.factuurnummer).join(', ')}
+                  </div>
+                )}
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Link
+                    to={`/invoices/${inv.id}/edit`}
+                    className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <PencilSquareIcon className="h-4 w-4" />
+                    Openen
+                  </Link>
+                  {inv.type !== 'credit' && (
+                    <button
+                      onClick={() => askCredit(inv)}
+                      disabled={creditingId === inv.id}
+                      className="inline-flex items-center gap-1 rounded-md border border-orange-300 px-2.5 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+                    >
+                      <ArrowUturnLeftIcon className="h-4 w-4" />
+                      {creditingId === inv.id ? 'Bezig…' : 'Creditfactuur'}
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* Desktop: tabel */}
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th className="px-4 py-2 text-left">Factuur</th>
+                  <th className="px-4 py-2 text-left">Bedrijf</th>
+                  <th className="px-4 py-2 text-left">Kenteken(s)</th>
+                  <th className="px-4 py-2 text-left">Periode</th>
+                  <th className="px-4 py-2 text-left">Datum</th>
+                  <th className="px-4 py-2 text-right">Totaal</th>
+                  <th className="px-4 py-2 text-left">Status</th>
+                  <th className="px-4 py-2 text-right">Acties</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {visible.map(inv => (
+                  <tr key={inv.id} className="hover:bg-gray-50">
+                    <td className="whitespace-nowrap px-4 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-gray-900">{inv.factuurnummer}</span>
+                        {inv.type === 'credit' && (
+                          <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700">
+                            Credit
+                          </span>
+                        )}
+                      </div>
+                      {inv.credit_of && (
+                        <div className="text-[11px] text-orange-600">van {inv.credit_of.factuurnummer}</div>
+                      )}
+                      {inv.credits.length > 0 && (
+                        <div className="text-[11px] text-gray-500">
+                          gecrediteerd: {inv.credits.map(c => c.factuurnummer).join(', ')}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-gray-700">{inv.bedrijf_naam || '—'}</td>
+                    <td className="px-4 py-2 text-gray-700">{inv.plates.join(', ') || '—'}</td>
+                    <td className="px-4 py-2 text-gray-700">{inv.weeks.join(', ') || '—'}</td>
+                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">{dateOnlyFmt(inv.factuurdatum)}</td>
+                    <td className={`whitespace-nowrap px-4 py-2 text-right font-medium ${inv.totaal < 0 ? 'text-orange-600' : 'text-gray-900'}`}>
+                      {currency(inv.totaal)}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${invoiceStatusClass(inv.status)}`}>
+                        {inv.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex items-center justify-end gap-1">
+                        <Link
+                          to={`/invoices/${inv.id}/edit`}
+                          className="rounded p-1.5 text-gray-600 hover:bg-gray-100"
+                          title="Factuur openen"
+                        >
+                          <PencilSquareIcon className="h-4 w-4" />
+                        </Link>
+                        {inv.type !== 'credit' && (
+                          <button
+                            onClick={() => askCredit(inv)}
+                            disabled={creditingId === inv.id}
+                            className="inline-flex items-center gap-1 rounded-md border border-orange-300 px-2 py-1 text-xs font-medium text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+                            title="Creditfactuur maken"
+                          >
+                            <ArrowUturnLeftIcon className="h-4 w-4" />
+                            {creditingId === inv.id ? 'Bezig…' : 'Credit'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {invoices.length > visible.length && (
+            <div className="border-t px-4 py-2 text-center">
+              <button
+                onClick={() => setShowAll(true)}
+                className="text-xs font-medium text-primary-600 hover:underline"
+              >
+                Toon alle {invoices.length} facturen
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
+    </section>
   )
 }
 
@@ -372,6 +804,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 
 interface VehicleRowProps {
   row: TollingVehicleRow
+  periodLabel: string
   open: boolean
   onToggle: () => void
   onCreateInvoice: () => void
@@ -379,7 +812,7 @@ interface VehicleRowProps {
   deleting: boolean
 }
 
-function VehicleRow({ row, open, onToggle, onCreateInvoice, onDelete, deleting }: VehicleRowProps) {
+function VehicleRow({ row, periodLabel, open, onToggle, onCreateInvoice, onDelete, deleting }: VehicleRowProps) {
   return (
     <div className="rounded-lg border bg-white overflow-hidden">
       <div className="flex items-stretch">
@@ -403,7 +836,10 @@ function VehicleRow({ row, open, onToggle, onCreateInvoice, onDelete, deleting }
               )}
             </div>
             <div className="text-xs text-gray-500 mt-0.5">
-              Huidige maand: {kmFmt(row.current_month_km)} · {currency(row.current_month_amount)}
+              {periodLabel}: {kmFmt(row.period_km)} · {currency(row.period_amount)}
+              {row.period_events > 0 && (
+                <span className="text-gray-400"> · {row.period_events} regels</span>
+              )}
             </div>
           </div>
           {open ? (

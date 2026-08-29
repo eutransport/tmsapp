@@ -28,8 +28,25 @@ export interface TollingVehicleRow {
   vehicle_id: string | null
   bedrijf_id: string | null
   bedrijf_naam: string | null
+  /** Totalen van de gekozen periode. */
+  period_km: number
+  period_amount: number
+  period_events: number
+  /** Alias van period_* (backwards-compat). */
   current_month_km: number
   current_month_amount: number
+}
+
+export type TollingListPeriod = 'week' | 'month' | 'quarter' | 'year' | 'all'
+
+export interface TollingVehicleList {
+  period: TollingListPeriod
+  year: number
+  index: number
+  date_from: string | null
+  date_to: string | null
+  totals: { vehicles: number; events: number; km: number; amount: number }
+  rows: TollingVehicleRow[]
 }
 
 export interface TollingSummary {
@@ -125,6 +142,107 @@ export interface CreateTollingInvoiceResponse {
   events_marked: number
 }
 
+export interface DachserPreviewRow {
+  route: string
+  license_plate: string
+  plate_normalized: string
+  bedrijf_id: string
+  bedrijf_naam: string
+  date: string          // YYYY-MM-DD
+  total_km: number
+  amount: number
+  events_count: number
+}
+
+export interface DachserRouteGroup {
+  route: string
+  label: string
+  bedrijf_id: string
+  bedrijf_naam: string
+  plates: string[]
+  rows: number
+  total_km: number
+  total_amount: number
+}
+
+export interface DachserCompanyGroup {
+  bedrijf_id: string
+  bedrijf_naam: string
+  routes: string[]
+  rows: number
+  total_km: number
+  total_amount: number
+}
+
+export interface DachserPreview {
+  date_from: string
+  date_to: string
+  exclude_weekend: boolean
+  bedrijf_id: string
+  companies: DachserCompanyGroup[]
+  rows: DachserPreviewRow[]
+  routes: DachserRouteGroup[]
+  totals: { rows: number; total_km: number; total_amount: number }
+}
+
+export interface DachserExportPayload {
+  date_from: string
+  date_to: string
+  bedrijf?: string
+  carriers: Record<string, string>
+  default_carrier?: string
+  routes?: string[]
+  exclude_weekend?: boolean
+  country?: string
+}
+
+export interface TollingInvoiceCreditRef {
+  id: string
+  factuurnummer: string
+  status: string
+  totaal: number
+}
+
+export interface TollingInvoiceRow {
+  id: string
+  factuurnummer: string
+  type: string
+  status: string
+  bedrijf_id: string | null
+  bedrijf_naam: string | null
+  administratie_id: string | null
+  administratie_naam: string | null
+  factuurdatum: string | null
+  vervaldatum: string | null
+  subtotaal: number
+  btw_bedrag: number
+  totaal: number
+  plates: string[]
+  weeks: string[]
+  credit_of: { invoice_id: string; factuurnummer: string } | null
+  credits: TollingInvoiceCreditRef[]
+  has_credit: boolean
+  created_at: string | null
+}
+
+export interface CreateCreditInvoicePayload {
+  invoice_id: string
+  factuurdatum?: string
+  vervaldatum?: string
+  force?: boolean
+}
+
+export interface CreateCreditInvoiceResponse {
+  invoice_id: string
+  factuurnummer: string
+  status: string
+  subtotaal: number
+  btw_bedrag: number
+  totaal: number
+  credit_of: { invoice_id: string; factuurnummer: string }
+  lines_copied: number
+}
+
 export interface TollingImportBatch {
   id: string
   filename: string
@@ -158,8 +276,24 @@ export const tollingApi = {
     return Array.isArray(data) ? data : (data?.results ?? [])
   },
 
-  listVehicles: async (): Promise<TollingVehicleRow[]> => {
-    const { data } = await api.get('/tolling/vehicles/')
+  listVehicles: async (
+    opts: { period?: TollingListPeriod; offset?: number } = {},
+  ): Promise<TollingVehicleList> => {
+    const { data } = await api.get('/tolling/vehicles/', {
+      params: { period: opts.period ?? 'month', offset: opts.offset ?? 0 },
+    })
+    // Oudere backends gaven nog een platte array terug.
+    if (Array.isArray(data)) {
+      return {
+        period: opts.period ?? 'month',
+        year: new Date().getFullYear(),
+        index: 0,
+        date_from: null,
+        date_to: null,
+        totals: { vehicles: data.length, events: 0, km: 0, amount: 0 },
+        rows: data,
+      }
+    }
     return data
   },
 
@@ -267,6 +401,54 @@ export const tollingApi = {
     payload: CreateTollingInvoicePayload,
   ): Promise<CreateTollingInvoiceResponse> => {
     const { data } = await api.post('/tolling/invoicing/create-invoice/', payload)
+    return data
+  },
+
+  /** Voorbeeld van de export: geaggregeerde regels + routes per carrier. */
+  dachserPreview: async (
+    opts: {
+      date_from?: string
+      date_to?: string
+      bedrijf?: string
+      exclude_weekend?: boolean
+    } = {},
+  ): Promise<DachserPreview> => {
+    const params: Record<string, string> = {}
+    if (opts.date_from) params.date_from = opts.date_from
+    if (opts.date_to) params.date_to = opts.date_to
+    if (opts.bedrijf) params.bedrijf = opts.bedrijf
+    if (opts.exclude_weekend !== undefined) {
+      params.exclude_weekend = opts.exclude_weekend ? 'true' : 'false'
+    }
+    const { data } = await api.get('/tolling/invoicing/dachser-preview/', { params })
+    return data
+  },
+
+  /** Genereer het Excel-bestand in Dachser-opmaak. */
+  dachserExport: async (payload: DachserExportPayload): Promise<Blob> => {
+    const { data } = await api.post('/tolling/invoicing/dachser-export/', payload, {
+      responseType: 'blob',
+      timeout: 120000,
+    })
+    return data
+  },
+
+  /** Facturen die uit tolheffing zijn ontstaan (incl. eventuele creditfacturen). */
+  listInvoices: async (
+    opts: { plate?: string; limit?: number } = {},
+  ): Promise<TollingInvoiceRow[]> => {
+    const params: Record<string, string> = {}
+    if (opts.plate) params.plate = opts.plate
+    if (opts.limit) params.limit = String(opts.limit)
+    const { data } = await api.get('/tolling/invoicing/invoices/', { params })
+    return Array.isArray(data) ? data : (data?.results ?? [])
+  },
+
+  /** Maak een creditfactuur op basis van een bestaande tolfactuur. */
+  createCreditInvoice: async (
+    payload: CreateCreditInvoicePayload,
+  ): Promise<CreateCreditInvoiceResponse> => {
+    const { data } = await api.post('/tolling/invoicing/create-credit-invoice/', payload)
     return data
   },
 
