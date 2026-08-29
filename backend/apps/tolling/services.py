@@ -316,7 +316,7 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
     ws.append([f'Kenteken: {plate_label}'])
     ws.append([f'Periode: {period_label}'])
     ws.append([])
-    ws.append(['Startdatum', 'Einddatum', 'Type', 'Afstand (km)', 'Bedrag (€)', 'Gefactureerd'])
+    ws.append(['Startdatum', 'Einddatum', 'Ritnummer', 'Type', 'Afstand (km)', 'Bedrag (€)', 'Gefactureerd'])
     weekend_fill = PatternFill(start_color='FEF3C7', end_color='FEF3C7', fill_type='solid')
     private_fill = PatternFill(start_color='EDE9FE', end_color='EDE9FE', fill_type='solid')
     private_font = Font(color='5B21B6')
@@ -328,9 +328,13 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
     weekend_amount = Decimal('0')
     weekday_km = Decimal('0')
     weekday_amount = Decimal('0')
+    # Subtotalen per ritnummer, zodat een wagen die in de periode van rit is
+    # gewisseld beide ritnummers apart terugkomt in de uitdraai.
+    per_rit: dict[str, list] = {}
     for e in events:
         is_priv = bool(getattr(e, 'is_private', False))
         is_wknd = bool(e.start_at and e.start_at.isoweekday() >= 6)
+        rit = (getattr(e, 'ritnummer', '') or '').strip()
         if is_priv:
             type_label = 'Privé'
         elif is_wknd:
@@ -340,6 +344,7 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
         ws.append([
             e.start_at.strftime('%Y-%m-%d %H:%M'),
             e.end_at.strftime('%Y-%m-%d %H:%M'),
+            rit,
             type_label,
             float(e.distance_km),
             float(e.amount),
@@ -347,7 +352,7 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
         ])
         row_idx = ws.max_row
         if is_priv:
-            for col in range(1, 7):
+            for col in range(1, 8):
                 cell = ws.cell(row=row_idx, column=col)
                 cell.fill = private_fill
                 cell.font = private_font
@@ -355,7 +360,7 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
             private_amount += Decimal(e.amount)
         else:
             if is_wknd:
-                for col in range(1, 7):
+                for col in range(1, 8):
                     ws.cell(row=row_idx, column=col).fill = weekend_fill
                 weekend_km += Decimal(e.distance_km)
                 weekend_amount += Decimal(e.amount)
@@ -364,18 +369,31 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
                 weekday_amount += Decimal(e.amount)
             total_km += Decimal(e.distance_km)
             total_amount += Decimal(e.amount)
+            bucket = per_rit.setdefault(rit, [Decimal('0'), Decimal('0'), 0])
+            bucket[0] += Decimal(e.distance_km)
+            bucket[1] += Decimal(e.amount)
+            bucket[2] += 1
     ws.append([])
-    ws.append(['', 'Doordeweeks', '', float(weekday_km), float(weekday_amount), ''])
-    ws.append(['', 'Weekend', '', float(weekend_km), float(weekend_amount), ''])
+    ws.append(['', 'Doordeweeks', '', '', float(weekday_km), float(weekday_amount), ''])
+    ws.append(['', 'Weekend', '', '', float(weekend_km), float(weekend_amount), ''])
     if private_km > 0 or private_amount > 0:
-        ws.append(['', 'Privé (niet doorbelast)', '', float(private_km), float(private_amount), ''])
+        ws.append(['', 'Privé (niet doorbelast)', '', '', float(private_km), float(private_amount), ''])
         row_idx = ws.max_row
-        for col in range(1, 7):
+        for col in range(1, 8):
             cell = ws.cell(row=row_idx, column=col)
             cell.fill = private_fill
             cell.font = private_font
-    ws.append(['', 'Totaal tolkosten', '', float(total_km), float(total_amount), ''])
-    for col_idx, width in enumerate([20, 20, 14, 15, 15, 15], start=1):
+    ws.append(['', 'Totaal tolkosten', '', '', float(total_km), float(total_amount), ''])
+    if len(per_rit) > 1:
+        ws.append([])
+        ws.append(['Per ritnummer', '', '', '', '', '', ''])
+        for rit in sorted(per_rit):
+            km, bedrag, aantal = per_rit[rit]
+            ws.append([
+                '', rit or 'Geen ritnummer', f'{aantal} regels', '',
+                float(km), float(bedrag), '',
+            ])
+    for col_idx, width in enumerate([20, 20, 16, 14, 15, 15, 15], start=1):
         ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = width
     out = io.BytesIO()
     wb.save(out)
@@ -560,7 +578,7 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
         Paragraph(f'Periode: {period_label}', styles['Normal']),
         Spacer(1, 6),
     ]
-    data = [['Startdatum', 'Einddatum', 'Type', 'Afstand (km)', 'Bedrag (€)', 'Status']]
+    data = [['Startdatum', 'Einddatum', 'Ritnummer', 'Type', 'Afstand (km)', 'Bedrag (€)', 'Status']]
     weekend_rows: list[int] = []
     private_rows: list[int] = []
     total_km = Decimal('0')
@@ -571,9 +589,13 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
     weekend_amount = Decimal('0')
     weekday_km = Decimal('0')
     weekday_amount = Decimal('0')
+    # Subtotalen per ritnummer, zodat een ritnummerwissel binnen de periode
+    # zichtbaar blijft in de uitdraai.
+    per_rit: dict[str, list] = {}
     for idx, e in enumerate(events, start=1):
         is_priv = bool(getattr(e, 'is_private', False))
         is_wknd = bool(e.start_at and e.start_at.isoweekday() >= 6)
+        rit = (getattr(e, 'ritnummer', '') or '').strip()
         if is_priv:
             type_label = 'Privé'
             status = 'Privé'
@@ -593,21 +615,26 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
             status = 'Gefactureerd' if e.invoiced_at else 'Open'
             total_km += Decimal(e.distance_km)
             total_amount += Decimal(e.amount)
+            bucket = per_rit.setdefault(rit, [Decimal('0'), Decimal('0'), 0])
+            bucket[0] += Decimal(e.distance_km)
+            bucket[1] += Decimal(e.amount)
+            bucket[2] += 1
         data.append([
             e.start_at.strftime('%Y-%m-%d %H:%M'),
             e.end_at.strftime('%Y-%m-%d %H:%M'),
+            rit,
             type_label,
             f'{float(e.distance_km):.3f}',
             f'{float(e.amount):.2f}',
             status,
         ])
     # Subtotal rows
-    data.append(['', 'Doordeweeks', '', f'{float(weekday_km):.3f}', f'{float(weekday_amount):.2f}', ''])
-    data.append(['', 'Weekend', '', f'{float(weekend_km):.3f}', f'{float(weekend_amount):.2f}', ''])
+    data.append(['', 'Doordeweeks', '', '', f'{float(weekday_km):.3f}', f'{float(weekday_amount):.2f}', ''])
+    data.append(['', 'Weekend', '', '', f'{float(weekend_km):.3f}', f'{float(weekend_amount):.2f}', ''])
     has_private = private_km > 0 or private_amount > 0
     if has_private:
-        data.append(['', 'Privé (niet doorbelast)', '', f'{float(private_km):.3f}', f'{float(private_amount):.2f}', ''])
-    data.append(['', 'Totaal tolkosten', '', f'{float(total_km):.3f}', f'{float(total_amount):.2f}', ''])
+        data.append(['', 'Privé (niet doorbelast)', '', '', f'{float(private_km):.3f}', f'{float(private_amount):.2f}', ''])
+    data.append(['', 'Totaal tolkosten', '', '', f'{float(total_km):.3f}', f'{float(total_amount):.2f}', ''])
 
     tbl = Table(data, repeatRows=1, hAlign='LEFT')
     subtotal_rows = 4 if has_private else 3
@@ -616,7 +643,7 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('ALIGN', (3, 1), (4, -1), 'RIGHT'),
+        ('ALIGN', (4, 1), (5, -1), 'RIGHT'),
         ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
         ('BACKGROUND', (0, -subtotal_rows), (-1, -subtotal_rows), colors.HexColor('#eff6ff')),
         ('BACKGROUND', (0, -subtotal_rows + 1), (-1, -subtotal_rows + 1), colors.HexColor('#fef3c7')),
@@ -633,5 +660,29 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
         style_cmds.append(('TEXTCOLOR', (0, ri), (-1, ri), colors.HexColor('#5b21b6')))
     tbl.setStyle(TableStyle(style_cmds))
     elems.append(tbl)
+
+    # Losse tabel met de totalen per ritnummer wanneer de wagen in deze
+    # periode onder meer dan één ritnummer heeft gereden.
+    if len(per_rit) > 1:
+        elems.append(Spacer(1, 10))
+        elems.append(Paragraph('Totalen per ritnummer', styles['Heading3']))
+        rit_data = [['Ritnummer', 'Regels', 'Afstand (km)', 'Bedrag (€)']]
+        for rit in sorted(per_rit):
+            km, bedrag, aantal = per_rit[rit]
+            rit_data.append([
+                rit or 'Geen ritnummer', str(aantal),
+                f'{float(km):.3f}', f'{float(bedrag):.2f}',
+            ])
+        rit_tbl = Table(rit_data, hAlign='LEFT')
+        rit_tbl.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
+            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+        ]))
+        elems.append(rit_tbl)
+
     doc.build(elems)
     return buf.getvalue()

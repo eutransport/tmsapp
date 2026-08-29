@@ -382,8 +382,35 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         events_qs = TollingEvent.objects.filter(
             license_plate_normalized=norm, start_at__gte=start, start_at__lt=end,
         )
+
+        # Alle ritnummers waarop deze wagen in de periode heeft gereden, zodat
+        # de UI er een keuzelijst van kan maken. Dit gebeurt vóór het filter,
+        # anders zou de lijst na een keuze inklappen tot één optie.
+        ritnummers = [
+            {
+                'ritnummer': r['ritnummer'] or '',
+                'events_count': r['events_count'],
+                'total_km': float(r['km'] or 0),
+                'total_amount': float(r['bedrag'] or 0),
+            }
+            for r in (
+                events_qs
+                .values('ritnummer')
+                .annotate(
+                    events_count=Count('id'),
+                    km=Coalesce(Sum('distance_km'), Value(0),
+                                output_field=DecimalField(max_digits=14, decimal_places=3)),
+                    bedrag=Coalesce(Sum('amount'), Value(0),
+                                    output_field=DecimalField(max_digits=14, decimal_places=2)),
+                )
+                .order_by('ritnummer')
+            )
+        ]
+
         # Optioneel beperken tot één ritnummer, zodat de historie van vóór
-        # een ritnummerwijziging apart te bekijken blijft.
+        # een ritnummerwijziging apart te bekijken blijft. De parameter
+        # weglaten betekent 'alle ritnummers'; een lege waarde betekent de
+        # groep zonder ritnummer.
         ritnummer = request.query_params.get('ritnummer')
         if ritnummer is not None:
             events_qs = events_qs.filter(ritnummer=ritnummer.strip())
@@ -395,6 +422,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         return Response({
             'plate_normalized': norm,
             'ritnummer': ritnummer,
+            'ritnummers': ritnummers,
             'period': period,
             'year': year,
             'index': idx,
@@ -554,11 +582,14 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         else:
             year, idx = _shift_month(now.year, now.month, offset)
             start, end = _month_range(year, idx)
-        events = list(
-            TollingEvent.objects
-            .filter(license_plate_normalized=norm, start_at__gte=start, start_at__lt=end)
-            .order_by('start_at')
+        events_qs = TollingEvent.objects.filter(
+            license_plate_normalized=norm, start_at__gte=start, start_at__lt=end,
         )
+        # Optioneel beperken tot het ritnummer dat bij de import is vastgelegd.
+        ritnummer = request.data.get('ritnummer')
+        if ritnummer is not None:
+            events_qs = events_qs.filter(ritnummer=str(ritnummer).strip())
+        events = list(events_qs.order_by('start_at'))
         if not events:
             return Response({'detail': 'Geen tolgebeurtenissen in de gekozen periode.'}, status=400)
 

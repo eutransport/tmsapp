@@ -12,6 +12,10 @@ export interface TollingEvent {
   license_plate_raw: string
   license_plate_normalized: string
   obu: string
+  /** Ritnummer zoals vastgelegd bij de import. */
+  ritnummer: string
+  vehicle: string | null
+  bedrijf: string | null
   invoice_line: string | null
   invoiced_at: string | null
   invoiced: boolean
@@ -55,8 +59,20 @@ export interface TollingVehicleList {
   rows: TollingVehicleRow[]
 }
 
+/** Eén ritnummer waarop deze wagen in de periode heeft gereden. */
+export interface TollingSummaryRit {
+  ritnummer: string
+  events_count: number
+  total_km: number
+  total_amount: number
+}
+
 export interface TollingSummary {
   plate_normalized: string
+  /** Actief filter; null betekent alle ritnummers. */
+  ritnummer: string | null
+  /** Alle ritnummers in deze periode, ongeacht het actieve filter. */
+  ritnummers: TollingSummaryRit[]
   period: 'week' | 'month'
   year: number
   index: number
@@ -384,6 +400,8 @@ export const tollingApi = {
       fmt: 'pdf' | 'xlsx'
       period: 'week' | 'month'
       offset: number
+      /** Weglaten = alle ritnummers van deze wagen. */
+      ritnummer?: string
       email_profile_id?: string
     },
   ): Promise<{ sent: boolean; recipients: string[]; filename: string }> => {

@@ -928,6 +928,8 @@ interface VehicleDetailProps {
 function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDetailProps) {
   const [period, setPeriod] = useState<'week' | 'month'>('month')
   const [offset, setOffset] = useState(0)
+  // Standaard het ritnummer van de aangeklikte regel; null = alle ritnummers.
+  const [ritFilter, setRitFilter] = useState<string | null>(ritnummer)
   const [data, setData] = useState<TollingSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -946,7 +948,12 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
   const load = async () => {
     setLoading(true)
     try {
-      const s = await tollingApi.summary(plate, { period, offset, ritnummer })
+      const s = await tollingApi.summary(plate, {
+        period,
+        offset,
+        // Parameter weglaten = alle ritnummers van deze wagen.
+        ...(ritFilter === null ? {} : { ritnummer: ritFilter }),
+      })
       setData(s)
       setPage(1)
     } catch (e: any) {
@@ -956,7 +963,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
     }
   }
 
-  useEffect(() => { load() /* eslint-disable-next-line */ }, [plate, period, offset, ritnummer])
+  useEffect(() => { load() /* eslint-disable-next-line */ }, [plate, period, offset, ritFilter])
 
   const totalPages = data ? Math.max(1, Math.ceil(data.events.length / PAGE_SIZE)) : 1
   const pageEvents = data ? data.events.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : []
@@ -964,7 +971,12 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
   const download = async (fmt: 'xlsx' | 'pdf') => {
     setExporting(fmt)
     try {
-      const blob = await tollingApi.downloadExport(plate, { period, offset, format: fmt, ritnummer })
+      const blob = await tollingApi.downloadExport(plate, {
+        period,
+        offset,
+        format: fmt,
+        ...(ritFilter === null ? {} : { ritnummer: ritFilter }),
+      })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -1182,6 +1194,39 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
           )
         })()}
 
+        {/* Ritnummerfilter: welke ritten heeft deze wagen in de periode gereden? */}
+        {data && data.ritnummers.length > 0 && (data.ritnummers.length > 1 || ritFilter !== null) && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs uppercase tracking-wide text-gray-500">Ritnummer</span>
+            <button
+              type="button"
+              onClick={() => setRitFilter(null)}
+              className={`px-2 py-1 rounded text-xs font-medium border ${
+                ritFilter === null
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Alle ({data.ritnummers.reduce((s, r) => s + r.events_count, 0)})
+            </button>
+            {data.ritnummers.map(r => (
+              <button
+                key={r.ritnummer || '(leeg)'}
+                type="button"
+                onClick={() => setRitFilter(r.ritnummer)}
+                className={`px-2 py-1 rounded text-xs font-medium border ${
+                  ritFilter === r.ritnummer
+                    ? 'bg-primary-600 text-white border-primary-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+                title={`${kmFmt(r.total_km)} km · ${currency(r.total_amount)}`}
+              >
+                {r.ritnummer || 'Geen ritnummer'} ({r.events_count})
+              </button>
+            ))}
+          </div>
+        )}
+
         {loading ? (
           <div className="py-6 text-center text-gray-400">Laden…</div>
         ) : !data || data.events.length === 0 ? (
@@ -1196,6 +1241,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                   <tr>
                     <th className="text-left px-3 py-2">Startdatum</th>
                     <th className="text-left px-3 py-2">Einddatum</th>
+                    <th className="text-left px-3 py-2">Ritnummer</th>
                     <th className="text-right px-3 py-2">Afstand</th>
                     <th className="text-right px-3 py-2">Bedrag</th>
                     <th className="text-center px-3 py-2">Status</th>
@@ -1223,6 +1269,20 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                         )}
                       </td>
                       <td className="px-3 py-1.5 whitespace-nowrap">{dateFmt(ev.end_at)}</td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">
+                        {ev.ritnummer ? (
+                          <button
+                            type="button"
+                            onClick={() => setRitFilter(ev.ritnummer)}
+                            className="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 hover:bg-primary-100 hover:text-primary-800"
+                            title={`Alleen ritnummer ${ev.ritnummer} tonen`}
+                          >
+                            {ev.ritnummer}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-1.5 text-right tabular-nums">
                         {Number(ev.distance_km).toLocaleString('nl-NL', { maximumFractionDigits: 3 })}
                       </td>
@@ -1250,7 +1310,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                 </tbody>
                 <tfoot className="bg-gray-50 text-sm font-medium">
                   <tr>
-                    <td className="px-3 py-2 text-right" colSpan={2}>Totaal (periode)</td>
+                    <td className="px-3 py-2 text-right" colSpan={3}>Totaal (periode)</td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {Number(data.total_km).toLocaleString('nl-NL', { maximumFractionDigits: 3 })} km
                     </td>
@@ -1460,6 +1520,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                       fmt: emailModal.fmt,
                       period,
                       offset,
+                      ...(ritFilter === null ? {} : { ritnummer: ritFilter }),
                       email_profile_id: emailProfileId || undefined,
                     })
                     toast.success(`Mail verzonden naar ${r.recipients.length} ontvanger(s).`)
