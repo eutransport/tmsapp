@@ -134,11 +134,14 @@ export default function TollingPage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const askDeletePlate = (row: TollingVehicleRow) => {
+    const label = row.ritnummer
+      ? `${row.plate_display} (rit ${row.ritnummer})`
+      : row.plate_display
     setConfirmState({
-      title: `Alle tolheffingen van ${row.plate_display} verwijderen?`,
+      title: `Alle tolheffingen van ${label} verwijderen?`,
       message: (
         <span>
-          Alle geïmporteerde tolheffing-events voor <strong>{row.plate_display}</strong> worden
+          Alle geïmporteerde tolheffing-events voor <strong>{label}</strong> worden
           definitief verwijderd. Gekoppelde factuurregels blijven bestaan maar verliezen hun
           onderliggende events. Deze actie kan niet ongedaan worden gemaakt.
         </span>
@@ -146,9 +149,9 @@ export default function TollingPage() {
       confirmLabel: 'Verwijderen',
       variant: 'danger',
       onConfirm: async () => {
-        setDeletingPlate(row.plate_normalized)
+        setDeletingPlate(row.row_key)
         try {
-          const res = await tollingApi.deleteEventsForPlate(row.plate_normalized)
+          const res = await tollingApi.deleteEventsForPlate(row.plate_normalized, row.ritnummer)
           if (res.invoiced_deleted > 0) {
             toast.success(
               `${res.deleted} events verwijderd (${res.invoiced_deleted} waren gefactureerd, ${res.invoice_lines_affected} factuurregels aangepast).`,
@@ -484,16 +487,16 @@ export default function TollingPage() {
         <div className="space-y-2">
           {filteredRows.map(row => (
             <VehicleRow
-              key={row.plate_normalized}
+              key={row.row_key}
               row={row}
               periodLabel={periodTitle(meta, period)}
-              open={!!expanded[row.plate_normalized]}
+              open={!!expanded[row.row_key]}
               onToggle={() =>
-                setExpanded(prev => ({ ...prev, [row.plate_normalized]: !prev[row.plate_normalized] }))
+                setExpanded(prev => ({ ...prev, [row.row_key]: !prev[row.row_key] }))
               }
               onCreateInvoice={() => setInvoiceModalRow(row)}
               onDelete={() => askDeletePlate(row)}
-              deleting={deletingPlate === row.plate_normalized}
+              deleting={deletingPlate === row.row_key}
             />
           ))}
         </div>
@@ -824,9 +827,25 @@ function VehicleRow({ row, periodLabel, open, onToggle, onCreateInvoice, onDelet
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <span className="font-semibold text-gray-900">{row.plate_display}</span>
-              {row.ritnummer && (
-                <span className="text-xs uppercase tracking-wide text-gray-500">
-                  {row.ritnummer}
+              {row.ritnummer ? (
+                <span
+                  className={
+                    row.is_actueel
+                      ? 'text-xs font-medium uppercase tracking-wide text-gray-700 bg-gray-100 rounded px-1.5 py-0.5'
+                      : 'text-xs font-medium uppercase tracking-wide text-amber-800 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5'
+                  }
+                  title={
+                    row.is_actueel
+                      ? 'Huidig ritnummer van deze wagen'
+                      : `Eerder ritnummer. Deze wagen rijdt nu op ${row.huidig_ritnummer || 'geen ritnummer'}.`
+                  }
+                >
+                  Rit {row.ritnummer}
+                  {!row.is_actueel && ' · eerder'}
+                </span>
+              ) : (
+                <span className="text-xs uppercase tracking-wide text-gray-400">
+                  Geen ritnummer
                 </span>
               )}
               {row.bedrijf_naam && (
@@ -886,7 +905,14 @@ function VehicleRow({ row, periodLabel, open, onToggle, onCreateInvoice, onDelet
           Verwijderen
         </button>
       </div>
-      {open && <VehicleDetail plate={row.plate_normalized} plateDisplay={row.plate_display} bedrijfId={row.bedrijf_id} />}
+      {open && (
+        <VehicleDetail
+          plate={row.plate_normalized}
+          plateDisplay={row.plate_display}
+          bedrijfId={row.bedrijf_id}
+          ritnummer={row.ritnummer}
+        />
+      )}
     </div>
   )
 }
@@ -895,9 +921,11 @@ interface VehicleDetailProps {
   plate: string
   plateDisplay: string
   bedrijfId: string | null
+  /** Beperk het detail tot dit ritnummer (momentopname bij import). */
+  ritnummer: string
 }
 
-function VehicleDetail({ plate, plateDisplay, bedrijfId }: VehicleDetailProps) {
+function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDetailProps) {
   const [period, setPeriod] = useState<'week' | 'month'>('month')
   const [offset, setOffset] = useState(0)
   const [data, setData] = useState<TollingSummary | null>(null)
@@ -918,7 +946,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId }: VehicleDetailProps) {
   const load = async () => {
     setLoading(true)
     try {
-      const s = await tollingApi.summary(plate, { period, offset })
+      const s = await tollingApi.summary(plate, { period, offset, ritnummer })
       setData(s)
       setPage(1)
     } catch (e: any) {
@@ -928,7 +956,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId }: VehicleDetailProps) {
     }
   }
 
-  useEffect(() => { load() /* eslint-disable-next-line */ }, [plate, period, offset])
+  useEffect(() => { load() /* eslint-disable-next-line */ }, [plate, period, offset, ritnummer])
 
   const totalPages = data ? Math.max(1, Math.ceil(data.events.length / PAGE_SIZE)) : 1
   const pageEvents = data ? data.events.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : []
@@ -936,7 +964,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId }: VehicleDetailProps) {
   const download = async (fmt: 'xlsx' | 'pdf') => {
     setExporting(fmt)
     try {
-      const blob = await tollingApi.downloadExport(plate, { period, offset, format: fmt })
+      const blob = await tollingApi.downloadExport(plate, { period, offset, format: fmt, ritnummer })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

@@ -248,7 +248,14 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         return period, year, index, start, end
 
     def list(self, request):
-        """Eén regel per kenteken met de totalen van de gekozen periode."""
+        """Eén regel per kenteken + ritnummer met de totalen van de periode.
+
+        Het ritnummer komt uit de momentopname die bij de import is
+        vastgelegd, niet uit de huidige vloot. Krijgt een wagen later een
+        ander ritnummer, dan blijft de eerder geïmporteerde historie onder
+        het oude ritnummer staan en komen nieuwe imports onder het nieuwe.
+        Hetzelfde kenteken kan dus meerdere keren in de lijst voorkomen.
+        """
         period, year, index, start, end = self._resolve_list_period(request.query_params)
 
         agg_qs = TollingEvent.objects.all()
@@ -256,41 +263,75 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             agg_qs = agg_qs.filter(start_at__gte=start, start_at__lt=end)
         agg_qs = (
             agg_qs
-            .values('license_plate_normalized')
+            .values('license_plate_normalized', 'ritnummer')
             .annotate(
                 period_km=Coalesce(Sum('distance_km'), Value(0), output_field=DecimalField(max_digits=14, decimal_places=3)),
                 period_amount=Coalesce(Sum('amount'), Value(0), output_field=DecimalField(max_digits=14, decimal_places=2)),
                 period_events=Count('id'),
             )
         )
-        agg_map = {row['license_plate_normalized']: row for row in agg_qs}
+        agg_map = {
+            (row['license_plate_normalized'], row['ritnummer'] or ''): row
+            for row in agg_qs
+        }
 
-        # Vehicles for enrichment (kenteken with dashes / ritnummer / bedrijf)
+        # Huidige vloot: alleen als terugval voor regels zonder momentopname
+        # (geïmporteerd voordat het kenteken in de vloot stond).
         vehicle_map: dict[str, Vehicle] = {}
-        for v in Vehicle.objects.select_related('bedrijf').all():
+        for v in Vehicle.objects.select_related('bedrijf').order_by('actief', 'created_at'):
             vehicle_map[normalize_plate(v.kenteken)] = v
 
-        # Distinct plates with any events
-        plates = TollingEvent.objects.values_list('license_plate_normalized', 'license_plate_raw').distinct()
-        seen: dict[str, str] = {}
-        for norm, raw in plates:
-            seen.setdefault(norm, raw)
+        # Alle combinaties kenteken + ritnummer die ooit zijn geïmporteerd.
+        combos: dict[tuple, dict] = {}
+        rows_qs = TollingEvent.objects.values_list(
+            'license_plate_normalized', 'ritnummer', 'license_plate_raw',
+            'vehicle_id', 'vehicle__kenteken', 'bedrijf_id', 'bedrijf__naam',
+        ).distinct()
+        for norm, rit, raw, veh_id, veh_plate, bedrijf_id, bedrijf_naam in rows_qs:
+            key = (norm, rit or '')
+            entry = combos.setdefault(key, {
+                'plate_raw': raw, 'vehicle_id': veh_id, 'vehicle_plate': veh_plate,
+                'bedrijf_id': bedrijf_id, 'bedrijf_naam': bedrijf_naam,
+            })
+            # Vul ontbrekende gegevens aan vanuit een andere regel van dezelfde groep.
+            if not entry['vehicle_id'] and veh_id:
+                entry['vehicle_id'] = veh_id
+                entry['vehicle_plate'] = veh_plate
+            if not entry['bedrijf_id'] and bedrijf_id:
+                entry['bedrijf_id'] = bedrijf_id
+                entry['bedrijf_naam'] = bedrijf_naam
 
         results = []
-        for norm, raw in seen.items():
-            vehicle = vehicle_map.get(norm)
-            totals = agg_map.get(norm, {})
-            bedrijf = getattr(vehicle, 'bedrijf', None) if vehicle else None
+        for (norm, rit), info in combos.items():
+            fallback = vehicle_map.get(norm)
+            totals = agg_map.get((norm, rit), {})
             km = float(totals.get('period_km') or 0)
             amount = float(totals.get('period_amount') or 0)
+
+            plate_display = info['vehicle_plate'] or (
+                fallback.kenteken if fallback else (info['plate_raw'] or norm)
+            )
+            bedrijf_id = info['bedrijf_id']
+            bedrijf_naam = info['bedrijf_naam']
+            if not bedrijf_id and fallback and fallback.bedrijf_id:
+                bedrijf_id = fallback.bedrijf_id
+                bedrijf_naam = fallback.bedrijf.naam
+            vehicle_id = info['vehicle_id'] or (fallback.id if fallback else None)
+            huidig_rit = (fallback.ritnummer or '').strip() if fallback else ''
+
             results.append({
+                'row_key': f"{norm}|{rit}",
                 'plate_normalized': norm,
-                'plate_raw': raw,
-                'plate_display': vehicle.kenteken if vehicle else raw,
-                'ritnummer': vehicle.ritnummer if vehicle else None,
-                'vehicle_id': str(vehicle.id) if vehicle else None,
-                'bedrijf_id': str(bedrijf.id) if bedrijf else None,
-                'bedrijf_naam': bedrijf.naam if bedrijf else None,
+                'plate_raw': info['plate_raw'],
+                'plate_display': plate_display,
+                'ritnummer': rit,
+                # Rijdt de wagen vandaag nog op deze rit? Zo niet, dan is dit
+                # een historische regel van vóór een ritnummerwijziging.
+                'is_actueel': bool(rit) and rit == huidig_rit,
+                'huidig_ritnummer': huidig_rit,
+                'vehicle_id': str(vehicle_id) if vehicle_id else None,
+                'bedrijf_id': str(bedrijf_id) if bedrijf_id else None,
+                'bedrijf_naam': bedrijf_naam or None,
                 'period_km': km,
                 'period_amount': amount,
                 'period_events': int(totals.get('period_events') or 0),
@@ -298,7 +339,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
                 'current_month_km': km,
                 'current_month_amount': amount,
             })
-        results.sort(key=lambda r: r['plate_display'])
+        results.sort(key=lambda r: (r['plate_display'], r['ritnummer']))
 
         return Response({
             'period': period,
@@ -307,7 +348,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             'date_from': start.date().isoformat() if start else None,
             'date_to': (end - timedelta(days=1)).date().isoformat() if end else None,
             'totals': {
-                'vehicles': sum(1 for r in results if r['period_events'] > 0),
+                'vehicles': len({r['plate_normalized'] for r in results if r['period_events'] > 0}),
                 'events': sum(r['period_events'] for r in results),
                 'km': round(sum(r['period_km'] for r in results), 3),
                 'amount': round(sum(r['period_amount'] for r in results), 2),
@@ -339,17 +380,22 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             year, idx = _shift_month(now.year, now.month, offset)
             start, end = _month_range(year, idx)
 
-        events = list(
-            TollingEvent.objects
-            .filter(license_plate_normalized=norm, start_at__gte=start, start_at__lt=end)
-            .order_by('start_at')
+        events_qs = TollingEvent.objects.filter(
+            license_plate_normalized=norm, start_at__gte=start, start_at__lt=end,
         )
+        # Optioneel beperken tot één ritnummer, zodat de historie van vóór
+        # een ritnummerwijziging apart te bekijken blijft.
+        ritnummer = request.query_params.get('ritnummer')
+        if ritnummer is not None:
+            events_qs = events_qs.filter(ritnummer=ritnummer.strip())
+        events = list(events_qs.order_by('start_at'))
         total_km = sum((e.distance_km for e in events), Decimal('0'))
         total_amount = sum((e.amount for e in events), Decimal('0'))
         invoiced_count = sum(1 for e in events if e.invoiced_at)
 
         return Response({
             'plate_normalized': norm,
+            'ritnummer': ritnummer,
             'period': period,
             'year': year,
             'index': idx,
@@ -438,11 +484,14 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         else:
             year, idx = _shift_month(now.year, now.month, offset)
             start, end = _month_range(year, idx)
-        events = list(
-            TollingEvent.objects
-            .filter(license_plate_normalized=norm, start_at__gte=start, start_at__lt=end)
-            .order_by('start_at')
+        events_qs = TollingEvent.objects.filter(
+            license_plate_normalized=norm, start_at__gte=start, start_at__lt=end,
         )
+        # Optioneel beperken tot het ritnummer dat bij de import is vastgelegd.
+        ritnummer = request.query_params.get('ritnummer')
+        if ritnummer is not None:
+            events_qs = events_qs.filter(ritnummer=ritnummer.strip())
+        events = list(events_qs.order_by('start_at'))
         plate_display = events[0].license_plate_raw if events else plate
         for v in Vehicle.objects.all():
             if normalize_plate(v.kenteken) == norm:
@@ -594,6 +643,13 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         if not norm:
             return Response({'detail': 'Kenteken vereist.'}, status=400)
         qs = TollingEvent.objects.filter(license_plate_normalized=norm)
+        # Optioneel beperken tot één ritnummer: hetzelfde kenteken kan onder
+        # meerdere ritten in het overzicht staan.
+        ritnummer = request.data.get('ritnummer') if isinstance(request.data, dict) else None
+        if ritnummer is None:
+            ritnummer = request.query_params.get('ritnummer')
+        if ritnummer is not None:
+            qs = qs.filter(ritnummer=str(ritnummer).strip())
         total = qs.count()
         if total == 0:
             return Response({'deleted': 0, 'invoiced_deleted': 0, 'invoice_lines_affected': 0})
@@ -713,13 +769,18 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         events_qs = TollingEvent.objects.filter(
             start_at__gte=start, start_at__lt=end, invoiced_at__isnull=True,
             is_private=False,
-        ).values_list('license_plate_normalized', 'license_plate_raw', 'start_at', 'distance_km', 'amount')
+        ).values_list('license_plate_normalized', 'license_plate_raw', 'start_at',
+                      'distance_km', 'amount', 'ritnummer')
 
         agg: dict[str, dict] = {}
         raw_map: dict[str, str] = {}
+        # Ritnummer zoals vastgelegd bij de import, niet de huidige vlootwaarde.
+        rit_map: dict[str, str] = {}
         tz = timezone.get_current_timezone()
-        for norm, raw, start_at, km, amount in events_qs:
+        for norm, raw, start_at, km, amount, ritnummer in events_qs:
             raw_map.setdefault(norm, raw)
+            if ritnummer and not rit_map.get(norm):
+                rit_map[norm] = ritnummer
             local_dt = start_at.astimezone(tz) if timezone.is_aware(start_at) else start_at
             is_weekend = local_dt.isoweekday() >= 6  # 6=Sat, 7=Sun
             bucket = agg.setdefault(norm, {
@@ -744,7 +805,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             results.append({
                 'plate_normalized': norm,
                 'plate_display': v.kenteken if v else raw_map.get(norm, norm),
-                'ritnummer': v.ritnummer if v else None,
+                'ritnummer': rit_map.get(norm) or (v.ritnummer if v else None),
                 'vehicle_id': str(v.id) if v else None,
                 'total_km': float(b['total_km']),
                 'total_amount': float(b['total_amount']),
@@ -939,7 +1000,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             ranges = ranges_by_plate.get(plate_norm)
             veh = vehicle_map.get(plate_norm)
             plate_display = veh.kenteken if veh else e.license_plate_raw
-            ritnummer = veh.ritnummer if veh else ''
+            ritnummer = (e.ritnummer or '').strip() or ((veh.ritnummer or '') if veh else '')
 
             start_at = e.start_at
             # Sommige DB-rijen kunnen naive zijn — dan localizen.
@@ -1079,7 +1140,10 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 continue
             v = vehicle_map.get(norm)
             plate_display = v.kenteken if v else evs[0].license_plate_raw
-            ritnummer = v.ritnummer if v else ''
+            ritnummer = next(
+                ((e.ritnummer or '').strip() for e in evs if (e.ritnummer or '').strip()),
+                (v.ritnummer or '') if v else '',
+            )
             total_km = sum((e.distance_km for e in evs), Decimal('0'))
             total_amount = sum((e.amount for e in evs), Decimal('0'))
             max_order += 1
@@ -1340,7 +1404,14 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         plate_display = vehicle.kenteken if vehicle else (
             events_by_week[weeks[0]][0].license_plate_raw if events_by_week[weeks[0]] else plate
         )
-        ritnummer = vehicle.ritnummer if vehicle else ''
+        ritnummer = next(
+            (
+                (e.ritnummer or '').strip()
+                for week in weeks for e in events_by_week[week]
+                if (e.ritnummer or '').strip()
+            ),
+            (vehicle.ritnummer or '') if vehicle else '',
+        )
 
         # Generate invoice number using the same logic as InvoiceViewSet
         lookup_prefix, start_number = InvoiceViewSet._resolve_invoice_numbering(
@@ -1744,7 +1815,8 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             start_at__gte=start, start_at__lt=end, is_private=False,
         ).values_list(
             'license_plate_normalized', 'license_plate_raw',
-            'start_at', 'distance_km', 'amount',
+            'start_at', 'distance_km', 'amount', 'ritnummer',
+            'bedrijf_id', 'bedrijf__naam',
         )
 
         vehicle_map = {
@@ -1753,15 +1825,23 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         }
 
         agg: dict[tuple, dict] = {}
-        for norm, raw, start_at, km, amount in events:
+        for norm, raw, start_at, km, amount, ritnummer, bedrijf_id, bedrijf_naam in events:
             local_dt = start_at.astimezone(tz) if timezone.is_aware(start_at) else start_at
             if exclude_weekend and local_dt.isoweekday() >= 6:
                 continue
 
             vehicle = vehicle_map.get(norm)
             plate_display = vehicle.kenteken if vehicle else (raw or norm)
-            route = (getattr(vehicle, 'ritnummer', '') or '') if vehicle else ''
-            bedrijf = getattr(vehicle, 'bedrijf', None) if vehicle else None
+            # Route = het ritnummer zoals vastgelegd bij de import, zodat een
+            # latere ritnummerwijziging de historie niet herschrijft.
+            route = (ritnummer or '').strip() or (
+                (getattr(vehicle, 'ritnummer', '') or '') if vehicle else ''
+            )
+            # Bedrijf eveneens uit de momentopname; alleen terugvallen op de
+            # vloot als het event nog geen bedrijf had bij de import.
+            if not bedrijf_id and vehicle is not None and vehicle.bedrijf_id:
+                bedrijf_id = vehicle.bedrijf_id
+                bedrijf_naam = vehicle.bedrijf.naam
             day = local_dt.date()
 
             key = (route, norm, day)
@@ -1769,8 +1849,8 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 'route': route,
                 'plate_normalized': norm,
                 'license_plate': plate_display,
-                'bedrijf_id': str(bedrijf.id) if bedrijf else '',
-                'bedrijf_naam': bedrijf.naam if bedrijf else '',
+                'bedrijf_id': str(bedrijf_id) if bedrijf_id else '',
+                'bedrijf_naam': bedrijf_naam or '',
                 'date': day,
                 'total_km': Decimal('0'),
                 'amount': Decimal('0'),

@@ -11,6 +11,7 @@ class TollingEventSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'start_at', 'end_at', 'distance_km', 'amount',
             'license_plate_raw', 'license_plate_normalized', 'obu',
+            'ritnummer', 'vehicle', 'bedrijf',
             'invoice_line', 'invoiced_at', 'invoiced',
             'is_private', 'private_registration', 'created_at',
         )

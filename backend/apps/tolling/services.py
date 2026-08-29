@@ -131,6 +131,23 @@ def _header_map(fieldnames: list[str]) -> dict[str, str]:
     return mapping
 
 
+def build_vehicle_lookup() -> dict:
+    """Genormaliseerd kenteken -> Vehicle.
+
+    Wordt gebruikt om bij de import het ritnummer, de wagen en het bedrijf
+    vast te leggen. Staat hetzelfde kenteken meerdere keren in de vloot, dan
+    wint het actieve voertuig (die worden als laatste ingelezen).
+    """
+    from apps.fleet.models import Vehicle
+
+    lookup: dict = {}
+    for v in Vehicle.objects.select_related('bedrijf').order_by('actief', 'created_at'):
+        key = normalize_plate(v.kenteken)
+        if key:
+            lookup[key] = v
+    return lookup
+
+
 def import_csv(file_obj, user, filename: str = '') -> ImportResult:
     """Import a tolling CSV file. Idempotent — duplicates are skipped."""
     raw = file_obj.read()
@@ -154,6 +171,10 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
 
     imported = duplicates = invalid = total = 0
     new_events: list[TollingEvent] = []
+    # Momentopname van de vloot: het ritnummer dat een wagen nu heeft wordt op
+    # het event vastgelegd, zodat een latere ritnummerwijziging de historie
+    # niet met terugwerkende kracht herschrijft.
+    vehicle_lookup = build_vehicle_lookup()
 
     for row in reader:
         total += 1
@@ -168,6 +189,9 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
             invalid += 1
             continue
 
+        plate_norm = normalize_plate(plate_raw)
+        vehicle = vehicle_lookup.get(plate_norm)
+
         new_events.append(TollingEvent(
             batch=batch,
             start_at=start,
@@ -175,8 +199,11 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
             distance_km=distance,
             amount=amount,
             license_plate_raw=plate_raw,
-            license_plate_normalized=normalize_plate(plate_raw),
+            license_plate_normalized=plate_norm,
             obu=obu,
+            vehicle=vehicle,
+            ritnummer=(vehicle.ritnummer or '').strip() if vehicle else '',
+            bedrijf=vehicle.bedrijf if vehicle else None,
         ))
 
     # Bulk insert; on unique conflict fall back to per-row insert to count duplicates.
