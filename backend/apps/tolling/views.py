@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Iterable
 
 from django.db import transaction
-from django.db.models import DecimalField, Sum, Value, Q
+from django.db.models import Count, DecimalField, Sum, Value, Q
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.utils import timezone
@@ -200,18 +200,67 @@ class TollingVehicleViewSet(viewsets.ViewSet):
     module_permission_read = 'view_tolling'
     module_permission_write = 'manage_tolling'
 
-    def list(self, request):
-        """Return one row per license plate with current-month totals."""
-        now = timezone.now().astimezone(timezone.get_current_timezone())
-        month_start, month_end = _month_range(now.year, now.month)
+    # Toegestane periodes voor het overzicht per kenteken.
+    PERIOD_CHOICES = ('week', 'month', 'quarter', 'year', 'all')
 
+    def _resolve_list_period(self, params):
+        """Bepaal het datumbereik voor de kentekenlijst.
+
+        Query params:
+          - period = week | month | quarter | year | all (standaard: month)
+          - offset = verschuiving t.o.v. nu (0 = huidige periode, -1 = vorige, 1 = volgende)
+
+        Geeft (period, year, index, start, end) terug. Voor period='all' zijn
+        start en end None (= alles tot nu toe).
+        """
+        period = (params.get('period') or 'month').strip().lower()
+        if period not in self.PERIOD_CHOICES:
+            period = 'month'
+        try:
+            offset = int(params.get('offset') or 0)
+        except (TypeError, ValueError):
+            offset = 0
+
+        tz = timezone.get_current_timezone()
+        now = timezone.now().astimezone(tz)
+
+        if period == 'week':
+            iso = now.isocalendar()
+            year, index = _shift_week(iso[0], iso[1], offset)
+            start, end = _week_range(year, index)
+        elif period == 'month':
+            year, index = _shift_month(now.year, now.month, offset)
+            start, end = _month_range(year, index)
+        elif period == 'quarter':
+            q_idx = (now.year * 4 + (now.month - 1) // 3) + offset
+            year, index = q_idx // 4, (q_idx % 4) + 1
+            first_month = (index - 1) * 3 + 1
+            start, _ = _month_range(year, first_month)
+            last_year, last_month = _shift_month(year, first_month, 2)
+            _, end = _month_range(last_year, last_month)
+        elif period == 'year':
+            year, index = now.year + offset, 0
+            start = timezone.make_aware(datetime(year, 1, 1), tz)
+            end = timezone.make_aware(datetime(year + 1, 1, 1), tz)
+        else:  # all
+            year, index, start, end = now.year, 0, None, None
+
+        return period, year, index, start, end
+
+    def list(self, request):
+        """Eén regel per kenteken met de totalen van de gekozen periode."""
+        period, year, index, start, end = self._resolve_list_period(request.query_params)
+
+        agg_qs = TollingEvent.objects.all()
+        if start is not None and end is not None:
+            agg_qs = agg_qs.filter(start_at__gte=start, start_at__lt=end)
         agg_qs = (
-            TollingEvent.objects
-            .filter(start_at__gte=month_start, start_at__lt=month_end)
+            agg_qs
             .values('license_plate_normalized')
             .annotate(
-                current_month_km=Coalesce(Sum('distance_km'), Value(0), output_field=DecimalField(max_digits=14, decimal_places=3)),
-                current_month_amount=Coalesce(Sum('amount'), Value(0), output_field=DecimalField(max_digits=14, decimal_places=2)),
+                period_km=Coalesce(Sum('distance_km'), Value(0), output_field=DecimalField(max_digits=14, decimal_places=3)),
+                period_amount=Coalesce(Sum('amount'), Value(0), output_field=DecimalField(max_digits=14, decimal_places=2)),
+                period_events=Count('id'),
             )
         )
         agg_map = {row['license_plate_normalized']: row for row in agg_qs}
@@ -230,8 +279,10 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         results = []
         for norm, raw in seen.items():
             vehicle = vehicle_map.get(norm)
-            monthly = agg_map.get(norm, {})
+            totals = agg_map.get(norm, {})
             bedrijf = getattr(vehicle, 'bedrijf', None) if vehicle else None
+            km = float(totals.get('period_km') or 0)
+            amount = float(totals.get('period_amount') or 0)
             results.append({
                 'plate_normalized': norm,
                 'plate_raw': raw,
@@ -240,11 +291,29 @@ class TollingVehicleViewSet(viewsets.ViewSet):
                 'vehicle_id': str(vehicle.id) if vehicle else None,
                 'bedrijf_id': str(bedrijf.id) if bedrijf else None,
                 'bedrijf_naam': bedrijf.naam if bedrijf else None,
-                'current_month_km': float(monthly.get('current_month_km') or 0),
-                'current_month_amount': float(monthly.get('current_month_amount') or 0),
+                'period_km': km,
+                'period_amount': amount,
+                'period_events': int(totals.get('period_events') or 0),
+                # Backwards-compat met oudere frontend-builds:
+                'current_month_km': km,
+                'current_month_amount': amount,
             })
         results.sort(key=lambda r: r['plate_display'])
-        return Response(results)
+
+        return Response({
+            'period': period,
+            'year': year,
+            'index': index,
+            'date_from': start.date().isoformat() if start else None,
+            'date_to': (end - timedelta(days=1)).date().isoformat() if end else None,
+            'totals': {
+                'vehicles': sum(1 for r in results if r['period_events'] > 0),
+                'events': sum(r['period_events'] for r in results),
+                'km': round(sum(r['period_km'] for r in results), 3),
+                'amount': round(sum(r['period_amount'] for r in results), 2),
+            },
+            'rows': results,
+        })
 
     @action(detail=False, methods=['get'], url_path=r'(?P<plate>[^/]+)/summary')
     def summary(self, request, plate: str = ''):
@@ -1370,6 +1439,546 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             'lines': created_lines,
             'events_marked': events_marked,
         })
+
+
+    # ------------------------------------------------------------------
+    # Overzicht van facturen die uit tolheffing zijn ontstaan
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _serialize_tolling_invoice(invoice, credits_by_source: dict) -> dict:
+        """Maak een compacte representatie van een tolheffing-factuur."""
+        plates: list = []
+        weeks: list = []
+        credit_of = None
+        for line in invoice.lines.all():
+            extra = line.extra_data or {}
+            if extra.get('source') != 'tolling':
+                continue
+            plate = extra.get('plate')
+            if plate and plate not in plates:
+                plates.append(plate)
+            label = extra.get('period_label')
+            if label and label not in weeks:
+                weeks.append(label)
+            if extra.get('credit_of_invoice_id'):
+                credit_of = {
+                    'invoice_id': extra.get('credit_of_invoice_id'),
+                    'factuurnummer': extra.get('credit_of_factuurnummer'),
+                }
+
+        credits = credits_by_source.get(str(invoice.id), [])
+        return {
+            'id': str(invoice.id),
+            'factuurnummer': invoice.factuurnummer,
+            'type': invoice.type,
+            'status': invoice.status,
+            'bedrijf_id': str(invoice.bedrijf_id) if invoice.bedrijf_id else None,
+            'bedrijf_naam': invoice.bedrijf.naam if invoice.bedrijf_id else None,
+            'administratie_id': str(invoice.administratie_id) if invoice.administratie_id else None,
+            'administratie_naam': invoice.administratie.naam if invoice.administratie_id else None,
+            'factuurdatum': invoice.factuurdatum.isoformat() if invoice.factuurdatum else None,
+            'vervaldatum': invoice.vervaldatum.isoformat() if invoice.vervaldatum else None,
+            'subtotaal': float(invoice.subtotaal or 0),
+            'btw_bedrag': float(invoice.btw_bedrag or 0),
+            'totaal': float(invoice.totaal or 0),
+            'plates': plates,
+            'weeks': weeks,
+            'credit_of': credit_of,
+            'credits': credits,
+            'has_credit': bool(credits),
+            'created_at': invoice.created_at.isoformat() if invoice.created_at else None,
+        }
+
+    @action(detail=False, methods=['get'], url_path='invoices')
+    def invoices(self, request):
+        """Lijst met facturen die tolheffing-regels bevatten.
+
+        Query params:
+          - plate: filter op genormaliseerd kenteken (optioneel)
+          - limit: max aantal resultaten (default 100, max 500)
+        """
+        plate = normalize_plate(request.query_params.get('plate') or '')
+        try:
+            limit = min(int(request.query_params.get('limit') or 100), 500)
+        except (TypeError, ValueError):
+            limit = 100
+
+        qs = Invoice.objects.filter(lines__extra_data__source='tolling')
+        if plate:
+            qs = qs.filter(lines__extra_data__plate_normalized=plate)
+        qs = (
+            qs.distinct()
+            .select_related('bedrijf', 'administratie')
+            .prefetch_related('lines')
+            .order_by('-factuurdatum', '-created_at')[:limit]
+        )
+        invoices = list(qs)
+
+        # Zoek per bron-factuur welke creditfacturen er al zijn
+        source_ids = [str(inv.id) for inv in invoices]
+        credits_by_source: dict = {}
+        if source_ids:
+            credit_qs = (
+                Invoice.objects
+                .filter(type='credit', lines__extra_data__credit_of_invoice_id__in=source_ids)
+                .distinct()
+                .prefetch_related('lines')
+            )
+            for credit in credit_qs:
+                for line in credit.lines.all():
+                    src = (line.extra_data or {}).get('credit_of_invoice_id')
+                    if not src:
+                        continue
+                    bucket = credits_by_source.setdefault(src, [])
+                    if any(c['id'] == str(credit.id) for c in bucket):
+                        continue
+                    bucket.append({
+                        'id': str(credit.id),
+                        'factuurnummer': credit.factuurnummer,
+                        'status': credit.status,
+                        'totaal': float(credit.totaal or 0),
+                    })
+
+        return Response([
+            self._serialize_tolling_invoice(inv, credits_by_source) for inv in invoices
+        ])
+
+    @action(detail=False, methods=['post'], url_path='create-credit-invoice')
+    def create_credit_invoice(self, request):
+        """Maak een creditfactuur op basis van een bestaande tolheffing-factuur.
+
+        Body:
+          invoice_id   UUID van de bronfactuur (verplicht)
+          factuurdatum 'YYYY-MM-DD' (optioneel, default vandaag)
+          vervaldatum  'YYYY-MM-DD' (optioneel, default +30 dagen)
+          force        bool (optioneel, sta een tweede creditfactuur toe)
+
+        De creditfactuur krijgt een eigen nummer uit de credit-nummerreeks
+        (bijvoorbeeld C-2026-0001), kopieert alle regels van de bronfactuur en
+        laat Invoice.calculate_totals() de bedragen negatief maken. De
+        gekoppelde TollingEvents blijven aan de originele factuur hangen.
+        """
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from apps.invoicing.models import InvoiceStatus, InvoiceType
+        from apps.invoicing.views import InvoiceViewSet
+
+        data = request.data
+        invoice_id = data.get('invoice_id')
+        if not invoice_id:
+            return Response({'detail': 'invoice_id vereist.'}, status=400)
+
+        try:
+            source = (
+                Invoice.objects
+                .select_related('bedrijf', 'administratie', 'template')
+                .prefetch_related('lines')
+                .get(id=invoice_id)
+            )
+        except (Invoice.DoesNotExist, ValueError, DjangoValidationError):
+            return Response({'detail': 'Factuur niet gevonden.'}, status=404)
+
+        if source.type == InvoiceType.CREDIT:
+            return Response(
+                {'detail': 'Deze factuur is zelf al een creditfactuur.'},
+                status=400,
+            )
+
+        source_lines = list(source.lines.all().order_by('volgorde', 'created_at'))
+        if not source_lines:
+            return Response({'detail': 'Bronfactuur heeft geen regels.'}, status=400)
+
+        administratie = source.administratie
+        if administratie is not None:
+            user = request.user
+            if not (user.is_superuser or getattr(user, 'rol', None) == 'admin'):
+                if not administratie.allowed_users.filter(pk=user.pk).exists():
+                    return Response(
+                        {'detail': 'Geen rechten op deze administratie.'},
+                        status=403,
+                    )
+
+        force = _parse_bool(data.get('force'), default=False)
+        if not force:
+            existing = (
+                Invoice.objects
+                .filter(type=InvoiceType.CREDIT,
+                        lines__extra_data__credit_of_invoice_id=str(source.id))
+                .distinct()
+                .first()
+            )
+            if existing is not None:
+                return Response(
+                    {
+                        'detail': (
+                            'Er bestaat al een creditfactuur ({}) voor {}. '
+                            'Bevestig om er nog een te maken.'
+                        ).format(existing.factuurnummer, source.factuurnummer),
+                        'existing_invoice_id': str(existing.id),
+                        'existing_factuurnummer': existing.factuurnummer,
+                    },
+                    status=409,
+                )
+
+        try:
+            factuurdatum = (
+                date.fromisoformat(data.get('factuurdatum'))
+                if data.get('factuurdatum') else date.today()
+            )
+            vervaldatum = (
+                date.fromisoformat(data.get('vervaldatum'))
+                if data.get('vervaldatum') else factuurdatum + timedelta(days=30)
+            )
+        except (TypeError, ValueError):
+            return Response({'detail': 'factuurdatum/vervaldatum ongeldig (YYYY-MM-DD).'}, status=400)
+
+        # Nummer uit de credit-reeks (bijvoorbeeld C-2026-0001)
+        lookup_prefix, start_number = InvoiceViewSet._resolve_invoice_numbering(
+            'credit', administratie
+        )
+        next_num = InvoiceViewSet._compute_next_invoice_number(lookup_prefix, start_number)
+        factuurnummer = '{}-{:04d}'.format(lookup_prefix, next_num)
+
+        opmerking = 'Creditfactuur voor {}.'.format(source.factuurnummer)
+        if source.opmerkingen:
+            opmerking = '{}\n\n{}'.format(opmerking, source.opmerkingen)
+
+        with transaction.atomic():
+            credit = Invoice.objects.create(
+                factuurnummer=factuurnummer,
+                type=InvoiceType.CREDIT,
+                status=InvoiceStatus.CONCEPT,
+                template=source.template,
+                bedrijf=source.bedrijf,
+                administratie=administratie,
+                factuurdatum=factuurdatum,
+                vervaldatum=vervaldatum,
+                btw_percentage=source.btw_percentage,
+                dot_percentage=source.dot_percentage,
+                week_number=source.week_number,
+                week_year=source.week_year,
+                chauffeur=source.chauffeur,
+                opmerkingen=opmerking[:5000],
+                created_by=request.user,
+            )
+
+            for idx, line in enumerate(source_lines, start=1):
+                extra = dict(line.extra_data or {})
+                extra['credit_of_invoice_id'] = str(source.id)
+                extra['credit_of_factuurnummer'] = source.factuurnummer
+                extra['credit_of_line_id'] = str(line.id)
+                InvoiceLine.objects.create(
+                    invoice=credit,
+                    omschrijving='Credit: {}'.format(line.omschrijving)[:500],
+                    aantal=line.aantal,
+                    eenheid=line.eenheid,
+                    prijs_per_eenheid=line.prijs_per_eenheid,
+                    volgorde=idx,
+                    extra_data=extra,
+                )
+
+            credit.calculate_totals()
+
+        credit.refresh_from_db()
+
+        logger.info(
+            "Tolling credit invoice created: %s for source %s by %s",
+            factuurnummer, source.factuurnummer, getattr(request.user, 'email', request.user),
+        )
+
+        return Response({
+            'invoice_id': str(credit.id),
+            'factuurnummer': credit.factuurnummer,
+            'status': credit.status,
+            'subtotaal': float(credit.subtotaal),
+            'btw_bedrag': float(credit.btw_bedrag),
+            'totaal': float(credit.totaal),
+            'credit_of': {
+                'invoice_id': str(source.id),
+                'factuurnummer': source.factuurnummer,
+            },
+            'lines_copied': len(source_lines),
+        }, status=status.HTTP_201_CREATED)
+
+
+    # ------------------------------------------------------------------
+    # Dachser-export (Excel)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _dachser_parse_range(data) -> tuple[date, date]:
+        """Haal de datumrange uit de request. Default = huidige maand."""
+        raw_from = data.get('date_from')
+        raw_to = data.get('date_to')
+        if not raw_from or not raw_to:
+            today = timezone.localdate()
+            first = today.replace(day=1)
+            last_day = calendar.monthrange(today.year, today.month)[1]
+            return first, today.replace(day=last_day)
+        try:
+            date_from = date.fromisoformat(str(raw_from))
+            date_to = date.fromisoformat(str(raw_to))
+        except (TypeError, ValueError):
+            raise ValueError('date_from/date_to ongeldig (YYYY-MM-DD).')
+        if date_to < date_from:
+            raise ValueError('date_to mag niet voor date_from liggen.')
+        return date_from, date_to
+
+    @staticmethod
+    def _dachser_aggregate(date_from: date, date_to: date,
+                           exclude_weekend: bool = True) -> list[dict]:
+        """Tel tolheffing op per route + kenteken + dag.
+
+        Meerdere ritten op dezelfde dag komen als losse regels onder elkaar
+        te staan zodra ze een ander routenummer of kenteken hebben.
+        Privé-gemarkeerde events tellen niet mee. Met `exclude_weekend`
+        (default aan) worden zaterdag en zondag overgeslagen.
+        """
+        tz = timezone.get_current_timezone()
+        start = timezone.make_aware(datetime.combine(date_from, datetime.min.time()), tz)
+        end = timezone.make_aware(
+            datetime.combine(date_to + timedelta(days=1), datetime.min.time()), tz
+        )
+
+        events = TollingEvent.objects.filter(
+            start_at__gte=start, start_at__lt=end, is_private=False,
+        ).values_list(
+            'license_plate_normalized', 'license_plate_raw',
+            'start_at', 'distance_km', 'amount',
+        )
+
+        vehicle_map = {
+            normalize_plate(v.kenteken): v
+            for v in Vehicle.objects.select_related('bedrijf').all()
+        }
+
+        agg: dict[tuple, dict] = {}
+        for norm, raw, start_at, km, amount in events:
+            local_dt = start_at.astimezone(tz) if timezone.is_aware(start_at) else start_at
+            if exclude_weekend and local_dt.isoweekday() >= 6:
+                continue
+
+            vehicle = vehicle_map.get(norm)
+            plate_display = vehicle.kenteken if vehicle else (raw or norm)
+            route = (getattr(vehicle, 'ritnummer', '') or '') if vehicle else ''
+            bedrijf = getattr(vehicle, 'bedrijf', None) if vehicle else None
+            day = local_dt.date()
+
+            key = (route, norm, day)
+            bucket = agg.setdefault(key, {
+                'route': route,
+                'plate_normalized': norm,
+                'license_plate': plate_display,
+                'bedrijf_id': str(bedrijf.id) if bedrijf else '',
+                'bedrijf_naam': bedrijf.naam if bedrijf else '',
+                'date': day,
+                'total_km': Decimal('0'),
+                'amount': Decimal('0'),
+                'events_count': 0,
+            })
+            bucket['total_km'] += km or Decimal('0')
+            bucket['amount'] += amount or Decimal('0')
+            bucket['events_count'] += 1
+
+        rows = list(agg.values())
+        rows.sort(key=lambda r: (r['date'], r['route'] or '\uffff', r['license_plate']))
+        return rows
+
+    @action(detail=False, methods=['get'], url_path='dachser-preview')
+    def dachser_preview(self, request):
+        """Voorbeeld van de export + de routes waarvoor een carrier nodig is.
+
+        Query params:
+          - date_from / date_to (YYYY-MM-DD, default huidige maand)
+          - bedrijf: UUID van het bedrijf (optioneel filter op de routes)
+          - exclude_weekend: default true
+        """
+        params = request.query_params
+        try:
+            date_from, date_to = self._dachser_parse_range(params)
+        except ValueError as ex:
+            return Response({'detail': str(ex)}, status=400)
+
+        exclude_weekend = _parse_bool(params.get('exclude_weekend'), default=True)
+        bedrijf_id = (params.get('bedrijf') or '').strip()
+
+        all_rows = self._dachser_aggregate(date_from, date_to, exclude_weekend)
+
+        # Bedrijvenfilter vullen op basis van ALLE regels, zodat de keuzelijst
+        # blijft staan zodra er een bedrijf geselecteerd is.
+        companies: dict[str, dict] = {}
+        for row in all_rows:
+            key = row['bedrijf_id'] or ''
+            entry = companies.setdefault(key, {
+                'bedrijf_id': key,
+                'bedrijf_naam': row['bedrijf_naam'] or 'Zonder bedrijf',
+                'routes': [],
+                'rows': 0,
+                'total_km': Decimal('0'),
+                'total_amount': Decimal('0'),
+            })
+            if row['route'] and row['route'] not in entry['routes']:
+                entry['routes'].append(row['route'])
+            entry['rows'] += 1
+            entry['total_km'] += row['total_km']
+            entry['total_amount'] += row['amount']
+
+        rows = all_rows
+        if bedrijf_id:
+            rows = [r for r in rows if r['bedrijf_id'] == bedrijf_id]
+
+        routes: dict[str, dict] = {}
+        for row in rows:
+            key = row['route'] or ''
+            entry = routes.setdefault(key, {
+                'route': key,
+                'label': key or 'Zonder routenummer',
+                'bedrijf_id': row['bedrijf_id'],
+                'bedrijf_naam': row['bedrijf_naam'],
+                'plates': [],
+                'rows': 0,
+                'total_km': Decimal('0'),
+                'total_amount': Decimal('0'),
+            })
+            if row['license_plate'] not in entry['plates']:
+                entry['plates'].append(row['license_plate'])
+            entry['rows'] += 1
+            entry['total_km'] += row['total_km']
+            entry['total_amount'] += row['amount']
+
+        return Response({
+            'date_from': date_from.isoformat(),
+            'date_to': date_to.isoformat(),
+            'exclude_weekend': exclude_weekend,
+            'bedrijf_id': bedrijf_id,
+            'companies': sorted(
+                (
+                    {
+                        'bedrijf_id': v['bedrijf_id'],
+                        'bedrijf_naam': v['bedrijf_naam'],
+                        'routes': v['routes'],
+                        'rows': v['rows'],
+                        'total_km': float(v['total_km']),
+                        'total_amount': float(v['total_amount']),
+                    }
+                    for v in companies.values()
+                ),
+                key=lambda x: (x['bedrijf_id'] == '', x['bedrijf_naam'].lower()),
+            ),
+            'rows': [
+                {
+                    'route': r['route'],
+                    'license_plate': r['license_plate'],
+                    'plate_normalized': r['plate_normalized'],
+                    'bedrijf_id': r['bedrijf_id'],
+                    'bedrijf_naam': r['bedrijf_naam'],
+                    'date': r['date'].isoformat(),
+                    'total_km': float(r['total_km']),
+                    'amount': float(r['amount']),
+                    'events_count': r['events_count'],
+                }
+                for r in rows
+            ],
+            'routes': sorted(
+                (
+                    {
+                        'route': v['route'],
+                        'label': v['label'],
+                        'bedrijf_id': v['bedrijf_id'],
+                        'bedrijf_naam': v['bedrijf_naam'],
+                        'plates': v['plates'],
+                        'rows': v['rows'],
+                        'total_km': float(v['total_km']),
+                        'total_amount': float(v['total_amount']),
+                    }
+                    for v in routes.values()
+                ),
+                key=lambda x: x['route'] or '\uffff',
+            ),
+            'totals': {
+                'rows': len(rows),
+                'total_km': float(sum((r['total_km'] for r in rows), Decimal('0'))),
+                'total_amount': float(sum((r['amount'] for r in rows), Decimal('0'))),
+            },
+        })
+
+    @action(detail=False, methods=['post'], url_path='dachser-export')
+    def dachser_export(self, request):
+        """Genereer het Excel-bestand in Dachser-opmaak.
+
+        Body:
+          {
+            date_from: 'YYYY-MM-DD',
+            date_to:   'YYYY-MM-DD',
+            bedrijf:   '<uuid>',                             # alleen routes van dit bedrijf
+            carriers:  { '<routenummer>': 'Carrier B.V.' },   # per route
+            default_carrier: 'Carrier B.V.',                  # optioneel
+            routes: ['<routenummer>', ...],                   # optioneel filter
+            exclude_weekend: true,                            # default true
+            country: 'NL'                                     # optioneel, default NL
+          }
+        """
+        from .services import build_dachser_export_xlsx
+
+        data = request.data
+        try:
+            date_from, date_to = self._dachser_parse_range(data)
+        except ValueError as ex:
+            return Response({'detail': str(ex)}, status=400)
+
+        carriers = data.get('carriers') or {}
+        if not isinstance(carriers, dict):
+            return Response({'detail': 'carriers moet een object zijn.'}, status=400)
+        default_carrier = (data.get('default_carrier') or '').strip()
+        country = (data.get('country') or 'NL').strip() or 'NL'
+        exclude_weekend = _parse_bool(data.get('exclude_weekend'), default=True)
+        bedrijf_id = (data.get('bedrijf') or '').strip()
+
+        selected = data.get('routes')
+        selected_set = None
+        if isinstance(selected, list):
+            selected_set = {str(r or '') for r in selected}
+
+        rows = self._dachser_aggregate(date_from, date_to, exclude_weekend)
+        if bedrijf_id:
+            rows = [r for r in rows if r['bedrijf_id'] == bedrijf_id]
+        if selected_set is not None:
+            rows = [r for r in rows if (r['route'] or '') in selected_set]
+
+        if not rows:
+            return Response(
+                {'detail': 'Geen tolheffing gevonden voor de gekozen periode, bedrijf of routes.'},
+                status=400,
+            )
+
+        export_rows = [
+            {
+                'route': r['route'],
+                'carrier': (carriers.get(r['route'] or '') or default_carrier or '').strip(),
+                'country': country,
+                'license_plate': r['license_plate'],
+                'total_km': float(r['total_km']),
+                'amount': float(r['amount']),
+                'date': r['date'],
+            }
+            for r in rows
+        ]
+
+        content = build_dachser_export_xlsx(export_rows)
+        bedrijf_naam = rows[0]['bedrijf_naam'] if bedrijf_id else ''
+        slug = ''.join(ch if ch.isalnum() else '_' for ch in bedrijf_naam).strip('_') or 'tol'
+        filename = f"{slug}_{date_from.isoformat()}_{date_to.isoformat()}.xlsx"
+        response = HttpResponse(
+            content,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response['Access-Control-Expose-Headers'] = 'Content-Disposition'
+        logger.info(
+            "Tolheffing-export: %s regels (%s t/m %s, bedrijf=%s) door %s",
+            len(export_rows), date_from, date_to, bedrijf_naam or 'alle', request.user.email,
+        )
+        return response
 
 
 class PrivateTollRegistrationViewSet(viewsets.ModelViewSet):
