@@ -765,6 +765,102 @@ class TollingVehicleViewSet(viewsets.ViewSet):
                 deleted += 1
         return Response({'unmarked': len(events), 'lines_deleted': deleted})
 
+    @action(detail=False, methods=['post'], url_path=r'(?P<plate>[^/]+)/ritnummer-wijzigen')
+    def ritnummer_wijzigen(self, request, plate: str = ''):
+        """Zet met terugwerkende kracht een ander ritnummer op tolregels.
+
+        Bedoeld voor het geval dat er te laat is doorgegeven dat een wagen
+        onder een ander ritnummer reed. Alleen het veld ``ritnummer`` wordt
+        aangepast; bedragen, kilometers, wagen, bedrijf en de factuurstatus
+        blijven ongemoeid.
+
+        Body:
+          van, tot                 datums (jjjj-mm-dd), tot is inclusief
+          van_ritnummer            optioneel filter; weglaten = alle,
+                                   lege tekst = regels zonder ritnummer
+          naar_ritnummer           het nieuwe ritnummer
+          inclusief_gefactureerd   ook al gefactureerde regels meenemen
+          preview                  true = alleen tellen, niets wijzigen
+        """
+        norm = normalize_plate(plate)
+        data = request.data
+
+        def _datum(veld):
+            waarde = (data.get(veld) or '').strip()
+            if not waarde:
+                raise ValueError(f"Vul '{veld}' in als datum jjjj-mm-dd.")
+            try:
+                return date.fromisoformat(waarde)
+            except ValueError:
+                raise ValueError(f"'{veld}' is geen geldige datum (jjjj-mm-dd).")
+
+        try:
+            van = _datum('van')
+            tot = _datum('tot')
+        except ValueError as ex:
+            return Response({'detail': str(ex)}, status=400)
+        if tot < van:
+            return Response({'detail': 'De einddatum ligt voor de begindatum.'}, status=400)
+
+        naar = str(data.get('naar_ritnummer') or '').strip()
+        if not naar:
+            return Response({'detail': 'Vul het nieuwe ritnummer in.'}, status=400)
+        if len(naar) > 50:
+            return Response({'detail': 'Het ritnummer mag maximaal 50 tekens zijn.'}, status=400)
+
+        tz = timezone.get_current_timezone()
+        start = timezone.make_aware(datetime.combine(van, datetime.min.time()), tz)
+        eind = timezone.make_aware(
+            datetime.combine(tot + timedelta(days=1), datetime.min.time()), tz
+        )
+
+        qs = TollingEvent.objects.filter(
+            license_plate_normalized=norm, start_at__gte=start, start_at__lt=eind,
+        )
+        van_ritnummer = data.get('van_ritnummer')
+        if van_ritnummer is not None:
+            qs = qs.filter(ritnummer=str(van_ritnummer).strip())
+
+        inclusief_gefactureerd = bool(data.get('inclusief_gefactureerd'))
+        gefactureerd_aantal = qs.filter(invoiced_at__isnull=False).count()
+        if not inclusief_gefactureerd:
+            qs = qs.filter(invoiced_at__isnull=True)
+
+        # Regels die het nieuwe ritnummer al hebben, hoeven niet aangeraakt.
+        qs = qs.exclude(ritnummer=naar)
+
+        totalen = qs.aggregate(
+            aantal=Count('id'),
+            km=Coalesce(Sum('distance_km'), Value(0),
+                        output_field=DecimalField(max_digits=14, decimal_places=3)),
+            bedrag=Coalesce(Sum('amount'), Value(0),
+                            output_field=DecimalField(max_digits=14, decimal_places=2)),
+        )
+        antwoord = {
+            'plate_normalized': norm,
+            'van': van.isoformat(),
+            'tot': tot.isoformat(),
+            'naar_ritnummer': naar,
+            'aantal': totalen['aantal'],
+            'totaal_km': float(totalen['km'] or 0),
+            'totaal_bedrag': float(totalen['bedrag'] or 0),
+            'gefactureerd_aantal': gefactureerd_aantal,
+            'inclusief_gefactureerd': inclusief_gefactureerd,
+        }
+
+        if data.get('preview'):
+            antwoord['aangepast'] = 0
+            return Response(antwoord)
+
+        with transaction.atomic():
+            aangepast = qs.update(ritnummer=naar)
+        antwoord['aangepast'] = aangepast
+        logger.info(
+            'Ritnummer tolregels gewijzigd: %s %s t/m %s -> %s (%d regels) door %s',
+            norm, van, tot, naar, aangepast, request.user.email,
+        )
+        return Response(antwoord)
+
 
 class TollingInvoicingViewSet(viewsets.ViewSet):
     """Utilities to inject tolling totals into invoices."""

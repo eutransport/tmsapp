@@ -125,6 +125,31 @@ function ConfirmDialog({
 }
 
 // Vehicle form component
+/** ISO-weeknummer van een datum (maandag is de eerste dag van de week). */
+function isoWeek(datum: Date): number {
+  const d = new Date(Date.UTC(datum.getFullYear(), datum.getMonth(), datum.getDate()))
+  // Donderdag van dezelfde week bepaalt het weeknummer.
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
+  const jaarStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil(((d.getTime() - jaarStart.getTime()) / 86400000 + 1) / 7)
+}
+
+/** Toont bijvoorbeeld 'ma 07-09-2026 (week 37)'. */
+function formatDatumMetWeek(isoDatum: string): string {
+  const d = new Date(`${isoDatum}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return isoDatum
+  const datum = d.toLocaleDateString('nl-NL', {
+    weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric',
+  })
+  return `${datum} (week ${isoWeek(d)})`
+}
+
+/** Valt deze datum op een maandag? Zo niet, dan loopt de wissel door de week heen. */
+function isMaandag(isoDatum: string): boolean {
+  const d = new Date(`${isoDatum}T00:00:00`)
+  return !Number.isNaN(d.getTime()) && d.getDay() === 1
+}
+
 function VehicleForm({
   vehicle,
   companies,
@@ -147,8 +172,16 @@ function VehicleForm({
     bedrijf: vehicle?.bedrijf?.toString() || '',
     minimum_weken_per_jaar: vehicle?.minimum_weken_per_jaar?.toString() || '',
     actief: vehicle?.actief ?? true,
+    // Laat het nieuwe ritnummer pas vanaf deze datum gelden. Leeg = meteen.
+    ritnummer_vanaf: '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // Het ritnummer is aangepast ten opzichte van wat er nu in de vloot staat.
+  const ritnummerGewijzigd = Boolean(
+    vehicle && formData.ritnummer.trim() !== (vehicle.ritnummer || '').trim(),
+  )
+  const periodes = vehicle?.ritnummer_periodes || []
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
@@ -179,6 +212,11 @@ function VehicleForm({
       bedrijf: formData.bedrijf,
       minimum_weken_per_jaar: formData.minimum_weken_per_jaar ? parseInt(formData.minimum_weken_per_jaar) : null,
       actief: formData.actief,
+    }
+    // Alleen meesturen als het ritnummer echt wijzigt; anders zou er een
+    // periode ontstaan die niets verandert.
+    if (ritnummerGewijzigd && formData.ritnummer_vanaf) {
+      (saveData as VehicleUpdate).ritnummer_vanaf = formData.ritnummer_vanaf
     }
     onSave(saveData)
   }
@@ -227,6 +265,64 @@ function VehicleForm({
           className="input"
         />
       </div>
+
+      {/* Ritnummer met ingangsdatum: zo blijft de historie van voor de wissel
+          op het oude ritnummer staan. */}
+      {ritnummerGewijzigd && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Nieuw ritnummer geldig vanaf
+          </label>
+          <input
+            type="date"
+            name="ritnummer_vanaf"
+            value={formData.ritnummer_vanaf}
+            onChange={handleChange}
+            className="input"
+          />
+          <p className="text-xs text-gray-600">
+            {formData.ritnummer_vanaf ? (
+              <>
+                Vanaf {formatDatumMetWeek(formData.ritnummer_vanaf)} rijdt deze wagen op
+                ritnummer <strong>{formData.ritnummer || '(leeg)'}</strong>. Alles daarvoor
+                blijft op <strong>{vehicle?.ritnummer || '(leeg)'}</strong> staan.
+              </>
+            ) : (
+              <>
+                Laat leeg om het ritnummer meteen te wijzigen. Vul een datum in als de
+                wissel op een bepaalde dag ingaat.
+              </>
+            )}
+          </p>
+          {formData.ritnummer_vanaf && !isMaandag(formData.ritnummer_vanaf) && (
+            <p className="text-xs text-amber-700">
+              Let op: deze datum valt midden in de week. De planning van die week krijgt
+              dan deels het oude en deels het nieuwe ritnummer.
+            </p>
+          )}
+        </div>
+      )}
+
+      {periodes.length > 1 && (
+        <div className="rounded-lg border border-gray-200 p-3">
+          <p className="text-sm font-medium text-gray-700 mb-2">Ritnummers door de tijd</p>
+          <ul className="space-y-1 text-xs text-gray-600">
+            {periodes.map(p => (
+              <li key={p.id} className="flex items-center gap-2">
+                <span className="font-medium text-gray-900">{p.ritnummer || '(leeg)'}</span>
+                <span>
+                  {p.geldig_vanaf
+                    ? `vanaf ${formatDatumMetWeek(p.geldig_vanaf)}`
+                    : 'vanaf het begin'}
+                </span>
+                {p.is_huidig && (
+                  <span className="rounded bg-green-100 px-1.5 py-0.5 text-green-800">nu</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">

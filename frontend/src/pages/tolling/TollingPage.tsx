@@ -43,6 +43,7 @@ import type { MailingListContact } from '@/types'
 import ConfirmDialog, { ConfirmState } from '@/components/common/ConfirmDialog'
 import CreateTollingInvoiceModal from '@/components/tolling/CreateTollingInvoiceModal'
 import DachserExportModal from '@/components/tolling/DachserExportModal'
+import RitnummerCorrectieDialog from '@/components/tolling/RitnummerCorrectieDialog'
 import EmailProfileSelector from '@/components/EmailProfileSelector'
 
 const PAGE_SIZE = 15
@@ -944,6 +945,8 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
   const [emailSending, setEmailSending] = useState(false)
   const [mailingContacts, setMailingContacts] = useState<MailingListContact[]>([])
   const [selectedContactEmails, setSelectedContactEmails] = useState<Set<string>>(new Set())
+  // Dialoog om het ritnummer van bestaande tolregels alsnog te corrigeren.
+  const [correctieOpen, setCorrectieOpen] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -1227,6 +1230,19 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
           </div>
         )}
 
+        {/* Ritnummer van de getoonde regels alsnog corrigeren. */}
+        {data && data.events.length > 0 && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setCorrectieOpen(true)}
+              className="text-xs font-medium text-primary-700 underline hover:text-primary-900"
+            >
+              Ritnummer terugwerkend corrigeren…
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <div className="py-6 text-center text-gray-400">Laden…</div>
         ) : !data || data.events.length === 0 ? (
@@ -1369,6 +1385,23 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
         )}
       </div>
       <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
+      <RitnummerCorrectieDialog
+        isOpen={correctieOpen}
+        onClose={() => setCorrectieOpen(false)}
+        plate={plate}
+        plateDisplay={plateDisplay}
+        standaardVan={data?.start?.slice(0, 10) || ''}
+        standaardTot={
+          // data.end is exclusief; toon de laatste dag van de periode.
+          data?.end
+            ? new Date(new Date(data.end).getTime() - 86400000).toLocaleDateString('sv-SE')
+            : ''
+        }
+        huidigRitnummer={ritFilter}
+        voorstelRitnummer={ritFilter || ''}
+        bekendeRitnummers={(data?.ritnummers || []).map(r => r.ritnummer).filter(Boolean)}
+        onGewijzigd={() => load()}
+      />
       {emailModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">

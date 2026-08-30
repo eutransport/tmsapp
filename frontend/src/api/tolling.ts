@@ -282,6 +282,23 @@ export interface TollingImportBatch {
   }
 }
 
+/** Uitkomst van een ritnummercorrectie, zowel bij een preview als bij toepassen. */
+export interface RitnummerWijzigingResultaat {
+  plate_normalized: string
+  van: string
+  tot: string
+  naar_ritnummer: string
+  /** Aantal regels dat aangepast wordt (preview) of is. */
+  aantal: number
+  totaal_km: number
+  totaal_bedrag: number
+  /** Hoeveel regels in de selectie al gefactureerd zijn. */
+  gefactureerd_aantal: number
+  inclusief_gefactureerd: boolean
+  /** 0 bij een preview. */
+  aangepast: number
+}
+
 export const tollingApi = {
   uploadCsv: async (file: File): Promise<TollingImportBatch> => {
     const fd = new FormData()
@@ -388,6 +405,29 @@ export const tollingApi = {
     const { data } = await api.post('/tolling/vehicles/delete-all/', {
       confirm: 'DELETE_ALL',
     })
+    return data
+  },
+
+  /**
+   * Zet met terugwerkende kracht een ander ritnummer op tolregels.
+   * Met `preview: true` wordt alleen geteld en niets gewijzigd.
+   */
+  wijzigRitnummer: async (
+    plate: string,
+    payload: {
+      van: string
+      tot: string
+      /** Weglaten = alle ritnummers; lege tekst = regels zonder ritnummer. */
+      van_ritnummer?: string
+      naar_ritnummer: string
+      inclusief_gefactureerd?: boolean
+      preview?: boolean
+    },
+  ): Promise<RitnummerWijzigingResultaat> => {
+    const { data } = await api.post(
+      `/tolling/vehicles/${encodeURIComponent(plate)}/ritnummer-wijzigen/`,
+      payload,
+    )
     return data
   },
 
