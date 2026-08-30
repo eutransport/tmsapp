@@ -12,14 +12,18 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    Paragraph,
     SimpleDocTemplate,
     Spacer,
-    Table,
     TableStyle,
 )
 
 from apps.core.models import AppSettings
+# Paragraph en Table lopen via deze varianten, zodat tekens die het
+# ingebouwde lettertype niet kent geen zwart blokje worden in de PDF.
+from apps.core.pdf_tekst import (
+    VeiligeParagraph as Paragraph,
+    VeiligeTable as Table,
+)
 from django.utils import timezone as dj_timezone
 
 

@@ -9,11 +9,18 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm, cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, Frame, PageTemplate
+from reportlab.platypus import SimpleDocTemplate, Spacer, TableStyle, Image, Frame, PageTemplate
 from reportlab.lib.enums import TA_RIGHT, TA_CENTER, TA_LEFT
 from django.conf import settings as django_settings
 
 from apps.core.models import AppSettings
+# Paragraph en Table lopen via deze varianten, zodat tekens die het
+# ingebouwde lettertype niet kent geen zwart blokje worden in de PDF.
+from apps.core.pdf_tekst import (
+    VeiligeParagraph as Paragraph,
+    VeiligeTable as Table,
+    pdf_veilig,
+)
 
 
 class InvoicePDFGenerator:
@@ -375,6 +382,9 @@ class InvoicePDFGenerator:
             col_width = (page_width - left_margin - right_margin) / 3
             
             for line in lines:
+                # De voettekst komt uit de template en kan dus ook vreemde
+                # tekens bevatten; die schonen we hier op.
+                line = pdf_veilig(line)
                 if align == 'left':
                     canvas.drawString(x, y, line)
                 elif align == 'center':
