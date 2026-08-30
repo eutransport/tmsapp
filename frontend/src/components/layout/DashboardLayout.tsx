@@ -348,8 +348,8 @@ export default function DashboardLayout() {
                     <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                     <p className="text-xs text-gray-400 capitalize mt-0.5">{user?.rol}</p>
                   </div>
-                  <div className="sm:hidden px-4 py-2 border-b border-gray-100">
-                    <LanguageSwitcher />
+                  <div className="sm:hidden px-2 py-2 border-b border-gray-100">
+                    <LanguageSwitcher inline />
                   </div>
                   <Menu.Item>
                     {({ active }) => (

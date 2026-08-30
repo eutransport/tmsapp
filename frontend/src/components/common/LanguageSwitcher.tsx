@@ -43,13 +43,53 @@ const languages: Language[] = [
   { code: 'tr', name: 'Türkçe', flag: <TurkishFlag /> },
 ]
 
-export default function LanguageSwitcher() {
+interface LanguageSwitcherProps {
+  /**
+   * Toon de talen direct onder elkaar in plaats van in een eigen dropdown.
+   * Nodig op mobiel: daar staat de taalkiezer binnen het gebruikersmenu en
+   * een dropdown binnen een dropdown laat het scherm wegflikkeren.
+   */
+  inline?: boolean
+}
+
+export default function LanguageSwitcher({ inline = false }: LanguageSwitcherProps) {
   const { i18n } = useTranslation()
 
-  const currentLanguage = languages.find(lang => lang.code === i18n.language) || languages[0]
+  // resolvedLanguage vangt varianten als 'nl-NL' op en geeft gewoon 'nl' terug.
+  const actieveCode = i18n.resolvedLanguage || i18n.language
+  const currentLanguage = languages.find(lang => lang.code === actieveCode) || languages[0]
 
   const changeLanguage = (code: string) => {
     i18n.changeLanguage(code)
+  }
+
+  const vinkje = (
+    <svg className="ml-auto h-4 w-4 text-primary-600" viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+    </svg>
+  )
+
+  if (inline) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        {languages.map((language) => (
+          <button
+            key={language.code}
+            type="button"
+            onClick={() => changeLanguage(language.code)}
+            aria-pressed={actieveCode === language.code}
+            className={clsx(
+              actieveCode === language.code ? 'bg-primary-50 text-primary-700' : 'text-gray-700',
+              'flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm touch-manipulation'
+            )}
+          >
+            {language.flag}
+            <span>{language.name}</span>
+            {actieveCode === language.code && vinkje}
+          </button>
+        ))}
+      </div>
+    )
   }
 
   return (
@@ -76,17 +116,13 @@ export default function LanguageSwitcher() {
                   onClick={() => changeLanguage(language.code)}
                   className={clsx(
                     active ? 'bg-gray-50' : '',
-                    i18n.language === language.code ? 'bg-primary-50 text-primary-700' : 'text-gray-700',
+                    actieveCode === language.code ? 'bg-primary-50 text-primary-700' : 'text-gray-700',
                     'flex w-full items-center gap-3 px-4 py-2 text-sm'
                   )}
                 >
                   {language.flag}
                   <span>{language.name}</span>
-                  {i18n.language === language.code && (
-                    <svg className="ml-auto h-4 w-4 text-primary-600" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
+                  {actieveCode === language.code && vinkje}
                 </button>
               )}
             </Menu.Item>
