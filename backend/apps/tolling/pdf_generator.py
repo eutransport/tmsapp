@@ -4,6 +4,7 @@ import re
 from collections import defaultdict
 from decimal import Decimal
 from typing import Iterable
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
@@ -28,6 +29,33 @@ def _format_money(value) -> str:
 
 def _format_km(value) -> str:
     return f"{Decimal(value or 0):.2f}".replace('.', ',')
+
+
+def _dag_ritnummers_voor_events(events) -> dict:
+    """Zoek per event het ritnummer dat voor die dag is ingediend.
+
+    De dag bepalen we op de lokale tijdzone, net als de datum die in de
+    tabel komt te staan; anders valt een nachtrit op de verkeerde dag.
+    """
+    from .dagritnummers import als_label, ritnummers_per_dag
+
+    sleutels: dict = {}
+    kentekens: set = set()
+    datums: set = set()
+    for ev in events:
+        if not ev.start_at:
+            continue
+        lokaal = dj_timezone.localtime(ev.start_at)
+        sleutel = (ev.license_plate_normalized or '', lokaal.date())
+        sleutels[ev.id] = sleutel
+        kentekens.add(sleutel[0])
+        datums.add(sleutel[1])
+
+    gevonden = ritnummers_per_dag(kentekens, datums)
+    return {
+        ev_id: als_label(gevonden.get(sleutel, []))
+        for ev_id, sleutel in sleutels.items()
+    }
 
 
 def _fmt_nl(n: float) -> str:
@@ -153,6 +181,20 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
         spaceBefore=10,
         spaceAfter=4,
     )
+    # Ritnummers kunnen lang zijn of met meerdere naast elkaar staan; in een
+    # Paragraph breken ze netjes af binnen de kolom.
+    rit_style = ParagraphStyle(
+        'TollingRit',
+        fontName='Helvetica',
+        fontSize=8,
+        leading=9,
+        textColor=colors.HexColor('#111827'),
+    )
+    rit_prive_style = ParagraphStyle(
+        'TollingRitPrive',
+        parent=rit_style,
+        textColor=colors.HexColor('#5b21b6'),
+    )
 
     story = []
 
@@ -188,6 +230,9 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
     for ev in events:
         key = ev.license_plate_raw or ev.license_plate_normalized or 'onbekend'
         grouped[key].append(ev)
+
+    # Het ritnummer per dag komt uit de urenregistratie, niet uit de vloot.
+    dag_ritnummers = _dag_ritnummers_voor_events(events)
 
     # Bepaal ritnummer per (genormaliseerd) kenteken via Vehicle-tabel, zodat
     # we hetzelfde ritnummer op de PDF tonen als op de bijbehorende factuurregel
@@ -251,7 +296,7 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
         header_text += f" &nbsp;&nbsp; ({len(billed_events)} events, {_format_km(total_km)} km, {_format_money(total_amount)})"
         story.append(Paragraph(header_text, section_style))
 
-        data = [['Datum', 'Type', 'Start', 'Eind', 'Afstand (km)', 'Bedrag']]
+        data = [['Datum', 'Ritnummer', 'Type', 'Start', 'Eind', 'Afstand (km)', 'Bedrag']]
         weekend_row_indices: list[int] = []
         private_row_indices: list[int] = []
         for idx, ev in enumerate(plate_events, start=1):
@@ -267,8 +312,15 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
                 weekend_row_indices.append(idx)
             else:
                 type_label = 'doordeweeks'
+            # Staat er voor die dag geen rit in de uren, dan valt de regel
+            # terug op het ritnummer dat bij de import is vastgelegd.
+            rit_tekst = dag_ritnummers.get(ev.id) or (ev.ritnummer or '')
+            rit_cel = Paragraph(
+                escape(rit_tekst), rit_prive_style if private else rit_style,
+            ) if rit_tekst else ''
             data.append([
                 start.strftime('%d-%m-%Y') if start else '',
+                rit_cel,
                 type_label,
                 start.strftime('%H:%M') if start else '',
                 end.strftime('%H:%M') if end else '',
@@ -277,15 +329,15 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
             ])
         # Subtotal rows: weekday (billed), weekend (billed), privé (not billed), totaal (billed)
         show_private_subtotal = bool(private_events)
-        data.append(['', '', '', 'Totaal doordeweeks', _format_km(weekday_km), _format_money(weekday_amount)])
-        data.append(['', '', '', 'Totaal weekend', _format_km(weekend_km), _format_money(weekend_amount)])
+        data.append(['', '', '', '', 'Totaal doordeweeks', _format_km(weekday_km), _format_money(weekday_amount)])
+        data.append(['', '', '', '', 'Totaal weekend', _format_km(weekend_km), _format_money(weekend_amount)])
         if show_private_subtotal:
-            data.append(['', '', '', 'Privé (niet gefactureerd)', _format_km(private_km), _format_money(private_amount)])
-        data.append(['', '', '', 'Totaal gefactureerd', _format_km(total_km), _format_money(total_amount)])
+            data.append(['', '', '', '', 'Privé (niet gefactureerd)', _format_km(private_km), _format_money(private_amount)])
+        data.append(['', '', '', '', 'Totaal gefactureerd', _format_km(total_km), _format_money(total_amount)])
 
         table = Table(
             data,
-            colWidths=[24 * mm, 24 * mm, 18 * mm, 18 * mm, 40 * mm, 32 * mm],
+            colWidths=[24 * mm, 28 * mm, 24 * mm, 15 * mm, 15 * mm, 38 * mm, 30 * mm],
             repeatRows=1,
         )
         subtotal_rows = 4 if show_private_subtotal else 3
@@ -294,8 +346,8 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (4, 0), (-1, -1), 'RIGHT'),
-            ('ALIGN', (0, 0), (3, -1), 'LEFT'),
+            ('ALIGN', (5, 0), (-1, -1), 'RIGHT'),
+            ('ALIGN', (0, 0), (4, -1), 'LEFT'),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1 - subtotal_rows), [colors.white, colors.HexColor('#f9fafb')]),
             # Subtotal rows tinting
             ('BACKGROUND', (0, -subtotal_rows), (-1, -subtotal_rows), colors.HexColor('#eff6ff')),   # weekday

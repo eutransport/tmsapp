@@ -2591,6 +2591,8 @@ export default function InvoiceCreatePage() {
           plate_normalized: r.plate_normalized,
           plate_display: r.plate_display,
           ritnummer: r.ritnummer,
+          // Ritnummers zoals ze in de urenregistratie voor die dagen staan.
+          dag_ritnummers: (r as any).dag_ritnummers,
           total_km: r.total_km,
           total_amount: r.total_amount,
           events_count: r.events_count,

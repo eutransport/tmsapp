@@ -17,6 +17,8 @@ export interface UnmatchedEvent {
   id: string
   plate_display: string
   plate_normalized: string
+  /** Ritnummer dat voor die dag in de urenregistratie staat. */
+  dag_ritnummer?: string
   start_at: string
   end_at: string | null
   distance_km: number
@@ -27,6 +29,8 @@ export interface UnmatchedEvent {
 
 export interface MatchedEventDetail {
   id: string
+  /** Ritnummer dat voor die dag in de urenregistratie staat. */
+  dag_ritnummer?: string
   start_at: string
   end_at: string | null
   distance_km: number
@@ -38,6 +42,8 @@ export interface MatchedTollingRow {
   plate_normalized: string
   plate_display: string
   ritnummer: string | null
+  /** Alle ritnummers uit de uren die bij deze regels horen. */
+  dag_ritnummers?: string[]
   total_km: number
   total_amount: number
   events_count: number
@@ -116,7 +122,8 @@ export default function UnmatchedTollingModal({
       for (const e of r.events) {
         rows.push({
           plate_display: r.plate_display,
-          ritnummer: r.ritnummer,
+          // Het ritnummer van die dag uit de uren; anders dat van de wagen.
+          ritnummer: e.dag_ritnummer || r.ritnummer,
           start_at: e.start_at,
           end_at: e.end_at,
           distance_km: e.distance_km,
@@ -128,6 +135,18 @@ export default function UnmatchedTollingModal({
     rows.sort((a, b) => a.start_at.localeCompare(b.start_at))
     return rows
   }, [matched])
+
+  /** Ritnummers uit de uren, met terugval op het ritnummer van de wagen. */
+  const ritLabel = (r: MatchedTollingRow): string => {
+    const nummers = r.dag_ritnummers || []
+    if (nummers.length === 0) return r.ritnummer || '—'
+    if (nummers.length <= 3) return nummers.join(' / ')
+    return `${nummers.slice(0, 3).join(' / ')} +${nummers.length - 3}`
+  }
+
+  /** Volledige lijst voor de tooltip, zodat niets verloren gaat. */
+  const ritTitel = (r: MatchedTollingRow): string =>
+    (r.dag_ritnummers || []).join(' / ') || r.ritnummer || ''
 
   const hasEventDetails = matchedEventDetails.length > 0
   const [tab, setTab] = useState<'overview' | 'details'>('overview')
@@ -248,7 +267,7 @@ export default function UnmatchedTollingModal({
                                 <span className="text-sm font-semibold text-gray-900 tabular-nums">{fmtMoney(r.total_amount)}</span>
                               </div>
                               <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-gray-600">
-                                <span>Rit {r.ritnummer || '—'} · {r.events_count} events</span>
+                                <span className="truncate" title={ritTitel(r)}>Rit {ritLabel(r)} · {r.events_count} events</span>
                                 <span className="tabular-nums">{fmtKm(r.total_km)}</span>
                               </div>
                             </div>
@@ -269,7 +288,7 @@ export default function UnmatchedTollingModal({
                           <thead className="bg-emerald-100 text-emerald-900">
                             <tr>
                               <th className="px-3 py-1.5 text-left font-semibold">Kenteken</th>
-                              <th className="px-3 py-1.5 text-left font-semibold">Rit</th>
+                              <th className="px-3 py-1.5 text-left font-semibold">Ritnummer</th>
                               <th className="px-3 py-1.5 text-right font-semibold">Events</th>
                               <th className="px-3 py-1.5 text-right font-semibold">KM</th>
                               <th className="px-3 py-1.5 text-right font-semibold">Bedrag</th>
@@ -279,7 +298,7 @@ export default function UnmatchedTollingModal({
                             {matched.map(r => (
                               <tr key={r.plate_normalized}>
                                 <td className="px-3 py-1.5 font-medium text-gray-900">{r.plate_display}</td>
-                                <td className="px-3 py-1.5 text-gray-700">{r.ritnummer || '—'}</td>
+                                <td className="px-3 py-1.5 text-gray-700" title={ritTitel(r)}>{ritLabel(r)}</td>
                                 <td className="px-3 py-1.5 text-right text-gray-700">{r.events_count}</td>
                                 <td className="px-3 py-1.5 text-right text-gray-700">{fmtKm(r.total_km)}</td>
                                 <td className="px-3 py-1.5 text-right font-semibold text-gray-900">{fmtMoney(r.total_amount)}</td>
@@ -347,6 +366,7 @@ export default function UnmatchedTollingModal({
                                 <span className="tabular-nums">{fmtKm(u.distance_km)}</span>
                               </div>
                               <div className="mt-0.5 text-[11px] text-gray-500">
+                                Rit {u.dag_ritnummer || '—'} ·{' '}
                                 {u.reason === 'no_range_for_plate'
                                   ? 'Geen rit voor kenteken'
                                   : 'Buiten begin/eindtijd'}
@@ -369,6 +389,7 @@ export default function UnmatchedTollingModal({
                           <thead className="bg-amber-100 text-amber-900 sticky top-0">
                             <tr>
                               <th className="px-3 py-1.5 text-left font-semibold">Kenteken</th>
+                              <th className="px-3 py-1.5 text-left font-semibold">Ritnummer</th>
                               <th className="px-3 py-1.5 text-left font-semibold">Datum / tijd</th>
                               <th className="px-3 py-1.5 text-right font-semibold">KM</th>
                               <th className="px-3 py-1.5 text-right font-semibold">Bedrag</th>
@@ -379,6 +400,7 @@ export default function UnmatchedTollingModal({
                             {unmatched.map(u => (
                               <tr key={u.id}>
                                 <td className="px-3 py-1.5 font-medium text-gray-900">{u.plate_display}</td>
+                                <td className="px-3 py-1.5 text-gray-700">{u.dag_ritnummer || '—'}</td>
                                 <td className="px-3 py-1.5 text-gray-700">{fmtDateTime(u.start_at)}</td>
                                 <td className="px-3 py-1.5 text-right text-gray-700">{fmtKm(u.distance_km)}</td>
                                 <td className="px-3 py-1.5 text-right font-semibold text-gray-900">{fmtMoney(u.amount)}</td>
@@ -392,7 +414,7 @@ export default function UnmatchedTollingModal({
                           </tbody>
                           <tfoot>
                             <tr className="bg-amber-100 font-semibold text-amber-900">
-                              <td className="px-3 py-1.5" colSpan={2}>Totaal buiten tijden</td>
+                              <td className="px-3 py-1.5" colSpan={3}>Totaal buiten tijden</td>
                               <td className="px-3 py-1.5 text-right">{fmtKm(unmatchedTotals.km)}</td>
                               <td className="px-3 py-1.5 text-right">{fmtMoney(unmatchedTotals.amount)}</td>
                               <td />
@@ -453,7 +475,7 @@ export default function UnmatchedTollingModal({
                         <thead className="bg-white text-gray-600 sticky top-0 shadow-sm">
                           <tr>
                             <th className="px-3 py-2 text-left font-semibold">Kenteken</th>
-                            <th className="px-3 py-2 text-left font-semibold">Rit</th>
+                            <th className="px-3 py-2 text-left font-semibold">Ritnummer</th>
                             <th className="px-3 py-2 text-left font-semibold">Datum / tijd</th>
                             <th className="px-3 py-2 text-right font-semibold">KM</th>
                             <th className="px-3 py-2 text-right font-semibold">Bedrag</th>

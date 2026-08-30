@@ -584,6 +584,8 @@ export const tollingApi = {
       id: string
       plate_display: string
       plate_normalized: string
+      /** Ritnummer uit de urenregistratie voor die dag. */
+      dag_ritnummer?: string
       start_at: string
       end_at: string | null
       distance_km: number

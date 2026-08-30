@@ -23,6 +23,7 @@ from apps.core.permissions import HasReadWriteModulePermission
 from apps.fleet.models import Vehicle
 from apps.invoicing.models import Invoice, InvoiceLine
 
+from .dagritnummers import als_label, ritnummers_per_dag
 from .models import (PrivateTollRegistration, RitnummerCorrectie, TollingEvent,
                      TollingImportBatch, normalize_plate)
 from .serializers import (
@@ -1235,10 +1236,23 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             is_private=False,
         ).order_by('license_plate_normalized', 'start_at')
 
+        events = list(events_qs)
+        # Het ritnummer dat voor die dag in de uren staat; dat hoort op de
+        # factuur en in de tolbijlage, niet het ritnummer dat nu aan de wagen
+        # hangt.
+        dag_ritnummers = ritnummers_per_dag(
+            {e.license_plate_normalized for e in events},
+            {
+                (timezone.localtime(e.start_at, tz).date()
+                 if timezone.is_aware(e.start_at) else e.start_at.date())
+                for e in events if e.start_at
+            },
+        )
+
         matched_agg: dict[str, dict] = {}
         unmatched: list[dict] = []
 
-        for e in events_qs:
+        for e in events:
             plate_norm = e.license_plate_normalized
             ranges = ranges_by_plate.get(plate_norm)
             veh = vehicle_map.get(plate_norm)
@@ -1252,6 +1266,12 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             end_at = e.end_at or start_at
             if timezone.is_naive(end_at):
                 end_at = timezone.make_aware(end_at, tz)
+
+            # Leeg laten als er geen uren zijn; de weergave valt dan zelf
+            # terug op het ritnummer van de wagen.
+            dag_rit = als_label(
+                dag_ritnummers.get((plate_norm, start_at.astimezone(tz).date()), [])
+            )
 
             fits = False
             if ranges:
@@ -1269,6 +1289,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                     'plate_normalized': plate_norm,
                     'plate_display': plate_display,
                     'ritnummer': ritnummer,
+                    'dag_ritnummers': [],
                     'total_km': Decimal('0'),
                     'total_amount': Decimal('0'),
                     'events_count': 0,
@@ -1281,8 +1302,11 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 bucket['events_count'] += 1
                 bucket['days'].add(start_at.astimezone(tz).date().isoformat())
                 bucket['event_ids'].append(str(e.id))
+                if dag_rit and dag_rit not in bucket['dag_ritnummers']:
+                    bucket['dag_ritnummers'].append(dag_rit)
                 bucket['events'].append({
                     'id': str(e.id),
+                    'dag_ritnummer': dag_rit,
                     'start_at': start_at.isoformat(),
                     'end_at': end_at.isoformat() if e.end_at else None,
                     'distance_km': float(e.distance_km or 0),
@@ -1292,6 +1316,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             else:
                 unmatched.append({
                     'id': str(e.id),
+                    'dag_ritnummer': dag_rit,
                     'plate_display': plate_display,
                     'plate_normalized': plate_norm,
                     'start_at': start_at.isoformat(),
@@ -1308,6 +1333,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 'plate_normalized': b['plate_normalized'],
                 'plate_display': b['plate_display'],
                 'ritnummer': b['ritnummer'],
+                'dag_ritnummers': b['dag_ritnummers'],
                 'total_km': float(b['total_km']),
                 'total_amount': float(b['total_amount'].quantize(Decimal('0.01'))),
                 'events_count': b['events_count'],
