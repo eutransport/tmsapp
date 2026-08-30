@@ -34,6 +34,7 @@ import { getTolRegistraties, markTolGefactureerd, TolRegistratie } from '@/api/t
 import UnmatchedTollingModal, {
   MatchedTollingRow as ModalMatchedRow,
   UnmatchedEvent as ModalUnmatchedEvent,
+  SkippedRange as ModalSkippedRange,
 } from '@/components/invoices/UnmatchedTollingModal'
 import { 
   InvoiceTemplate, 
@@ -1786,6 +1787,8 @@ export default function InvoiceCreatePage() {
     unmatched: ModalUnmatchedEvent[]
     bufferMinutes: number
     totalRegisteredKm?: number
+    /** Dagen waarvoor geen tol is opgehaald, bv. door ontbrekende tijden. */
+    skipped?: ModalSkippedRange[]
   } | null>(null)
 
   // UI state
@@ -2385,12 +2388,31 @@ export default function InvoiceCreatePage() {
     // (zodat meerdere rits per dag correct worden gematched), fallback op user|datum
     const chauffeurKmMap: Record<string, number> = {}
     const chauffeurKmMapByDay: Record<string, number> = {}
+    // Zelfde sleutels, maar dan voor het kenteken dat de chauffeur die dag
+    // registreerde. Dat is de enige bron die een wisseling van wagen midden
+    // in de week kent.
+    const chauffeurKentekenMap: Record<string, string> = {}
+    const chauffeurKentekenByDay: Record<string, string> = {}
     chauffeurEntries.forEach(e => {
       chauffeurKmMap[`${e.user}|${e.datum}|${e.ritnummer || ''}`] = e.totaal_km || 0
       // Voor fallback: som km per dag zodat je bij missende ritnummer-match toch km krijgt
       const dayKey = `${e.user}|${e.datum}`
       chauffeurKmMapByDay[dayKey] = (chauffeurKmMapByDay[dayKey] || 0) + (e.totaal_km || 0)
+
+      const kenteken = String(e.kenteken || '').trim()
+      if (kenteken) {
+        chauffeurKentekenMap[`${e.user}|${e.datum}|${e.ritnummer || ''}`] = kenteken
+        if (!chauffeurKentekenByDay[dayKey]) chauffeurKentekenByDay[dayKey] = kenteken
+      }
     })
+
+    // Zelfde matchvolgorde als bij de km: eerst op ritnummer, dan op de dag.
+    const chauffeurKentekenVoor = (entry: ImportedTimeEntry): string | null => {
+      if (!entry.user) return null
+      return chauffeurKentekenMap[`${entry.user}|${entry.datum}|${entry.ritlijst || ''}`]
+        ?? chauffeurKentekenByDay[`${entry.user}|${entry.datum}`]
+        ?? null
+    }
 
     let totalKm = 0
     let totalUren = 0
@@ -2523,6 +2545,11 @@ export default function InvoiceCreatePage() {
         sortedEntries.map(e => ({
           kenteken_import: e.kenteken_import,
           voertuig_kenteken: e.voertuig_kenteken,
+          // Het kenteken dat de chauffeur die dag zelf registreerde. Dat is de
+          // enige bron die weet welke auto er die dag echt reed, dus ook bij
+          // een wisseling midden in de week.
+          chauffeur_kenteken: chauffeurKentekenVoor(e),
+          ritnummer: e.kenteken_import,
           datum: e.datum,
           begintijd_rit: e.begintijd_rit,
           eindtijd_rit: e.eindtijd_rit,
@@ -2540,6 +2567,8 @@ export default function InvoiceCreatePage() {
     entries: Array<{
       kenteken_import?: string | null
       voertuig_kenteken?: string | null
+      chauffeur_kenteken?: string | null
+      ritnummer?: string | null
       datum: string
       begintijd_rit?: string | null
       eindtijd_rit?: string | null
@@ -2551,7 +2580,11 @@ export default function InvoiceCreatePage() {
 
     const ranges = entries
       .map(e => {
-        const plate = (e.kenteken_import || e.voertuig_kenteken || '').trim()
+        // Volgorde is belangrijk: het kenteken van de chauffeur is per dag
+        // juist, de gekoppelde wagen is een momentopname van de import, en
+        // kenteken_import is meestal een vlootlabel (bv. "E&UTRANS1") dat
+        // altijd naar dezelfde wagen wijst. Dat laatste is de terugval.
+        const plate = (e.chauffeur_kenteken || e.voertuig_kenteken || e.kenteken_import || '').trim()
         if (!plate) return null
         const d = new Date(e.datum)
         if (Number.isNaN(d.getTime())) return null
@@ -2561,24 +2594,20 @@ export default function InvoiceCreatePage() {
           date: iso,
           start_time: e.begintijd_rit || null,
           end_time: e.eindtijd_rit || null,
+          ritnummer: e.ritnummer || null,
         }
       })
-      .filter(Boolean) as Array<{ plate: string; date: string; start_time: string | null; end_time: string | null }>
+      .filter(Boolean) as Array<{ plate: string; date: string; start_time: string | null; end_time: string | null; ritnummer: string | null }>
 
     if (ranges.length === 0) return
 
     try {
       const { matched, unmatched, buffer_minutes, skipped_ranges } = await tollingApi.matchByHours(ranges, bufferMinutes)
-      if (skipped_ranges && skipped_ranges.length > 0) {
-        console.warn(
-          `[auto-tolling] ${skipped_ranges.length} rit(ten) overgeslagen wegens ontbrekende begin/eindtijd:`,
-          skipped_ranges,
-        )
-      }
+      const overgeslagen = (skipped_ranges || []) as ModalSkippedRange[]
       const withMoney = matched.filter(r => r.total_amount > 0)
 
       // Geen matched en geen unmatched → helemaal geen tolheffing gevonden.
-      if (withMoney.length === 0 && unmatched.length === 0) {
+      if (withMoney.length === 0 && unmatched.length === 0 && overgeslagen.length === 0) {
         console.info('[auto-tolling] geen tolheffing gevonden voor deze uren', { ranges })
         return
       }
@@ -2602,6 +2631,7 @@ export default function InvoiceCreatePage() {
         unmatched: unmatched as ModalUnmatchedEvent[],
         bufferMinutes: buffer_minutes ?? bufferMinutes,
         totalRegisteredKm,
+        skipped: overgeslagen,
       })
     } catch (err) {
       console.warn('[auto-tolling] match-by-hours failed', err)
@@ -4041,6 +4071,7 @@ export default function InvoiceCreatePage() {
         onClose={() => setTollingReview(null)}
         matched={tollingReview?.matched ?? []}
         unmatched={tollingReview?.unmatched ?? []}
+        skipped={tollingReview?.skipped ?? []}
         bufferMinutes={tollingReview?.bufferMinutes ?? 30}
         totalRegisteredKm={tollingReview?.totalRegisteredKm}
         onConfirmStrict={() => applyTollingReview(false)}

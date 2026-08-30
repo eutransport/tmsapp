@@ -618,7 +618,15 @@ export const tollingApi = {
    * Terug: `matched` (te factureren) + `unmatched` (buiten range → controle).
    */
   matchByHours: async (
-    ranges: Array<{ plate: string; date: string; start_time: string | null; end_time: string | null }>,
+    ranges: Array<{
+      plate: string
+      date: string
+      start_time: string | null
+      end_time: string | null
+      /** Ritnummer waar deze factuur over gaat; tol van een ander ritnummer
+       *  wordt dan apart gezet in plaats van meegeteld. */
+      ritnummer?: string | null
+    }>,
     bufferMinutes: number = 30,
   ): Promise<{
     matched: TollingInvoicePreviewRow[]
@@ -628,12 +636,14 @@ export const tollingApi = {
       plate_normalized: string
       /** Ritnummer uit de urenregistratie voor die dag. */
       dag_ritnummer?: string
+      /** Ritnummer dat aan het tol-event zelf hangt. */
+      ritnummer?: string
       start_at: string
       end_at: string | null
       distance_km: number
       amount: number
       obu: string
-      reason: 'outside_time_range' | 'no_range_for_plate'
+      reason: 'outside_time_range' | 'no_range_for_plate' | 'ander_ritnummer'
     }>
     buffer_minutes: number
     skipped_ranges?: Array<{

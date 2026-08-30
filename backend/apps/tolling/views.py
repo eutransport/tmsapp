@@ -1147,7 +1147,8 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
           {
             "ranges": [
               {"plate": "50-BXN-5", "date": "2026-07-20",
-               "start_time": "06:00", "end_time": "16:30"},
+               "start_time": "06:00", "end_time": "16:30",
+               "ritnummer": "E&UTRANS1"},
               ...
             ],
             "buffer_minutes": 30            # optioneel, default 30
@@ -1174,6 +1175,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 "distance_km": 12.3, "amount": 2.45,
                 "obu": "...",
                 "reason": "outside_time_range" | "no_range_for_plate"
+                        | "ander_ritnummer"
               }
             ]
           }
@@ -1202,7 +1204,10 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         # Bouw eerst een lookup: normalized_plate -> Vehicle. Zo kunnen we
         # fleet-labels als "E&UTRANS1" mappen naar het echte kenteken.
         vehicle_map: dict[str, Vehicle] = build_vehicle_lookup()
-        for v in Vehicle.objects.order_by('actief', 'created_at'):
+        # Actieve wagens eerst. setdefault laat de eerste winnen, en een label
+        # als "E&UTRANS1" hoort naar de wagen die er NU op rijdt te wijzen,
+        # niet naar een wagen die allang op inactief staat.
+        for v in Vehicle.objects.order_by('-actief', 'created_at'):
             rn = normalize_plate(v.ritnummer)
             if rn:
                 vehicle_map.setdefault(rn, v)
@@ -1232,6 +1237,9 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             return None
 
         ranges_by_plate: dict[str, list[tuple[datetime, datetime]]] = {}
+        # Per kenteken de ritnummers die volgens de uren bij deze factuur
+        # horen. Tol met een afwijkend ritnummer hoort op een andere factuur.
+        rits_by_plate: dict[str, set[str]] = {}
         overall_min: datetime | None = None
         overall_max: datetime | None = None
         skipped_ranges: list[dict] = []
@@ -1279,6 +1287,9 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 end_dt = timezone.make_aware(datetime.combine(d, et), tz) + buffer
 
             ranges_by_plate.setdefault(norm, []).append((start_dt, end_dt))
+            verwacht_rit = normalize_plate(item.get('ritnummer') or '')
+            if verwacht_rit:
+                rits_by_plate.setdefault(norm, set()).add(verwacht_rit)
             if overall_min is None or start_dt < overall_min:
                 overall_min = start_dt
             if overall_max is None or end_dt > overall_max:
@@ -1313,6 +1324,34 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 for e in events if e.start_at
             },
         )
+
+        def _aware(dt):
+            return timezone.make_aware(dt, tz) if timezone.is_naive(dt) else dt
+
+        def _past_binnen_ranges(ev) -> bool:
+            ranges = ranges_by_plate.get(ev.license_plate_normalized)
+            if not ranges:
+                return False
+            s = _aware(ev.start_at)
+            eind = _aware(ev.end_at or ev.start_at)
+            return any(s <= re_ and eind >= rs for rs, re_ in ranges)
+
+        # Het ritnummerfilter mag nooit alle tol van een kenteken wegfilteren.
+        # We zetten alleen events apart als het voor dat kenteken echt gemengd
+        # is: het ritnummer uit de uren moet ook daadwerkelijk voorkomen. Rijdt
+        # er een vervangende wagen met een eigen ritnummer, dan hoort die tol
+        # er gewoon bij en filteren we niets.
+        actieve_ritfilters: dict[str, set[str]] = {}
+        for plate_norm_f, verwacht in rits_by_plate.items():
+            gevonden = {
+                normalize_plate(ev.ritnummer or '')
+                for ev in events
+                if ev.license_plate_normalized == plate_norm_f
+                and _past_binnen_ranges(ev)
+            }
+            gevonden.discard('')
+            if len(gevonden) > 1 and (verwacht & gevonden):
+                actieve_ritfilters[plate_norm_f] = verwacht
 
         matched_agg: dict[str, dict] = {}
         unmatched: list[dict] = []
@@ -1349,6 +1388,18 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                         fits = True
                         break
 
+            # Valt binnen de tijden, maar hoort bij een ander ritnummer? Dan
+            # niet stilzwijgend meenemen maar apart tonen, zodat de gebruiker
+            # zelf beslist. Events zonder ritnummer laten we met rust.
+            verwachte_rits = actieve_ritfilters.get(plate_norm)
+            eigen_rit = normalize_plate(e.ritnummer or '')
+            ander_ritnummer = bool(
+                fits and verwachte_rits and eigen_rit
+                and eigen_rit not in verwachte_rits
+            )
+            if ander_ritnummer:
+                fits = False
+
             if fits:
                 bucket = matched_agg.setdefault(plate_norm, {
                     'plate_normalized': plate_norm,
@@ -1382,6 +1433,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 unmatched.append({
                     'id': str(e.id),
                     'dag_ritnummer': dag_rit,
+                    'ritnummer': ritnummer,
                     'plate_display': plate_display,
                     'plate_normalized': plate_norm,
                     'start_at': start_at.isoformat(),
@@ -1389,7 +1441,11 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                     'distance_km': float(e.distance_km or 0),
                     'amount': float(e.amount or 0),
                     'obu': e.obu or '',
-                    'reason': 'outside_time_range' if ranges else 'no_range_for_plate',
+                    'reason': (
+                        'ander_ritnummer' if ander_ritnummer
+                        else 'outside_time_range' if ranges
+                        else 'no_range_for_plate'
+                    ),
                 })
 
         matched = []

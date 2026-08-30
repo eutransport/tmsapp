@@ -19,12 +19,24 @@ export interface UnmatchedEvent {
   plate_normalized: string
   /** Ritnummer dat voor die dag in de urenregistratie staat. */
   dag_ritnummer?: string
+  /** Ritnummer dat aan het tol-event zelf hangt. */
+  ritnummer?: string
   start_at: string
   end_at: string | null
   distance_km: number
   amount: number
   obu: string
-  reason: 'outside_time_range' | 'no_range_for_plate'
+  reason: 'outside_time_range' | 'no_range_for_plate' | 'ander_ritnummer'
+}
+
+/** Een rit waarvoor helemaal geen tol is opgehaald. */
+export interface SkippedRange {
+  plate: string
+  plate_normalized: string
+  date: string
+  start_time: string | null
+  end_time: string | null
+  reason: 'missing_time'
 }
 
 export interface MatchedEventDetail {
@@ -56,6 +68,8 @@ interface Props {
   onClose: () => void
   matched: MatchedTollingRow[]
   unmatched: UnmatchedEvent[]
+  /** Ritten waarvoor geen tol is opgehaald, bv. door ontbrekende tijden. */
+  skipped?: SkippedRange[]
   bufferMinutes: number
   /** Alleen binnen tijden factureren (aanbevolen). */
   onConfirmStrict: () => void
@@ -80,11 +94,25 @@ const fmtDateTime = (iso: string) => {
   })
 }
 
+const fmtDate = (iso: string) => {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+/** Uitleg per reden waarom een event niet automatisch is meegenomen. */
+const redenTekst = (reden: UnmatchedEvent['reason']): string => {
+  if (reden === 'no_range_for_plate') return 'Geen rit voor kenteken'
+  if (reden === 'ander_ritnummer') return 'Ander ritnummer'
+  return 'Buiten begin/eindtijd'
+}
+
 export default function UnmatchedTollingModal({
   open,
   onClose,
   matched,
   unmatched,
+  skipped = [],
   bufferMinutes,
   onConfirmStrict,
   onConfirmIncludeAll,
@@ -105,6 +133,7 @@ export default function UnmatchedTollingModal({
 
   const hasMatched = matched.length > 0
   const hasUnmatched = unmatched.length > 0
+  const hasSkipped = skipped.length > 0
 
   // Flat list met per-event details voor de "Details"-tab.
   const matchedEventDetails = useMemo(() => {
@@ -196,14 +225,14 @@ export default function UnmatchedTollingModal({
                 {/* Header */}
                 <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-gradient-to-r from-primary-50 to-white px-4 sm:px-5 py-3 shrink-0">
                   <div className="flex items-center gap-2 min-w-0">
-                    {hasUnmatched ? (
+                    {hasUnmatched || hasSkipped ? (
                       <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-500" />
                     ) : (
                       <CheckCircleIcon className="h-5 w-5 shrink-0 text-emerald-600" />
                     )}
                     <Dialog.Title className="text-sm sm:text-base font-semibold text-gray-900">
-                      {hasUnmatched
-                        ? 'Tolheffing gevonden — controleer buiten-tijden events'
+                      {hasUnmatched || hasSkipped
+                        ? 'Tolheffing gevonden — controleer de aandachtspunten'
                         : 'Tolheffing gevonden — controleer koppeling'}
                     </Dialog.Title>
                   </div>
@@ -365,7 +394,7 @@ export default function UnmatchedTollingModal({
                       <div className="flex items-center gap-2 mb-2">
                         <ClockIcon className="h-5 w-5 text-amber-600" />
                         <h3 className="text-sm font-semibold text-amber-900">
-                          Buiten rit-tijden ({unmatchedTotals.count} event{unmatchedTotals.count === 1 ? '' : 's'})
+                          Niet automatisch meegenomen ({unmatchedTotals.count} event{unmatchedTotals.count === 1 ? '' : 's'})
                         </h3>
                       </div>
                       <div className="max-h-64 overflow-y-auto rounded border border-amber-200 bg-white">
@@ -382,10 +411,7 @@ export default function UnmatchedTollingModal({
                                 <span className="tabular-nums">{fmtKm(u.distance_km)}</span>
                               </div>
                               <div className="mt-0.5 text-[11px] text-gray-500">
-                                Rit {u.dag_ritnummer || '—'} ·{' '}
-                                {u.reason === 'no_range_for_plate'
-                                  ? 'Geen rit voor kenteken'
-                                  : 'Buiten begin/eindtijd'}
+                                Rit {u.ritnummer || u.dag_ritnummer || '—'} · {redenTekst(u.reason)}
                               </div>
                             </div>
                           ))}
@@ -416,14 +442,12 @@ export default function UnmatchedTollingModal({
                             {unmatched.map(u => (
                               <tr key={u.id}>
                                 <td className="px-3 py-1.5 font-medium text-gray-900">{u.plate_display}</td>
-                                <td className="px-3 py-1.5 text-gray-700">{u.dag_ritnummer || '—'}</td>
+                                <td className="px-3 py-1.5 text-gray-700">{u.ritnummer || u.dag_ritnummer || '—'}</td>
                                 <td className="px-3 py-1.5 text-gray-700">{fmtDateTime(u.start_at)}</td>
                                 <td className="px-3 py-1.5 text-right text-gray-700">{fmtKm(u.distance_km)}</td>
                                 <td className="px-3 py-1.5 text-right font-semibold text-gray-900">{fmtMoney(u.amount)}</td>
                                 <td className="px-3 py-1.5 text-gray-500 text-[11px]">
-                                  {u.reason === 'no_range_for_plate'
-                                    ? 'Geen rit voor kenteken'
-                                    : 'Buiten begin/eindtijd'}
+                                  {redenTekst(u.reason)}
                                 </td>
                               </tr>
                             ))}
@@ -439,14 +463,43 @@ export default function UnmatchedTollingModal({
                         </table>
                       </div>
                       <p className="mt-2 text-[11px] text-amber-800">
-                        Dit zijn tolheffing-events op dit kenteken die niet overlappen met een rit
-                        uit de geïmporteerde uren. Vaak zijn dit ritten van een andere chauffeur
-                        of ritten buiten werktijd.
+                        Dit zijn tolheffing-events die niet vanzelf bij deze factuur horen: ze
+                        overlappen niet met een rit uit de geïmporteerde uren, of ze staan op een
+                        ander ritnummer. Vaak zijn dit ritten van een andere chauffeur, ritten
+                        buiten werktijd of tol die op een andere factuur thuishoort.
                       </p>
                     </div>
                   )}
 
-                  {!hasMatched && !hasUnmatched && (
+                  {/* Ritten waarvoor helemaal geen tol is opgehaald */}
+                  {hasSkipped && (
+                    <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <ExclamationTriangleIcon className="h-5 w-5 text-rose-600" />
+                        <h3 className="text-sm font-semibold text-rose-900">
+                          Geen tol opgehaald ({skipped.length} dag{skipped.length === 1 ? '' : 'en'})
+                        </h3>
+                      </div>
+                      <div className="max-h-40 overflow-y-auto rounded border border-rose-200 bg-white divide-y divide-rose-100">
+                        {skipped.map((s, i) => (
+                          <div key={`${s.plate_normalized}-${s.date}-${i}`} className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs">
+                            <span className="font-medium text-gray-900">{s.plate}</span>
+                            <span className="text-gray-700 tabular-nums">{fmtDate(s.date)}</span>
+                            <span className="text-gray-500 text-[11px]">
+                              {s.start_time || '—'} – {s.end_time || '—'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[11px] text-rose-800">
+                        Voor deze dagen ontbreekt een begin- of eindtijd, dus kon er geen
+                        tolheffing worden gekoppeld. Vul de tijden aan in de urenregistratie en
+                        importeer opnieuw, of voeg de tolheffing handmatig toe.
+                      </p>
+                    </div>
+                  )}
+
+                  {!hasMatched && !hasUnmatched && !hasSkipped && (
                     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 text-center">
                       Geen tolheffing gevonden voor deze uren.
                     </div>
