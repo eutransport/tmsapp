@@ -34,7 +34,7 @@ import {
   MyPlanningEntry,
 } from '@/api/planning'
 import { getDriverReport, DriverReport, downloadDriverReportPdf, getDriverReportYears } from '@/api/timetracking'
-import { getDrivers } from '@/api/drivers'
+import { getAllDrivers } from '@/api/drivers'
 import clsx from '@/utils/clsx'
 import EmailProfileSelector from '@/components/EmailProfileSelector'
 
@@ -1236,8 +1236,10 @@ function HistorieView() {
 
   const loadDrivers = async () => {
     try {
-      const response = await getDrivers()
-      setDrivers(response.results || response)
+      // Alle chauffeurs ophalen: de gepagineerde lijst gaf alleen de eerste
+      // 25 namen terug, waardoor zoeken op latere namen niets opleverde.
+      const alle = await getAllDrivers()
+      setDrivers(alle)
     } catch (err) {
       console.error('Failed to load drivers:', err)
     }
@@ -1255,9 +1257,13 @@ function HistorieView() {
   }
 
   // Filter drivers based on search
-  const filteredDrivers = drivers.filter(driver => 
-    driver.naam.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    driver.gekoppelde_gebruiker_naam?.toLowerCase().includes(searchQuery.toLowerCase())
+  // Accenten worden weggehaald, zodat 'oz' ook 'Özcan' vindt.
+  const normaliseer = (waarde?: string | null) =>
+    (waarde || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const zoekterm = normaliseer(searchQuery)
+  const filteredDrivers = drivers.filter(driver =>
+    normaliseer(driver.naam).includes(zoekterm) ||
+    normaliseer(driver.gekoppelde_gebruiker_naam).includes(zoekterm)
   )
 
   // Load report when driver is selected
