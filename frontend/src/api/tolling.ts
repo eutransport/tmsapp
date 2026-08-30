@@ -12,6 +12,10 @@ export interface TollingEvent {
   license_plate_raw: string
   license_plate_normalized: string
   obu: string
+  /** Ritnummer zoals vastgelegd bij de import. */
+  ritnummer: string
+  vehicle: string | null
+  bedrijf: string | null
   invoice_line: string | null
   invoiced_at: string | null
   invoiced: boolean
@@ -21,10 +25,16 @@ export interface TollingEvent {
 }
 
 export interface TollingVehicleRow {
+  /** Unieke sleutel: kenteken + ritnummer. */
+  row_key: string
   plate_normalized: string
   plate_raw: string
   plate_display: string
-  ritnummer: string | null
+  /** Ritnummer zoals vastgelegd bij de import. */
+  ritnummer: string
+  /** Rijdt de wagen vandaag nog op dit ritnummer? */
+  is_actueel: boolean
+  huidig_ritnummer: string
   vehicle_id: string | null
   bedrijf_id: string | null
   bedrijf_naam: string | null
@@ -49,8 +59,20 @@ export interface TollingVehicleList {
   rows: TollingVehicleRow[]
 }
 
+/** Eén ritnummer waarop deze wagen in de periode heeft gereden. */
+export interface TollingSummaryRit {
+  ritnummer: string
+  events_count: number
+  total_km: number
+  total_amount: number
+}
+
 export interface TollingSummary {
   plate_normalized: string
+  /** Actief filter; null betekent alle ritnummers. */
+  ritnummer: string | null
+  /** Alle ritnummers in deze periode, ongeacht het actieve filter. */
+  ritnummers: TollingSummaryRit[]
   period: 'week' | 'month'
   year: number
   index: number
@@ -299,7 +321,7 @@ export const tollingApi = {
 
   summary: async (
     plate: string,
-    params: { period: 'week' | 'month'; offset: number },
+    params: { period: 'week' | 'month'; offset: number; ritnummer?: string },
   ): Promise<TollingSummary> => {
     const { data } = await api.get(`/tolling/vehicles/${encodeURIComponent(plate)}/summary/`, { params })
     return data
@@ -319,12 +341,17 @@ export const tollingApi = {
 
   downloadExport: async (
     plate: string,
-    params: { period: 'week' | 'month'; offset: number; format: 'xlsx' | 'pdf' },
+    params: { period: 'week' | 'month'; offset: number; format: 'xlsx' | 'pdf'; ritnummer?: string },
   ): Promise<Blob> => {
     const { data } = await api.get(
       `/tolling/vehicles/${encodeURIComponent(plate)}/export/`,
       {
-        params: { period: params.period, offset: params.offset, export_format: params.format },
+        params: {
+          period: params.period,
+          offset: params.offset,
+          export_format: params.format,
+          ...(params.ritnummer === undefined ? {} : { ritnummer: params.ritnummer }),
+        },
         responseType: 'blob',
       },
     )
@@ -344,9 +371,11 @@ export const tollingApi = {
 
   deleteEventsForPlate: async (
     plate: string,
+    ritnummer?: string,
   ): Promise<{ deleted: number; invoiced_deleted: number; invoice_lines_affected: number }> => {
     const { data } = await api.post(
       `/tolling/vehicles/${encodeURIComponent(plate)}/delete-events/`,
+      ritnummer === undefined ? {} : { ritnummer },
     )
     return data
   },
@@ -371,6 +400,8 @@ export const tollingApi = {
       fmt: 'pdf' | 'xlsx'
       period: 'week' | 'month'
       offset: number
+      /** Weglaten = alle ritnummers van deze wagen. */
+      ritnummer?: string
       email_profile_id?: string
     },
   ): Promise<{ sent: boolean; recipients: string[]; filename: string }> => {
