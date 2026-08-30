@@ -4,6 +4,7 @@ Snapshot-pattern: bij aanmaken van een entry (of toewijzen van een chauffeur)
 worden de relevante velden van Vehicle/Driver/Company gekopieerd naar de entry.
 Latere wijzigingen aan die gerelateerde objecten beinvloeden de historie niet.
 """
+import datetime
 import uuid
 from django.db import models
 
@@ -14,6 +15,10 @@ class Weekday(models.TextChoices):
     WOENSDAG = 'wo', 'Woensdag'
     DONDERDAG = 'do', 'Donderdag'
     VRIJDAG = 'vr', 'Vrijdag'
+
+
+# Positie van elke dag binnen de ISO-week (maandag = 1).
+DAG_NUMMERS = {'ma': 1, 'di': 2, 'wo': 3, 'do': 4, 'vr': 5}
 
 
 class WeekPlanning(models.Model):
@@ -121,6 +126,18 @@ class PlanningEntry(models.Model):
         kenteken = self.vehicle_kenteken or (self.vehicle.kenteken if self.vehicle else '?')
         return f"{kenteken} - {self.get_dag_display()}"
 
+    def planningsdatum(self):
+        """Kalenderdatum van deze regel, afgeleid uit jaar, week en dag."""
+        dagnummer = DAG_NUMMERS.get(self.dag)
+        if not dagnummer or not self.planning_id:
+            return None
+        try:
+            return datetime.date.fromisocalendar(
+                self.planning.jaar, self.planning.weeknummer, dagnummer,
+            )
+        except (ValueError, AttributeError):
+            return None
+
     def save(self, *args, **kwargs):
         is_new = self._state.adding
 
@@ -137,7 +154,12 @@ class PlanningEntry(models.Model):
                 if not self.vehicle_type_wagen:
                     self.vehicle_type_wagen = veh.type_wagen or ''
                 if not self.vehicle_ritnummer:
-                    self.vehicle_ritnummer = veh.ritnummer or ''
+                    # Het ritnummer dat op de geplande dag geldt, zodat een
+                    # wissel halverwege het jaar de oudere weken niet
+                    # herschrijft en een nieuwe week alvast het nieuwe
+                    # ritnummer krijgt.
+                    from apps.fleet.ritnummers import ritnummer_op
+                    self.vehicle_ritnummer = ritnummer_op(veh, self.planningsdatum()) or ''
             except Exception:
                 pass
 

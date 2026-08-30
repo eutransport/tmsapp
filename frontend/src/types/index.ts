@@ -183,6 +183,19 @@ export interface Vehicle {
   bedrijf_naam: string
   minimum_weken_per_jaar: number | null
   actief: boolean
+  /** Ritnummers van deze wagen door de tijd heen, oudste eerst. */
+  ritnummer_periodes?: {
+    id: string
+    vehicle: string
+    ritnummer: string
+    /** null betekent: vanaf het begin. */
+    geldig_vanaf: string | null
+    weeknummer: string
+    notitie: string
+    is_huidig: boolean
+    created_at: string
+    updated_at: string
+  }[]
   created_at: string
   updated_at: string
 }

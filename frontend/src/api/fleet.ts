@@ -16,7 +16,33 @@ export interface VehicleCreate {
   vervang_actief?: boolean
 }
 
-export interface VehicleUpdate extends Partial<VehicleCreate> {}
+export interface VehicleUpdate extends Partial<VehicleCreate> {
+  /** Laat het nieuwe ritnummer pas vanaf deze datum gelden (jjjj-mm-dd). */
+  ritnummer_vanaf?: string | null
+}
+
+/** Een ritnummer van een wagen met de datum vanaf wanneer het geldt. */
+export interface VehicleRitnummerPeriode {
+  id: string
+  vehicle: string
+  ritnummer: string
+  /** null betekent: vanaf het begin. */
+  geldig_vanaf: string | null
+  /** Bijvoorbeeld 'week 37 (2026)'; leeg bij een periode zonder datum. */
+  weeknummer: string
+  notitie: string
+  /** Geldt deze periode vandaag? */
+  is_huidig: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface VehicleRitnummerPeriodeInput {
+  vehicle: string
+  ritnummer: string
+  geldig_vanaf: string | null
+  notitie?: string
+}
 
 /** Meegestuurd bij een 400 als het kenteken al actief in de vloot staat. */
 export interface KentekenConflict {
@@ -166,4 +192,29 @@ export async function updateVehicle(id: string, data: VehicleUpdate): Promise<Ve
 // Delete vehicle
 export async function deleteVehicle(id: string): Promise<void> {
   await api.delete(`/fleet/${id}/`)
+}
+
+// === Ritnummerperiodes: welk ritnummer had een wagen wanneer? ===
+
+export async function getRitnummerPeriodes(vehicleId: string): Promise<VehicleRitnummerPeriode[]> {
+  const response = await api.get('/fleet/ritnummer-periodes/', { params: { vehicle: vehicleId } })
+  return response.data.results || response.data
+}
+
+export async function createRitnummerPeriode(
+  data: VehicleRitnummerPeriodeInput,
+): Promise<VehicleRitnummerPeriode> {
+  const response = await api.post('/fleet/ritnummer-periodes/', data)
+  return response.data
+}
+
+export async function updateRitnummerPeriode(
+  id: string, data: Partial<VehicleRitnummerPeriodeInput>,
+): Promise<VehicleRitnummerPeriode> {
+  const response = await api.patch(`/fleet/ritnummer-periodes/${id}/`, data)
+  return response.data
+}
+
+export async function deleteRitnummerPeriode(id: string): Promise<void> {
+  await api.delete(`/fleet/ritnummer-periodes/${id}/`)
 }

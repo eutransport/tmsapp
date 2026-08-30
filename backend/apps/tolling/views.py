@@ -7,6 +7,8 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Iterable
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Count, DecimalField, Sum, Value, Q
 from django.db.models.functions import Coalesce
@@ -21,7 +23,8 @@ from apps.core.permissions import HasReadWriteModulePermission
 from apps.fleet.models import Vehicle
 from apps.invoicing.models import Invoice, InvoiceLine
 
-from .models import PrivateTollRegistration, TollingEvent, TollingImportBatch, normalize_plate
+from .models import (PrivateTollRegistration, RitnummerCorrectie, TollingEvent,
+                     TollingImportBatch, normalize_plate)
 from .serializers import (
     PrivateTollRegistrationSerializer,
     TollingEventSerializer,
@@ -37,6 +40,34 @@ from .services import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# Hoe lang ritnummercorrecties bewaard blijven om terug te kunnen draaien.
+RITNUMMER_CORRECTIE_BEWAARDAGEN = 31
+
+
+def _correctie_naar_dict(c) -> dict:
+    """Zet een ritnummercorrectie om naar het formaat voor de frontend."""
+    def naam(gebruiker):
+        if not gebruiker:
+            return ''
+        volledig = f'{gebruiker.voornaam} {gebruiker.achternaam}'.strip()
+        return volledig or gebruiker.email
+
+    return {
+        'id': str(c.id),
+        'van': c.van.isoformat(),
+        'tot': c.tot.isoformat(),
+        'van_ritnummer': c.van_ritnummer,
+        'naar_ritnummer': c.naar_ritnummer,
+        'aantal': c.aantal,
+        'inclusief_gefactureerd': c.inclusief_gefactureerd,
+        'uitgevoerd_op': c.uitgevoerd_op.isoformat(),
+        'uitgevoerd_door': naam(c.uitgevoerd_door),
+        'teruggedraaid_op': c.teruggedraaid_op.isoformat() if c.teruggedraaid_op else None,
+        'teruggedraaid_door': naam(c.teruggedraaid_door),
+        'teruggedraaid_aantal': c.teruggedraaid_aantal,
+    }
 
 
 # --------- period helpers ---------
@@ -560,8 +591,26 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             recipients = [str(x).strip() for x in recipients_raw if str(x).strip()]
         if not recipients:
             return Response({'detail': 'Geen ontvangers opgegeven.'}, status=400)
+        # Alleen echte adressen doorlaten. Dit voorkomt zowel typefouten als
+        # regeleindes in een adres, waarmee extra mailkoppen gesmokkeld
+        # zouden kunnen worden.
+        ongeldig = []
+        for adres in recipients:
+            try:
+                validate_email(adres)
+            except DjangoValidationError:
+                ongeldig.append(adres)
+        if ongeldig:
+            return Response(
+                {'detail': 'Ongeldig e-mailadres: ' + ', '.join(ongeldig[:5])}, status=400,
+            )
+        if len(recipients) > 50:
+            return Response(
+                {'detail': 'Maximaal 50 ontvangers per mail.'}, status=400,
+            )
 
-        subject = (request.data.get('subject') or '').strip()
+        # Een onderwerp is een mailkop; regeleindes horen daar niet in.
+        subject = (request.data.get('subject') or '').replace('\r', ' ').replace('\n', ' ').strip()[:200]
         body = request.data.get('body') or ''
         fmt = (request.data.get('fmt') or 'pdf').lower()
         if fmt not in ('pdf', 'xlsx'):
@@ -609,7 +658,8 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
         if not subject:
-            subject = f'Tolheffing overzicht {plate_display} — {label}'
+            veilig_kenteken = str(plate_display).replace('\r', ' ').replace('\n', ' ')[:32]
+            subject = f'Tolheffing overzicht {veilig_kenteken} — {label}'
         if not body:
             body = (
                 f'Beste,\n\nIn de bijlage vind je het tolheffing overzicht voor '
@@ -764,6 +814,174 @@ class TollingVehicleViewSet(viewsets.ViewSet):
                 inv.calculate_totals()
                 deleted += 1
         return Response({'unmarked': len(events), 'lines_deleted': deleted})
+
+    @action(detail=False, methods=['post'], url_path=r'(?P<plate>[^/]+)/ritnummer-wijzigen')
+    def ritnummer_wijzigen(self, request, plate: str = ''):
+        """Zet met terugwerkende kracht een ander ritnummer op tolregels.
+
+        Bedoeld voor het geval dat er te laat is doorgegeven dat een wagen
+        onder een ander ritnummer reed. Alleen het veld ``ritnummer`` wordt
+        aangepast; bedragen, kilometers, wagen, bedrijf en de factuurstatus
+        blijven ongemoeid.
+
+        Body:
+          van, tot                 datums (jjjj-mm-dd), tot is inclusief
+          van_ritnummer            optioneel filter; weglaten = alle,
+                                   lege tekst = regels zonder ritnummer
+          naar_ritnummer           het nieuwe ritnummer
+          inclusief_gefactureerd   ook al gefactureerde regels meenemen
+          preview                  true = alleen tellen, niets wijzigen
+        """
+        norm = normalize_plate(plate)
+        data = request.data
+
+        def _datum(veld):
+            waarde = (data.get(veld) or '').strip()
+            if not waarde:
+                raise ValueError(f"Vul '{veld}' in als datum jjjj-mm-dd.")
+            try:
+                return date.fromisoformat(waarde)
+            except ValueError:
+                raise ValueError(f"'{veld}' is geen geldige datum (jjjj-mm-dd).")
+
+        try:
+            van = _datum('van')
+            tot = _datum('tot')
+        except ValueError as ex:
+            return Response({'detail': str(ex)}, status=400)
+        if tot < van:
+            return Response({'detail': 'De einddatum ligt voor de begindatum.'}, status=400)
+
+        naar = str(data.get('naar_ritnummer') or '').strip()
+        if not naar:
+            return Response({'detail': 'Vul het nieuwe ritnummer in.'}, status=400)
+        if len(naar) > 50:
+            return Response({'detail': 'Het ritnummer mag maximaal 50 tekens zijn.'}, status=400)
+
+        tz = timezone.get_current_timezone()
+        start = timezone.make_aware(datetime.combine(van, datetime.min.time()), tz)
+        eind = timezone.make_aware(
+            datetime.combine(tot + timedelta(days=1), datetime.min.time()), tz
+        )
+
+        qs = TollingEvent.objects.filter(
+            license_plate_normalized=norm, start_at__gte=start, start_at__lt=eind,
+        )
+        van_ritnummer = data.get('van_ritnummer')
+        if van_ritnummer is not None:
+            qs = qs.filter(ritnummer=str(van_ritnummer).strip())
+
+        inclusief_gefactureerd = bool(data.get('inclusief_gefactureerd'))
+        gefactureerd_aantal = qs.filter(invoiced_at__isnull=False).count()
+        if not inclusief_gefactureerd:
+            qs = qs.filter(invoiced_at__isnull=True)
+
+        # Regels die het nieuwe ritnummer al hebben, hoeven niet aangeraakt.
+        qs = qs.exclude(ritnummer=naar)
+
+        totalen = qs.aggregate(
+            aantal=Count('id'),
+            km=Coalesce(Sum('distance_km'), Value(0),
+                        output_field=DecimalField(max_digits=14, decimal_places=3)),
+            bedrag=Coalesce(Sum('amount'), Value(0),
+                            output_field=DecimalField(max_digits=14, decimal_places=2)),
+        )
+        antwoord = {
+            'plate_normalized': norm,
+            'van': van.isoformat(),
+            'tot': tot.isoformat(),
+            'naar_ritnummer': naar,
+            'aantal': totalen['aantal'],
+            'totaal_km': float(totalen['km'] or 0),
+            'totaal_bedrag': float(totalen['bedrag'] or 0),
+            'gefactureerd_aantal': gefactureerd_aantal,
+            'inclusief_gefactureerd': inclusief_gefactureerd,
+        }
+
+        if data.get('preview'):
+            antwoord['aangepast'] = 0
+            return Response(antwoord)
+
+        with transaction.atomic():
+            # Eerst de oude ritnummers bewaren, anders zijn ze na de update weg
+            # en kan de correctie niet meer teruggedraaid worden.
+            oude_waarden = {str(pk): (rit or '')
+                            for pk, rit in qs.values_list('id', 'ritnummer')}
+            aangepast = qs.update(ritnummer=naar)
+            correctie = RitnummerCorrectie.objects.create(
+                license_plate_normalized=norm,
+                license_plate_raw=str(plate)[:32],
+                van=van, tot=tot,
+                van_ritnummer=(None if van_ritnummer is None
+                               else str(van_ritnummer).strip()[:50]),
+                naar_ritnummer=naar,
+                inclusief_gefactureerd=inclusief_gefactureerd,
+                aantal=aangepast,
+                oude_waarden=oude_waarden,
+                uitgevoerd_door=request.user if request.user.is_authenticated else None,
+            )
+        antwoord['aangepast'] = aangepast
+        antwoord['correctie_id'] = str(correctie.id)
+        logger.info(
+            'Ritnummer tolregels gewijzigd: %s %s t/m %s -> %s (%d regels) door %s',
+            norm, van, tot, naar, aangepast, request.user.email,
+        )
+        return Response(antwoord)
+
+    @action(detail=False, methods=['get'],
+            url_path=r'(?P<plate>[^/]+)/ritnummer-correcties')
+    def ritnummer_correcties(self, request, plate: str = ''):
+        """Geef de ritnummercorrecties van de afgelopen maand voor dit kenteken."""
+        norm = normalize_plate(plate)
+        grens = timezone.now() - timedelta(days=RITNUMMER_CORRECTIE_BEWAARDAGEN)
+        rijen = (RitnummerCorrectie.objects
+                 .filter(license_plate_normalized=norm, uitgevoerd_op__gte=grens)
+                 .select_related('uitgevoerd_door', 'teruggedraaid_door'))
+        return Response([_correctie_naar_dict(c) for c in rijen])
+
+    @action(detail=False, methods=['post'],
+            url_path=r'(?P<plate>[^/]+)/ritnummer-correcties/(?P<correctie_id>[^/]+)/ongedaan-maken')
+    def ritnummer_correctie_ongedaan(self, request, plate: str = '', correctie_id: str = ''):
+        """Zet de ritnummers van een eerdere correctie weer terug.
+
+        Alleen regels die nog steeds het ritnummer hebben dat deze correctie
+        erop gezet heeft worden teruggezet; is er daarna nog een correctie
+        overheen gegaan, dan blijft die staan.
+        """
+        norm = normalize_plate(plate)
+        try:
+            correctie = RitnummerCorrectie.objects.get(
+                id=correctie_id, license_plate_normalized=norm)
+        except (RitnummerCorrectie.DoesNotExist, DjangoValidationError, ValueError):
+            return Response({'detail': 'Deze wijziging bestaat niet (meer).'}, status=404)
+        if correctie.teruggedraaid_op:
+            return Response({'detail': 'Deze wijziging is al teruggedraaid.'}, status=400)
+
+        # Per oud ritnummer bundelen, dan is het een handvol updates in plaats
+        # van er een per regel.
+        per_oud: dict[str, list[str]] = {}
+        for regel_id, oud in (correctie.oude_waarden or {}).items():
+            per_oud.setdefault(oud or '', []).append(regel_id)
+
+        teruggezet = 0
+        with transaction.atomic():
+            for oud, ids in per_oud.items():
+                teruggezet += (TollingEvent.objects
+                               .filter(id__in=ids, ritnummer=correctie.naar_ritnummer)
+                               .update(ritnummer=oud))
+            correctie.teruggedraaid_op = timezone.now()
+            correctie.teruggedraaid_door = (request.user if request.user.is_authenticated
+                                            else None)
+            correctie.teruggedraaid_aantal = teruggezet
+            correctie.save(update_fields=['teruggedraaid_op', 'teruggedraaid_door',
+                                          'teruggedraaid_aantal'])
+        logger.info('Ritnummercorrectie teruggedraaid: %s (%d van %d regels) door %s',
+                    correctie.id, teruggezet, correctie.aantal, request.user.email)
+        return Response({
+            'teruggezet': teruggezet,
+            'overgeslagen': max(correctie.aantal - teruggezet, 0),
+            'correctie': _correctie_naar_dict(correctie),
+        })
 
 
 class TollingInvoicingViewSet(viewsets.ViewSet):

@@ -24,6 +24,7 @@ die regels overgeslagen.
 from __future__ import annotations
 
 import gzip
+import re
 import sys
 from pathlib import Path
 
@@ -33,6 +34,40 @@ KOLOMMEN = [
     'id', 'start_at', 'end_at', 'license_plate_normalized',
     'amount', 'obu', 'invoiced_at', 'invoice_line_id',
 ]
+
+# Het gegenereerde script wordt door een beheerder met volledige rechten
+# uitgevoerd. Daarom wordt elke waarde uit de dump eerst gecontroleerd: zo kan
+# een gemanipuleerd bestand er geen extra SQL tussen smokkelen door het
+# COPY-blok af te breken.
+NULL = '\\N'
+PATRONEN = {
+    'id': re.compile(r'^[0-9a-fA-F-]{36}$'),
+    'invoice_line_id': re.compile(r'^[0-9a-fA-F-]{36}$'),
+    'start_at': re.compile(r'^[0-9 :.+-]{10,40}$'),
+    'end_at': re.compile(r'^[0-9 :.+-]{10,40}$'),
+    'invoiced_at': re.compile(r'^[0-9 :.+-]{10,40}$'),
+    'amount': re.compile(r'^-?[0-9]+(\.[0-9]+)?$'),
+    'license_plate_normalized': re.compile(r'^[A-Za-z0-9-]{0,32}$'),
+    'obu': re.compile(r'^[A-Za-z0-9 ._-]{0,64}$'),
+}
+
+
+def controleer_rij(waarden: dict[str, str], regelnr: int) -> None:
+    """Weiger waarden die niet bij hun kolom passen."""
+    for naam, waarde in waarden.items():
+        if waarde == NULL:
+            continue
+        if any(teken in waarde for teken in ('\t', '\r', '\n', '\\')):
+            raise SystemExit(
+                'Rij %d, kolom %s bevat een stuurteken; dump wordt niet vertrouwd.'
+                % (regelnr, naam)
+            )
+        patroon = PATRONEN.get(naam)
+        if patroon is not None and not patroon.match(waarde):
+            raise SystemExit(
+                'Rij %d, kolom %s heeft een onverwachte waarde (%r); '
+                'dump wordt niet vertrouwd.' % (regelnr, naam, waarde[:60])
+            )
 
 
 def _open(pad: Path):
@@ -116,8 +151,10 @@ def main(argv: list[str]) -> int:
     w(') ON COMMIT DROP;')
     w('')
     w('COPY tol_gefactureerd (%s) FROM stdin;' % ', '.join(KOLOMMEN))
-    for r in gefactureerd:
-        w('\t'.join(r[idx[naam]] for naam in KOLOMMEN))
+    for regelnr, r in enumerate(gefactureerd, start=1):
+        waarden = {naam: r[idx[naam]] for naam in KOLOMMEN}
+        controleer_rij(waarden, regelnr)
+        w('\t'.join(waarden[naam] for naam in KOLOMMEN))
     w('\\.')
     w('')
     w('CREATE INDEX ON tol_gefactureerd (start_at, license_plate_normalized);')

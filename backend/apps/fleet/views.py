@@ -4,12 +4,48 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Count, Q
+from rest_framework.exceptions import ValidationError
+from django.db.models import Count, F, Q
 from apps.core.permissions import FleetPermission
-from .models import Vehicle
-from .serializers import VehicleSerializer
+from .models import Vehicle, VehicleRitnummer
+from .serializers import VehicleRitnummerSerializer, VehicleSerializer
 
 logger = logging.getLogger('accounts.security')
+
+
+class VehicleRitnummerViewSet(viewsets.ModelViewSet):
+    """Beheer van de ritnummers van een wagen door de tijd heen.
+
+    De oudste periode van een wagen heeft geen ingangsdatum en geldt dus
+    'vanaf het begin'; die mag niet verwijderd worden, anders zou er een
+    gat in de historie ontstaan.
+    """
+    queryset = VehicleRitnummer.objects.select_related('vehicle').all()
+    serializer_class = VehicleRitnummerSerializer
+    permission_classes = [IsAuthenticated, FleetPermission]
+    filterset_fields = ['vehicle']
+    ordering = ['vehicle', 'geldig_vanaf']
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        vehicle = self.request.query_params.get('vehicle')
+        if vehicle:
+            qs = qs.filter(vehicle_id=vehicle)
+        return qs.order_by('vehicle_id', F('geldig_vanaf').asc(nulls_first=True), 'created_at')
+
+    def perform_destroy(self, instance):
+        if instance.geldig_vanaf is None:
+            raise ValidationError(
+                'De oudste periode kan niet verwijderd worden; die geldt vanaf het begin. '
+                'Pas het ritnummer aan in plaats van de periode te verwijderen.'
+            )
+        logger.info(
+            'Ritnummerperiode verwijderd: %s vanaf %s (wagen %s) door %s',
+            instance.ritnummer, instance.geldig_vanaf,
+            instance.vehicle.kenteken, self.request.user.email,
+        )
+        instance.delete()
 
 
 class VehicleViewSet(viewsets.ModelViewSet):
@@ -18,7 +54,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
     - Admin/Gebruiker: Full CRUD access
     - Chauffeur: Read-only access
     """
-    queryset = Vehicle.objects.select_related('bedrijf').all()
+    queryset = Vehicle.objects.select_related('bedrijf').prefetch_related('ritnummer_periodes').all()
     serializer_class = VehicleSerializer
     permission_classes = [IsAuthenticated, FleetPermission]
     search_fields = ['kenteken', 'ritnummer', 'type_wagen']

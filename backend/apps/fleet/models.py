@@ -44,3 +44,55 @@ class Vehicle(models.Model):
     
     def __str__(self):
         return f"{self.kenteken} - {self.type_wagen}"
+
+
+class VehicleRitnummer(models.Model):
+    """Ritnummer van een wagen met de datum waarop het ingaat.
+
+    Elke wagen heeft minstens een periode zonder begindatum: die geldt
+    'vanaf het begin'. Een nieuwe periode met een ingangsdatum laat de
+    vorige automatisch tot de dag ervoor lopen, zodat er nooit een moment
+    is waarop geen ritnummer geldt.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.CASCADE,
+        related_name='ritnummer_periodes',
+        verbose_name='Voertuig',
+    )
+    ritnummer = models.CharField(max_length=50, blank=True, verbose_name='Ritnummer')
+    geldig_vanaf = models.DateField(
+        null=True, blank=True,
+        verbose_name='Geldig vanaf',
+        help_text='Laat leeg voor de oudste periode; die geldt vanaf het begin.',
+    )
+    notitie = models.CharField(max_length=200, blank=True, verbose_name='Notitie')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Ritnummerperiode'
+        verbose_name_plural = 'Ritnummerperiodes'
+        ordering = [models.F('geldig_vanaf').asc(nulls_first=True), 'created_at']
+        constraints = [
+            # Per wagen mag er maar een periode 'vanaf het begin' bestaan...
+            models.UniqueConstraint(
+                fields=['vehicle'],
+                condition=models.Q(geldig_vanaf__isnull=True),
+                name='uniek_open_ritnummerperiode',
+            ),
+            # ... en maar een periode per ingangsdatum.
+            models.UniqueConstraint(
+                fields=['vehicle', 'geldig_vanaf'],
+                name='uniek_ritnummerperiode_per_datum',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['vehicle', 'geldig_vanaf']),
+        ]
+
+    def __str__(self):
+        vanaf = self.geldig_vanaf.isoformat() if self.geldig_vanaf else 'vanaf het begin'
+        return f"{self.ritnummer or '(leeg)'} ({vanaf})"

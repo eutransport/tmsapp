@@ -52,4 +52,15 @@ app.conf.beat_schedule = {
         'task': 'apps.tasks.tasks.send_stale_task_reminders',
         'schedule': crontab(hour=8, minute=45),
     },
+    'sync-vehicle-ritnummers': {
+        # Kort na middernacht: periodes met een toekomstige ingangsdatum
+        # worden dan vanzelf het huidige ritnummer van de wagen.
+        'task': 'apps.fleet.tasks.sync_ritnummers',
+        'schedule': crontab(hour=0, minute=5),
+    },
+    'opruimen-ritnummer-correcties': {
+        # Ritnummercorrecties zijn een maand terug te draaien; daarna weg.
+        'task': 'apps.tolling.tasks.opruimen_ritnummer_correcties',
+        'schedule': crontab(hour=0, minute=20),
+    },
 }
