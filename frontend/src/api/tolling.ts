@@ -297,6 +297,24 @@ export interface RitnummerWijzigingResultaat {
   inclusief_gefactureerd: boolean
   /** 0 bij een preview. */
   aangepast: number
+  /** Alleen bij toepassen: het id waarmee de wijziging teruggedraaid kan worden. */
+  correctie_id?: string
+}
+
+/** Een eerder uitgevoerde ritnummercorrectie, om terug te kunnen draaien. */
+export interface RitnummerCorrectie {
+  id: string
+  van: string
+  tot: string
+  van_ritnummer: string | null
+  naar_ritnummer: string
+  aantal: number
+  inclusief_gefactureerd: boolean
+  uitgevoerd_op: string
+  uitgevoerd_door: string
+  teruggedraaid_op: string | null
+  teruggedraaid_door: string
+  teruggedraaid_aantal: number
 }
 
 export const tollingApi = {
@@ -427,6 +445,27 @@ export const tollingApi = {
     const { data } = await api.post(
       `/tolling/vehicles/${encodeURIComponent(plate)}/ritnummer-wijzigen/`,
       payload,
+    )
+    return data
+  },
+
+  /** De ritnummercorrecties van de afgelopen maand voor dit kenteken. */
+  getRitnummerCorrecties: async (plate: string): Promise<RitnummerCorrectie[]> => {
+    const { data } = await api.get(
+      `/tolling/vehicles/${encodeURIComponent(plate)}/ritnummer-correcties/`,
+    )
+    return data
+  },
+
+  /** Draai een eerdere ritnummercorrectie terug. */
+  maakRitnummerCorrectieOngedaan: async (
+    plate: string,
+    correctieId: string,
+  ): Promise<{ teruggezet: number; overgeslagen: number; correctie: RitnummerCorrectie }> => {
+    const { data } = await api.post(
+      `/tolling/vehicles/${encodeURIComponent(plate)}/ritnummer-correcties/`
+      + `${encodeURIComponent(correctieId)}/ongedaan-maken/`,
+      {},
     )
     return data
   },

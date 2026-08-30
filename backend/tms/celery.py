@@ -58,4 +58,9 @@ app.conf.beat_schedule = {
         'task': 'apps.fleet.tasks.sync_ritnummers',
         'schedule': crontab(hour=0, minute=5),
     },
+    'opruimen-ritnummer-correcties': {
+        # Ritnummercorrecties zijn een maand terug te draaien; daarna weg.
+        'task': 'apps.tolling.tasks.opruimen_ritnummer_correcties',
+        'schedule': crontab(hour=0, minute=20),
+    },
 }

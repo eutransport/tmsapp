@@ -181,3 +181,51 @@ class PrivateTollRegistration(models.Model):
         if self.license_plate_raw and not self.license_plate_normalized:
             self.license_plate_normalized = normalize_plate(self.license_plate_raw)
         super().save(*args, **kwargs)
+
+
+class RitnummerCorrectie(models.Model):
+    """Vastlegging van een terugwerkende ritnummerwijziging op tolregels.
+
+    Per correctie bewaren we van elke aangeraakte regel het oude ritnummer, in
+    ``oude_waarden`` als ``{tolregel-id: oud ritnummer}``. Alleen zo kan een
+    correctie ook teruggedraaid worden wanneer er in de periode verschillende
+    ritnummers door elkaar stonden. Correcties worden na een maand automatisch
+    opgeruimd.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    license_plate_normalized = models.CharField(
+        max_length=32, db_index=True, verbose_name='Kenteken (genormaliseerd)')
+    license_plate_raw = models.CharField(max_length=32, blank=True, verbose_name='Kenteken')
+    van = models.DateField(verbose_name='Van')
+    tot = models.DateField(verbose_name='Tot en met')
+    van_ritnummer = models.CharField(
+        max_length=50, null=True, blank=True,
+        verbose_name='Alleen dit oude ritnummer',
+        help_text='Leeg betekent: alle ritnummers in de periode.')
+    naar_ritnummer = models.CharField(max_length=50, verbose_name='Nieuw ritnummer')
+    inclusief_gefactureerd = models.BooleanField(
+        default=False, verbose_name='Ook gefactureerde regels')
+    aantal = models.PositiveIntegerField(default=0, verbose_name='Aantal regels')
+    oude_waarden = models.JSONField(default=dict, verbose_name='Oude ritnummers per regel')
+    uitgevoerd_door = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ritnummer_correcties', verbose_name='Uitgevoerd door')
+    uitgevoerd_op = models.DateTimeField(auto_now_add=True, db_index=True,
+                                         verbose_name='Uitgevoerd op')
+    teruggedraaid_op = models.DateTimeField(null=True, blank=True,
+                                            verbose_name='Teruggedraaid op')
+    teruggedraaid_door = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ritnummer_correcties_teruggedraaid', verbose_name='Teruggedraaid door')
+    teruggedraaid_aantal = models.PositiveIntegerField(
+        default=0, verbose_name='Aantal teruggezette regels')
+
+    class Meta:
+        ordering = ['-uitgevoerd_op']
+        verbose_name = 'Ritnummercorrectie'
+        verbose_name_plural = 'Ritnummercorrecties'
+        indexes = [models.Index(fields=['license_plate_normalized', '-uitgevoerd_op'])]
+
+    def __str__(self) -> str:
+        return (f'{self.license_plate_normalized} {self.van}..{self.tot} '
+                f'-> {self.naar_ritnummer} ({self.aantal} regels)')

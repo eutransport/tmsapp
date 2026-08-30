@@ -31,6 +31,7 @@ import {
 } from '@heroicons/react/24/outline'
 
 import {
+  RitnummerCorrectie,
   tollingApi,
   TollingInvoiceRow,
   TollingListPeriod,
@@ -60,6 +61,12 @@ function dateFmt(iso: string): string {
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit',
   })
+}
+/** Alleen de datum, zonder tijd: 15-05-2026. */
+function korteDatum(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('nl-NL', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
 function companyKey(row: TollingVehicleRow): string {
@@ -947,6 +954,43 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
   const [selectedContactEmails, setSelectedContactEmails] = useState<Set<string>>(new Set())
   // Dialoog om het ritnummer van bestaande tolregels alsnog te corrigeren.
   const [correctieOpen, setCorrectieOpen] = useState(false)
+  // Uitgevoerde ritnummercorrecties van de afgelopen maand, om terug te draaien.
+  const [correcties, setCorrecties] = useState<RitnummerCorrectie[]>([])
+  const [historieOpen, setHistorieOpen] = useState(false)
+  const [ongedaanBezig, setOngedaanBezig] = useState<string | null>(null)
+
+  const laadCorrecties = async () => {
+    try {
+      setCorrecties(await tollingApi.getRitnummerCorrecties(plate))
+    } catch {
+      // De historie is bijzaak; een fout hier mag het overzicht niet blokkeren.
+      setCorrecties([])
+    }
+  }
+
+  const maakOngedaan = async (correctie: RitnummerCorrectie) => {
+    setOngedaanBezig(correctie.id)
+    try {
+      const r = await tollingApi.maakRitnummerCorrectieOngedaan(plate, correctie.id)
+      toast.success(
+        r.overgeslagen > 0
+          ? `${r.teruggezet} regel(s) teruggezet, ${r.overgeslagen} overgeslagen omdat er later nog een wijziging overheen ging`
+          : `${r.teruggezet} regel(s) teruggezet`,
+      )
+      await laadCorrecties()
+      // Stond het filter op het ritnummer dat we net hebben teruggedraaid, dan
+      // zou het scherm nu leeg lijken. Schuif het filter mee terug.
+      if (ritFilter !== null && ritFilter === correctie.naar_ritnummer) {
+        setRitFilter(correctie.van_ritnummer || null)
+      } else {
+        await load()
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || 'Terugdraaien mislukt')
+    } finally {
+      setOngedaanBezig(null)
+    }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -967,6 +1011,8 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
   }
 
   useEffect(() => { load() /* eslint-disable-next-line */ }, [plate, period, offset, ritFilter])
+
+  useEffect(() => { laadCorrecties() /* eslint-disable-next-line */ }, [plate])
 
   const totalPages = data ? Math.max(1, Math.ceil(data.events.length / PAGE_SIZE)) : 1
   const pageEvents = data ? data.events.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : []
@@ -1232,7 +1278,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
 
         {/* Ritnummer van de getoonde regels alsnog corrigeren. */}
         {data && data.events.length > 0 && (
-          <div>
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => setCorrectieOpen(true)}
@@ -1240,6 +1286,61 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
             >
               Ritnummer terugwerkend corrigeren…
             </button>
+            {correcties.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setHistorieOpen(o => !o)}
+                className="text-xs font-medium text-gray-600 underline hover:text-gray-900"
+              >
+                {historieOpen
+                  ? 'Recente wijzigingen verbergen'
+                  : `Recente wijzigingen (${correcties.length})`}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Uitgevoerde correcties, met de mogelijkheid ze terug te draaien. */}
+        {historieOpen && correcties.length > 0 && (
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+            <p className="mb-2 text-xs text-gray-500">
+              Wijzigingen van de afgelopen maand. Daarna worden ze opgeruimd en kunnen
+              ze niet meer teruggedraaid worden.
+            </p>
+            <ul className="divide-y divide-gray-200">
+              {correcties.map(cor => (
+                <li key={cor.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <div className="text-xs text-gray-700">
+                    <span className="font-medium">
+                      {cor.aantal} regel(s) → ritnummer {cor.naar_ritnummer}
+                    </span>
+                    <span className="text-gray-500">
+                      {' '}· {korteDatum(cor.van)} t/m {korteDatum(cor.tot)}
+                      {cor.van_ritnummer ? ` · alleen ${cor.van_ritnummer}` : ''}
+                    </span>
+                    <div className="text-gray-500">
+                      {new Date(cor.uitgevoerd_op).toLocaleString('nl-NL')}
+                      {cor.uitgevoerd_door ? ` · ${cor.uitgevoerd_door}` : ''}
+                    </div>
+                  </div>
+                  {cor.teruggedraaid_op ? (
+                    <span className="text-xs text-gray-500">
+                      Teruggedraaid ({cor.teruggedraaid_aantal} regels)
+                      {cor.teruggedraaid_door ? ` door ${cor.teruggedraaid_door}` : ''}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={ongedaanBezig === cor.id}
+                      onClick={() => maakOngedaan(cor)}
+                      className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                    >
+                      {ongedaanBezig === cor.id ? 'Bezig…' : 'Ongedaan maken'}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
@@ -1401,6 +1502,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
         voorstelRitnummer={ritFilter || ''}
         bekendeRitnummers={(data?.ritnummers || []).map(r => r.ritnummer).filter(Boolean)}
         onGewijzigd={(resultaat) => {
+          laadCorrecties()
           // Stond er een filter op het oude ritnummer, dan zou het scherm nu
           // leeg lijken. Schuif het filter mee naar het nieuwe ritnummer.
           if (ritFilter !== null && ritFilter !== resultaat.naar_ritnummer) {
