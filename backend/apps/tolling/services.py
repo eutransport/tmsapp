@@ -12,6 +12,8 @@ from decimal import Decimal, InvalidOperation
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from apps.fleet.ritnummers import bouw_ritnummer_index, zoek_in_index
+
 from .models import PrivateTollRegistration, TollingEvent, TollingImportBatch, normalize_plate
 
 logger = logging.getLogger(__name__)
@@ -171,10 +173,15 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
 
     imported = duplicates = invalid = total = 0
     new_events: list[TollingEvent] = []
-    # Momentopname van de vloot: het ritnummer dat een wagen nu heeft wordt op
-    # het event vastgelegd, zodat een latere ritnummerwijziging de historie
-    # niet met terugwerkende kracht herschrijft.
+    # Momentopname van de vloot: het ritnummer dat op de datum van de passage
+    # gold wordt op het event vastgelegd, zodat een latere ritnummerwijziging
+    # de historie niet met terugwerkende kracht herschrijft en een bestand dat
+    # over een ritnummerwissel heen loopt toch goed verdeeld wordt.
     vehicle_lookup = build_vehicle_lookup()
+    ritnummer_index = bouw_ritnummer_index(
+        {v.pk for v in vehicle_lookup.values() if v is not None}
+    )
+    tijdzone = timezone.get_current_timezone()
 
     for row in reader:
         total += 1
@@ -192,6 +199,13 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
         plate_norm = normalize_plate(plate_raw)
         vehicle = vehicle_lookup.get(plate_norm)
 
+        # Datum van de passage in de lokale tijdzone; daarop wordt het
+        # ritnummer opgezocht.
+        passagedatum = (
+            timezone.localtime(start, tijdzone).date()
+            if timezone.is_aware(start) else start.date()
+        )
+
         new_events.append(TollingEvent(
             batch=batch,
             start_at=start,
@@ -202,7 +216,7 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
             license_plate_normalized=plate_norm,
             obu=obu,
             vehicle=vehicle,
-            ritnummer=(vehicle.ritnummer or '').strip() if vehicle else '',
+            ritnummer=zoek_in_index(ritnummer_index, vehicle, passagedatum),
             bedrijf=vehicle.bedrijf if vehicle else None,
         ))
 

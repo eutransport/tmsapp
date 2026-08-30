@@ -1,6 +1,64 @@
 from django.db import transaction
 from rest_framework import serializers
-from .models import Vehicle
+from .models import Vehicle, VehicleRitnummer
+from .ritnummers import _vandaag
+
+
+def iso_week_label(datum):
+    """Geef 'week 37 (2026)' bij een datum, of een lege tekst bij None."""
+    if not datum:
+        return ''
+    jaar, week, _dag = datum.isocalendar()
+    return f'week {week} ({jaar})'
+
+
+class VehicleRitnummerSerializer(serializers.ModelSerializer):
+    """Een ritnummer met de datum vanaf wanneer het geldt."""
+    weeknummer = serializers.SerializerMethodField()
+    is_huidig = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VehicleRitnummer
+        fields = [
+            'id', 'vehicle', 'ritnummer', 'geldig_vanaf', 'weeknummer',
+            'notitie', 'is_huidig', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_weeknummer(self, obj):
+        return iso_week_label(obj.geldig_vanaf)
+
+    def get_is_huidig(self, obj):
+        """Geldt deze periode vandaag?"""
+        vandaag = _vandaag()
+        if obj.geldig_vanaf and obj.geldig_vanaf > vandaag:
+            return False
+        later = VehicleRitnummer.objects.filter(
+            vehicle_id=obj.vehicle_id, geldig_vanaf__lte=vandaag,
+        )
+        if obj.geldig_vanaf is not None:
+            later = later.filter(geldig_vanaf__gt=obj.geldig_vanaf)
+        return not later.exists()
+
+    def validate(self, attrs):
+        vehicle = attrs.get('vehicle') or getattr(self.instance, 'vehicle', None)
+        vanaf = attrs.get('geldig_vanaf', getattr(self.instance, 'geldig_vanaf', None))
+        if vehicle is None:
+            raise serializers.ValidationError({'vehicle': 'Kies een voertuig.'})
+
+        qs = VehicleRitnummer.objects.filter(vehicle=vehicle, geldig_vanaf=vanaf)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError({
+                'geldig_vanaf': (
+                    'Er bestaat al een periode zonder ingangsdatum voor deze wagen.'
+                    if vanaf is None else
+                    f'Er bestaat al een periode die op {vanaf} ingaat.'
+                )
+            })
+        return attrs
+
 
 class VehicleSerializer(serializers.ModelSerializer):
     bedrijf_naam = serializers.CharField(source='bedrijf.naam', read_only=True, allow_null=True)
@@ -8,13 +66,19 @@ class VehicleSerializer(serializers.ModelSerializer):
     # een wagen onder een nieuw ritnummer verder kan zonder dat de oude regel
     # (en daarmee de historie) verdwijnt.
     vervang_actief = serializers.BooleanField(write_only=True, required=False, default=False)
+    # Alle ritnummers van deze wagen door de tijd heen, oudste eerst.
+    ritnummer_periodes = VehicleRitnummerSerializer(many=True, read_only=True)
+    # Optioneel: laat het opgegeven ritnummer pas vanaf deze datum gelden in
+    # plaats van het huidige ritnummer te overschrijven.
+    ritnummer_vanaf = serializers.DateField(write_only=True, required=False, allow_null=True)
 
     class Meta:
         model = Vehicle
         fields = [
             'id', 'kenteken', 'type_wagen', 'ritnummer',
             'bedrijf', 'bedrijf_naam', 'minimum_weken_per_jaar',
-            'actief', 'created_at', 'updated_at', 'vervang_actief'
+            'actief', 'created_at', 'updated_at', 'vervang_actief',
+            'ritnummer_periodes', 'ritnummer_vanaf',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
         extra_kwargs = {
@@ -81,17 +145,30 @@ class VehicleSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         vervang_actief = validated_data.pop('vervang_actief', False)
+        validated_data.pop('ritnummer_vanaf', None)
         with transaction.atomic():
             if vervang_actief and validated_data.get('actief', True):
                 self._deactiveer_vorige(validated_data['kenteken'])
+            # De open periode wordt automatisch aangemaakt door het signaal.
             return super().create(validated_data)
 
     def update(self, instance, validated_data):
         vervang_actief = validated_data.pop('vervang_actief', False)
+        vanaf = validated_data.pop('ritnummer_vanaf', None)
+        nieuw_ritnummer = validated_data.get('ritnummer')
         with transaction.atomic():
             if vervang_actief and validated_data.get('actief', instance.actief):
                 self._deactiveer_vorige(
                     validated_data.get('kenteken', instance.kenteken),
                     exclude_pk=instance.pk,
+                )
+            if vanaf and nieuw_ritnummer is not None:
+                # Nieuw ritnummer pas vanaf een datum: leg een periode vast en
+                # laat het ritnummer van de wagen zelf ongemoeid. Het signaal
+                # zet het door zodra de datum bereikt is.
+                validated_data.pop('ritnummer', None)
+                VehicleRitnummer.objects.update_or_create(
+                    vehicle=instance, geldig_vanaf=vanaf,
+                    defaults={'ritnummer': (nieuw_ritnummer or '').strip()},
                 )
             return super().update(instance, validated_data)
