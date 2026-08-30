@@ -136,9 +136,25 @@ export default function UnmatchedTollingModal({
     return rows
   }, [matched])
 
+  /**
+   * Unieke ritnummers van alle dagen samen. De backend levert per dag een
+   * label dat zelf al meerdere nummers kan bevatten ("A / B"), dus die halen
+   * we eerst uit elkaar voordat we ontdubbelen en afkappen.
+   */
+  const ritNummers = (r: MatchedTollingRow): string[] => {
+    const uniek: string[] = []
+    for (const label of r.dag_ritnummers || []) {
+      for (const nummer of label.split(' / ')) {
+        const schoon = nummer.trim()
+        if (schoon && !uniek.includes(schoon)) uniek.push(schoon)
+      }
+    }
+    return uniek
+  }
+
   /** Ritnummers uit de uren, met terugval op het ritnummer van de wagen. */
   const ritLabel = (r: MatchedTollingRow): string => {
-    const nummers = r.dag_ritnummers || []
+    const nummers = ritNummers(r)
     if (nummers.length === 0) return r.ritnummer || '—'
     if (nummers.length <= 3) return nummers.join(' / ')
     return `${nummers.slice(0, 3).join(' / ')} +${nummers.length - 3}`
@@ -146,7 +162,7 @@ export default function UnmatchedTollingModal({
 
   /** Volledige lijst voor de tooltip, zodat niets verloren gaat. */
   const ritTitel = (r: MatchedTollingRow): string =>
-    (r.dag_ritnummers || []).join(' / ') || r.ritnummer || ''
+    ritNummers(r).join(' / ') || r.ritnummer || ''
 
   const hasEventDetails = matchedEventDetails.length > 0
   const [tab, setTab] = useState<'overview' | 'details'>('overview')
