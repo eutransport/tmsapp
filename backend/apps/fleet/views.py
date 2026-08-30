@@ -54,7 +54,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
     - Admin/Gebruiker: Full CRUD access
     - Chauffeur: Read-only access
     """
-    queryset = Vehicle.objects.select_related('bedrijf').all()
+    queryset = Vehicle.objects.select_related('bedrijf').prefetch_related('ritnummer_periodes').all()
     serializer_class = VehicleSerializer
     permission_classes = [IsAuthenticated, FleetPermission]
     search_fields = ['kenteken', 'ritnummer', 'type_wagen']

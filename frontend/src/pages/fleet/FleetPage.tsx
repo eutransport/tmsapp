@@ -267,8 +267,8 @@ function VehicleForm({
       </div>
 
       {/* Ritnummer met ingangsdatum: zo blijft de historie van voor de wissel
-          op het oude ritnummer staan. */}
-      {ritnummerGewijzigd && (
+          op het oude ritnummer staan. Alleen zinvol bij een bestaande wagen. */}
+      {vehicle && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
           <label className="block text-sm font-medium text-gray-700">
             Nieuw ritnummer geldig vanaf
@@ -281,7 +281,13 @@ function VehicleForm({
             className="input"
           />
           <p className="text-xs text-gray-600">
-            {formData.ritnummer_vanaf ? (
+            {!ritnummerGewijzigd ? (
+              <>
+                Pas hierboven eerst het ritnummer aan. Vul hier daarna een datum in als
+                de wissel pas vanaf een bepaalde dag geldt; laat leeg om meteen te
+                wijzigen.
+              </>
+            ) : formData.ritnummer_vanaf ? (
               <>
                 Vanaf {formatDatumMetWeek(formData.ritnummer_vanaf)} rijdt deze wagen op
                 ritnummer <strong>{formData.ritnummer || '(leeg)'}</strong>. Alles daarvoor
@@ -290,7 +296,8 @@ function VehicleForm({
             ) : (
               <>
                 Laat leeg om het ritnummer meteen te wijzigen. Vul een datum in als de
-                wissel op een bepaalde dag ingaat.
+                wissel op een bepaalde dag ingaat, dan blijft de historie van voor die
+                dag op <strong>{vehicle?.ritnummer || '(leeg)'}</strong> staan.
               </>
             )}
           </p>
@@ -300,10 +307,15 @@ function VehicleForm({
               dan deels het oude en deels het nieuwe ritnummer.
             </p>
           )}
+          {formData.ritnummer_vanaf && !ritnummerGewijzigd && (
+            <p className="text-xs text-amber-700">
+              Er is nog geen ander ritnummer ingevuld, dus deze datum wordt niet gebruikt.
+            </p>
+          )}
         </div>
       )}
 
-      {periodes.length > 1 && (
+      {vehicle && periodes.length > 0 && (
         <div className="rounded-lg border border-gray-200 p-3">
           <p className="text-sm font-medium text-gray-700 mb-2">Ritnummers door de tijd</p>
           <ul className="space-y-1 text-xs text-gray-600">
