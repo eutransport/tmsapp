@@ -7,6 +7,8 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Iterable
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Count, DecimalField, Sum, Value, Q
 from django.db.models.functions import Coalesce
@@ -560,8 +562,26 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             recipients = [str(x).strip() for x in recipients_raw if str(x).strip()]
         if not recipients:
             return Response({'detail': 'Geen ontvangers opgegeven.'}, status=400)
+        # Alleen echte adressen doorlaten. Dit voorkomt zowel typefouten als
+        # regeleindes in een adres, waarmee extra mailkoppen gesmokkeld
+        # zouden kunnen worden.
+        ongeldig = []
+        for adres in recipients:
+            try:
+                validate_email(adres)
+            except DjangoValidationError:
+                ongeldig.append(adres)
+        if ongeldig:
+            return Response(
+                {'detail': 'Ongeldig e-mailadres: ' + ', '.join(ongeldig[:5])}, status=400,
+            )
+        if len(recipients) > 50:
+            return Response(
+                {'detail': 'Maximaal 50 ontvangers per mail.'}, status=400,
+            )
 
-        subject = (request.data.get('subject') or '').strip()
+        # Een onderwerp is een mailkop; regeleindes horen daar niet in.
+        subject = (request.data.get('subject') or '').replace('\r', ' ').replace('\n', ' ').strip()[:200]
         body = request.data.get('body') or ''
         fmt = (request.data.get('fmt') or 'pdf').lower()
         if fmt not in ('pdf', 'xlsx'):
@@ -609,7 +629,8 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
         if not subject:
-            subject = f'Tolheffing overzicht {plate_display} — {label}'
+            veilig_kenteken = str(plate_display).replace('\r', ' ').replace('\n', ' ')[:32]
+            subject = f'Tolheffing overzicht {veilig_kenteken} — {label}'
         if not body:
             body = (
                 f'Beste,\n\nIn de bijlage vind je het tolheffing overzicht voor '

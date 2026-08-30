@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from xml.sax.saxutils import escape
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -320,6 +321,24 @@ def unmatch_private_registration(reg: PrivateTollRegistration) -> int:
 
 # ---------- Exports ----------
 
+def _xlsx_tekst(waarde) -> str:
+    """Maak tekst veilig voor een Excel-cel.
+
+    Excel voert een cel die met =, +, - of @ begint uit als formule. Kentekens
+    en ritnummers komen deels uit geimporteerde bestanden, dus die tekst wordt
+    met een apostrof onschadelijk gemaakt.
+    """
+    tekst = str(waarde or '')
+    if tekst[:1] in ('=', '+', '-', '@', '\t', '\r'):
+        return "'" + tekst
+    return tekst
+
+
+def _pdf_tekst(waarde) -> str:
+    """Maak tekst veilig voor een reportlab Paragraph, die opmaaktags leest."""
+    return escape(str(waarde or ''))
+
+
 def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
     from openpyxl import Workbook
     from openpyxl.styles import PatternFill, Font
@@ -358,7 +377,7 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
         ws.append([
             e.start_at.strftime('%Y-%m-%d %H:%M'),
             e.end_at.strftime('%Y-%m-%d %H:%M'),
-            rit,
+            _xlsx_tekst(rit),
             type_label,
             float(e.distance_km),
             float(e.amount),
@@ -404,7 +423,7 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
         for rit in sorted(per_rit):
             km, bedrag, aantal = per_rit[rit]
             ws.append([
-                '', rit or 'Geen ritnummer', f'{aantal} regels', '',
+                '', _xlsx_tekst(rit) or 'Geen ritnummer', f'{aantal} regels', '',
                 float(km), float(bedrag), '',
             ])
     for col_idx, width in enumerate([20, 20, 16, 14, 15, 15, 15], start=1):
@@ -540,10 +559,12 @@ def build_dachser_export_xlsx(rows: list[dict]) -> bytes:
     for offset, row in enumerate(rows):
         excel_row = header_row + 1 + offset
         values = [
-            row.get('route') or '',
-            row.get('carrier') or '',
-            row.get('country') or 'NL',
-            row.get('license_plate') or '',
+            # Vrije tekst wordt onschadelijk gemaakt: Excel voert een cel die
+            # met = + - of @ begint anders uit als formule.
+            _xlsx_tekst(row.get('route')),
+            _xlsx_tekst(row.get('carrier')),
+            _xlsx_tekst(row.get('country') or 'NL'),
+            _xlsx_tekst(row.get('license_plate')),
             float(row.get('total_km') or 0),
             float(row.get('amount') or 0),
             row.get('date'),
@@ -588,8 +609,8 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
         topMargin=10 * mm, bottomMargin=10 * mm,
     )
     elems = [
-        Paragraph(f'Tolheffing overzicht — kenteken {plate_label}', styles['Title']),
-        Paragraph(f'Periode: {period_label}', styles['Normal']),
+        Paragraph(f'Tolheffing overzicht — kenteken {_pdf_tekst(plate_label)}', styles['Title']),
+        Paragraph(f'Periode: {_pdf_tekst(period_label)}', styles['Normal']),
         Spacer(1, 6),
     ]
     data = [['Startdatum', 'Einddatum', 'Ritnummer', 'Type', 'Afstand (km)', 'Bedrag (€)', 'Status']]
