@@ -142,8 +142,11 @@ export default function TollingPage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const askDeletePlate = (row: TollingVehicleRow) => {
-    const label = row.ritnummer
-      ? `${row.plate_display} (rit ${row.ritnummer})`
+    const delen = [row.plate_display]
+    if (row.ritnummer) delen.push(`rit ${row.ritnummer}`)
+    if (row.bedrijf_naam) delen.push(row.bedrijf_naam)
+    const label = delen.length > 1
+      ? `${row.plate_display} (${delen.slice(1).join(' · ')})`
       : row.plate_display
     setConfirmState({
       title: `Alle tolheffingen van ${label} verwijderen?`,
@@ -159,7 +162,11 @@ export default function TollingPage() {
       onConfirm: async () => {
         setDeletingPlate(row.row_key)
         try {
-          const res = await tollingApi.deleteEventsForPlate(row.plate_normalized, row.ritnummer)
+          const res = await tollingApi.deleteEventsForPlate(
+            row.plate_normalized,
+            row.ritnummer,
+            row.bedrijf_id,
+          )
           if (res.invoiced_deleted > 0) {
             toast.success(
               `${res.deleted} events verwijderd (${res.invoiced_deleted} waren gefactureerd, ${res.invoice_lines_affected} factuurregels aangepast).`,
@@ -857,8 +864,20 @@ function VehicleRow({ row, periodLabel, open, onToggle, onCreateInvoice, onDelet
                 </span>
               )}
               {row.bedrijf_naam && (
-                <span className="text-xs text-primary-700 bg-primary-50 rounded px-1.5 py-0.5">
+                <span
+                  className={
+                    row.is_actueel_bedrijf === false
+                      ? 'text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5'
+                      : 'text-xs text-primary-700 bg-primary-50 rounded px-1.5 py-0.5'
+                  }
+                  title={
+                    row.is_actueel_bedrijf === false
+                      ? `Eerder bedrijf. Deze wagen rijdt nu voor ${row.huidig_bedrijf_naam || 'geen bedrijf'}.`
+                      : 'Huidig bedrijf van deze wagen'
+                  }
+                >
                   {row.bedrijf_naam}
+                  {row.is_actueel_bedrijf === false && ' · eerder'}
                 </span>
               )}
             </div>
@@ -938,6 +957,8 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
   const [offset, setOffset] = useState(0)
   // Standaard het ritnummer van de aangeklikte regel; null = alle ritnummers.
   const [ritFilter, setRitFilter] = useState<string | null>(ritnummer)
+  // Standaard het bedrijf van de aangeklikte regel; null = alle bedrijven.
+  const [bedrijfFilter, setBedrijfFilter] = useState<string | null>(bedrijfId)
   const [data, setData] = useState<TollingSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -1000,6 +1021,8 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
         offset,
         // Parameter weglaten = alle ritnummers van deze wagen.
         ...(ritFilter === null ? {} : { ritnummer: ritFilter }),
+        // Idem voor het bedrijf waarvoor de wagen toen reed.
+        ...(bedrijfFilter === null ? {} : { bedrijf_id: bedrijfFilter }),
       })
       setData(s)
       setPage(1)
@@ -1010,7 +1033,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
     }
   }
 
-  useEffect(() => { load() /* eslint-disable-next-line */ }, [plate, period, offset, ritFilter])
+  useEffect(() => { load() /* eslint-disable-next-line */ }, [plate, period, offset, ritFilter, bedrijfFilter])
 
   useEffect(() => { laadCorrecties() /* eslint-disable-next-line */ }, [plate])
 
@@ -1025,6 +1048,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
         offset,
         format: fmt,
         ...(ritFilter === null ? {} : { ritnummer: ritFilter }),
+        ...(bedrijfFilter === null ? {} : { bedrijf_id: bedrijfFilter }),
       })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -1276,6 +1300,41 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
           </div>
         )}
 
+        {/* Bedrijfsfilter: voor welk bedrijf reed deze wagen in de periode? */}
+        {data && data.bedrijven && data.bedrijven.length > 0
+          && (data.bedrijven.length > 1 || bedrijfFilter !== null) && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs uppercase tracking-wide text-gray-500">Bedrijf</span>
+            <button
+              type="button"
+              onClick={() => setBedrijfFilter(null)}
+              className={`px-2 py-1 rounded text-xs font-medium border ${
+                bedrijfFilter === null
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Alle ({data.bedrijven.reduce((s, b) => s + b.events_count, 0)})
+            </button>
+            {data.bedrijven.map(b => (
+              <button
+                key={b.bedrijf_id || '(leeg)'}
+                type="button"
+                onClick={() => setBedrijfFilter(b.bedrijf_id)}
+                disabled={!b.bedrijf_id}
+                className={`px-2 py-1 rounded text-xs font-medium border ${
+                  bedrijfFilter === b.bedrijf_id
+                    ? 'bg-primary-600 text-white border-primary-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                } disabled:opacity-60`}
+                title={`${kmFmt(b.total_km)} km · ${currency(b.total_amount)}`}
+              >
+                {b.bedrijf_naam || 'Geen bedrijf'} ({b.events_count})
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Ritnummer van de getoonde regels alsnog corrigeren. */}
         {data && data.events.length > 0 && (
           <div className="flex flex-wrap items-center gap-3">
@@ -1359,6 +1418,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                     <th className="text-left px-3 py-2">Startdatum</th>
                     <th className="text-left px-3 py-2">Einddatum</th>
                     <th className="text-left px-3 py-2">Ritnummer</th>
+                    <th className="text-left px-3 py-2">Bedrijf</th>
                     <th className="text-right px-3 py-2">Afstand</th>
                     <th className="text-right px-3 py-2">Bedrag</th>
                     <th className="text-center px-3 py-2">Status</th>
@@ -1400,6 +1460,20 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                           <span className="text-xs text-gray-400">—</span>
                         )}
                       </td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">
+                        {ev.bedrijf_naam ? (
+                          <button
+                            type="button"
+                            onClick={() => setBedrijfFilter(ev.bedrijf)}
+                            className="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 hover:bg-primary-100 hover:text-primary-800"
+                            title={`Alleen ${ev.bedrijf_naam} tonen`}
+                          >
+                            {ev.bedrijf_naam}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-1.5 text-right tabular-nums">
                         {Number(ev.distance_km).toLocaleString('nl-NL', { maximumFractionDigits: 3 })}
                       </td>
@@ -1427,7 +1501,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                 </tbody>
                 <tfoot className="bg-gray-50 text-sm font-medium">
                   <tr>
-                    <td className="px-3 py-2 text-right" colSpan={3}>Totaal (periode)</td>
+                    <td className="px-3 py-2 text-right" colSpan={4}>Totaal (periode)</td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {Number(data.total_km).toLocaleString('nl-NL', { maximumFractionDigits: 3 })} km
                     </td>

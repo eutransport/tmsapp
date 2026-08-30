@@ -13,6 +13,7 @@ from xml.sax.saxutils import escape
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from apps.fleet.bedrijven import bouw_bedrijf_index, zoek_bedrijf_in_index
 from apps.fleet.ritnummers import bouw_ritnummer_index, zoek_in_index
 
 from .models import PrivateTollRegistration, TollingEvent, TollingImportBatch, normalize_plate
@@ -174,14 +175,14 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
 
     imported = duplicates = invalid = total = 0
     new_events: list[TollingEvent] = []
-    # Momentopname van de vloot: het ritnummer dat op de datum van de passage
-    # gold wordt op het event vastgelegd, zodat een latere ritnummerwijziging
-    # de historie niet met terugwerkende kracht herschrijft en een bestand dat
-    # over een ritnummerwissel heen loopt toch goed verdeeld wordt.
+    # Momentopname van de vloot: het ritnummer en het bedrijf die op de datum
+    # van de passage golden worden op het event vastgelegd, zodat een latere
+    # wijziging de historie niet met terugwerkende kracht herschrijft en een
+    # bestand dat over een wissel heen loopt toch goed verdeeld wordt.
     vehicle_lookup = build_vehicle_lookup()
-    ritnummer_index = bouw_ritnummer_index(
-        {v.pk for v in vehicle_lookup.values() if v is not None}
-    )
+    wagen_ids = {v.pk for v in vehicle_lookup.values() if v is not None}
+    ritnummer_index = bouw_ritnummer_index(wagen_ids)
+    bedrijf_index = bouw_bedrijf_index(wagen_ids)
     tijdzone = timezone.get_current_timezone()
 
     for row in reader:
@@ -218,7 +219,7 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
             obu=obu,
             vehicle=vehicle,
             ritnummer=zoek_in_index(ritnummer_index, vehicle, passagedatum),
-            bedrijf=vehicle.bedrijf if vehicle else None,
+            bedrijf_id=zoek_bedrijf_in_index(bedrijf_index, vehicle, passagedatum),
         ))
 
     # Bulk insert; on unique conflict fall back to per-row insert to count duplicates.

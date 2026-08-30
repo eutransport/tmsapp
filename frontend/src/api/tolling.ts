@@ -16,6 +16,8 @@ export interface TollingEvent {
   ritnummer: string
   vehicle: string | null
   bedrijf: string | null
+  /** Bedrijf waarvoor de wagen op die dag reed (momentopname bij de import). */
+  bedrijf_naam?: string
   invoice_line: string | null
   invoiced_at: string | null
   invoiced: boolean
@@ -25,7 +27,7 @@ export interface TollingEvent {
 }
 
 export interface TollingVehicleRow {
-  /** Unieke sleutel: kenteken + ritnummer. */
+  /** Unieke sleutel: kenteken + ritnummer + bedrijf. */
   row_key: string
   plate_normalized: string
   plate_raw: string
@@ -38,6 +40,10 @@ export interface TollingVehicleRow {
   vehicle_id: string | null
   bedrijf_id: string | null
   bedrijf_naam: string | null
+  /** Rijdt de wagen vandaag nog voor dit bedrijf? */
+  is_actueel_bedrijf?: boolean
+  /** Bedrijf waar de wagen vandaag bij hoort. */
+  huidig_bedrijf_naam?: string
   /** Totalen van de gekozen periode. */
   period_km: number
   period_amount: number
@@ -67,12 +73,25 @@ export interface TollingSummaryRit {
   total_amount: number
 }
 
+/** Eén bedrijf waarvoor deze wagen in de periode heeft gereden. */
+export interface TollingSummaryBedrijf {
+  bedrijf_id: string | null
+  bedrijf_naam: string
+  events_count: number
+  total_km: number
+  total_amount: number
+}
+
 export interface TollingSummary {
   plate_normalized: string
   /** Actief filter; null betekent alle ritnummers. */
   ritnummer: string | null
   /** Alle ritnummers in deze periode, ongeacht het actieve filter. */
   ritnummers: TollingSummaryRit[]
+  /** Actief bedrijfsfilter; null betekent alle bedrijven. */
+  bedrijf_id: string | null
+  /** Alle bedrijven in deze periode, ongeacht het actieve filter. */
+  bedrijven: TollingSummaryBedrijf[]
   period: 'week' | 'month'
   year: number
   index: number
@@ -356,7 +375,13 @@ export const tollingApi = {
 
   summary: async (
     plate: string,
-    params: { period: 'week' | 'month'; offset: number; ritnummer?: string },
+    params: {
+      period: 'week' | 'month'
+      offset: number
+      ritnummer?: string
+      /** Weglaten = alle bedrijven waarvoor deze wagen reed. */
+      bedrijf_id?: string
+    },
   ): Promise<TollingSummary> => {
     const { data } = await api.get(`/tolling/vehicles/${encodeURIComponent(plate)}/summary/`, { params })
     return data
@@ -376,7 +401,13 @@ export const tollingApi = {
 
   downloadExport: async (
     plate: string,
-    params: { period: 'week' | 'month'; offset: number; format: 'xlsx' | 'pdf'; ritnummer?: string },
+    params: {
+      period: 'week' | 'month'
+      offset: number
+      format: 'xlsx' | 'pdf'
+      ritnummer?: string
+      bedrijf_id?: string
+    },
   ): Promise<Blob> => {
     const { data } = await api.get(
       `/tolling/vehicles/${encodeURIComponent(plate)}/export/`,
@@ -386,6 +417,7 @@ export const tollingApi = {
           offset: params.offset,
           export_format: params.format,
           ...(params.ritnummer === undefined ? {} : { ritnummer: params.ritnummer }),
+          ...(params.bedrijf_id ? { bedrijf_id: params.bedrijf_id } : {}),
         },
         responseType: 'blob',
       },
@@ -407,10 +439,14 @@ export const tollingApi = {
   deleteEventsForPlate: async (
     plate: string,
     ritnummer?: string,
+    bedrijfId?: string | null,
   ): Promise<{ deleted: number; invoiced_deleted: number; invoice_lines_affected: number }> => {
     const { data } = await api.post(
       `/tolling/vehicles/${encodeURIComponent(plate)}/delete-events/`,
-      ritnummer === undefined ? {} : { ritnummer },
+      {
+        ...(ritnummer === undefined ? {} : { ritnummer }),
+        ...(bedrijfId ? { bedrijf_id: bedrijfId } : {}),
+      },
     )
     return data
   },
@@ -493,13 +529,19 @@ export const tollingApi = {
 
   openWeeks: async (
     plate: string,
-    opts: { excludeWeekend?: boolean; cutoffTime?: string | null } = {},
+    opts: {
+      excludeWeekend?: boolean
+      cutoffTime?: string | null
+      /** Alleen de weken die deze wagen voor dit bedrijf reed. */
+      bedrijfId?: string | null
+    } = {},
   ): Promise<TollingOpenWeek[]> => {
     const params: Record<string, string> = {}
     if (opts.excludeWeekend !== undefined) {
       params.exclude_weekend = opts.excludeWeekend ? 'true' : 'false'
     }
     if (opts.cutoffTime) params.cutoff_time = opts.cutoffTime
+    if (opts.bedrijfId) params.bedrijf_id = opts.bedrijfId
     const { data } = await api.get(
       `/tolling/vehicles/${encodeURIComponent(plate)}/open-weeks/`,
       { params },

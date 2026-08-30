@@ -19,3 +19,18 @@ def sync_ritnummers():
     if aantal:
         logger.info('Ritnummer bijgewerkt voor %d voertuig(en).', aantal)
     return aantal
+
+
+@shared_task(name='apps.fleet.tasks.sync_bedrijven')
+def sync_bedrijven():
+    """Zet het huidige bedrijf van elke wagen gelijk aan de geldende periode.
+
+    Draait dagelijks kort na middernacht, zodat een periode met een
+    toekomstige ingangsdatum op de juiste dag vanzelf actief wordt.
+    """
+    from .bedrijven import synchroniseer_huidig_bedrijf
+
+    aantal = synchroniseer_huidig_bedrijf()
+    if aantal:
+        logger.info('Bedrijf bijgewerkt voor %d voertuig(en).', aantal)
+    return aantal

@@ -123,7 +123,12 @@ export default function CreateTollingInvoiceModal({
     })
     setLoadingRefs(true)
     Promise.all([
-      tollingApi.openWeeks(row.plate_normalized, { excludeWeekend: true, cutoffTime: null }),
+      tollingApi.openWeeks(row.plate_normalized, {
+        excludeWeekend: true,
+        cutoffTime: null,
+        // Alleen de weken die deze wagen voor dit bedrijf reed.
+        bedrijfId: row.bedrijf_id,
+      }),
       getTemplates(true),
       getAllCompanies(),
       listAdministraties().catch(() => [] as Administratie[]),
@@ -181,6 +186,8 @@ export default function CreateTollingInvoiceModal({
     tollingApi.openWeeks(row.plate_normalized, {
       excludeWeekend,
       cutoffTime: cutoff,
+      // Wisselt de gebruiker van bedrijf, dan horen daar andere weken bij.
+      bedrijfId: bedrijfId || null,
     })
       .then(weeks => {
         if (cancelled) return
@@ -194,7 +201,7 @@ export default function CreateTollingInvoiceModal({
       .catch(() => { /* silent */ })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, excludeWeekend, cutoffEnabled, cutoffTime, row.plate_normalized])
+  }, [isOpen, excludeWeekend, cutoffEnabled, cutoffTime, row.plate_normalized, bedrijfId])
 
   // Cleanup blob URL on unmount
   useEffect(() => {

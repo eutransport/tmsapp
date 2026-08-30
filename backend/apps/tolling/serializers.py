@@ -5,13 +5,18 @@ from .models import PrivateTollRegistration, TollingEvent, TollingImportBatch, n
 
 class TollingEventSerializer(serializers.ModelSerializer):
     invoiced = serializers.SerializerMethodField()
+    # Naam van het bedrijf waarvoor de wagen op die dag reed; komt uit de
+    # momentopname bij de import, niet uit de vloot van vandaag.
+    bedrijf_naam = serializers.CharField(
+        source='bedrijf.naam', read_only=True, default='',
+    )
 
     class Meta:
         model = TollingEvent
         fields = (
             'id', 'start_at', 'end_at', 'distance_km', 'amount',
             'license_plate_raw', 'license_plate_normalized', 'obu',
-            'ritnummer', 'vehicle', 'bedrijf',
+            'ritnummer', 'vehicle', 'bedrijf', 'bedrijf_naam',
             'invoice_line', 'invoiced_at', 'invoiced',
             'is_private', 'private_registration', 'created_at',
         )

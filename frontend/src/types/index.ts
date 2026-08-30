@@ -196,6 +196,20 @@ export interface Vehicle {
     created_at: string
     updated_at: string
   }[]
+  /** Bedrijven waarvoor deze wagen reed, oudste eerst. */
+  bedrijf_periodes?: {
+    id: string
+    vehicle: string
+    bedrijf: string
+    bedrijf_naam: string
+    /** null betekent: vanaf het begin. */
+    geldig_vanaf: string | null
+    weeknummer: string
+    notitie: string
+    is_huidig: boolean
+    created_at: string
+    updated_at: string
+  }[]
   created_at: string
   updated_at: string
 }

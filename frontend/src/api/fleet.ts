@@ -19,6 +19,8 @@ export interface VehicleCreate {
 export interface VehicleUpdate extends Partial<VehicleCreate> {
   /** Laat het nieuwe ritnummer pas vanaf deze datum gelden (jjjj-mm-dd). */
   ritnummer_vanaf?: string | null
+  /** Laat het nieuwe bedrijf pas vanaf deze datum gelden (jjjj-mm-dd). */
+  bedrijf_vanaf?: string | null
 }
 
 /** Een ritnummer van een wagen met de datum vanaf wanneer het geldt. */

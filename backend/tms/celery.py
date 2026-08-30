@@ -58,6 +58,11 @@ app.conf.beat_schedule = {
         'task': 'apps.fleet.tasks.sync_ritnummers',
         'schedule': crontab(hour=0, minute=5),
     },
+    'sync-vehicle-bedrijven': {
+        # Idem voor het bedrijf waarvoor de wagen rijdt.
+        'task': 'apps.fleet.tasks.sync_bedrijven',
+        'schedule': crontab(hour=0, minute=10),
+    },
     'opruimen-ritnummer-correcties': {
         # Ritnummercorrecties zijn een maand terug te draaien; daarna weg.
         'task': 'apps.tolling.tasks.opruimen_ritnummer_correcties',

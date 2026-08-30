@@ -96,3 +96,62 @@ class VehicleRitnummer(models.Model):
     def __str__(self):
         vanaf = self.geldig_vanaf.isoformat() if self.geldig_vanaf else 'vanaf het begin'
         return f"{self.ritnummer or '(leeg)'} ({vanaf})"
+
+
+class VehicleBedrijf(models.Model):
+    """Bedrijf waarvoor een wagen rijdt, met de datum waarop dat ingaat.
+
+    Werkt precies zoals :class:`VehicleRitnummer`: elke wagen heeft minstens
+    een periode zonder begindatum die 'vanaf het begin' geldt. Gaat een wagen
+    van bedrijf A naar bedrijf B, dan komt er een periode bij met de datum van
+    de overgang. Zo blijft de tolheffing die voor bedrijf A gereden is ook aan
+    bedrijf A hangen in plaats van met terugwerkende kracht naar B te
+    verspringen.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.CASCADE,
+        related_name='bedrijf_periodes',
+        verbose_name='Voertuig',
+    )
+    bedrijf = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        related_name='vehicle_periodes',
+        verbose_name='Bedrijf',
+    )
+    geldig_vanaf = models.DateField(
+        null=True, blank=True,
+        verbose_name='Geldig vanaf',
+        help_text='Laat leeg voor de oudste periode; die geldt vanaf het begin.',
+    )
+    notitie = models.CharField(max_length=200, blank=True, verbose_name='Notitie')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Bedrijfsperiode'
+        verbose_name_plural = 'Bedrijfsperiodes'
+        ordering = [models.F('geldig_vanaf').asc(nulls_first=True), 'created_at']
+        constraints = [
+            # Per wagen mag er maar een periode 'vanaf het begin' bestaan...
+            models.UniqueConstraint(
+                fields=['vehicle'],
+                condition=models.Q(geldig_vanaf__isnull=True),
+                name='uniek_open_bedrijfsperiode',
+            ),
+            # ... en maar een periode per ingangsdatum.
+            models.UniqueConstraint(
+                fields=['vehicle', 'geldig_vanaf'],
+                name='uniek_bedrijfsperiode_per_datum',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['vehicle', 'geldig_vanaf']),
+        ]
+
+    def __str__(self):
+        vanaf = self.geldig_vanaf.isoformat() if self.geldig_vanaf else 'vanaf het begin'
+        return f"{self.bedrijf_id} ({vanaf})"

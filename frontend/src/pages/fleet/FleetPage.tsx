@@ -174,6 +174,8 @@ function VehicleForm({
     actief: vehicle?.actief ?? true,
     // Laat het nieuwe ritnummer pas vanaf deze datum gelden. Leeg = meteen.
     ritnummer_vanaf: '',
+    // Idem voor het bedrijf waarvoor de wagen rijdt.
+    bedrijf_vanaf: '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -182,6 +184,14 @@ function VehicleForm({
     vehicle && formData.ritnummer.trim() !== (vehicle.ritnummer || '').trim(),
   )
   const periodes = vehicle?.ritnummer_periodes || []
+
+  // Idem voor het bedrijf.
+  const bedrijfGewijzigd = Boolean(
+    vehicle && formData.bedrijf !== (vehicle.bedrijf?.toString() || ''),
+  )
+  const bedrijfPeriodes = vehicle?.bedrijf_periodes || []
+  const bedrijfNaam = (id: string) =>
+    companies.find(c => c.id === id)?.naam || '(geen bedrijf)'
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
@@ -217,6 +227,10 @@ function VehicleForm({
     // periode ontstaan die niets verandert.
     if (ritnummerGewijzigd && formData.ritnummer_vanaf) {
       (saveData as VehicleUpdate).ritnummer_vanaf = formData.ritnummer_vanaf
+    }
+    // Idem voor het bedrijf: alleen een periode aanmaken als het echt wijzigt.
+    if (bedrijfGewijzigd && formData.bedrijf_vanaf) {
+      (saveData as VehicleUpdate).bedrijf_vanaf = formData.bedrijf_vanaf
     }
     onSave(saveData)
   }
@@ -355,6 +369,81 @@ function VehicleForm({
         </select>
         {errors.bedrijf && <p className="text-red-500 text-xs mt-1">{errors.bedrijf}</p>}
       </div>
+
+      {/* Bedrijf met ingangsdatum: zo blijft de tolheffing van voor de wissel
+          bij het oude bedrijf horen. Alleen zinvol bij een bestaande wagen. */}
+      {vehicle && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Nieuw bedrijf geldig vanaf
+          </label>
+          <input
+            type="date"
+            name="bedrijf_vanaf"
+            value={formData.bedrijf_vanaf}
+            onChange={handleChange}
+            className="input"
+          />
+          <p className="text-xs text-gray-600">
+            {!bedrijfGewijzigd ? (
+              <>
+                Kies hierboven eerst een ander bedrijf. Vul hier daarna een datum in als
+                de overgang pas vanaf een bepaalde dag geldt; laat leeg om meteen te
+                wijzigen.
+              </>
+            ) : formData.bedrijf_vanaf ? (
+              <>
+                Vanaf {formatDatumMetWeek(formData.bedrijf_vanaf)} rijdt deze wagen voor{' '}
+                <strong>{bedrijfNaam(formData.bedrijf)}</strong>. De tolheffing van
+                daarvoor blijft bij <strong>{vehicle.bedrijf_naam || '(geen bedrijf)'}</strong>{' '}
+                horen.
+              </>
+            ) : (
+              <>
+                Laat leeg om het bedrijf meteen te wijzigen. Vul een datum in als de
+                overgang op een bepaalde dag ingaat, dan blijft de tolheffing van voor
+                die dag bij <strong>{vehicle.bedrijf_naam || '(geen bedrijf)'}</strong>{' '}
+                staan.
+              </>
+            )}
+          </p>
+          {formData.bedrijf_vanaf && !isMaandag(formData.bedrijf_vanaf) && (
+            <p className="text-xs text-amber-700">
+              Let op: deze datum valt midden in de week. Die week krijgt dan deels het
+              oude en deels het nieuwe bedrijf, en dus twee regels in het
+              tolheffing-overzicht.
+            </p>
+          )}
+          {formData.bedrijf_vanaf && !bedrijfGewijzigd && (
+            <p className="text-xs text-amber-700">
+              Er is nog geen ander bedrijf gekozen, dus deze datum wordt niet gebruikt.
+            </p>
+          )}
+        </div>
+      )}
+
+      {vehicle && bedrijfPeriodes.length > 0 && (
+        <div className="rounded-lg border border-gray-200 p-3">
+          <p className="text-sm font-medium text-gray-700 mb-2">Bedrijven door de tijd</p>
+          <ul className="space-y-1 text-xs text-gray-600">
+            {bedrijfPeriodes.map(p => (
+              <li key={p.id} className="flex items-center gap-2">
+                <span className="font-medium text-gray-900">
+                  {p.bedrijf_naam || '(geen bedrijf)'}
+                </span>
+                <span>
+                  {p.geldig_vanaf
+                    ? `vanaf ${formatDatumMetWeek(p.geldig_vanaf)}`
+                    : 'vanaf het begin'}
+                </span>
+                {p.is_huidig && (
+                  <span className="rounded bg-green-100 px-1.5 py-0.5 text-green-800">nu</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">

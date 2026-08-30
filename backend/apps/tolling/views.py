@@ -281,13 +281,17 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         return period, year, index, start, end
 
     def list(self, request):
-        """Eén regel per kenteken + ritnummer met de totalen van de periode.
+        """Eén regel per kenteken + ritnummer + bedrijf met de totalen van de periode.
 
         Het ritnummer komt uit de momentopname die bij de import is
         vastgelegd, niet uit de huidige vloot. Krijgt een wagen later een
         ander ritnummer, dan blijft de eerder geïmporteerde historie onder
         het oude ritnummer staan en komen nieuwe imports onder het nieuwe.
         Hetzelfde kenteken kan dus meerdere keren in de lijst voorkomen.
+
+        Voor het bedrijf geldt precies hetzelfde: gaat een wagen van
+        bedrijf A naar bedrijf B, dan blijft de tolheffing van daarvoor
+        onder bedrijf A staan in plaats van mee te verspringen.
         """
         period, year, index, start, end = self._resolve_list_period(request.query_params)
 
@@ -296,7 +300,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             agg_qs = agg_qs.filter(start_at__gte=start, start_at__lt=end)
         agg_qs = (
             agg_qs
-            .values('license_plate_normalized', 'ritnummer')
+            .values('license_plate_normalized', 'ritnummer', 'bedrijf_id')
             .annotate(
                 period_km=Coalesce(Sum('distance_km'), Value(0), output_field=DecimalField(max_digits=14, decimal_places=3)),
                 period_amount=Coalesce(Sum('amount'), Value(0), output_field=DecimalField(max_digits=14, decimal_places=2)),
@@ -304,7 +308,8 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             )
         )
         agg_map = {
-            (row['license_plate_normalized'], row['ritnummer'] or ''): row
+            (row['license_plate_normalized'], row['ritnummer'] or '',
+             row['bedrijf_id']): row
             for row in agg_qs
         }
 
@@ -312,46 +317,49 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         # (geïmporteerd voordat het kenteken in de vloot stond).
         vehicle_map = build_vehicle_lookup()
 
-        # Alle combinaties kenteken + ritnummer die ooit zijn geïmporteerd.
+        # Alle combinaties kenteken + ritnummer + bedrijf die ooit zijn geïmporteerd.
         combos: dict[tuple, dict] = {}
         rows_qs = TollingEvent.objects.values_list(
             'license_plate_normalized', 'ritnummer', 'license_plate_raw',
             'vehicle_id', 'vehicle__kenteken', 'bedrijf_id', 'bedrijf__naam',
         ).distinct()
         for norm, rit, raw, veh_id, veh_plate, bedrijf_id, bedrijf_naam in rows_qs:
-            key = (norm, rit or '')
+            key = (norm, rit or '', bedrijf_id)
             entry = combos.setdefault(key, {
                 'plate_raw': raw, 'vehicle_id': veh_id, 'vehicle_plate': veh_plate,
-                'bedrijf_id': bedrijf_id, 'bedrijf_naam': bedrijf_naam,
+                'bedrijf_naam': bedrijf_naam,
             })
             # Vul ontbrekende gegevens aan vanuit een andere regel van dezelfde groep.
             if not entry['vehicle_id'] and veh_id:
                 entry['vehicle_id'] = veh_id
                 entry['vehicle_plate'] = veh_plate
-            if not entry['bedrijf_id'] and bedrijf_id:
-                entry['bedrijf_id'] = bedrijf_id
-                entry['bedrijf_naam'] = bedrijf_naam
 
         results = []
-        for (norm, rit), info in combos.items():
+        for (norm, rit, bedrijf_id), info in combos.items():
             fallback = vehicle_map.get(norm)
-            totals = agg_map.get((norm, rit), {})
+            totals = agg_map.get((norm, rit, bedrijf_id), {})
             km = float(totals.get('period_km') or 0)
             amount = float(totals.get('period_amount') or 0)
 
             plate_display = info['vehicle_plate'] or (
                 fallback.kenteken if fallback else (info['plate_raw'] or norm)
             )
-            bedrijf_id = info['bedrijf_id']
             bedrijf_naam = info['bedrijf_naam']
+            # Regels zonder momentopname van het bedrijf zijn ingelezen
+            # voordat het kenteken in de vloot stond; die vallen terug op
+            # het bedrijf van nu.
             if not bedrijf_id and fallback and fallback.bedrijf_id:
                 bedrijf_id = fallback.bedrijf_id
                 bedrijf_naam = fallback.bedrijf.naam
             vehicle_id = info['vehicle_id'] or (fallback.id if fallback else None)
             huidig_rit = (fallback.ritnummer or '').strip() if fallback else ''
+            huidig_bedrijf_id = fallback.bedrijf_id if fallback else None
+            huidig_bedrijf_naam = (
+                fallback.bedrijf.naam if fallback and fallback.bedrijf_id else ''
+            )
 
             results.append({
-                'row_key': f"{norm}|{rit}",
+                'row_key': f"{norm}|{rit}|{bedrijf_id or ''}",
                 'plate_normalized': norm,
                 'plate_raw': info['plate_raw'],
                 'plate_display': plate_display,
@@ -363,6 +371,10 @@ class TollingVehicleViewSet(viewsets.ViewSet):
                 'vehicle_id': str(vehicle_id) if vehicle_id else None,
                 'bedrijf_id': str(bedrijf_id) if bedrijf_id else None,
                 'bedrijf_naam': bedrijf_naam or None,
+                # Rijdt de wagen vandaag nog voor dit bedrijf? Zo niet, dan
+                # is dit historie van voor een bedrijfswissel.
+                'is_actueel_bedrijf': bool(bedrijf_id) and bedrijf_id == huidig_bedrijf_id,
+                'huidig_bedrijf_naam': huidig_bedrijf_naam,
                 'period_km': km,
                 'period_amount': amount,
                 'period_events': int(totals.get('period_events') or 0),
@@ -370,7 +382,8 @@ class TollingVehicleViewSet(viewsets.ViewSet):
                 'current_month_km': km,
                 'current_month_amount': amount,
             })
-        results.sort(key=lambda r: (r['plate_display'], r['ritnummer']))
+        results.sort(key=lambda r: (r['plate_display'], r['ritnummer'],
+                                    r['bedrijf_naam'] or ''))
 
         return Response({
             'period': period,
@@ -439,6 +452,31 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             )
         ]
 
+        # Idem voor de bedrijven waarvoor deze wagen in de periode reed.
+        # Staan er meerdere in, dan is de wagen midden in de periode van
+        # bedrijf gewisseld.
+        bedrijven = [
+            {
+                'bedrijf_id': str(r['bedrijf_id']) if r['bedrijf_id'] else None,
+                'bedrijf_naam': r['bedrijf__naam'] or '',
+                'events_count': r['events_count'],
+                'total_km': float(r['km'] or 0),
+                'total_amount': float(r['bedrag'] or 0),
+            }
+            for r in (
+                events_qs
+                .values('bedrijf_id', 'bedrijf__naam')
+                .annotate(
+                    events_count=Count('id'),
+                    km=Coalesce(Sum('distance_km'), Value(0),
+                                output_field=DecimalField(max_digits=14, decimal_places=3)),
+                    bedrag=Coalesce(Sum('amount'), Value(0),
+                                    output_field=DecimalField(max_digits=14, decimal_places=2)),
+                )
+                .order_by('bedrijf__naam')
+            )
+        ]
+
         # Optioneel beperken tot één ritnummer, zodat de historie van vóór
         # een ritnummerwijziging apart te bekijken blijft. De parameter
         # weglaten betekent 'alle ritnummers'; een lege waarde betekent de
@@ -446,7 +484,14 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         ritnummer = request.query_params.get('ritnummer')
         if ritnummer is not None:
             events_qs = events_qs.filter(ritnummer=ritnummer.strip())
-        events = list(events_qs.order_by('start_at'))
+
+        # Optioneel beperken tot een bedrijf, zodat de tolheffing van voor
+        # een bedrijfswissel apart te bekijken blijft.
+        bedrijf_id = request.query_params.get('bedrijf_id')
+        if bedrijf_id:
+            events_qs = events_qs.filter(bedrijf_id=bedrijf_id)
+
+        events = list(events_qs.select_related('bedrijf').order_by('start_at'))
         total_km = sum((e.distance_km for e in events), Decimal('0'))
         total_amount = sum((e.amount for e in events), Decimal('0'))
         invoiced_count = sum(1 for e in events if e.invoiced_at)
@@ -455,6 +500,8 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             'plate_normalized': norm,
             'ritnummer': ritnummer,
             'ritnummers': ritnummers,
+            'bedrijf_id': bedrijf_id,
+            'bedrijven': bedrijven,
             'period': period,
             'year': year,
             'index': idx,
@@ -487,11 +534,18 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         exclude_weekend = _parse_bool(request.query_params.get('exclude_weekend'), default=True)
         cutoff_time = _parse_cutoff_time(request.query_params.get('cutoff_time'))
 
-        events = list(
-            TollingEvent.objects
-            .filter(license_plate_normalized=norm, invoiced_at__isnull=True, is_private=False)
-            .values_list('start_at', 'distance_km', 'amount')
+        events_qs = TollingEvent.objects.filter(
+            license_plate_normalized=norm, invoiced_at__isnull=True, is_private=False,
         )
+        # Alleen de tolheffing die deze wagen voor het gekozen bedrijf reed.
+        # Regels zonder bedrijf blijven meetellen, anders zouden die nooit
+        # meer op een factuur terechtkomen.
+        bedrijf_id = request.query_params.get('bedrijf_id')
+        if bedrijf_id:
+            events_qs = events_qs.filter(
+                Q(bedrijf_id=bedrijf_id) | Q(bedrijf_id__isnull=True)
+            )
+        events = list(events_qs.values_list('start_at', 'distance_km', 'amount'))
         tz = timezone.get_current_timezone()
         buckets: dict[tuple[int, int], dict] = {}
         for start_at, km, amount in events:
@@ -550,6 +604,10 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         ritnummer = request.query_params.get('ritnummer')
         if ritnummer is not None:
             events_qs = events_qs.filter(ritnummer=ritnummer.strip())
+        # Idem voor het bedrijf waarvoor de wagen toen reed.
+        bedrijf_id = request.query_params.get('bedrijf_id')
+        if bedrijf_id:
+            events_qs = events_qs.filter(bedrijf_id=bedrijf_id)
         events = list(events_qs.order_by('start_at'))
         plate_display = events[0].license_plate_raw if events else plate
         vehicle = build_vehicle_lookup().get(norm)
@@ -729,6 +787,13 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             ritnummer = request.query_params.get('ritnummer')
         if ritnummer is not None:
             qs = qs.filter(ritnummer=str(ritnummer).strip())
+        # Idem voor het bedrijf: sinds de bedrijfsperiodes kan hetzelfde
+        # kenteken onder meerdere bedrijven in het overzicht staan.
+        bedrijf_id = request.data.get('bedrijf_id') if isinstance(request.data, dict) else None
+        if bedrijf_id is None:
+            bedrijf_id = request.query_params.get('bedrijf_id')
+        if bedrijf_id:
+            qs = qs.filter(bedrijf_id=bedrijf_id)
         total = qs.count()
         if total == 0:
             return Response({'deleted': 0, 'invoiced_deleted': 0, 'invoice_lines_affected': 0})
@@ -1633,6 +1698,13 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 return False
             if cutoff_time is not None and local.time() >= cutoff_time:
                 return False
+            # De wagen kan van bedrijf gewisseld zijn. Alleen de regels die
+            # hij voor het gekozen bedrijf reed horen op deze factuur.
+            # Regels zonder bedrijf (ingelezen voordat het kenteken in de
+            # vloot stond) laten we staan, anders zouden die nooit meer
+            # gefactureerd kunnen worden.
+            if ev.bedrijf_id is not None and ev.bedrijf_id != bedrijf.id:
+                return False
             return True
 
         # Compute weeks
@@ -1661,7 +1733,12 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             events_by_week[(yr, wk)] = evs
         if not any(events_by_week.values()):
             return Response(
-                {'detail': 'Geen openstaande tolheffing-events gevonden voor de gekozen week(en) na toepassen van de filters.'},
+                {'detail': (
+                    'Geen openstaande tolheffing-events gevonden voor de gekozen '
+                    f'week(en) bij {bedrijf.naam} na toepassen van de filters. '
+                    'Reed deze wagen die week voor een ander bedrijf, kies dan '
+                    'dat bedrijf.'
+                )},
                 status=400,
             )
 
