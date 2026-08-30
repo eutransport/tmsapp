@@ -1400,7 +1400,15 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
         huidigRitnummer={ritFilter}
         voorstelRitnummer={ritFilter || ''}
         bekendeRitnummers={(data?.ritnummers || []).map(r => r.ritnummer).filter(Boolean)}
-        onGewijzigd={() => load()}
+        onGewijzigd={(resultaat) => {
+          // Stond er een filter op het oude ritnummer, dan zou het scherm nu
+          // leeg lijken. Schuif het filter mee naar het nieuwe ritnummer.
+          if (ritFilter !== null && ritFilter !== resultaat.naar_ritnummer) {
+            setRitFilter(resultaat.naar_ritnummer)
+          } else {
+            load()
+          }
+        }}
       />
       {emailModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
