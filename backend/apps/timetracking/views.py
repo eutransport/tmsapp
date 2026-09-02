@@ -107,10 +107,40 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
-        entry = serializer.save(user=self.request.user)
-        logger.info(
-            f"TimeEntry created: {entry.ritnummer} on {entry.datum} by {self.request.user.email}"
-        )
+        # Standaard schrijft een gebruiker uren op zijn eigen naam. Een beheerder
+        # mag uren invoeren namens iemand anders door 'user' mee te sturen. Het
+        # veld staat in de serializer op alleen-lezen, dus we lezen de keuze hier
+        # zelf uit het verzoek en controleren de rechten.
+        doelgebruiker = self.request.user
+        gekozen = self.request.data.get('user')
+
+        if gekozen and str(gekozen) != str(self.request.user.id):
+            if not (self.request.user.is_superuser or self.request.user.rol == 'admin'):
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied(
+                    'Alleen een beheerder kan uren invoeren voor een andere gebruiker.'
+                )
+
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            from rest_framework.exceptions import ValidationError
+            from apps.accounts.models import User
+
+            try:
+                doelgebruiker = User.objects.get(id=gekozen, is_active=True)
+            except (User.DoesNotExist, DjangoValidationError, ValueError):
+                raise ValidationError({'user': 'Onbekende of inactieve gebruiker.'})
+
+        entry = serializer.save(user=doelgebruiker)
+
+        if doelgebruiker != self.request.user:
+            logger.info(
+                f"TimeEntry created for {doelgebruiker.email}: {entry.ritnummer} "
+                f"on {entry.datum} by admin {self.request.user.email}"
+            )
+        else:
+            logger.info(
+                f"TimeEntry created: {entry.ritnummer} on {entry.datum} by {self.request.user.email}"
+            )
     
     def perform_update(self, serializer):
         instance = self.get_object()

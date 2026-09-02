@@ -31,6 +31,8 @@ export interface TimeEntryCreate {
   eind: string
   pauze?: string
   kilometerheffing_bedrag?: string | null
+  /** Alleen een beheerder mag uren op naam van een andere gebruiker zetten. */
+  user?: string
 }
 
 export interface TimeEntryUpdate extends Partial<TimeEntryCreate> {

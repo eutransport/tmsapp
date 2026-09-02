@@ -33,7 +33,8 @@ import {
   formatMinutesToDuration,
 } from '@/api/timetracking'
 import { getVehiclesForDropdown } from '@/api/fleet'
-import { Vehicle } from '@/types'
+import { getUsers } from '@/api/users'
+import { User, Vehicle } from '@/types'
 import { useAuthStore } from '@/stores/authStore'
 
 // Modal component
@@ -138,6 +139,7 @@ function ConfirmDialog({
 function TimeEntryForm({
   entry,
   vehicles,
+  selectableUsers = [],
   onSave,
   onCancel,
   isLoading,
@@ -145,12 +147,15 @@ function TimeEntryForm({
 }: {
   entry?: TimeEntry
   vehicles: Vehicle[]
+  /** Gevuld voor beheerders: uren kunnen dan namens iemand anders worden ingevoerd. */
+  selectableUsers?: User[]
   onSave: (data: TimeEntryCreate[] | TimeEntryUpdate) => void
   onCancel: () => void
   isLoading: boolean
   t: (key: string) => string
 }) {
   const isEditMode = !!entry
+  const kanVoorAnderInvoeren = !isEditMode && selectableUsers.length > 0
 
   function parsePauze(pauze: string): number {
     if (!pauze) return 0
@@ -164,6 +169,8 @@ function TimeEntryForm({
   // Shared state (datum + kenteken)
   const [datum, setDatum] = useState(entry?.datum || new Date().toISOString().split('T')[0])
   const [kenteken, setKenteken] = useState(entry?.kenteken || '')
+  // Leeg betekent: op naam van de ingelogde gebruiker zelf.
+  const [gebruikerId, setGebruikerId] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   // Per-trip state
@@ -283,6 +290,7 @@ function TimeEntryForm({
         kilometerheffing_bedrag: trip.heeft_kilometerheffing
           ? trip.kilometerheffing_bedrag.replace(',', '.').trim()
           : null,
+        ...(gebruikerId ? { user: gebruikerId } : {}),
       }))
       onSave(entries)
     }
@@ -319,6 +327,33 @@ function TimeEntryForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Alleen voor beheerders: uren invoeren namens een andere gebruiker */}
+      {kanVoorAnderInvoeren && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Uren invoeren voor
+          </label>
+          <select
+            value={gebruikerId}
+            onChange={(e) => setGebruikerId(e.target.value)}
+            className="input"
+          >
+            <option value="">Mezelf</option>
+            {selectableUsers.map(u => (
+              <option key={u.id} value={u.id}>
+                {u.full_name || `${u.voornaam} ${u.achternaam}`.trim() || u.email}
+                {u.bedrijf ? ` - ${u.bedrijf}` : ''}
+              </option>
+            ))}
+          </select>
+          {gebruikerId && (
+            <p className="text-xs text-amber-600 mt-1">
+              Deze uren komen op naam van de gekozen gebruiker te staan.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Shared: Datum */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -496,7 +531,7 @@ function TimeEntryForm({
               </label>
               {trip.heeft_kilometerheffing && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Bedrag (€)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bedrag (ï¿½)</label>
                   <input
                     type="text"
                     inputMode="decimal"
@@ -683,6 +718,7 @@ export default function TimeEntriesPage() {
   const { user } = useAuthStore()
   const [entries, setEntries] = useState<TimeEntry[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [selectableUsers, setSelectableUsers] = useState<User[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isActionLoading, setIsActionLoading] = useState(false)
@@ -743,6 +779,24 @@ export default function TimeEntriesPage() {
     }
     fetchVehicles()
   }, [])
+
+  // Alleen een beheerder kan uren voor een andere gebruiker invoeren, dus
+  // halen we de lijst met gebruikers alleen dan op.
+  useEffect(() => {
+    if (!isAdmin) {
+      setSelectableUsers([])
+      return
+    }
+    const fetchUsers = async () => {
+      try {
+        const data = await getUsers({ is_active: 'true', page_size: 200, ordering: 'voornaam' })
+        setSelectableUsers(data.results || [])
+      } catch (err) {
+        console.error('Error fetching users:', err)
+      }
+    }
+    fetchUsers()
+  }, [isAdmin])
 
   // Debounce search query for live search
   useEffect(() => {
@@ -1464,6 +1518,7 @@ export default function TimeEntriesPage() {
       >
         <TimeEntryForm
           vehicles={vehicles}
+          selectableUsers={selectableUsers}
           onSave={handleCreate}
           onCancel={() => setShowCreateModal(false)}
           isLoading={isActionLoading}
