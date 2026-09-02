@@ -85,6 +85,15 @@ export async function getTemplate(id: string): Promise<InvoiceTemplate> {
   return response.data
 }
 
+/**
+ * Per template het bedrijf waarmee die template in het verleden het vaakst is
+ * gefactureerd. Sleutel is het template-id, waarde het bedrijf-id.
+ */
+export async function getTemplateBedrijfSuggesties(): Promise<Record<string, string>> {
+  const response = await api.get('/invoicing/templates/bedrijf-suggesties/')
+  return response.data
+}
+
 export interface TemplateCreate {
   naam: string
   beschrijving?: string

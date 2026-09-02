@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from django.utils import timezone
 from django.http import JsonResponse
-from django.db.models import Sum, Q, Count
+from django.db.models import Sum, Q, Count, Max
 from django.db.models.functions import TruncWeek, TruncMonth, TruncQuarter, TruncYear
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -97,6 +97,47 @@ class InvoiceTemplateViewSet(viewsets.ModelViewSet):
         )
         
         return Response(InvoiceTemplateSerializer(new_template).data, status=status.HTTP_201_CREATED)
+    
+    @action(detail=False, methods=['get'], url_path='bedrijf-suggesties')
+    def bedrijf_suggesties(self, request):
+        """
+        Geeft per template het bedrijf dat er in het verleden het vaakst mee is
+        gefactureerd. Zo kan het scherm 'Nieuwe factuur' bij het kiezen van een
+        template alvast het juiste bedrijf invullen.
+
+        De namen van templates en bedrijven lopen niet gelijk ('Dachser Muller'
+        hoort bij 'DACHSER Netherlands Food  Logistics B.V'), dus raden op naam
+        gaat mis. De feitelijke facturen zijn de betrouwbare bron.
+
+        Antwoord: {"<template_id>": "<bedrijf_id>", ...}
+        """
+        facturen = Invoice.objects.filter(
+            template__isnull=False,
+            bedrijf__isnull=False,
+        )
+
+        # Alleen bedrijven die deze gebruiker mag zien voorstellen.
+        toegestaan = accessible_company_ids(request.user)
+        if toegestaan is not None:
+            facturen = facturen.filter(bedrijf_id__in=toegestaan)
+
+        rijen = (
+            facturen
+            .values('template_id', 'bedrijf_id')
+            .annotate(aantal=Count('id'), laatst=Max('factuurdatum'))
+            .order_by('template_id', '-aantal', '-laatst')
+        )
+
+        # Per template wint het meest gebruikte bedrijf; bij gelijke stand het
+        # bedrijf van de meest recente factuur. De ordering hierboven zet die
+        # winnaar vooraan, dus de eerste regel per template is de juiste.
+        suggesties = {}
+        for rij in rijen:
+            sleutel = str(rij['template_id'])
+            if sleutel not in suggesties:
+                suggesties[sleutel] = str(rij['bedrijf_id'])
+
+        return Response(suggesties)
     
     @action(detail=True, methods=['get'])
     def export(self, request, pk=None):

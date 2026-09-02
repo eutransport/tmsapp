@@ -22,7 +22,7 @@ import {
   ChevronRightIcon,
   ReceiptPercentIcon,
 } from '@heroicons/react/24/outline'
-import { getTemplates, createInvoice, createInvoiceLine, getNextInvoiceNumber, getInvoice, getInvoiceLines, updateInvoice, deleteInvoiceLine } from '@/api/invoices'
+import { getTemplates, getTemplateBedrijfSuggesties, createInvoice, createInvoiceLine, getNextInvoiceNumber, getInvoice, getInvoiceLines, updateInvoice, deleteInvoiceLine } from '@/api/invoices'
 import { getCompanies } from '@/api/companies'
 import { getMijnAdministraties, Administratie } from '@/api/administraties'
 import { getTimeEntries, markKilometerheffingGefactureerd } from '@/api/timetracking'
@@ -233,25 +233,25 @@ function TemplateCard({
     <div
       onClick={onSelect}
       className={`
-        border-2 rounded-lg p-4 cursor-pointer transition-all
+        border-2 rounded-lg p-2.5 cursor-pointer transition-all
         ${selected 
           ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200' 
           : 'border-gray-200 hover:border-gray-300 bg-white'}
       `}
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="font-semibold text-gray-900">{template.naam}</h3>
+      <div className="flex items-start justify-between gap-1.5">
+        <div className="min-w-0">
+          <h3 className="font-semibold text-gray-900 text-sm leading-tight break-words">{template.naam}</h3>
           {template.beschrijving && (
-            <p className="text-sm text-gray-500 mt-1">{template.beschrijving}</p>
+            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{template.beschrijving}</p>
           )}
         </div>
         {selected && (
-          <CheckCircleIcon className="h-6 w-6 text-primary-500 flex-shrink-0" />
+          <CheckCircleIcon className="h-4 w-4 text-primary-500 flex-shrink-0" />
         )}
       </div>
       {template.layout && (
-        <div className="mt-3 text-xs text-gray-400">
+        <div className="mt-1 text-[11px] text-gray-400">
           {(template.layout as TemplateLayout).columns?.length || 0} kolommen
         </div>
       )}
@@ -1756,6 +1756,9 @@ export default function InvoiceCreatePage() {
   
   // Data state
   const [templates, setTemplates] = useState<InvoiceTemplate[]>([])
+  // Per template het bedrijf dat er eerder mee is gefactureerd, zodat stap 2
+  // zichzelf invult zodra er een template gekozen wordt.
+  const [bedrijfPerTemplate, setBedrijfPerTemplate] = useState<Record<string, string>>({})
   const [companies, setCompanies] = useState<Company[]>([])
   const [administraties, setAdministraties] = useState<Administratie[]>([])
   
@@ -1851,14 +1854,18 @@ export default function InvoiceCreatePage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [templatesRes, companiesRes, administratiesRes] = await Promise.all([
+        const [templatesRes, companiesRes, administratiesRes, suggestiesRes] = await Promise.all([
           getTemplates(true),
           getCompanies({ page_size: 1000 }),
           getMijnAdministraties(),
+          // Mag mislukken: zonder suggesties werkt het scherm gewoon, alleen
+          // vult het bedrijf zich dan niet vanzelf in.
+          getTemplateBedrijfSuggesties().catch(() => ({} as Record<string, string>)),
         ])
         setTemplates(templatesRes.results)
         setCompanies(companiesRes.results)
         setAdministraties(administratiesRes)
+        setBedrijfPerTemplate(suggestiesRes)
 
         if (reimportId) {
           // Reimport mode: prefill from existing invoice
@@ -3565,15 +3572,26 @@ export default function InvoiceCreatePage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
             {templates.map((template) => (
               <TemplateCard
                 key={template.id}
                 template={template}
                 selected={selectedTemplate?.id === template.id}
                 onSelect={() => {
+                  const andereTemplate = selectedTemplate?.id !== template.id
                   setSelectedTemplate(template)
                   setLines([]) // Reset lines when changing template
+                  // Vul meteen het bedrijf in waarmee deze template eerder is
+                  // gefactureerd. Alleen bij het wisselen van template, zodat
+                  // een handmatig gekozen bedrijf niet overschreven wordt als
+                  // je nog eens op dezelfde kaart klikt.
+                  if (andereTemplate) {
+                    const bedrijfId = bedrijfPerTemplate[template.id]
+                    if (bedrijfId && companies.some(c => c.id === bedrijfId)) {
+                      setSelectedCompany(bedrijfId)
+                    }
+                  }
                 }}
               />
             ))}
