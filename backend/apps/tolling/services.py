@@ -340,6 +340,19 @@ def _pdf_tekst(waarde) -> str:
     return escape(str(waarde or ''))
 
 
+def _lokaal(tijdstip):
+    """Zet een tijdstip om naar de lokale tijdzone.
+
+    Tijdstippen staan in UTC in de database. Een export toonde ze eerder
+    rechtstreeks, waardoor een passage van 05:45 als 03:45 op papier kwam. Ook
+    het onderscheid doordeweeks/weekend liep daarop mis bij passages rond
+    middernacht.
+    """
+    if tijdstip is None:
+        return None
+    return timezone.localtime(tijdstip) if timezone.is_aware(tijdstip) else tijdstip
+
+
 def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
     from openpyxl import Workbook
     from openpyxl.styles import PatternFill, Font
@@ -366,8 +379,10 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
     # gewisseld beide ritnummers apart terugkomt in de uitdraai.
     per_rit: dict[str, list] = {}
     for e in events:
+        start_lokaal = _lokaal(e.start_at)
+        eind_lokaal = _lokaal(e.end_at)
         is_priv = bool(getattr(e, 'is_private', False))
-        is_wknd = bool(e.start_at and e.start_at.isoweekday() >= 6)
+        is_wknd = bool(start_lokaal and start_lokaal.isoweekday() >= 6)
         rit = (getattr(e, 'ritnummer', '') or '').strip()
         if is_priv:
             type_label = 'Privé'
@@ -376,8 +391,8 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
         else:
             type_label = 'Doordeweeks'
         ws.append([
-            e.start_at.strftime('%Y-%m-%d %H:%M'),
-            e.end_at.strftime('%Y-%m-%d %H:%M'),
+            start_lokaal.strftime('%d-%m-%Y %H:%M') if start_lokaal else '',
+            eind_lokaal.strftime('%d-%m-%Y %H:%M') if eind_lokaal else '',
             _xlsx_tekst(rit),
             type_label,
             float(e.distance_km),
@@ -629,8 +644,10 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
     # zichtbaar blijft in de uitdraai.
     per_rit: dict[str, list] = {}
     for idx, e in enumerate(events, start=1):
+        start_lokaal = _lokaal(e.start_at)
+        eind_lokaal = _lokaal(e.end_at)
         is_priv = bool(getattr(e, 'is_private', False))
-        is_wknd = bool(e.start_at and e.start_at.isoweekday() >= 6)
+        is_wknd = bool(start_lokaal and start_lokaal.isoweekday() >= 6)
         rit = (getattr(e, 'ritnummer', '') or '').strip()
         if is_priv:
             type_label = 'Privé'
@@ -656,8 +673,8 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
             bucket[1] += Decimal(e.amount)
             bucket[2] += 1
         data.append([
-            e.start_at.strftime('%Y-%m-%d %H:%M'),
-            e.end_at.strftime('%Y-%m-%d %H:%M'),
+            start_lokaal.strftime('%d-%m-%Y %H:%M') if start_lokaal else '',
+            eind_lokaal.strftime('%d-%m-%Y %H:%M') if eind_lokaal else '',
             rit,
             type_label,
             f'{float(e.distance_km):.3f}',

@@ -103,10 +103,18 @@ def _shift_week(year: int, week: int, offset: int) -> tuple[int, int]:
     return iso[0], iso[1]
 
 
+# Maandnamen staan hier vast; calendar.month_name volgt de locale van de
+# server en leverde daardoor Engelse namen op in exports en PDF's.
+NL_MAANDEN = (
+    '', 'januari', 'februari', 'maart', 'april', 'mei', 'juni',
+    'juli', 'augustus', 'september', 'oktober', 'november', 'december',
+)
+
+
 def _period_label(period: str, year: int, index: int) -> str:
     if period == 'month':
-        month_name = calendar.month_name[index]
-        return f"{month_name} {year}"
+        maand = NL_MAANDEN[index] if 1 <= index <= 12 else str(index)
+        return f"{maand.capitalize()} {year}"
     return f"Week {index:02d} {year}"
 
 

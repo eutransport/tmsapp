@@ -129,7 +129,7 @@ class TollingEvent(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.license_plate_raw} {self.start_at:%Y-%m-%d %H:%M} €{self.amount}"
+        return f"{self.license_plate_raw} {self.start_at:%d-%m-%Y %H:%M} €{self.amount}"
 
 
 class PrivateTollRegistration(models.Model):
