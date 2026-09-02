@@ -1320,7 +1320,10 @@ function HistorieView() {
   return (
     <div className="space-y-6">
       {/* Search Bar and Year Filter */}
-      <div className="card p-4">
+      {/* overflow-visible: .card knipt standaard af (overflow-hidden), waardoor de
+          lijst met zoekresultaten achter de rand verdween. relative + z-20 zet de
+          kaart boven het rapport eronder. */}
+      <div className="card p-4 overflow-visible relative z-20">
         <div className="flex flex-col md:flex-row gap-4">
           {/* Chauffeur Search */}
           <div className="flex-1">
@@ -1359,7 +1362,7 @@ function HistorieView() {
               
               {/* Search Results Dropdown */}
               {searchFocused && searchQuery && !selectedDriver && filteredDrivers.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                <div className="absolute z-30 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                   {filteredDrivers.map((driver) => (
                     <button
                       key={driver.id}
@@ -1379,7 +1382,7 @@ function HistorieView() {
               )}
               
               {searchFocused && searchQuery && !selectedDriver && filteredDrivers.length === 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4 text-center text-gray-500">
+                <div className="absolute z-30 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4 text-center text-gray-500">
                   {t('drivers.noDrivers')}
                 </div>
               )}
