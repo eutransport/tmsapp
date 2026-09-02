@@ -110,3 +110,94 @@ def _sorteersleutel(nummer: str) -> tuple[int, int, str]:
 def als_label(nummers) -> str:
     """Meerdere ritnummers op dezelfde dag komen naast elkaar te staan."""
     return ' / '.join(sorted(nummers or [], key=_sorteersleutel))
+
+
+def _tijdvakken(kentekens, datums) -> dict:
+    """Ingediende ritten met hun begin- en eindtijd.
+
+    Levert ``{(kenteken, datum): [(begintijd, eindtijd, ritnummers), ...]}``.
+    Een rit zonder ingevulde tijden komt er niet in; die valt terug op de
+    dagwaarde.
+    """
+    from apps.timetracking.models import ImportedTimeEntry, TimeEntry
+
+    index = _kentekenindex()
+    vakken: dict = defaultdict(list)
+
+    def voeg_toe(ruw_kenteken, datum, ritnummer, begin, eind) -> None:
+        if not (begin and eind):
+            return
+        nummers = _losse_nummers(ritnummer)
+        if not nummers:
+            return
+        norm = normalize_plate(ruw_kenteken)
+        norm = index.get(norm, norm)
+        if norm not in kentekens:
+            return
+        vakken[(norm, datum)].append((begin, eind, nummers))
+
+    for kenteken, datum, ritnummer, begin, eind in (
+        TimeEntry.objects.filter(datum__in=datums)
+        .values_list('kenteken', 'datum', 'ritnummer', 'aanvang', 'eind')
+    ):
+        voeg_toe(kenteken, datum, ritnummer, begin, eind)
+
+    for kenteken, datum, ritlijst, begin, eind in (
+        ImportedTimeEntry.objects.filter(datum__in=datums)
+        .values_list('kenteken_import', 'datum', 'ritlijst',
+                     'begintijd_rit', 'eindtijd_rit')
+    ):
+        voeg_toe(kenteken, datum, ritlijst, begin, eind)
+
+    return dict(vakken)
+
+
+def ritnummers_voor_events(events) -> dict:
+    """Zoek per tolregel het ritnummer dat bij die registratie hoort.
+
+    Reed een wagen op een dag meerdere ritten, dan bepaalt het tijdstip van
+    de passage bij welke rit de regel hoort. Valt de passage buiten alle
+    ingediende tijden, of zijn er geen tijden ingevuld, dan komen alle
+    ritnummers van die dag naast elkaar te staan. Is er niets ingediend, dan
+    is de waarde leeg en houdt de beller zijn eigen terugval over.
+
+    De dag en het tijdstip bepalen we in de lokale tijdzone, net als de datum
+    die in de uitdraai komt te staan; anders valt een nachtrit op de
+    verkeerde dag.
+    """
+    from django.utils import timezone
+
+    sleutels: dict = {}
+    tijden: dict = {}
+    kentekens: set = set()
+    datums: set = set()
+    for ev in events:
+        start = getattr(ev, 'start_at', None)
+        if not start:
+            continue
+        lokaal = timezone.localtime(start) if timezone.is_aware(start) else start
+        sleutel = (getattr(ev, 'license_plate_normalized', '') or '', lokaal.date())
+        sleutels[ev.id] = sleutel
+        tijden[ev.id] = lokaal.time()
+        kentekens.add(sleutel[0])
+        datums.add(sleutel[1])
+
+    if not sleutels:
+        return {}
+
+    per_dag = ritnummers_per_dag(kentekens, datums)
+    vakken = _tijdvakken(kentekens, datums)
+
+    resultaat: dict = {}
+    for ev_id, sleutel in sleutels.items():
+        moment = tijden[ev_id]
+        gekozen = None
+        for begin, eind, nummers in vakken.get(sleutel, ()):
+            # Loopt een rit over middernacht, dan telt alles vanaf de
+            # begintijd tot het einde van de dag mee.
+            binnen = begin <= moment <= eind if begin <= eind else moment >= begin
+            if binnen:
+                gekozen = nummers
+                break
+        resultaat[ev_id] = als_label(gekozen if gekozen else per_dag.get(sleutel, []))
+    return resultaat

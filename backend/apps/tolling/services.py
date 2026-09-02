@@ -357,6 +357,14 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
     from openpyxl import Workbook
     from openpyxl.styles import PatternFill, Font
 
+    from .dagritnummers import ritnummers_voor_events
+
+    events = list(events)
+    # Het ritnummer komt uit de urenregistratie van die dag. Alleen als daar
+    # niets is ingediend valt de regel terug op het ritnummer dat bij de
+    # import van de vloot is overgenomen.
+    dag_ritnummers = ritnummers_voor_events(events)
+
     wb = Workbook()
     ws = wb.active
     ws.title = 'Tolheffing'
@@ -407,7 +415,7 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
         eind_lokaal = _lokaal(e.end_at)
         is_priv = bool(getattr(e, 'is_private', False))
         is_wknd = bool(start_lokaal and start_lokaal.isoweekday() >= 6)
-        rit = (getattr(e, 'ritnummer', '') or '').strip()
+        rit = (dag_ritnummers.get(e.id) or getattr(e, 'ritnummer', '') or '').strip()
         huidige_dag = start_lokaal.date() if start_lokaal else None
         if dag['datum'] is not None and huidige_dag != dag['datum']:
             _schrijf_dagtotaal()
@@ -650,6 +658,14 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
         Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
     )
 
+    from .dagritnummers import ritnummers_voor_events
+
+    events = list(events)
+    # Het ritnummer komt uit de urenregistratie van die dag. Alleen als daar
+    # niets is ingediend valt de regel terug op het ritnummer dat bij de
+    # import van de vloot is overgenomen.
+    dag_ritnummers = ritnummers_voor_events(events)
+
     styles = getSampleStyleSheet()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -701,7 +717,7 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
         eind_lokaal = _lokaal(e.end_at)
         is_priv = bool(getattr(e, 'is_private', False))
         is_wknd = bool(start_lokaal and start_lokaal.isoweekday() >= 6)
-        rit = (getattr(e, 'ritnummer', '') or '').strip()
+        rit = (dag_ritnummers.get(e.id) or getattr(e, 'ritnummer', '') or '').strip()
         huidige_dag = start_lokaal.date() if start_lokaal else None
         if dag['datum'] is not None and huidige_dag != dag['datum']:
             _voeg_dagtotaal_toe()
