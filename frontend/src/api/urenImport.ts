@@ -69,6 +69,23 @@ export interface ImportedEntryFilters {
   kenteken?: string
 }
 
+/** Een ritnummer zoals het in het Excel-bestand staat, met een voorstel. */
+export interface ImportLabel {
+  label: string
+  sleutel: string
+  aantal: number
+  voorstel_user_id: string | null
+  voorstel_user_naam: string
+  voorstel_vehicle_id: string | null
+  voertuig_kenteken: string
+}
+
+/**
+ * Keuze per ritnummer. Lege waarde = bewust niet koppelen, ontbrekende sleutel
+ * = laat het systeem het zelf uitzoeken via de vloot.
+ */
+export type ImportToewijzing = Record<string, { user: string; vehicle: string }>
+
 // API functions
 
 export async function getImportBatches(): Promise<ImportBatch[]> {
@@ -85,11 +102,28 @@ export async function deleteImportBatch(id: string): Promise<void> {
   await api.delete(`/time-entries/imports/${id}/`)
 }
 
-export async function uploadImportFile(file: File, overwrite: boolean = false, skipDuplicates: boolean = false): Promise<ImportBatch> {
+export async function analyseerImportBestand(file: File): Promise<ImportLabel[]> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await api.post('/time-entries/imports/analyse/', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data.labels ?? []
+}
+
+export async function uploadImportFile(
+  file: File,
+  overwrite: boolean = false,
+  skipDuplicates: boolean = false,
+  toewijzingen?: ImportToewijzing,
+): Promise<ImportBatch> {
   const formData = new FormData()
   formData.append('file', file)
   if (overwrite) formData.append('overwrite', 'true')
   if (skipDuplicates) formData.append('skip_duplicates', 'true')
+  if (toewijzingen && Object.keys(toewijzingen).length > 0) {
+    formData.append('toewijzingen', JSON.stringify(toewijzingen))
+  }
   const response = await api.post('/time-entries/imports/upload/', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })

@@ -2560,7 +2560,8 @@ export default function InvoiceCreatePage() {
   }
 
   // NIEUW: strikte match op begin/eindtijd per dag per kenteken.
-  // Alleen tol-events die binnen de rit-tijdrange vallen (± buffer) tellen mee.
+  // Alleen tol-events die binnen de rit-tijdrange vallen tellen mee; er wordt
+  // geen marge rond de begin- en eindtijd gebruikt.
   // Ongematchte events worden getoond zodat de gebruiker kan beslissen of hij
   // ze alsnog wil meenemen.
   const autoAddTollingByHours = async (
@@ -4072,7 +4073,7 @@ export default function InvoiceCreatePage() {
         matched={tollingReview?.matched ?? []}
         unmatched={tollingReview?.unmatched ?? []}
         skipped={tollingReview?.skipped ?? []}
-        bufferMinutes={tollingReview?.bufferMinutes ?? 30}
+        bufferMinutes={tollingReview?.bufferMinutes ?? 0}
         totalRegisteredKm={tollingReview?.totalRegisteredKm}
         onConfirmStrict={() => applyTollingReview(false)}
         onConfirmIncludeAll={() => applyTollingReview(true)}

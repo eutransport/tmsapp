@@ -1159,7 +1159,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                "ritnummer": "E&UTRANS1"},
               ...
             ],
-            "buffer_minutes": 30            # optioneel, default 30
+            "buffer_minutes": 0             # optioneel, default 0 (geen marge)
           }
 
         Response:
@@ -1197,10 +1197,12 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         if not isinstance(raw_ranges, list) or not raw_ranges:
             return Response({'detail': 'ranges is verplicht (lijst).'}, status=400)
 
+        # Standaard geen marge: een tol-event telt alleen mee als het
+        # binnen de gereden begin- en eindtijd van de rit zelf valt.
         try:
-            buffer_minutes = int(request.data.get('buffer_minutes', 30) or 0)
+            buffer_minutes = int(request.data.get('buffer_minutes', 0) or 0)
         except (TypeError, ValueError):
-            buffer_minutes = 30
+            buffer_minutes = 0
         if buffer_minutes < 0:
             buffer_minutes = 0
         if buffer_minutes > 240:

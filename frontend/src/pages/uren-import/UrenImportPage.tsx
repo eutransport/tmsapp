@@ -11,18 +11,25 @@ import {
   ArrowPathIcon,
   TableCellsIcon,
   DocumentDuplicateIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import {
   getImportBatches,
   deleteImportBatch,
   uploadImportFile,
+  analyseerImportBestand,
   getBatchEntries,
   getWeekComparison,
   ImportBatch,
+  ImportLabel,
+  ImportToewijzing,
   ImportedTimeEntry,
   WeekComparison,
 } from '@/api/urenImport'
+import { getUsers } from '@/api/users'
+import { getVehiclesForDropdown } from '@/api/fleet'
+import { User, Vehicle } from '@/types'
 import clsx from '@/utils/clsx'
 
 // Tab type
@@ -110,6 +117,13 @@ export default function UrenImportPage() {
   // Duplicate detection
   const [duplicateInfo, setDuplicateInfo] = useState<{ file: File; duplicates: number; total: number } | null>(null)
 
+  // Koppeling per ritnummer, gevraagd voordat het bestand wordt ingelezen
+  const [koppeling, setKoppeling] = useState<{ file: File; labels: ImportLabel[] } | null>(null)
+  const [keuzes, setKeuzes] = useState<ImportToewijzing>({})
+  const [gebruikers, setGebruikers] = useState<User[]>([])
+  const [wagens, setWagens] = useState<Vehicle[]>([])
+  const [analyseren, setAnalyseren] = useState(false)
+
   const loadBatches = useCallback(async () => {
     try {
       setLoading(true)
@@ -126,10 +140,29 @@ export default function UrenImportPage() {
     loadBatches()
   }, [loadBatches])
 
-  const doUpload = async (file: File, overwrite: boolean = false) => {
+  // De keuzelijsten met chauffeurs en wagens zijn voor elk toewijzingsvenster
+  // hetzelfde, dus die halen we eenmalig op.
+  useEffect(() => {
+    const laadKeuzelijsten = async () => {
+      try {
+        const data = await getUsers({ is_active: 'true', page_size: 200, ordering: 'voornaam' })
+        setGebruikers(data.results || [])
+      } catch {
+        // Niet fataal: het venster toont dan alleen de voorstellen.
+      }
+      try {
+        setWagens(await getVehiclesForDropdown())
+      } catch {
+        // Idem.
+      }
+    }
+    laadKeuzelijsten()
+  }, [])
+
+  const doUpload = async (file: File, overwrite: boolean = false, toewijzingen?: ImportToewijzing) => {
     try {
       setUploading(true)
-      const batch = await uploadImportFile(file, overwrite)
+      const batch = await uploadImportFile(file, overwrite, false, toewijzingen)
       toast.success(
         t('urenImport.uploadSuccess', '{{count}} rijen geïmporteerd, {{matched}} gekoppeld', {
           count: batch.totaal_rijen,
@@ -160,14 +193,47 @@ export default function UrenImportPage() {
     if (!file) return
     // Reset file input
     if (fileInputRef.current) fileInputRef.current.value = ''
-    await doUpload(file)
+
+    // Eerst de ritnummers uit het bestand halen en tonen, zodat de gebruiker
+    // per ritnummer een chauffeur kan aanwijzen voordat er iets wordt opgeslagen.
+    try {
+      setAnalyseren(true)
+      const labels = await analyseerImportBestand(file)
+      if (labels.length === 0) {
+        await doUpload(file)
+        return
+      }
+      const voorgevuld: ImportToewijzing = {}
+      labels.forEach(l => {
+        voorgevuld[l.label] = {
+          user: l.voorstel_user_id || '',
+          vehicle: l.voorstel_vehicle_id || '',
+        }
+      })
+      setKeuzes(voorgevuld)
+      setKoppeling({ file, labels })
+    } catch (err: any) {
+      // Lukt de analyse niet, dan gaat de import gewoon zoals voorheen door.
+      const message = err?.response?.data?.error
+      if (message) toast.error(message)
+      else await doUpload(file)
+    } finally {
+      setAnalyseren(false)
+    }
+  }
+
+  const bevestigKoppeling = async () => {
+    if (!koppeling) return
+    const file = koppeling.file
+    setKoppeling(null)
+    await doUpload(file, false, keuzes)
   }
 
   const handleDuplicateOverwrite = async () => {
     if (!duplicateInfo) return
     const file = duplicateInfo.file
     setDuplicateInfo(null)
-    await doUpload(file, true)
+    await doUpload(file, true, keuzes)
   }
 
   const handleDuplicateSkip = async () => {
@@ -177,7 +243,7 @@ export default function UrenImportPage() {
     // Upload with skip_duplicates mode
     try {
       setUploading(true)
-      const batch = await uploadImportFile(file, false, true)
+      const batch = await uploadImportFile(file, false, true, keuzes)
       toast.success(
         t('urenImport.uploadSuccess', '{{count}} rijen geïmporteerd, {{matched}} gekoppeld', {
           count: batch.totaal_rijen,
@@ -294,19 +360,21 @@ export default function UrenImportPage() {
               {t('urenImport.uploadTitle', 'Excel bestand uploaden')}
             </h3>
             <p className="mt-2 text-sm text-gray-500">
-              {t('urenImport.uploadDesc', 'Upload een Excel bestand (.xlsx) met uren van het planbureau. De kentekens worden automatisch gekoppeld aan chauffeurs.')}
+              {t('urenImport.uploadDesc', 'Upload een Excel bestand (.xlsx) met uren van het planbureau. Je krijgt daarna de ritnummers te zien en kunt per ritnummer de chauffeur aanwijzen.')}
             </p>
             <div className="mt-6">
               <label className={clsx(
                 'inline-flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium cursor-pointer transition-colors',
-                uploading
+                uploading || analyseren
                   ? 'bg-gray-100 text-gray-400'
                   : 'bg-primary-600 text-white hover:bg-primary-700'
               )}>
-                {uploading ? (
+                {uploading || analyseren ? (
                   <>
                     <ArrowPathIcon className="w-5 h-5 animate-spin" />
-                    {t('urenImport.uploading', 'Bezig met importeren...')}
+                    {analyseren
+                      ? 'Bestand lezen...'
+                      : t('urenImport.uploading', 'Bezig met importeren...')}
                   </>
                 ) : (
                   <>
@@ -319,7 +387,7 @@ export default function UrenImportPage() {
                   type="file"
                   accept=".xlsx,.xls"
                   onChange={handleUpload}
-                  disabled={uploading}
+                  disabled={uploading || analyseren}
                   className="hidden"
                 />
               </label>
@@ -858,6 +926,102 @@ export default function UrenImportPage() {
         message={t('urenImport.deleteMessage', 'Weet je zeker dat je deze import en alle bijbehorende regels wilt verwijderen? Dit kan niet ongedaan worden gemaakt.')}
         isLoading={deleting}
       />
+
+      {/* Koppeling per ritnummer */}
+      {koppeling && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50" onClick={() => setKoppeling(null)} />
+            <div className="relative bg-white rounded-xl shadow-xl w-full max-w-3xl">
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex-shrink-0 w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                    <UserGroupIcon className="w-5 h-5 text-primary-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Koppelen per ritnummer</h3>
+                    <p className="text-sm text-gray-500">{koppeling.file.name}</p>
+                  </div>
+                </div>
+                <p className="text-gray-600 mb-4 text-sm">
+                  Deze ritnummers staan in het bestand. Chauffeur en kenteken zijn alvast
+                  ingevuld met wat het systeem er zelf bij zoekt. Is er deze week met een
+                  andere wagen of door een andere chauffeur gereden, pas het hier aan.
+                  Laat leeg om niet te koppelen.
+                </p>
+
+                <div className="border rounded-lg divide-y max-h-96 overflow-y-auto">
+                  <div className="hidden sm:flex gap-2 px-3 py-2 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    <div className="w-40 flex-shrink-0">Ritnummer</div>
+                    <div className="flex-1">Chauffeur</div>
+                    <div className="flex-1">Kenteken deze week</div>
+                  </div>
+                  {koppeling.labels.map(l => {
+                    const keuze = keuzes[l.label] || { user: '', vehicle: '' }
+                    return (
+                      <div key={l.sleutel} className="flex flex-col sm:flex-row sm:items-center gap-2 p-3">
+                        <div className="sm:w-40 flex-shrink-0">
+                          <div className="font-medium text-gray-900">{l.label}</div>
+                          <div className="text-xs text-gray-500">
+                            {l.aantal} {l.aantal === 1 ? 'regel' : 'regels'}
+                          </div>
+                        </div>
+                        <select
+                          value={keuze.user}
+                          onChange={(e) => setKeuzes(prev => ({
+                            ...prev,
+                            [l.label]: { ...keuze, user: e.target.value },
+                          }))}
+                          className="input flex-1"
+                        >
+                          <option value="">Geen chauffeur</option>
+                          {gebruikers.map(u => (
+                            <option key={u.id} value={u.id}>
+                              {u.full_name || `${u.voornaam} ${u.achternaam}`.trim() || u.email}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={keuze.vehicle}
+                          onChange={(e) => setKeuzes(prev => ({
+                            ...prev,
+                            [l.label]: { ...keuze, vehicle: e.target.value },
+                          }))}
+                          className="input flex-1"
+                        >
+                          <option value="">Geen kenteken</option>
+                          {wagens.map(v => (
+                            <option key={v.id} value={v.id}>
+                              {v.kenteken}{v.ritnummer ? ` · ${v.ritnummer}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    onClick={() => setKoppeling(null)}
+                    disabled={uploading}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    onClick={bevestigKoppeling}
+                    disabled={uploading}
+                    className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                  >
+                    {uploading ? 'Bezig...' : 'Importeren'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Duplicate detection dialog */}
       {duplicateInfo && (

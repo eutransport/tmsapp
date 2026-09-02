@@ -1,8 +1,10 @@
+import json
 import logging
 import os
 from datetime import timedelta
 from decimal import Decimal
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import FileResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -1661,6 +1663,40 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
         instance.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=False, methods=['post'], url_path='analyse')
+    def analyse(self, request):
+        """Som de ritnummers in een Excel-bestand op, met een voorstel per label.
+
+        Wordt aangeroepen voordat er daadwerkelijk geimporteerd wordt, zodat de
+        gebruiker per ritnummer kan kiezen aan welke chauffeur de regels
+        gekoppeld moeten worden. Er wordt niets opgeslagen.
+        """
+        from .import_service import analyseer_labels
+
+        user = request.user
+        if not (user.is_superuser or user.rol in ['admin', 'gebruiker']):
+            return Response({'error': 'Geen toegang.'}, status=status.HTTP_403_FORBIDDEN)
+
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'error': 'Geen bestand geüpload.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not file_obj.name.endswith(('.xlsx', '.xls')):
+            return Response(
+                {'error': 'Alleen Excel bestanden (.xlsx, .xls) zijn toegestaan.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            labels = analyseer_labels(file_obj)
+        except Exception as e:
+            logger.error(f"Analyse van importbestand mislukt: {e}", exc_info=True)
+            return Response(
+                {'error': f'Bestand kon niet gelezen worden: {e}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return Response({'labels': labels})
+
     @action(detail=False, methods=['post'], url_path='upload')
     def upload(self, request):
         """Upload and import an Excel file."""
@@ -1683,6 +1719,81 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
         overwrite = request.data.get('overwrite', '').lower() in ('true', '1', 'yes')
         skip_duplicates = request.data.get('skip_duplicates', '').lower() in ('true', '1', 'yes')
 
+        # Optionele handmatige koppeling per ritnummer:
+        #   {"E&UTRANS3": {"user": "<id>", "vehicle": "<id>"}}
+        # Een lege waarde betekent bewust niet koppelen; een ontbrekende sleutel
+        # betekent: laat de automatische route via de vloot zijn werk doen.
+        toewijzingen = None
+        rauwe_toewijzing = request.data.get('toewijzingen')
+        if rauwe_toewijzing:
+            try:
+                gekozen = json.loads(rauwe_toewijzing) if isinstance(rauwe_toewijzing, str) else rauwe_toewijzing
+            except (TypeError, ValueError):
+                return Response(
+                    {'error': 'Toewijzing kon niet gelezen worden.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if not isinstance(gekozen, dict):
+                return Response(
+                    {'error': 'Toewijzing moet een lijst van ritnummer naar keuze zijn.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            from apps.accounts.models import User as AppUser
+            from apps.fleet.models import Vehicle
+
+            gevraagde_users = set()
+            gevraagde_wagens = set()
+            for keuze in gekozen.values():
+                if not isinstance(keuze, dict):
+                    return Response(
+                        {'error': 'Toewijzing moet per ritnummer een chauffeur en/of voertuig bevatten.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                if keuze.get('user'):
+                    gevraagde_users.add(str(keuze['user']))
+                if keuze.get('vehicle'):
+                    gevraagde_wagens.add(str(keuze['vehicle']))
+
+            try:
+                gebruikers = {
+                    str(u.id): u
+                    for u in AppUser.objects.filter(id__in=gevraagde_users, is_active=True)
+                } if gevraagde_users else {}
+                wagens = {
+                    str(v.id): v
+                    for v in Vehicle.objects.filter(id__in=gevraagde_wagens)
+                } if gevraagde_wagens else {}
+            except (ValueError, DjangoValidationError):
+                return Response(
+                    {'error': 'Toewijzing bevat een ongeldige verwijzing.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if gevraagde_users - set(gebruikers):
+                return Response(
+                    {'error': 'Een of meer gekozen chauffeurs bestaan niet of zijn inactief.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if gevraagde_wagens - set(wagens):
+                return Response(
+                    {'error': 'Een of meer gekozen voertuigen bestaan niet.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            toewijzingen = {}
+            for label, keuze in gekozen.items():
+                sleutel = _normalize_kenteken(label)
+                if not sleutel:
+                    continue
+                blok = {}
+                if 'user' in keuze:
+                    blok['user'] = gebruikers.get(str(keuze['user'])) if keuze.get('user') else None
+                if 'vehicle' in keuze:
+                    blok['vehicle'] = wagens.get(str(keuze['vehicle'])) if keuze.get('vehicle') else None
+                if blok:
+                    toewijzingen[sleutel] = blok
+
         # Check for duplicates (unless user already chose to overwrite or skip)
         if not overwrite and not skip_duplicates:
             try:
@@ -1703,7 +1814,11 @@ class ImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
                 file_obj.seek(0)
 
         try:
-            batch = import_excel(file_obj, file_obj.name, user, overwrite=overwrite, skip_duplicates=skip_duplicates)
+            batch = import_excel(
+                file_obj, file_obj.name, user,
+                overwrite=overwrite, skip_duplicates=skip_duplicates,
+                toewijzingen=toewijzingen,
+            )
         except Exception as e:
             logger.error(f"Import failed: {e}", exc_info=True)
             return Response(

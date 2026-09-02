@@ -138,6 +138,51 @@ def _normalize_kenteken(excel_kenteken):
     return str(excel_kenteken).lower().replace('&', '').replace(' ', '').replace('-', '')
 
 
+def analyseer_labels(file_obj):
+    """Som de ritnummers/kentekens op die in het Excel-bestand voorkomen.
+
+    Per label wordt teruggegeven hoeveel regels er zijn en welke chauffeur het
+    systeem er zelf bij zou zoeken. De gebruiker kan die keuze bij het
+    importeren overrulen; zie `import_excel(..., toewijzingen=...)`.
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(file_obj, data_only=True, read_only=True)
+    ws = wb.active
+    rows = list(ws.iter_rows(min_row=3, values_only=True))
+    wb.close()
+
+    kenteken_map = _build_kenteken_mapping()
+
+    gevonden = {}
+    for row in rows:
+        if not row or len(row) < 5:
+            continue
+        label = str(row[4]).strip() if row[4] else ''
+        if not label:
+            continue
+        sleutel = _normalize_kenteken(label)
+        blok = gevonden.setdefault(sleutel, {'label': label, 'aantal': 0})
+        blok['aantal'] += 1
+
+    resultaat = []
+    for sleutel, blok in gevonden.items():
+        match = kenteken_map.get(sleutel)
+        gebruiker = match['user'] if match else None
+        wagen = match['vehicle'] if match else None
+        resultaat.append({
+            'label': blok['label'],
+            'sleutel': sleutel,
+            'aantal': blok['aantal'],
+            'voorstel_user_id': str(gebruiker.id) if gebruiker else None,
+            'voorstel_user_naam': gebruiker.full_name if gebruiker else '',
+            'voorstel_vehicle_id': str(wagen.id) if wagen else None,
+            'voertuig_kenteken': wagen.kenteken if wagen else '',
+        })
+    resultaat.sort(key=lambda r: r['label'])
+    return resultaat
+
+
 def check_duplicates_excel(file_obj):
     """
     Quick check: how many rows in this Excel already exist in the DB?
@@ -190,10 +235,18 @@ def check_duplicates_excel(file_obj):
     return len(duplicates), total
 
 
-def import_excel(file_obj, filename, uploaded_by, overwrite=False, skip_duplicates=False):
+def import_excel(file_obj, filename, uploaded_by, overwrite=False, skip_duplicates=False,
+                 toewijzingen=None):
     """
     Import uren from an Excel file.
-    
+
+    `toewijzingen` is een optionele map van genormaliseerd label naar een dict
+    met de sleutels 'user' en/of 'vehicle'. Staat een label daarin, dan worden
+    alle regels met dat label aan die chauffeur en/of dat voertuig gekoppeld in
+    plaats van aan wat er via de vloot gevonden wordt. Zo kun je voor een week
+    vastleggen dat er met een andere wagen is gereden dan het label aangeeft.
+    Labels die er niet in staan volgen gewoon de automatische route.
+
     Returns the created ImportBatch with stats.
     """
     import openpyxl
@@ -261,7 +314,19 @@ def import_excel(file_obj, filename, uploaded_by, overwrite=False, skip_duplicat
 
         vehicle = match['vehicle'] if match else None
         user = match['user'] if match else None
-        if match:
+
+        # Een handmatige keuze bij de import gaat voor op de vloot. Zo kun je
+        # voor deze week een andere chauffeur en/of een andere wagen aanwijzen
+        # dan het label normaal oplevert. Het label zelf blijft ongemoeid in
+        # `kenteken_import` staan.
+        if toewijzingen and norm_key in toewijzingen:
+            keuze = toewijzingen[norm_key]
+            if 'user' in keuze:
+                user = keuze['user']
+            if 'vehicle' in keuze:
+                vehicle = keuze['vehicle']
+
+        if user is not None:
             matched += 1
         else:
             unmatched += 1

@@ -614,7 +614,8 @@ export const tollingApi = {
   /**
    * Match tolling-events STRIKT op kenteken + tijdrange per dag.
    * Alleen events waarvan `start_at` binnen een van de opgegeven ranges valt
-   * (plus optionele buffer, default 30 min) tellen mee.
+   * tellen mee. Standaard zonder marge; een marge kan alleen bewust worden
+   * meegegeven.
    * Terug: `matched` (te factureren) + `unmatched` (buiten range → controle).
    */
   matchByHours: async (
@@ -627,7 +628,7 @@ export const tollingApi = {
        *  wordt dan apart gezet in plaats van meegeteld. */
       ritnummer?: string | null
     }>,
-    bufferMinutes: number = 30,
+    bufferMinutes: number = 0,
   ): Promise<{
     matched: TollingInvoicePreviewRow[]
     unmatched: Array<{
