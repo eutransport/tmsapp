@@ -378,12 +378,44 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
     # Subtotalen per ritnummer, zodat een wagen die in de periode van rit is
     # gewisseld beide ritnummers apart terugkomt in de uitdraai.
     per_rit: dict[str, list] = {}
+    # Per dag een subtotaalregel, zodat zichtbaar blijft hoeveel tolregels en
+    # kilometers er bij een dag horen. Een wagen kan op een dag meerdere
+    # passages hebben en die stonden voorheen los onder elkaar.
+    dag = {'datum': None, 'km': Decimal('0'), 'bedrag': Decimal('0'), 'aantal': 0}
+    dag_fill = PatternFill(start_color='DBEAFE', end_color='DBEAFE', fill_type='solid')
+
+    def _schrijf_dagtotaal():
+        if dag['datum'] is None or not dag['aantal']:
+            return
+        ws.append([
+            '',
+            f"Subtotaal {dag['datum']:%d-%m-%Y}",
+            f"{dag['aantal']} regels",
+            '',
+            float(dag['km']),
+            float(dag['bedrag']),
+            '',
+        ])
+        rij = ws.max_row
+        for kolom in range(1, 8):
+            cel = ws.cell(row=rij, column=kolom)
+            cel.fill = dag_fill
+            cel.font = Font(bold=True)
+
     for e in events:
         start_lokaal = _lokaal(e.start_at)
         eind_lokaal = _lokaal(e.end_at)
         is_priv = bool(getattr(e, 'is_private', False))
         is_wknd = bool(start_lokaal and start_lokaal.isoweekday() >= 6)
         rit = (getattr(e, 'ritnummer', '') or '').strip()
+        huidige_dag = start_lokaal.date() if start_lokaal else None
+        if dag['datum'] is not None and huidige_dag != dag['datum']:
+            _schrijf_dagtotaal()
+            dag.update(km=Decimal('0'), bedrag=Decimal('0'), aantal=0)
+        dag['datum'] = huidige_dag
+        dag['km'] += Decimal(e.distance_km)
+        dag['bedrag'] += Decimal(e.amount)
+        dag['aantal'] += 1
         if is_priv:
             type_label = 'Privé'
         elif is_wknd:
@@ -422,6 +454,7 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
             bucket[0] += Decimal(e.distance_km)
             bucket[1] += Decimal(e.amount)
             bucket[2] += 1
+    _schrijf_dagtotaal()
     ws.append([])
     ws.append(['', 'Doordeweeks', '', '', float(weekday_km), float(weekday_amount), ''])
     ws.append(['', 'Weekend', '', '', float(weekend_km), float(weekend_amount), ''])
@@ -643,12 +676,41 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
     # Subtotalen per ritnummer, zodat een ritnummerwissel binnen de periode
     # zichtbaar blijft in de uitdraai.
     per_rit: dict[str, list] = {}
-    for idx, e in enumerate(events, start=1):
+    # Per dag een subtotaalregel, zodat zichtbaar blijft hoeveel tolregels en
+    # kilometers er bij een dag horen. Een wagen kan op een dag meerdere
+    # passages hebben en die stonden voorheen los onder elkaar.
+    dagtotaal_rijen: list[int] = []
+    dag = {'datum': None, 'km': Decimal('0'), 'bedrag': Decimal('0'), 'aantal': 0}
+
+    def _voeg_dagtotaal_toe():
+        if dag['datum'] is None or not dag['aantal']:
+            return
+        dagtotaal_rijen.append(len(data))
+        data.append([
+            '',
+            f"Subtotaal {dag['datum']:%d-%m-%Y}",
+            f"{dag['aantal']} regels",
+            '',
+            f"{float(dag['km']):.3f}",
+            f"{float(dag['bedrag']):.2f}",
+            '',
+        ])
+
+    for e in events:
         start_lokaal = _lokaal(e.start_at)
         eind_lokaal = _lokaal(e.end_at)
         is_priv = bool(getattr(e, 'is_private', False))
         is_wknd = bool(start_lokaal and start_lokaal.isoweekday() >= 6)
         rit = (getattr(e, 'ritnummer', '') or '').strip()
+        huidige_dag = start_lokaal.date() if start_lokaal else None
+        if dag['datum'] is not None and huidige_dag != dag['datum']:
+            _voeg_dagtotaal_toe()
+            dag.update(km=Decimal('0'), bedrag=Decimal('0'), aantal=0)
+        dag['datum'] = huidige_dag
+        dag['km'] += Decimal(e.distance_km)
+        dag['bedrag'] += Decimal(e.amount)
+        dag['aantal'] += 1
+        idx = len(data)
         if is_priv:
             type_label = 'Privé'
             status = 'Privé'
@@ -681,6 +743,7 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
             f'{float(e.amount):.2f}',
             status,
         ])
+    _voeg_dagtotaal_toe()
     # Subtotal rows
     data.append(['', 'Doordeweeks', '', '', f'{float(weekday_km):.3f}', f'{float(weekday_amount):.2f}', ''])
     data.append(['', 'Weekend', '', '', f'{float(weekend_km):.3f}', f'{float(weekend_amount):.2f}', ''])
@@ -711,6 +774,9 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
     for ri in private_rows:
         style_cmds.append(('BACKGROUND', (0, ri), (-1, ri), colors.HexColor('#ede9fe')))
         style_cmds.append(('TEXTCOLOR', (0, ri), (-1, ri), colors.HexColor('#5b21b6')))
+    for ri in dagtotaal_rijen:
+        style_cmds.append(('BACKGROUND', (0, ri), (-1, ri), colors.HexColor('#dbeafe')))
+        style_cmds.append(('FONTNAME', (0, ri), (-1, ri), 'Helvetica-Bold'))
     tbl.setStyle(TableStyle(style_cmds))
     elems.append(tbl)
 
