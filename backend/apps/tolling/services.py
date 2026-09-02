@@ -475,15 +475,26 @@ def export_events_xlsx(events, plate_label: str, period_label: str) -> bytes:
             cell.font = private_font
     ws.append(['', 'Totaal tolkosten', '', '', float(total_km), float(total_amount), ''])
     if len(per_rit) > 1:
+        from .dagritnummers import geregistreerde_km
+
+        # De kilometers die de chauffeur zelf voor die rit heeft ingevuld,
+        # zodat de tolkilometers daarnaast te leggen zijn.
+        eigen_km = geregistreerde_km(per_rit)
         ws.append([])
         ws.append(['Per ritnummer', '', '', '', '', '', ''])
+        ws.append(['', 'Ritnummer', 'Regels', '', 'Afstand (km)',
+                   'Bedrag (€)', 'Geregistreerd (km)'])
+        for kolom in range(2, 8):
+            ws.cell(row=ws.max_row, column=kolom).font = Font(bold=True)
         for rit in sorted(per_rit):
             km, bedrag, aantal = per_rit[rit]
+            eigen = eigen_km.get(rit)
             ws.append([
                 '', _xlsx_tekst(rit) or 'Geen ritnummer', f'{aantal} regels', '',
-                float(km), float(bedrag), '',
+                float(km), float(bedrag),
+                float(eigen) if eigen is not None else '',
             ])
-    for col_idx, width in enumerate([20, 20, 16, 14, 15, 15, 15], start=1):
+    for col_idx, width in enumerate([20, 20, 16, 14, 15, 15, 18], start=1):
         ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = width
     out = io.BytesIO()
     wb.save(out)
@@ -799,16 +810,27 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
     # Losse tabel met de totalen per ritnummer wanneer de wagen in deze
     # periode onder meer dan één ritnummer heeft gereden.
     if len(per_rit) > 1:
+        from .dagritnummers import geregistreerde_km
+
+        # De kilometers die de chauffeur zelf voor die rit heeft ingevuld,
+        # zodat de tolkilometers daarnaast te leggen zijn.
+        eigen_km = geregistreerde_km(per_rit)
         elems.append(Spacer(1, 10))
         elems.append(Paragraph('Totalen per ritnummer', styles['Heading3']))
-        rit_data = [['Ritnummer', 'Regels', 'Afstand (km)', 'Bedrag (€)']]
+        rit_data = [[
+            'Ritnummer', 'Regels', 'Afstand (km)', 'Bedrag (€)',
+            'Geregistreerd (km)', 'Verschil (km)',
+        ]]
         for rit in sorted(per_rit):
             km, bedrag, aantal = per_rit[rit]
+            eigen = eigen_km.get(rit)
             rit_data.append([
                 rit or 'Geen ritnummer', str(aantal),
                 f'{float(km):.3f}', f'{float(bedrag):.2f}',
+                f'{float(eigen):.1f}' if eigen is not None else '-',
+                f'{float(eigen - km):+.1f}' if eigen is not None else '-',
             ])
-        rit_tbl = Table(rit_data, hAlign='LEFT')
+        rit_tbl = Table(rit_data, hAlign='LEFT', repeatRows=1)
         rit_tbl.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),

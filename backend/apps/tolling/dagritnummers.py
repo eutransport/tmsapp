@@ -112,6 +112,60 @@ def als_label(nummers) -> str:
     return ' / '.join(sorted(nummers or [], key=_sorteersleutel))
 
 
+def geregistreerde_km(labels) -> dict:
+    """Kilometers die bij een ritnummer zijn geregistreerd.
+
+    De chauffeur vult in zijn urenregistratie een begin- en eindstand in; het
+    verschil daartussen zijn de kilometers van die rit. Staat er niets, dan
+    valt het terug op de kilometers uit de urenimport van het planbureau.
+    Levert ``{label: kilometers}`` en laat een label weg als er voor dat
+    ritnummer niets is geregistreerd.
+    """
+    from decimal import Decimal
+
+    from django.db.models import Sum
+
+    from apps.timetracking.models import ImportedTimeEntry, TimeEntry
+
+    # Een label kan meer dan een ritnummer bevatten ("111 / 222"); de
+    # kilometers van die ritten tellen dan bij elkaar op.
+    per_label: dict = {}
+    nummers: set = set()
+    for label in labels:
+        losse = _losse_nummers(label)
+        if losse:
+            per_label[label] = losse
+            nummers.update(losse)
+    if not nummers:
+        return {}
+
+    km_per_nummer: dict = {}
+    for nummer, km in (
+        TimeEntry.objects.filter(ritnummer__in=nummers)
+        .values_list('ritnummer')
+        .annotate(km=Sum('totaal_km'))
+    ):
+        if km:
+            km_per_nummer[str(nummer).strip()] = Decimal(km)
+    ontbreekt = nummers - set(km_per_nummer)
+    if ontbreekt:
+        for nummer, km in (
+            ImportedTimeEntry.objects.filter(ritlijst__in=ontbreekt)
+            .values_list('ritlijst')
+            .annotate(km=Sum('km'))
+        ):
+            if km:
+                km_per_nummer[str(nummer).strip()] = Decimal(km)
+
+    resultaat: dict = {}
+    for label, losse in per_label.items():
+        totaal = sum((km_per_nummer[n] for n in losse if n in km_per_nummer),
+                     Decimal('0'))
+        if totaal:
+            resultaat[label] = totaal
+    return resultaat
+
+
 def _tijdvakken(kentekens, datums) -> dict:
     """Ingediende ritten met hun begin- en eindtijd.
 
