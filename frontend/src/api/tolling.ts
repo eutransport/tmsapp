@@ -612,6 +612,30 @@ export const tollingApi = {
   },
 
   /**
+   * Begin- en eindtijden van de ritten in een periode, per kenteken.
+   * Daarmee kan een import per week of maand langs dezelfde strikte controle
+   * als de urenimport, terwijl er zelf geen uren zijn geimporteerd.
+   */
+  ritvensters: async (
+    ref: TollingPeriodRef,
+    plates: string[],
+  ): Promise<Array<{
+    plate: string
+    date: string
+    start_time: string | null
+    end_time: string | null
+    ritnummer?: string | null
+  }>> => {
+    const { data } = await api.get('/tolling/invoicing/ritvensters/', {
+      params: {
+        period: ref.period, year: ref.year, index: ref.index,
+        plates: plates.join(','),
+      },
+    })
+    return data?.ranges ?? []
+  },
+
+  /**
    * Match tolling-events STRIKT op kenteken + tijdrange per dag.
    * Alleen events waarvan `start_at` binnen een van de opgegeven ranges valt
    * tellen mee. Standaard zonder marge; een marge kan alleen bewust worden

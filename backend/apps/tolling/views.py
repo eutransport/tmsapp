@@ -23,7 +23,8 @@ from apps.core.permissions import HasReadWriteModulePermission
 from apps.fleet.models import Vehicle
 from apps.invoicing.models import Invoice, InvoiceLine
 
-from .dagritnummers import als_label, ritnummers_per_dag
+from .dagritnummers import (als_label, ritnummers_per_dag,
+                            ritvensters as ritvensters_uit_uren)
 from .models import (PrivateTollRegistration, RitnummerCorrectie, TollingEvent,
                      TollingImportBatch, normalize_plate)
 from .serializers import (
@@ -1143,6 +1144,49 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             })
         results.sort(key=lambda x: x['plate_display'])
         return Response(results)
+
+    @action(detail=False, methods=['get'], url_path='ritvensters')
+    def ritvensters(self, request):
+        """Begin- en eindtijden van de ritten in een periode.
+
+        De tolimport per week of maand kent zelf geen uren. Met deze vensters
+        kan de frontend dezelfde strikte controle draaien als bij het
+        importeren van uren, zodat tol buiten werktijd of in het weekend
+        zichtbaar wordt voordat er iets op de factuur komt.
+
+        Query params: `period`, `year` en `index` (net als bij `preview`) en
+        `plates`: de genormaliseerde kentekens, gescheiden door een komma.
+        """
+        try:
+            period, year, index, start, end, label = _resolve_period(request.query_params)
+        except ValueError as ex:
+            return Response({'detail': str(ex)}, status=400)
+
+        kentekens = {
+            normalize_plate(deel)
+            for deel in (request.query_params.get('plates') or '').split(',')
+        }
+        kentekens.discard('')
+        if not kentekens:
+            return Response({'detail': 'plates is verplicht.'}, status=400)
+
+        # `end` is exclusief; een seconde eerder houdt de laatste dag heel.
+        tz = timezone.get_current_timezone()
+        eerste = timezone.localtime(start, tz).date()
+        laatste = timezone.localtime(end - timedelta(seconds=1), tz).date()
+        datums = set()
+        dag = eerste
+        while dag <= laatste:
+            datums.add(dag)
+            dag += timedelta(days=1)
+
+        return Response({
+            'period': period,
+            'year': year,
+            'index': index,
+            'label': label,
+            'ranges': ritvensters_uit_uren(kentekens, datums),
+        })
 
     @action(detail=False, methods=['post'], url_path='match-by-hours')
     def match_by_hours(self, request):

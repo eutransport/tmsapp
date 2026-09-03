@@ -206,6 +206,68 @@ def _tijdvakken(kentekens, datums) -> dict:
     return dict(vakken)
 
 
+def ritvensters(kentekens, datums) -> list[dict]:
+    """Gereden ritten met hun begin- en eindtijd, per kenteken en dag.
+
+    Levert de vensters in precies de vorm die de strikte tolkoppeling
+    (``match-by-hours``) als ``ranges`` verwacht. Daarmee kan ook een import
+    per week of maand op werktijden gecontroleerd worden, terwijl daar zelf
+    geen uren aan hangen.
+
+    Anders dan bij ``_tijdvakken`` telt een rit hier ook mee als er geen
+    ritnummer is ingevuld; het gaat immers om de tijden. Reed een wagen in
+    hetzelfde venster meerdere ritnummers, dan komt elk nummer als eigen
+    regel terug. De koppeling loopt over de tolregels, dus een dubbel venster
+    telt nooit dubbel.
+    """
+    from apps.timetracking.models import ImportedTimeEntry, TimeEntry
+
+    kentekens = {k for k in (normalize_plate(k) for k in kentekens) if k}
+    datums = {d for d in datums if d}
+    if not kentekens or not datums:
+        return []
+
+    index = _kentekenindex()
+    vensters: list[dict] = []
+    gezien: set = set()
+
+    def voeg_toe(ruw_kenteken, datum, ritnummer, begin, eind) -> None:
+        if not (begin and eind):
+            return
+        norm = normalize_plate(ruw_kenteken)
+        norm = index.get(norm, norm)
+        if norm not in kentekens:
+            return
+        for nummer in _losse_nummers(ritnummer) or [None]:
+            sleutel = (norm, datum, begin, eind, nummer)
+            if sleutel in gezien:
+                continue
+            gezien.add(sleutel)
+            vensters.append({
+                'plate': norm,
+                'date': datum.isoformat(),
+                'start_time': begin.strftime('%H:%M'),
+                'end_time': eind.strftime('%H:%M'),
+                'ritnummer': nummer,
+            })
+
+    for kenteken, datum, ritnummer, begin, eind in (
+        TimeEntry.objects.filter(datum__in=datums)
+        .values_list('kenteken', 'datum', 'ritnummer', 'aanvang', 'eind')
+    ):
+        voeg_toe(kenteken, datum, ritnummer, begin, eind)
+
+    for kenteken, datum, ritlijst, begin, eind in (
+        ImportedTimeEntry.objects.filter(datum__in=datums)
+        .values_list('kenteken_import', 'datum', 'ritlijst',
+                     'begintijd_rit', 'eindtijd_rit')
+    ):
+        voeg_toe(kenteken, datum, ritlijst, begin, eind)
+
+    vensters.sort(key=lambda v: (v['date'], v['plate'], v['start_time']))
+    return vensters
+
+
 def ritnummers_voor_events(events) -> dict:
     """Zoek per tolregel het ritnummer dat bij die registratie hoort.
 

@@ -107,6 +107,20 @@ const redenTekst = (reden: UnmatchedEvent['reason']): string => {
   return 'Buiten begin/eindtijd'
 }
 
+/** Zaterdag of zondag, in de tijdzone van de browser. */
+const isWeekend = (iso: string): boolean => {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return false
+  const dag = d.getDay()
+  return dag === 0 || dag === 6
+}
+
+const WeekendLabel = () => (
+  <span className="ml-1 inline-flex items-center rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-800">
+    Weekend
+  </span>
+)
+
 export default function UnmatchedTollingModal({
   open,
   onClose,
@@ -129,6 +143,17 @@ export default function UnmatchedTollingModal({
     const km = unmatched.reduce((s, u) => s + (u.distance_km || 0), 0)
     const amount = unmatched.reduce((s, u) => s + (u.amount || 0), 0)
     return { km, amount, count: unmatched.length }
+  }, [unmatched])
+
+  // Tol in het weekend springt er apart uit: dat wordt lang niet altijd
+  // doorbelast, dus de gebruiker moet het los kunnen zien.
+  const weekendTotals = useMemo(() => {
+    const regels = unmatched.filter(u => isWeekend(u.start_at))
+    return {
+      count: regels.length,
+      km: regels.reduce((s, u) => s + (u.distance_km || 0), 0),
+      amount: regels.reduce((s, u) => s + (u.amount || 0), 0),
+    }
   }, [unmatched])
 
   const hasMatched = matched.length > 0
@@ -412,6 +437,7 @@ export default function UnmatchedTollingModal({
                               </div>
                               <div className="mt-0.5 text-[11px] text-gray-500">
                                 Rit {u.ritnummer || u.dag_ritnummer || '—'} · {redenTekst(u.reason)}
+                                {isWeekend(u.start_at) && <WeekendLabel />}
                               </div>
                             </div>
                           ))}
@@ -448,6 +474,7 @@ export default function UnmatchedTollingModal({
                                 <td className="px-3 py-1.5 text-right font-semibold text-gray-900">{fmtMoney(u.amount)}</td>
                                 <td className="px-3 py-1.5 text-gray-500 text-[11px]">
                                   {redenTekst(u.reason)}
+                                  {isWeekend(u.start_at) && <WeekendLabel />}
                                 </td>
                               </tr>
                             ))}
@@ -468,6 +495,13 @@ export default function UnmatchedTollingModal({
                         ander ritnummer. Vaak zijn dit ritten van een andere chauffeur, ritten
                         buiten werktijd of tol die op een andere factuur thuishoort.
                       </p>
+                      {weekendTotals.count > 0 && (
+                        <p className="mt-1 text-[11px] font-medium text-indigo-800">
+                          Waarvan in het weekend: {weekendTotals.count} event
+                          {weekendTotals.count === 1 ? '' : 's'} · {fmtKm(weekendTotals.km)} ·{' '}
+                          {fmtMoney(weekendTotals.amount)}.
+                        </p>
+                      )}
                     </div>
                   )}
 

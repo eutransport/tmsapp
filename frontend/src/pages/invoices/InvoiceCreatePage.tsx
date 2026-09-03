@@ -2609,6 +2609,18 @@ export default function InvoiceCreatePage() {
 
     if (ranges.length === 0) return
 
+    await toonTolControle(ranges, totalRegisteredKm, bufferMinutes)
+  }
+
+  /**
+   * Draait de strikte controle op de meegegeven ritvensters en zet het
+   * resultaat in de review-modal. Levert `false` als er niets te tonen was.
+   */
+  const toonTolControle = async (
+    ranges: Array<{ plate: string; date: string; start_time: string | null; end_time: string | null; ritnummer: string | null }>,
+    totalRegisteredKm?: number,
+    bufferMinutes: number = 0,
+  ): Promise<boolean> => {
     try {
       const { matched, unmatched, buffer_minutes, skipped_ranges } = await tollingApi.matchByHours(ranges, bufferMinutes)
       const overgeslagen = (skipped_ranges || []) as ModalSkippedRange[]
@@ -2617,7 +2629,7 @@ export default function InvoiceCreatePage() {
       // Geen matched en geen unmatched → helemaal geen tolheffing gevonden.
       if (withMoney.length === 0 && unmatched.length === 0 && overgeslagen.length === 0) {
         console.info('[auto-tolling] geen tolheffing gevonden voor deze uren', { ranges })
-        return
+        return false
       }
 
       // Toon altijd de review-modal met het overzicht van gekoppelde
@@ -2641,8 +2653,10 @@ export default function InvoiceCreatePage() {
         totalRegisteredKm,
         skipped: overgeslagen,
       })
+      return true
     } catch (err) {
       console.warn('[auto-tolling] match-by-hours failed', err)
+      return false
     }
   }
 
@@ -2804,6 +2818,61 @@ export default function InvoiceCreatePage() {
     })
     setLines(prev => [...prev, ...newLines])
   }
+
+  /**
+   * Tolheffing die per week of maand is gekozen langs dezelfde controle
+   * halen als de urenimport: er wordt eerst opgezocht wanneer die wagens
+   * gereden hebben, en daarna toont de review-modal wat er binnen en buiten
+   * die tijden valt (dus ook weekend en avonduren). Pas na bevestiging komt
+   * het op de factuur.
+   */
+  const handleTollingImportMetControle = async (
+    rows: TollingInvoicePreviewRow[],
+    ref: { period: TollingPeriod; year: number; index: number },
+  ) => {
+    setShowTollingImportModal(false)
+    if (!rows.length) return
+
+    let vensters: Array<{ plate: string; date: string; start_time: string | null; end_time: string | null; ritnummer?: string | null }> = []
+    try {
+      vensters = await tollingApi.ritvensters(ref, rows.map(r => r.plate_normalized))
+    } catch (err) {
+      console.warn('[tolheffing] ritvensters ophalen mislukt', err)
+    }
+
+    const metVensters = new Set(vensters.map(v => v.plate))
+    const zonderVensters = rows.filter(r => !metVensters.has(r.plate_normalized))
+    const teControleren = rows.filter(r => metVensters.has(r.plate_normalized))
+
+    // Wagens zonder ingediende uren kunnen we niet op werktijden toetsen;
+    // die gaan er ongewijzigd op, met een melding erbij.
+    if (zonderVensters.length > 0) {
+      handleImportTolling(zonderVensters)
+      toast(
+        `Geen ritten met begin- en eindtijd gevonden voor ${zonderVensters.map(r => r.plate_display).join(', ')}. ` +
+        'Die tolheffing is zonder controle toegevoegd.',
+        { duration: 6000 },
+      )
+    }
+
+    if (teControleren.length === 0) return
+
+    const relevant = vensters
+      .filter(v => teControleren.some(r => r.plate_normalized === v.plate))
+      .map(v => ({
+        plate: v.plate,
+        date: v.date,
+        start_time: v.start_time,
+        end_time: v.end_time,
+        ritnummer: v.ritnummer ?? null,
+      }))
+
+    const getoond = await toonTolControle(relevant)
+    if (!getoond) {
+      toast('Geen openstaande tolheffing gevonden binnen de gereden tijden.')
+    }
+  }
+
   // Import spreadsheet ritregistratie entries
   const handleImportSpreadsheet = (spreadsheet: Spreadsheet) => {
     // Set week/chauffeur tracking from spreadsheet
@@ -4073,7 +4142,7 @@ export default function InvoiceCreatePage() {
       <TollingImportModal
         isOpen={showTollingImportModal}
         onClose={() => setShowTollingImportModal(false)}
-        onImport={rows => { handleImportTolling(rows); setShowTollingImportModal(false) }}
+        onImport={(rows, ref) => { void handleTollingImportMetControle(rows, ref) }}
       />
 
       {/* Tol Import Modal */}
@@ -4124,7 +4193,10 @@ export default function InvoiceCreatePage() {
 interface TollingImportModalProps {
   isOpen: boolean
   onClose: () => void
-  onImport: (rows: TollingInvoicePreviewRow[]) => void
+  onImport: (
+    rows: TollingInvoicePreviewRow[],
+    ref: { period: TollingPeriod; year: number; index: number },
+  ) => void
 }
 
 function TollingImportModal({ isOpen, onClose, onImport }: TollingImportModalProps) {
@@ -4163,9 +4235,9 @@ function TollingImportModal({ isOpen, onClose, onImport }: TollingImportModalPro
       try {
         const data = await tollingApi.invoicePreview({ period, year: currentYear, index: currentIndex })
         setRows(data)
-        const s: Record<string, boolean> = {}
-        data.forEach(r => { s[r.plate_normalized] = true })
-        setSelected(s)
+        // Bewust niets voorselecteren: de gebruiker kiest zelf welke wagens
+        // op de factuur komen.
+        setSelected({})
       } catch {
         setRows([])
       } finally {
@@ -4304,7 +4376,7 @@ function TollingImportModal({ isOpen, onClose, onImport }: TollingImportModalPro
               <button
                 type="button"
                 disabled={selectedRows.length === 0}
-                onClick={() => onImport(selectedRows)}
+                onClick={() => onImport(selectedRows, { period, year: currentYear, index: currentIndex })}
                 className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-40"
               >
                 Toevoegen aan factuur ({selectedRows.length})
