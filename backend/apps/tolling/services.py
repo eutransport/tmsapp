@@ -700,9 +700,6 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
     weekend_amount = Decimal('0')
     weekday_km = Decimal('0')
     weekday_amount = Decimal('0')
-    # Subtotalen per ritnummer, zodat een ritnummerwissel binnen de periode
-    # zichtbaar blijft in de uitdraai.
-    per_rit: dict[str, list] = {}
     # Per dag een subtotaalregel, zodat zichtbaar blijft hoeveel tolregels en
     # kilometers er bij een dag horen. Een wagen kan op een dag meerdere
     # passages hebben en die stonden voorheen los onder elkaar.
@@ -757,10 +754,6 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
             status = 'Gefactureerd' if e.invoiced_at else 'Open'
             total_km += Decimal(e.distance_km)
             total_amount += Decimal(e.amount)
-            bucket = per_rit.setdefault(rit, [Decimal('0'), Decimal('0'), 0])
-            bucket[0] += Decimal(e.distance_km)
-            bucket[1] += Decimal(e.amount)
-            bucket[2] += 1
         data.append([
             start_lokaal.strftime('%d-%m-%Y %H:%M') if start_lokaal else '',
             eind_lokaal.strftime('%d-%m-%Y %H:%M') if eind_lokaal else '',
@@ -806,40 +799,6 @@ def export_events_pdf(events, plate_label: str, period_label: str) -> bytes:
         style_cmds.append(('FONTNAME', (0, ri), (-1, ri), 'Helvetica-Bold'))
     tbl.setStyle(TableStyle(style_cmds))
     elems.append(tbl)
-
-    # Losse tabel met de totalen per ritnummer wanneer de wagen in deze
-    # periode onder meer dan één ritnummer heeft gereden.
-    if len(per_rit) > 1:
-        from .dagritnummers import geregistreerde_km
-
-        # De kilometers die de chauffeur zelf voor die rit heeft ingevuld,
-        # zodat de tolkilometers daarnaast te leggen zijn.
-        eigen_km = geregistreerde_km(per_rit)
-        elems.append(Spacer(1, 10))
-        elems.append(Paragraph('Totalen per ritnummer', styles['Heading3']))
-        rit_data = [[
-            'Ritnummer', 'Regels', 'Afstand (km)', 'Bedrag (€)',
-            'Geregistreerd (km)', 'Verschil (km)',
-        ]]
-        for rit in sorted(per_rit):
-            km, bedrag, aantal = per_rit[rit]
-            eigen = eigen_km.get(rit)
-            rit_data.append([
-                rit or 'Geen ritnummer', str(aantal),
-                f'{float(km):.3f}', f'{float(bedrag):.2f}',
-                f'{float(eigen):.1f}' if eigen is not None else '-',
-                f'{float(eigen - km):+.1f}' if eigen is not None else '-',
-            ])
-        rit_tbl = Table(rit_data, hAlign='LEFT', repeatRows=1)
-        rit_tbl.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
-            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
-        ]))
-        elems.append(rit_tbl)
 
     doc.build(elems)
     return buf.getvalue()
