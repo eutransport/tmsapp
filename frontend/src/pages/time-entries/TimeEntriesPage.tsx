@@ -740,6 +740,10 @@ export default function TimeEntriesPage() {
   // Admin search filters
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [debouncedSearch, setDebouncedSearch] = useState<string>('')
+  // Zoeken op ritnummer staat los van de chauffeurzoekbalk: een ritnummer is
+  // uniek genoeg om er over alle weken heen op te zoeken.
+  const [ritnummerQuery, setRitnummerQuery] = useState<string>('')
+  const [debouncedRitnummer, setDebouncedRitnummer] = useState<string>('')
   const [searchWeek, setSearchWeek] = useState<number | null>(null)
   const [showMoreWeeks, setShowMoreWeeks] = useState(false)
 
@@ -807,18 +811,33 @@ export default function TimeEntriesPage() {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedRitnummer(ritnummerQuery.trim())
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [ritnummerQuery])
+
   // Fetch entries
   const fetchEntries = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     
     try {
+      const zoektOpRitnummer = isAdmin && debouncedRitnummer.length > 0
       const filters: TimeEntryFilters = {
         page,
         page_size: pageSize,
-        weeknummer: searchWeek !== null ? searchWeek : selectedWeek,
-        jaar: selectedYear,
         ordering: sortDirection === 'asc' ? sortField : `-${sortField}`,
+      }
+      // Bij een ritnummer laten we week en jaar los, anders vind je de rit
+      // alleen als je toevallig al in de goede week staat.
+      if (zoektOpRitnummer) {
+        filters.ritnummer_zoek = debouncedRitnummer
+      } else {
+        filters.weeknummer = searchWeek !== null ? searchWeek : selectedWeek
+        filters.jaar = selectedYear
       }
       if (statusFilter !== 'all') filters.status = statusFilter
       // Admin: search by chauffeur name
@@ -841,7 +860,7 @@ export default function TimeEntriesPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [page, pageSize, selectedWeek, selectedYear, statusFilter, sortField, sortDirection, isAdmin, debouncedSearch, searchWeek])
+  }, [page, pageSize, selectedWeek, selectedYear, statusFilter, sortField, sortDirection, isAdmin, debouncedSearch, debouncedRitnummer, searchWeek])
 
   useEffect(() => {
     fetchEntries()
@@ -1168,6 +1187,26 @@ export default function TimeEntriesPage() {
               )}
             </div>
 
+            {/* Ritnummer search input */}
+            <div className="relative flex-1 max-w-xs">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={ritnummerQuery}
+                onChange={(e) => setRitnummerQuery(e.target.value)}
+                placeholder="Zoek op ritnummer"
+                className="input pl-9 w-full"
+              />
+              {ritnummerQuery && (
+                <button
+                  onClick={() => setRitnummerQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
             {/* Week number search */}
             <div className="flex flex-wrap items-center gap-1.5">
               <CalendarDaysIcon className="w-4 h-4 text-gray-500" />
@@ -1195,10 +1234,11 @@ export default function TimeEntriesPage() {
             </div>
 
             {/* Clear filters */}
-            {(searchQuery || searchWeek !== null) && (
+            {(searchQuery || ritnummerQuery || searchWeek !== null) && (
               <button
                 onClick={() => { 
                   setSearchQuery('')
+                  setRitnummerQuery('')
                   setSearchWeek(null)
                 }}
                 className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
@@ -1209,12 +1249,19 @@ export default function TimeEntriesPage() {
             )}
 
             {/* Active filters indicator */}
-            {(debouncedSearch || searchWeek !== null) && (
+            {(debouncedSearch || debouncedRitnummer || searchWeek !== null) && (
               <span className="text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded-full">
                 {[
                   debouncedSearch ? `"${debouncedSearch}"` : null,
+                  debouncedRitnummer ? `rit ${debouncedRitnummer}` : null,
                   searchWeek !== null ? `${t('common.week')} ${searchWeek}` : null
                 ].filter(Boolean).join(' • ')}
+              </span>
+            )}
+
+            {debouncedRitnummer && (
+              <span className="text-xs text-blue-700">
+                Zoekt op ritnummer in alle weken en jaren.
               </span>
             )}
           </div>
@@ -1239,6 +1286,27 @@ export default function TimeEntriesPage() {
                 </button>
               )}
             </div>
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={ritnummerQuery}
+                onChange={(e) => setRitnummerQuery(e.target.value)}
+                placeholder="Zoek op ritnummer"
+                className="input pl-9 w-full text-sm"
+              />
+              {ritnummerQuery && (
+                <button
+                  onClick={() => setRitnummerQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            {debouncedRitnummer && (
+              <p className="text-xs text-blue-700">Zoekt op ritnummer in alle weken en jaren.</p>
+            )}
             <div className="flex flex-wrap items-center gap-1.5">
               <button
                 onClick={() => { setSearchWeek(null); setPage(1) }}
@@ -1262,10 +1330,11 @@ export default function TimeEntriesPage() {
                 {showMoreWeeks ? t('common.showLess', 'Toon minder') : t('common.showMore', 'Toon meer')}
               </button>
             </div>
-            {(searchQuery || searchWeek !== null) && (
+            {(searchQuery || ritnummerQuery || searchWeek !== null) && (
               <button
                 onClick={() => { 
                   setSearchQuery('')
+                  setRitnummerQuery('')
                   setSearchWeek(null)
                 }}
                 className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
@@ -1300,8 +1369,12 @@ export default function TimeEntriesPage() {
         ) : entries.length === 0 ? (
           <div className="px-4 py-12 text-center text-gray-500">
             <ClockIcon className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-            <p>{t('timeEntries.noEntries')}{searchWeek !== null ? ` ${t('timeEntries.forWeek')} ${searchWeek}` : ` ${t('timeEntries.forWeek')} ${selectedWeek}`}{debouncedSearch ? ` ${t('timeEntries.with')} "${debouncedSearch}"` : ''}</p>
-            {!debouncedSearch && !searchWeek && (
+            <p>
+              {debouncedRitnummer
+                ? `${t('timeEntries.noEntries')} ${t('timeEntries.with')} "${debouncedRitnummer}"`
+                : `${t('timeEntries.noEntries')}${searchWeek !== null ? ` ${t('timeEntries.forWeek')} ${searchWeek}` : ` ${t('timeEntries.forWeek')} ${selectedWeek}`}${debouncedSearch ? ` ${t('timeEntries.with')} "${debouncedSearch}"` : ''}`}
+            </p>
+            {!debouncedSearch && !debouncedRitnummer && !searchWeek && (
               <button
                 onClick={() => setShowCreateModal(true)}
                 className="mt-2 text-primary-600 hover:text-primary-700"

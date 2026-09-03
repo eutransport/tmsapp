@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Iterable
 from xml.sax.saxutils import escape
 
+from reportlab.graphics.shapes import Drawing, Line
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -60,6 +61,33 @@ def _dag_ritnummers_voor_events(events) -> dict:
         ev_id: als_label(gevonden.get(sleutel, []))
         for ev_id, sleutel in sleutels.items()
     }
+
+
+def _vink_teken(status, streepje_style):
+    """Groen vinkje, rood kruisje of een streepje voor de tijdcontrole.
+
+    We tekenen de tekens met lijnen in plaats van ze uit een symbool-
+    lettertype te halen. Zo'n lettertype wordt niet meegeleverd in de PDF en
+    komt er in de ene lezer als vinkje uit en in de andere als blokje; met
+    lijnen ziet het er overal hetzelfde uit.
+    """
+    if status not in ('binnen', 'buiten'):
+        return Paragraph('<font color="#9ca3af">-</font>', streepje_style)
+    tekening = Drawing(11, 9)
+    tekening.hAlign = 'CENTER'
+    if status == 'binnen':
+        kleur = colors.HexColor('#15803d')
+        tekening.add(Line(1.5, 4.5, 4.2, 1.5, strokeColor=kleur,
+                          strokeWidth=1.6, strokeLineCap=1))
+        tekening.add(Line(4.2, 1.5, 9.5, 8.0, strokeColor=kleur,
+                          strokeWidth=1.6, strokeLineCap=1))
+    else:
+        kleur = colors.HexColor('#b91c1c')
+        tekening.add(Line(2.0, 1.5, 8.0, 7.5, strokeColor=kleur,
+                          strokeWidth=1.6, strokeLineCap=1))
+        tekening.add(Line(2.0, 7.5, 8.0, 1.5, strokeColor=kleur,
+                          strokeWidth=1.6, strokeLineCap=1))
+    return tekening
 
 
 def _fmt_nl(n: float) -> str:
@@ -199,6 +227,13 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
         parent=rit_style,
         textColor=colors.HexColor('#5b21b6'),
     )
+    vink_style = ParagraphStyle(
+        'TollingVink',
+        fontName='Helvetica',
+        fontSize=9,
+        leading=10,
+        alignment=TA_CENTER,
+    )
 
     story = []
 
@@ -237,6 +272,12 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
 
     # Het ritnummer per dag komt uit de urenregistratie, niet uit de vloot.
     dag_ritnummers = _dag_ritnummers_voor_events(events)
+
+    # Automatische controle: valt de passage binnen de begin- en eindtijd die
+    # voor die dag is ingediend? Is er geen tijd ingediend, dan blijft het
+    # antwoord 'onbekend' en komt er een streepje in plaats van een kruisje.
+    from .dagritnummers import binnen_rittijden
+    tijdcontrole = binnen_rittijden(events)
 
     # Bepaal ritnummer per (genormaliseerd) kenteken via Vehicle-tabel, zodat
     # we hetzelfde ritnummer op de PDF tonen als op de bijbehorende factuurregel
@@ -300,7 +341,8 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
         header_text += f" &nbsp;&nbsp; ({len(billed_events)} events, {_format_km(total_km)} km, {_format_money(total_amount)})"
         story.append(Paragraph(header_text, section_style))
 
-        data = [['Datum', 'Ritnummer', 'Type', 'Start', 'Eind', 'Afstand (km)', 'Bedrag']]
+        data = [['Datum', 'Ritnummer', 'Binnen tijd', 'Type', 'Start', 'Eind',
+                 'Afstand (km)', 'Bedrag']]
         weekend_row_indices: list[int] = []
         private_row_indices: list[int] = []
         for idx, ev in enumerate(plate_events, start=1):
@@ -325,6 +367,7 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
             data.append([
                 start.strftime('%d-%m-%Y') if start else '',
                 rit_cel,
+                _vink_teken(tijdcontrole.get(ev.id), vink_style),
                 type_label,
                 start.strftime('%H:%M') if start else '',
                 end.strftime('%H:%M') if end else '',
@@ -333,15 +376,16 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
             ])
         # Subtotal rows: weekday (billed), weekend (billed), privé (not billed), totaal (billed)
         show_private_subtotal = bool(private_events)
-        data.append(['', '', '', '', 'Totaal doordeweeks', _format_km(weekday_km), _format_money(weekday_amount)])
-        data.append(['', '', '', '', 'Totaal weekend', _format_km(weekend_km), _format_money(weekend_amount)])
+        data.append(['', '', '', '', '', 'Totaal doordeweeks', _format_km(weekday_km), _format_money(weekday_amount)])
+        data.append(['', '', '', '', '', 'Totaal weekend', _format_km(weekend_km), _format_money(weekend_amount)])
         if show_private_subtotal:
-            data.append(['', '', '', '', 'Privé (niet gefactureerd)', _format_km(private_km), _format_money(private_amount)])
-        data.append(['', '', '', '', 'Totaal gefactureerd', _format_km(total_km), _format_money(total_amount)])
+            data.append(['', '', '', '', '', 'Privé (niet gefactureerd)', _format_km(private_km), _format_money(private_amount)])
+        data.append(['', '', '', '', '', 'Totaal gefactureerd', _format_km(total_km), _format_money(total_amount)])
 
         table = Table(
             data,
-            colWidths=[24 * mm, 28 * mm, 24 * mm, 15 * mm, 15 * mm, 38 * mm, 30 * mm],
+            colWidths=[22 * mm, 24 * mm, 20 * mm, 22 * mm, 14 * mm, 14 * mm,
+                       34 * mm, 28 * mm],
             repeatRows=1,
         )
         subtotal_rows = 4 if show_private_subtotal else 3
@@ -350,8 +394,8 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (5, 0), (-1, -1), 'RIGHT'),
-            ('ALIGN', (0, 0), (4, -1), 'LEFT'),
+            ('ALIGN', (6, 0), (-1, -1), 'RIGHT'),
+            ('ALIGN', (0, 0), (5, -1), 'LEFT'),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1 - subtotal_rows), [colors.white, colors.HexColor('#f9fafb')]),
             # Subtotal rows tinting
             ('BACKGROUND', (0, -subtotal_rows), (-1, -subtotal_rows), colors.HexColor('#eff6ff')),   # weekday

@@ -166,12 +166,16 @@ def geregistreerde_km(labels) -> dict:
     return resultaat
 
 
-def _tijdvakken(kentekens, datums) -> dict:
+def _tijdvakken(kentekens, datums, alleen_met_ritnummer: bool = True) -> dict:
     """Ingediende ritten met hun begin- en eindtijd.
 
     Levert ``{(kenteken, datum): [(begintijd, eindtijd, ritnummers), ...]}``.
     Een rit zonder ingevulde tijden komt er niet in; die valt terug op de
     dagwaarde.
+
+    Met ``alleen_met_ritnummer=False`` telt een rit ook mee als er geen
+    ritnummer bij staat. Dat is nodig voor de controle op werktijden: de
+    wagen heeft dan wel gereden, alleen is het nummer niet ingevuld.
     """
     from apps.timetracking.models import ImportedTimeEntry, TimeEntry
 
@@ -182,7 +186,7 @@ def _tijdvakken(kentekens, datums) -> dict:
         if not (begin and eind):
             return
         nummers = _losse_nummers(ritnummer)
-        if not nummers:
+        if not nummers and alleen_met_ritnummer:
             return
         norm = normalize_plate(ruw_kenteken)
         norm = index.get(norm, norm)
@@ -268,6 +272,78 @@ def ritvensters(kentekens, datums) -> list[dict]:
     return vensters
 
 
+def _valt_binnen(moment, begin, eind) -> bool:
+    """Ligt een tijdstip binnen een rit?
+
+    Loopt een rit over middernacht, dan telt alles vanaf de begintijd tot het
+    einde van de dag mee. Dezelfde regel als bij het toekennen van het
+    ritnummer, zodat beide altijd hetzelfde antwoord geven.
+    """
+    if begin <= eind:
+        return begin <= moment <= eind
+    return moment >= begin
+
+
+def binnen_rittijden(events) -> dict:
+    """Controleer per tolregel of de passage binnen de gereden tijd valt.
+
+    Levert ``{event_id: 'binnen' | 'buiten' | 'onbekend'}``.
+
+    - ``binnen``   de passage ligt tussen de begin- en eindtijd van een rit
+                   die voor die wagen op die dag is ingediend;
+    - ``buiten``   er zijn wel tijden ingediend, maar de passage valt er
+                   buiten (bijvoorbeeld 's avonds of in het weekend);
+    - ``onbekend`` er zijn voor die wagen op die dag geen begin- en eindtijden
+                   ingediend. Dan valt er niets te toetsen en zetten we bewust
+                   geen kruisje neer.
+
+    Staat het ritnummer van de tolregel ook in de uren, dan toetsen we alleen
+    op de tijden van die rit. Anders tellen alle ritten van die dag mee, want
+    dan is niet te zeggen bij welke rit de passage hoort.
+
+    De dag en het tijdstip bepalen we in de lokale tijdzone, net als de datum
+    die in de uitdraai komt te staan; anders valt een nachtrit op de
+    verkeerde dag.
+    """
+    from django.utils import timezone
+
+    sleutels: dict = {}
+    tijden: dict = {}
+    eigen_nummers: dict = {}
+    kentekens: set = set()
+    datums: set = set()
+    for ev in events:
+        start = getattr(ev, 'start_at', None)
+        if not start:
+            continue
+        lokaal = timezone.localtime(start) if timezone.is_aware(start) else start
+        sleutel = (getattr(ev, 'license_plate_normalized', '') or '', lokaal.date())
+        sleutels[ev.id] = sleutel
+        tijden[ev.id] = lokaal.time()
+        eigen_nummers[ev.id] = set(_losse_nummers(getattr(ev, 'ritnummer', '')))
+        kentekens.add(sleutel[0])
+        datums.add(sleutel[1])
+
+    if not sleutels:
+        return {}
+
+    vakken = _tijdvakken(kentekens, datums, alleen_met_ritnummer=False)
+
+    resultaat: dict = {}
+    for ev_id, sleutel in sleutels.items():
+        vensters = vakken.get(sleutel) or []
+        if not vensters:
+            resultaat[ev_id] = 'onbekend'
+            continue
+        eigen = eigen_nummers.get(ev_id) or set()
+        van_die_rit = [v for v in vensters if eigen & set(v[2])]
+        te_toetsen = van_die_rit or vensters
+        moment = tijden[ev_id]
+        binnen = any(_valt_binnen(moment, begin, eind) for begin, eind, _ in te_toetsen)
+        resultaat[ev_id] = 'binnen' if binnen else 'buiten'
+    return resultaat
+
+
 def ritnummers_voor_events(events) -> dict:
     """Zoek per tolregel het ritnummer dat bij die registratie hoort.
 
@@ -309,10 +385,7 @@ def ritnummers_voor_events(events) -> dict:
         moment = tijden[ev_id]
         gekozen = None
         for begin, eind, nummers in vakken.get(sleutel, ()):
-            # Loopt een rit over middernacht, dan telt alles vanaf de
-            # begintijd tot het einde van de dag mee.
-            binnen = begin <= moment <= eind if begin <= eind else moment >= begin
-            if binnen:
+            if _valt_binnen(moment, begin, eind):
                 gekozen = nummers
                 break
         resultaat[ev_id] = als_label(gekozen if gekozen else per_dag.get(sleutel, []))

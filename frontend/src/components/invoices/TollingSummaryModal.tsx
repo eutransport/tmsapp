@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react'
-import { XMarkIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import {
+  XMarkIcon,
+  ArrowDownTrayIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  MinusCircleIcon,
+} from '@heroicons/react/24/outline'
 import {
   getTollingSummary,
   downloadTollingPdf,
+  type BinnenRittijd,
   type TollingSummary,
 } from '../../api/invoices'
 
@@ -33,6 +40,36 @@ function fmtNumber(n: number, decimals = 2): string {
 
 function fmtEuro(n: number): string {
   return `€ ${fmtNumber(n)}`
+}
+
+/**
+ * Vinkje of kruisje van de automatische controle: valt deze passage binnen de
+ * begin- en eindtijd die voor die dag in de urenregistratie staat? Staat er
+ * voor die dag geen tijd, dan tonen we bewust geen kruisje maar een streepje.
+ */
+function RittijdMerk({ status }: { status: BinnenRittijd }) {
+  if (status === 'binnen') {
+    return (
+      <CheckCircleIcon
+        className="h-5 w-5 text-green-600"
+        title="Binnen de begin- en eindtijd van de rit"
+      />
+    )
+  }
+  if (status === 'buiten') {
+    return (
+      <XCircleIcon
+        className="h-5 w-5 text-red-600"
+        title="Buiten de begin- en eindtijd van de rit"
+      />
+    )
+  }
+  return (
+    <MinusCircleIcon
+      className="h-5 w-5 text-gray-300"
+      title="Geen begin- en eindtijd ingediend voor die dag"
+    />
+  )
 }
 
 export default function TollingSummaryModal({ invoiceId, invoiceNumber, onClose }: Props) {
@@ -115,12 +152,29 @@ export default function TollingSummaryModal({ invoiceId, invoiceNumber, onClose 
 
           {!loading && !error && summary && summary.has_events && (
             <>
+              {/* Uitkomst van de tijdcontrole in één oogopslag. */}
+              <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+                <span className="inline-flex items-center gap-1 text-green-700">
+                  <CheckCircleIcon className="h-4 w-4" />
+                  {summary.totals.binnen_rittijd} binnen de rittijd
+                </span>
+                <span className="inline-flex items-center gap-1 text-red-700">
+                  <XCircleIcon className="h-4 w-4" />
+                  {summary.totals.buiten_rittijd} erbuiten
+                </span>
+                <span className="inline-flex items-center gap-1 text-gray-500">
+                  <MinusCircleIcon className="h-4 w-4" />
+                  {summary.totals.zonder_rittijd} zonder ingediende tijd
+                </span>
+              </div>
+
               {/* Mobile: card list */}
               <div className="sm:hidden space-y-2">
                 {summary.events.map((ev) => (
                   <div key={ev.id} className="rounded-lg border border-gray-200 bg-white p-3">
                     <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm font-semibold text-gray-900">
+                      <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                        <RittijdMerk status={ev.binnen_rittijd} />
                         {ev.license_plate || '-'}
                       </span>
                       <span className="text-sm font-semibold text-gray-900 tabular-nums">
@@ -131,6 +185,9 @@ export default function TollingSummaryModal({ invoiceId, invoiceNumber, onClose 
                       <span>{formatDateTimeNl(ev.start_at)}</span>
                       <span className="tabular-nums">{fmtNumber(ev.km)} km</span>
                     </div>
+                    {ev.ritnummer && (
+                      <div className="mt-0.5 text-xs text-gray-500">Rit {ev.ritnummer}</div>
+                    )}
                   </div>
                 ))}
                 <div className="rounded-lg border-2 border-gray-300 bg-gray-50 p-3">
@@ -151,6 +208,8 @@ export default function TollingSummaryModal({ invoiceId, invoiceNumber, onClose 
                     <tr className="border-b text-left text-xs font-semibold uppercase text-gray-600">
                       <th className="px-3 py-2">Datum</th>
                       <th className="px-3 py-2">Kenteken</th>
+                      <th className="px-3 py-2">Ritnummer</th>
+                      <th className="px-3 py-2 text-center">Binnen tijd</th>
                       <th className="px-3 py-2 text-right">Km</th>
                       <th className="px-3 py-2 text-right">Kosten</th>
                     </tr>
@@ -164,6 +223,14 @@ export default function TollingSummaryModal({ invoiceId, invoiceNumber, onClose 
                         <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">
                           {ev.license_plate || '-'}
                         </td>
+                        <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">
+                          {ev.ritnummer || '-'}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <div className="flex justify-center">
+                            <RittijdMerk status={ev.binnen_rittijd} />
+                          </div>
+                        </td>
                         <td className="px-3 py-1.5 text-right text-gray-900">{fmtNumber(ev.km)}</td>
                         <td className="px-3 py-1.5 text-right text-gray-900">{fmtEuro(ev.kosten)}</td>
                       </tr>
@@ -171,7 +238,7 @@ export default function TollingSummaryModal({ invoiceId, invoiceNumber, onClose 
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                      <td className="px-3 py-2 text-gray-900" colSpan={2}>
+                      <td className="px-3 py-2 text-gray-900" colSpan={4}>
                         Totaal ({summary.totals.count})
                       </td>
                       <td className="px-3 py-2 text-right text-gray-900">

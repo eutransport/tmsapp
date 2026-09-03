@@ -336,11 +336,18 @@ export async function sharePdf(id: string, invoiceNumber?: string): Promise<bool
   return false
 }
 
+/** Uitkomst van de controle op de rittijden uit de urenregistratie. */
+export type BinnenRittijd = 'binnen' | 'buiten' | 'onbekend'
+
 export interface TollingSummaryEvent {
   id: string
   start_at: string | null
   end_at: string | null
   license_plate: string
+  /** Ritnummer van die dag uit de urenregistratie. */
+  ritnummer: string
+  /** Valt de passage binnen de begin- en eindtijd van die rit? */
+  binnen_rittijd: BinnenRittijd
   km: number
   kosten: number
 }
@@ -348,7 +355,14 @@ export interface TollingSummaryEvent {
 export interface TollingSummary {
   has_events: boolean
   events: TollingSummaryEvent[]
-  totals: { km: number; kosten: number; count: number }
+  totals: {
+    km: number
+    kosten: number
+    count: number
+    binnen_rittijd: number
+    buiten_rittijd: number
+    zonder_rittijd: number
+  }
 }
 
 export async function getTollingSummary(id: string): Promise<TollingSummary> {

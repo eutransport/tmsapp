@@ -73,6 +73,10 @@ export default function SubmittedHoursPage() {
   const [weekHistory, setWeekHistory] = useState<WeekHistory[]>([])
   const [filteredWeeks, setFilteredWeeks] = useState<WeekHistory[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  // Op ritnummer zoeken gaat via de server: alleen de weken waarin dat
+  // ritnummer voorkomt blijven dan over.
+  const [ritnummerTerm, setRitnummerTerm] = useState('')
+  const [debouncedRitnummer, setDebouncedRitnummer] = useState('')
   const [statusFilter, setStatusFilter] = useState<'concept' | 'ingediend' | ''>('')
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState<PageSize>(30)
@@ -108,7 +112,12 @@ export default function SubmittedHoursPage() {
   // Load week history on mount and when status filter changes
   useEffect(() => {
     loadWeekHistory()
-  }, [statusFilter])
+  }, [statusFilter, debouncedRitnummer])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedRitnummer(ritnummerTerm.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [ritnummerTerm])
 
   // Filter weeks when search changes
   useEffect(() => {
@@ -132,7 +141,7 @@ export default function SubmittedHoursPage() {
   const loadWeekHistory = async () => {
     try {
       setLoading(true)
-      const history = await getWeekHistory(undefined, statusFilter || undefined)
+      const history = await getWeekHistory(undefined, statusFilter || undefined, debouncedRitnummer || undefined)
       // Sort by year and week descending
       const sorted = history.sort((a, b) => {
         if (a.jaar !== b.jaar) return b.jaar - a.jaar
@@ -753,6 +762,25 @@ export default function SubmittedHoursPage() {
                 className="form-input pl-10 w-full"
               />
             </div>
+            <div className="relative flex-1">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Zoek op ritnummer"
+                value={ritnummerTerm}
+                onChange={(e) => setRitnummerTerm(e.target.value)}
+                className="form-input pl-10 w-full"
+              />
+              {ritnummerTerm && (
+                <button
+                  onClick={() => setRitnummerTerm('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                  type="button"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as 'concept' | 'ingediend' | '')}
@@ -763,6 +791,11 @@ export default function SubmittedHoursPage() {
               <option value="ingediend">{t('timeEntries.submitted')}</option>
             </select>
           </div>
+          {debouncedRitnummer && (
+            <p className="mt-2 text-xs text-blue-700">
+              Alleen weken met een rit die "{debouncedRitnummer}" bevat.
+            </p>
+          )}
         </div>
       </div>
 

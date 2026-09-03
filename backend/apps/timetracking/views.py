@@ -96,6 +96,12 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         if bron:
             queryset = queryset.filter(bron=bron)
 
+        # Zoeken op (een deel van) het ritnummer. Het filterveld 'ritnummer'
+        # zoekt exact; hiermee vind je een rit ook op een stukje nummer.
+        ritnummer_zoek = (self.request.query_params.get('ritnummer_zoek') or '').strip()
+        if ritnummer_zoek:
+            queryset = queryset.filter(ritnummer__icontains=ritnummer_zoek)
+
         # Filter to only show entries for drivers with auto_uren enabled
         auto_uren_only = self.request.query_params.get('auto_uren_only')
         if auto_uren_only and auto_uren_only.lower() in ('true', '1'):
@@ -422,9 +428,27 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         year_filter = request.query_params.get('jaar')
         if year_filter:
             queryset = queryset.filter(datum__year=int(year_filter))
-        
+
         # Group by week and year
         from django.db.models.functions import ExtractYear
+
+        # Zoeken op ritnummer: alleen de weken waarin dat ritnummer voorkomt
+        # blijven over, zodat je vanuit een ritnummer bij de juiste week komt.
+        # We filteren op de gevonden weken en niet op de ritten zelf, zodat de
+        # weektotalen van die weken gewoon blijven kloppen.
+        ritnummer_zoek = (request.query_params.get('ritnummer') or '').strip()
+        if ritnummer_zoek:
+            treffers = (
+                queryset.filter(ritnummer__icontains=ritnummer_zoek)
+                .annotate(_jaar=ExtractYear('datum'))
+                .values_list('user_id', 'weeknummer', '_jaar')
+                .distinct()
+            )
+            weekfilter = Q()
+            for user_id, weeknummer, jaar in treffers:
+                weekfilter |= Q(user_id=user_id, weeknummer=weeknummer, datum__year=jaar)
+            queryset = queryset.filter(weekfilter) if weekfilter else queryset.none()
+
         weeks = queryset.annotate(
             jaar=ExtractYear('datum')
         ).values('weeknummer', 'jaar', 'user__voornaam', 'user__achternaam', 'user_id').annotate(

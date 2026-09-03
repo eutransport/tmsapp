@@ -12,6 +12,8 @@ export interface TimeEntryFilters {
   weeknummer__gte?: number
   weeknummer__lte?: number
   ritnummer?: string
+  /** Zoekt op een deel van het ritnummer in plaats van op de hele waarde. */
+  ritnummer_zoek?: string
   datum?: string
   datum__gte?: string
   datum__lte?: string
@@ -86,6 +88,7 @@ export async function getTimeEntries(filters?: TimeEntryFilters): Promise<Pagina
   if (filters?.weeknummer__gte) params.append('weeknummer__gte', filters.weeknummer__gte.toString())
   if (filters?.weeknummer__lte) params.append('weeknummer__lte', filters.weeknummer__lte.toString())
   if (filters?.ritnummer) params.append('ritnummer', filters.ritnummer)
+  if (filters?.ritnummer_zoek) params.append('ritnummer_zoek', filters.ritnummer_zoek)
   if (filters?.datum) params.append('datum', filters.datum)
   if (filters?.datum__gte) params.append('datum__gte', filters.datum__gte)
   if (filters?.datum__lte) params.append('datum__lte', filters.datum__lte)
@@ -187,11 +190,17 @@ export async function getWeekSummary(weeknummer: number, jaar?: number, userId?:
 /**
  * Get history grouped by week
  */
-export async function getWeekHistory(userId?: string, status?: string): Promise<WeekHistory[]> {
+export async function getWeekHistory(
+  userId?: string,
+  status?: string,
+  ritnummer?: string,
+): Promise<WeekHistory[]> {
   const params = new URLSearchParams()
   if (userId) params.append('user', userId)
   if (status) params.append('status', status)
-  
+  // Alleen de weken teruggeven waarin dit ritnummer voorkomt.
+  if (ritnummer) params.append('ritnummer', ritnummer)
+
   const response = await api.get(`/time-entries/history/?${params.toString()}`)
   return response.data
 }

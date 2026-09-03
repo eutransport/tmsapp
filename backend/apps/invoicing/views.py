@@ -684,6 +684,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         Retourneert alle gefactureerde events (privé wordt uitgesloten) plus totalen.
         """
         from decimal import Decimal
+        from apps.tolling.dagritnummers import binnen_rittijden, ritnummers_voor_events
         from apps.tolling.pdf_generator import get_tolling_events_for_invoice
 
         invoice = self.get_object()
@@ -691,19 +692,30 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         billed = [e for e in events if not getattr(e, 'is_private', False)]
         billed.sort(key=lambda e: (e.start_at or e.created_at))
 
+        # Controle op de urenregistratie: valt de passage binnen de begin- en
+        # eindtijd van de rit van die dag? Zonder ingediende tijden blijft het
+        # antwoord bewust 'onbekend'.
+        dag_ritnummers = ritnummers_voor_events(billed)
+        tijdcontrole = binnen_rittijden(billed)
+
         event_rows = []
         total_km = Decimal('0')
         total_kosten = Decimal('0')
+        telling = {'binnen': 0, 'buiten': 0, 'onbekend': 0}
         for ev in billed:
             km = Decimal(ev.distance_km or 0)
             kosten = Decimal(ev.amount or 0)
             total_km += km
             total_kosten += kosten
+            status_tijd = tijdcontrole.get(ev.id, 'onbekend')
+            telling[status_tijd] = telling.get(status_tijd, 0) + 1
             event_rows.append({
                 'id': str(ev.id),
                 'start_at': ev.start_at.isoformat() if ev.start_at else None,
                 'end_at': ev.end_at.isoformat() if ev.end_at else None,
                 'license_plate': ev.license_plate_raw or ev.license_plate_normalized or '',
+                'ritnummer': dag_ritnummers.get(ev.id) or (ev.ritnummer or ''),
+                'binnen_rittijd': status_tijd,
                 'km': float(km),
                 'kosten': float(kosten),
             })
@@ -715,6 +727,9 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 'km': float(total_km),
                 'kosten': float(total_kosten),
                 'count': len(event_rows),
+                'binnen_rittijd': telling['binnen'],
+                'buiten_rittijd': telling['buiten'],
+                'zonder_rittijd': telling['onbekend'],
             },
         })
 
