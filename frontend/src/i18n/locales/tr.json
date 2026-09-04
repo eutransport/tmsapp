@@ -725,7 +725,9 @@
     "assignDriver": "Şoför ata",
     "removeDriver": "Şoförü kaldır",
     "driverAssigned": "Şoför atandı",
-    "driverRemoved": "Şoför kaldırıldı"
+    "driverRemoved": "Şoför kaldırıldı",
+    "removeVehicle": "Aracı planlamadan çıkar",
+    "removeVehicleConfirm": "{{kenteken}} aracını {{week}} / {{year}} haftasının planlamasından çıkarmak istediğinize emin misiniz? Bu işlem {{aantal}} satırı siler ve araç artık PDF'te veya e-postada görünmez."
   },
   "leave": {
     "title": "İzin",

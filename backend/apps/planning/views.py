@@ -6,6 +6,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.core.mail import EmailMessage, get_connection
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.lib.units import cm
@@ -235,25 +237,41 @@ class WeekPlanningViewSet(viewsets.ModelViewSet):
             )
         
         # Create new planning
-        new_planning = WeekPlanning.objects.create(
-            bedrijf=source.bedrijf,
-            weeknummer=next_week,
-            jaar=year
-        )
-        
-        # Copy entries (skip inactive vehicles)
-        for entry in source.entries.select_related('vehicle').all():
-            if not entry.vehicle.actief:
-                continue  # Skip inactieve voertuigen
-            PlanningEntry.objects.create(
-                planning=new_planning,
-                vehicle=entry.vehicle,
-                dag=entry.dag,
-                chauffeur=entry.chauffeur,
-                ritnummer=entry.ritnummer,
-                telefoon=entry.telefoon,
-                adr=entry.adr
+        # Alles in een transactie: gaat het kopieren halverwege mis, dan blijft
+        # er geen halve week achter die de gebruiker daarna in de weg zit.
+        with transaction.atomic():
+            new_planning = WeekPlanning.objects.create(
+                bedrijf=source.bedrijf,
+                weeknummer=next_week,
+                jaar=year
             )
+
+            # Copy entries (skip inactive vehicles)
+            for entry in source.entries.select_related('vehicle').all():
+                if entry.vehicle and not entry.vehicle.actief:
+                    continue  # Skip inactieve voertuigen
+
+                nieuwe = PlanningEntry(
+                    planning=new_planning,
+                    vehicle=entry.vehicle,
+                    dag=entry.dag,
+                    chauffeur=entry.chauffeur,
+                    ritnummer=entry.ritnummer,
+                    telefoon=entry.telefoon,
+                    adr=entry.adr
+                )
+                # Is het voertuig uit de vloot verwijderd, dan staat er alleen
+                # nog een snapshot op de regel. save() kan die dan niet meer
+                # ophalen, dus nemen we hem hier over; anders zou de rij leeg in
+                # de nieuwe week komen te staan en klopt ook de sortering niet.
+                if not entry.vehicle_id:
+                    nieuwe.vehicle_kenteken = entry.vehicle_kenteken
+                    nieuwe.vehicle_type_wagen = entry.vehicle_type_wagen
+                    nieuwe.vehicle_ritnummer = entry.vehicle_ritnummer
+                # Hetzelfde voor een chauffeur die niet meer bestaat.
+                if not entry.chauffeur_id:
+                    nieuwe.chauffeur_naam = entry.chauffeur_naam
+                nieuwe.save()
         
         logger.info(
             f"WeekPlanning copied: {source.bedrijf.naam} Week {source.weeknummer}/{source.jaar} -> "
@@ -262,6 +280,56 @@ class WeekPlanningViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(new_planning)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def remove_vehicle(self, request, pk=None):
+        """Haal alle regels van een wagen uit deze week.
+
+        De frontend stuurt de id's van de regels die bij de rij horen. We
+        filteren daar zelf nog op deze planning, zodat een meegestuurd id nooit
+        een regel uit een andere week kan weghalen.
+        """
+        planning = self.get_object()
+
+        entry_ids = request.data.get('entry_ids')
+        if not isinstance(entry_ids, list) or not entry_ids:
+            return Response(
+                {'error': 'Geen regels opgegeven'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            regels = PlanningEntry.objects.filter(planning=planning, id__in=entry_ids)
+            aantal = regels.count()
+        except (ValueError, TypeError, DjangoValidationError):
+            return Response(
+                {'error': 'Ongeldige regel opgegeven'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not aantal:
+            return Response(
+                {'error': 'Deze regels horen niet bij deze planning'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        eerste = regels.first()
+        kenteken = eerste.vehicle_kenteken or (
+            eerste.vehicle.kenteken if eerste.vehicle else '?'
+        )
+
+        with transaction.atomic():
+            regels.delete()
+
+        logger.warning(
+            f"PlanningEntries deleted: {kenteken} ({aantal} regels) uit "
+            f"{planning.bedrijf.naam} Week {planning.weeknummer}/{planning.jaar} "
+            f"by user {request.user.email}"
+        )
+
+        # Opnieuw ophalen, anders zit de oude regelset nog in de prefetch-cache.
+        ververst = self.get_queryset().get(pk=planning.pk)
+        return Response(self.get_serializer(ververst).data)
     
     @action(detail=True, methods=['post'])
     def send_email(self, request, pk=None):

@@ -725,7 +725,9 @@
     "assignDriver": "Assign driver",
     "removeDriver": "Remove driver",
     "driverAssigned": "Driver assigned",
-    "driverRemoved": "Driver removed"
+    "driverRemoved": "Driver removed",
+    "removeVehicle": "Remove vehicle from planning",
+    "removeVehicleConfirm": "Are you sure you want to remove {{kenteken}} from the planning of week {{week}} / {{year}}? This deletes {{aantal}} row(s) and the vehicle will no longer appear in the PDF or the email."
   },
   "leave": {
     "title": "Leave",

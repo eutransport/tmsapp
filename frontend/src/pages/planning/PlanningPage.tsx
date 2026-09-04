@@ -27,6 +27,7 @@ import {
   deleteWeekPlanning,
   getCurrentWeek,
   copyToNextWeek,
+  removeVehicleFromPlanning,
   updatePlanningEntry,
   getMyPlanning,
   sendPlanningEmail,
@@ -291,6 +292,11 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
   // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  // Wagen die de gebruiker uit de planning wil halen; null = geen bevestiging open.
+  const [vehicleToRemove, setVehicleToRemove] = useState<{
+    kenteken: string
+    entryIds: string[]
+  } | null>(null)
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [emailAddress, setEmailAddress] = useState('')
   const [emailSending, setEmailSending] = useState(false)
@@ -461,6 +467,24 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
       setEditingEntry(null)
     } catch (err: any) {
       setError(err.response?.data?.detail || t('common.error'))
+    }
+  }
+
+  // Haalt alle regels van een wagen uit deze week. De planning die terugkomt
+  // is al bijgewerkt, dus we hoeven niet opnieuw op te halen.
+  const handleRemoveVehicle = async () => {
+    if (!planning || !vehicleToRemove) return
+
+    try {
+      setSaving(true)
+      setError(null)
+      const bijgewerkt = await removeVehicleFromPlanning(planning.id, vehicleToRemove.entryIds)
+      setPlanning(bijgewerkt)
+      setVehicleToRemove(null)
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.response?.data?.detail || t('common.error'))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -767,10 +791,28 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
                   <tr key={vehicle.vehicleId} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <div className="flex items-center">
-                        <TruckIcon className="h-5 w-5 text-gray-400 mr-2" />
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {vehicle.kenteken}
+                        <TruckIcon className="h-5 w-5 text-gray-400 mr-2 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1">
+                            <span className="font-medium text-gray-900">
+                              {vehicle.kenteken}
+                            </span>
+                            {!isReadOnly && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setVehicleToRemove({
+                                    kenteken: vehicle.kenteken,
+                                    entryIds: Array.from(vehicle.entries.values()).map((e) => e.id),
+                                  })
+                                }
+                                title={t('planning.removeVehicle')}
+                                aria-label={`${t('planning.removeVehicle')}: ${vehicle.kenteken}`}
+                                className="p-1 rounded text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                           <div className="text-sm text-gray-500">
                             {vehicle.ritnummer} • {vehicle.type}
@@ -840,11 +882,26 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
               <div key={vehicle.vehicleId} className="p-3">
                 {/* Vehicle header */}
                 <div className="flex items-center gap-2 mb-3 pb-2 border-b">
-                  <TruckIcon className="h-5 w-5 text-gray-400" />
-                  <div>
+                  <TruckIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
                     <div className="font-mono font-bold text-gray-900">{vehicle.kenteken}</div>
                     <div className="text-xs text-gray-500">{vehicle.ritnummer} • {vehicle.type}</div>
                   </div>
+                  {!isReadOnly && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVehicleToRemove({
+                          kenteken: vehicle.kenteken,
+                          entryIds: Array.from(vehicle.entries.values()).map((e) => e.id),
+                        })
+                      }
+                      aria-label={`${t('planning.removeVehicle')}: ${vehicle.kenteken}`}
+                      className="flex-shrink-0 -mr-1 rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 active:bg-red-100"
+                    >
+                      <TrashIcon className="h-5 w-5" />
+                    </button>
+                  )}
                 </div>
                 
                 {/* Days grid */}
@@ -1072,6 +1129,75 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
                     </button>
                     <button
                       onClick={handleDeletePlanning}
+                      disabled={saving}
+                      className="btn-danger"
+                    >
+                      {saving ? t('common.deleting') : t('common.delete')}
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Wagen uit de planning halen */}
+      <Transition appear show={vehicleToRemove !== null} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setVehicleToRemove(null)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 shadow-xl transition-all">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                      <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+                    </div>
+                    <div>
+                      <Dialog.Title className="text-lg font-semibold text-gray-900">
+                        {t('planning.removeVehicle')}
+                      </Dialog.Title>
+                      <p className="mt-2 text-sm text-gray-500">
+                        {t('planning.removeVehicleConfirm', {
+                          kenteken: vehicleToRemove?.kenteken ?? '',
+                          week: currentWeek,
+                          year: currentYear,
+                          aantal: vehicleToRemove?.entryIds.length ?? 0,
+                        })}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setVehicleToRemove(null)}
+                      className="btn-secondary"
+                    >
+                      {t('common.cancel')}
+                    </button>
+                    <button
+                      onClick={handleRemoveVehicle}
                       disabled={saving}
                       className="btn-danger"
                     >

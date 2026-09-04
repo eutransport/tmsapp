@@ -725,7 +725,9 @@
     "assignDriver": "Wijs chauffeur toe",
     "removeDriver": "Verwijder chauffeur",
     "driverAssigned": "Chauffeur toegewezen",
-    "driverRemoved": "Chauffeur verwijderd"
+    "driverRemoved": "Chauffeur verwijderd",
+    "removeVehicle": "Wagen uit planning halen",
+    "removeVehicleConfirm": "Weet je zeker dat je {{kenteken}} uit de planning van week {{week}} / {{year}} wilt halen? Dit haalt {{aantal}} regel(s) weg en de wagen komt dan ook niet meer in de PDF of de e-mail."
   },
   "leave": {
     "title": "Verlof",

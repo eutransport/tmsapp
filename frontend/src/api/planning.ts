@@ -105,6 +105,20 @@ export async function copyToNextWeek(id: string): Promise<WeekPlanning> {
   return response.data
 }
 
+/**
+ * Haal alle regels van een wagen uit de weekplanning.
+ * Levert de bijgewerkte planning terug.
+ */
+export async function removeVehicleFromPlanning(
+  id: string,
+  entryIds: string[]
+): Promise<WeekPlanning> {
+  const response = await api.post(`/planning/weeks/${id}/remove_vehicle/`, {
+    entry_ids: entryIds,
+  })
+  return response.data
+}
+
 // Planning Entry API
 
 /**
