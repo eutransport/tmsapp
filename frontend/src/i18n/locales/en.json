@@ -170,6 +170,8 @@
     "filesExplorer": "File explorer",
     "notifications": "Notifications",
     "invoices": "Invoices",
+    "factuurwizard": "Create invoice",
+    "factuurwizardBeheer": "Invoice wizard settings",
     "invoiceTemplates": "Invoice Templates",
     "invoiceImport": "Invoice Import",
     "revenue": "Revenue",

@@ -60,6 +60,8 @@ const InvoiceCreatePage = React.lazy(() => import('@/pages/invoices/InvoiceCreat
 const TemplatesPage = React.lazy(() => import('@/pages/invoices/TemplatesPage'))
 const InvoiceEditPage = React.lazy(() => import('@/pages/invoices/InvoiceEditPage'))
 const TemplateEditorPage = React.lazy(() => import('@/pages/invoices/TemplateEditorPage'))
+const FactuurWizardPage = React.lazy(() => import('@/pages/invoices/FactuurWizardPage'))
+const FactuurWizardBeheerPage = React.lazy(() => import('@/pages/invoices/FactuurWizardBeheerPage'))
 
 // Revenue
 const RevenuePage = React.lazy(() => import('@/pages/revenue/RevenuePage'))
@@ -352,6 +354,10 @@ function App() {
         <Route path="/invoices/templates" element={<AdminRoute><TemplatesPage /></AdminRoute>} />
         <Route path="/invoices/templates/new" element={<AdminRoute><TemplateEditorPage /></AdminRoute>} />
         <Route path="/invoices/templates/:id/edit" element={<AdminRoute><TemplateEditorPage /></AdminRoute>} />
+
+        {/* Factuurwizard */}
+        <Route path="/factuurwizard" element={<PermissionRoute permission="use_invoice_wizard"><FactuurWizardPage /></PermissionRoute>} />
+        <Route path="/factuurwizard/beheer" element={<PermissionRoute permission="manage_invoice_wizard"><FactuurWizardBeheerPage /></PermissionRoute>} />
 
         {/* Revenue */}
         <Route path="/revenue" element={<PermissionRoute permission="view_revenue"><RevenuePage /></PermissionRoute>} />

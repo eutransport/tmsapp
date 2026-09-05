@@ -170,6 +170,8 @@
     "filesExplorer": "Dosya yöneticisi",
     "notifications": "Bildirimler",
     "invoices": "Faturalar",
+    "factuurwizard": "Fatura oluştur",
+    "factuurwizardBeheer": "Fatura sihirbazı ayarları",
     "invoiceTemplates": "Fatura şablonları",
     "invoiceImport": "Fatura içe aktarma",
     "revenue": "Ciro",

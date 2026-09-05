@@ -318,3 +318,11 @@ class Expense(models.Model):
         if not self.totaal:
             self.totaal = self.bedrag + self.btw_bedrag
         super().save(*args, **kwargs)
+
+
+# De configuratie van de factuurwizard staat in een eigen bestand, maar moet
+# hier binnengehaald worden zodat Django de modellen vindt.
+from .wizard_models import (  # noqa: E402,F401
+    FactuurWizardBedrijf,
+    FactuurWizardDienst,
+)

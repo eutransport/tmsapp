@@ -170,6 +170,8 @@
     "filesExplorer": "Bestandsverkenner",
     "notifications": "Notificaties",
     "invoices": "Facturen",
+    "factuurwizard": "Factuur maken",
+    "factuurwizardBeheer": "Factuurwizard instellen",
     "invoiceTemplates": "Factuur Templates",
     "invoiceImport": "Factuur Import",
     "revenue": "Omzet",
