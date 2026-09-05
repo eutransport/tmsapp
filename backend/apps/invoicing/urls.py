@@ -9,12 +9,15 @@ from .views import (
     RevenueForecastView,
     RevenueYearsView,
 )
+from .wizard_views import FactuurWizardBedrijfViewSet, FactuurWizardViewSet
 
 router = DefaultRouter()
 router.register(r'templates', InvoiceTemplateViewSet, basename='invoice-templates')
 router.register(r'invoices', InvoiceViewSet, basename='invoices')
 router.register(r'lines', InvoiceLineViewSet, basename='invoice-lines')
 router.register(r'expenses', ExpenseViewSet, basename='expenses')
+router.register(r'wizard-bedrijven', FactuurWizardBedrijfViewSet, basename='factuurwizard-bedrijven')
+router.register(r'wizard', FactuurWizardViewSet, basename='factuurwizard')
 
 urlpatterns = [
     path('', include(router.urls)),
