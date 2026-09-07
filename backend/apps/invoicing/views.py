@@ -44,6 +44,138 @@ def safe_str(value):
     return s
 
 
+def bouw_factuur_bijlagen(invoice):
+    """Bijlagen bij een factuur: de factuur zelf en zo mogelijk de tolheffing.
+
+    Levert een lijst van (bestandsnaam, inhoud). Lukt het tolheffing-overzicht
+    niet, dan gaat de factuur alsnog gewoon mee; dat mag het versturen niet
+    tegenhouden.
+    """
+    from .pdf_generator import generate_invoice_pdf
+
+    bijlagen = [(
+        sanitize_filename(f"factuur_{invoice.factuurnummer.replace('/', '-')}.pdf") or 'factuur.pdf',
+        generate_invoice_pdf(invoice),
+    )]
+    try:
+        from apps.tolling.pdf_generator import (
+            generate_tolling_events_pdf,
+            get_tolling_events_for_invoice,
+            build_tolling_pdf_filename,
+        )
+        events = list(get_tolling_events_for_invoice(invoice))
+        if events:
+            bijlagen.append((
+                sanitize_filename(build_tolling_pdf_filename(events)) or 'tolheffing.pdf',
+                generate_tolling_events_pdf(events, invoice=invoice),
+            ))
+    except Exception as exc:  # pragma: no cover - defensief
+        logger.warning(
+            f"Kon tolheffing-bijlage niet genereren voor {invoice.factuurnummer}: {exc}"
+        )
+    return bijlagen
+
+
+def bepaal_factuur_ontvangers(invoice, data):
+    """Bepaal naar welke adressen deze factuur gaat.
+
+    Combineert een los adres, een meegegeven lijst en de mailinglijst van het
+    bedrijf. Levert dat niets op, dan valt het terug op het e-mailadres van het
+    bedrijf zelf. Dubbele adressen vervallen, de volgorde blijft behouden.
+    """
+    adressen = []
+
+    los_adres = data.get('email')
+    if los_adres:
+        adressen.append(los_adres)
+
+    meegegeven = data.get('emails') or []
+    if isinstance(meegegeven, list):
+        adressen.extend(meegegeven)
+
+    if data.get('use_mailing_list'):
+        from apps.companies.models import MailingListContact
+        for contact in MailingListContact.objects.filter(bedrijf=invoice.bedrijf, is_active=True):
+            adressen.append(contact.email)
+
+    if not adressen:
+        bedrijfsadres = getattr(invoice.bedrijf, 'email', '') or ''
+        if bedrijfsadres:
+            adressen.append(bedrijfsadres)
+
+    gezien = set()
+    uniek = []
+    for adres in adressen:
+        if adres and adres not in gezien:
+            gezien.add(adres)
+            uniek.append(adres)
+    return uniek
+
+
+def verstuur_factuurmail(invoice, ontvangers, smtp_gegevens, gebruiker):
+    """Stel de factuurmail samen, verstuur hem en werk de status bij.
+
+    Er gaat bewust een losse mail per factuur uit, met de factuur en het
+    eventuele tolheffing-overzicht als bijlage. `smtp_gegevens` is de tuple
+    die get_smtp_config teruggeeft.
+    """
+    from django.core.mail import EmailMessage, get_connection
+    from apps.core.models import AppSettings
+    from apps.core.views import signature_to_blocks, plain_text_to_html
+
+    (smtp_host, smtp_port, smtp_username_raw, smtp_password,
+     smtp_use_tls, from_email, signature, src) = smtp_gegevens
+
+    app_instellingen = AppSettings.get_settings()
+    handtekening_tekst, handtekening_html = signature_to_blocks(signature, src)
+
+    basis_tekst = f"""Geachte,
+
+Hierbij ontvangt u factuur {invoice.factuurnummer}.
+
+Factuurdatum: {invoice.factuurdatum.strftime('%d-%m-%Y')}
+Vervaldatum: {invoice.vervaldatum.strftime('%d-%m-%Y')}
+Bedrag: € {invoice.totaal:.2f}
+
+{f"Opmerkingen: {invoice.opmerkingen}" if invoice.opmerkingen else ""}
+
+Met vriendelijke groet,
+{app_instellingen.company_name or ''}
+{app_instellingen.company_email or ''}"""
+
+    verbinding = get_connection(
+        backend='django.core.mail.backends.smtp.EmailBackend',
+        host=smtp_host,
+        port=smtp_port,
+        username=safe_str(smtp_username_raw) if smtp_username_raw else '',
+        password=smtp_password,
+        use_tls=smtp_use_tls,
+        fail_silently=False,
+    )
+
+    bericht = EmailMessage(
+        subject=f"Factuur {invoice.factuurnummer}",
+        body=f"{plain_text_to_html(basis_tekst)}{handtekening_html}",
+        from_email=from_email,
+        to=ontvangers,
+        connection=verbinding,
+    )
+    bericht.content_subtype = 'html'
+    for bestandsnaam, inhoud in bouw_factuur_bijlagen(invoice):
+        bericht.attach(bestandsnaam, inhoud, 'application/pdf')
+    bericht.send()
+
+    if invoice.status == InvoiceStatus.DEFINITIEF:
+        invoice.status = InvoiceStatus.VERZONDEN
+        invoice.sent_at = timezone.now()
+        invoice.save()
+
+    logger.info(
+        f"Invoice email sent: {invoice.factuurnummer} to {', '.join(ontvangers)} "
+        f"by user {gebruiker.email}"
+    )
+
+
 class InvoiceTemplateViewSet(viewsets.ModelViewSet):
     """
     ViewSet voor factuur templates.
@@ -735,174 +867,118 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def send_email(self, request, pk=None):
-        """Send invoice via email. Supports single email, multiple emails, or mailing list."""
-        from django.core.mail import EmailMessage
-        from apps.core.models import AppSettings
-        
+        """Verstuur deze factuur per e-mail met de bijbehorende bijlagen."""
         invoice = self.get_object()
-        
+
         if invoice.status not in [InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN]:
             return Response(
                 {'error': 'E-mail kan alleen voor definitieve/verzonden facturen worden verstuurd'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Collect recipient emails
-        recipient_emails = []
-        
-        # Option 1: Single email from request
-        single_email = request.data.get('email')
-        if single_email:
-            recipient_emails.append(single_email)
-        
-        # Option 2: Multiple emails from request (mailing list selection)
-        emails_list = request.data.get('emails', [])
-        if emails_list and isinstance(emails_list, list):
-            recipient_emails.extend(emails_list)
-        
-        # Option 3: Use mailing list flag - send to all active contacts of the company
-        use_mailing_list = request.data.get('use_mailing_list', False)
-        if use_mailing_list:
-            from apps.companies.models import MailingListContact
-            mailing_contacts = MailingListContact.objects.filter(
-                bedrijf=invoice.bedrijf, is_active=True
-            )
-            for contact in mailing_contacts:
-                if contact.email not in recipient_emails:
-                    recipient_emails.append(contact.email)
-        
-        # Fallback to company email
+
+        recipient_emails = bepaal_factuur_ontvangers(invoice, request.data)
         if not recipient_emails:
-            if hasattr(invoice.bedrijf, 'email') and invoice.bedrijf.email:
-                recipient_emails.append(invoice.bedrijf.email)
-            else:
-                return Response(
-                    {'error': 'Geen e-mailadres opgegeven en bedrijf heeft geen e-mailadres'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_emails = []
-        for e in recipient_emails:
-            if e not in seen:
-                seen.add(e)
-                unique_emails.append(e)
-        recipient_emails = unique_emails
-        
-        # Resolve email profile (optional) then fall back to AppSettings
-        profile_id = request.data.get('email_profile_id') or None
-        from apps.core.views import get_smtp_config, signature_to_blocks, plain_text_to_html
+            return Response(
+                {'error': 'Geen e-mailadres opgegeven en bedrijf heeft geen e-mailadres'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from apps.core.views import get_smtp_config
         try:
-            smtp_host, smtp_port, smtp_username_raw, smtp_password, smtp_use_tls, from_email, signature, src = \
-                get_smtp_config(profile_id, request.user)
+            smtp_gegevens = get_smtp_config(
+                request.data.get('email_profile_id') or None, request.user
+            )
         except (ValueError, PermissionError) as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        settings = AppSettings.get_settings()
-
-        if not smtp_host:
+        if not smtp_gegevens[0]:
             return Response(
                 {'error': 'SMTP instellingen zijn niet geconfigureerd. Ga naar Instellingen om e-mail te configureren.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Build email - only show factuurnummer in subject, no company name
-        subject = f"Factuur {invoice.factuurnummer}"
-
-        # Build email body with optional signature (including inline image when configured)
-        signature_text_block, signature_html_block = signature_to_blocks(signature, src)
-
-        base_body = f"""Geachte,
-
-Hierbij ontvangt u factuur {invoice.factuurnummer}.
-
-Factuurdatum: {invoice.factuurdatum.strftime('%d-%m-%Y')}
-Vervaldatum: {invoice.vervaldatum.strftime('%d-%m-%Y')}
-Bedrag: € {invoice.totaal:.2f}
-
-{f"Opmerkingen: {invoice.opmerkingen}" if invoice.opmerkingen else ""}
-
-Met vriendelijke groet,
-{settings.company_name or ''}
-{settings.company_email or ''}"""
-
-        body = f"{base_body}{signature_text_block}"
-        body_html = f"{plain_text_to_html(base_body)}{signature_html_block}"
-
         try:
-            # Create custom SMTP connection
-            from django.core.mail import get_connection
-
-            smtp_username = safe_str(smtp_username_raw) if smtp_username_raw else ''
-
-            connection = get_connection(
-                backend='django.core.mail.backends.smtp.EmailBackend',
-                host=smtp_host,
-                port=smtp_port,
-                username=smtp_username,
-                password=smtp_password,
-                use_tls=smtp_use_tls,
-                fail_silently=False,
-            )
-            
-            email = EmailMessage(
-                subject=subject,
-                body=body_html,
-                from_email=from_email,
-                to=recipient_emails,
-                connection=connection,
-            )
-            email.content_subtype = 'html'
-            
-            # Generate and attach PDF
-            from .pdf_generator import generate_invoice_pdf
-            pdf_content = generate_invoice_pdf(invoice)
-            filename = f"factuur_{invoice.factuurnummer.replace('/', '-')}.pdf"
-            email.attach(filename, pdf_content, 'application/pdf')
-
-            # Attach tolling overview PDF when the invoice has tolling events
-            try:
-                from apps.tolling.pdf_generator import (
-                    generate_tolling_events_pdf,
-                    get_tolling_events_for_invoice,
-                    build_tolling_pdf_filename,
-                )
-                tolling_events = list(get_tolling_events_for_invoice(invoice))
-                if tolling_events:
-                    tolling_pdf = generate_tolling_events_pdf(tolling_events, invoice=invoice)
-                    tolling_filename = build_tolling_pdf_filename(tolling_events)
-                    email.attach(tolling_filename, tolling_pdf, 'application/pdf')
-            except Exception as tol_exc:
-                logger.warning(
-                    f"Kon tolheffing-bijlage niet genereren voor {invoice.factuurnummer}: {tol_exc}"
-                )
-
-            email.send()
-            
-            # Update invoice status to verzonden if definitief
-            if invoice.status == InvoiceStatus.DEFINITIEF:
-                invoice.status = InvoiceStatus.VERZONDEN
-                invoice.sent_at = timezone.now()
-                invoice.save()
-            
-            recipients_str = ', '.join(recipient_emails)
-            logger.info(
-                f"Invoice email sent: {invoice.factuurnummer} to {recipients_str} "
-                f"by user {request.user.email}"
-            )
-            
-            return Response({
-                'message': f'Factuur succesvol verzonden naar {recipients_str}',
-                'invoice': InvoiceSerializer(invoice).data
-            })
-            
+            verstuur_factuurmail(invoice, recipient_emails, smtp_gegevens, request.user)
         except Exception as e:
             logger.error(f"Email send failed for invoice {invoice.factuurnummer}: {str(e)}")
             return Response(
                 {'error': f'E-mail verzenden mislukt: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+        recipients_str = ', '.join(recipient_emails)
+        return Response({
+            'message': f'Factuur succesvol verzonden naar {recipients_str}',
+            'invoice': InvoiceSerializer(invoice).data
+        })
+
+    @action(detail=False, methods=['post'], url_path='bulk_send_email')
+    def bulk_send_email(self, request):
+        """Verstuur meerdere facturen: per factuur een losse mail.
+
+        Elke factuur gaat naar de eigen ontvangers met de eigen bijlagen. Er
+        wordt bewust geen verzamelmail gemaakt, zodat iedere klant alleen de
+        eigen factuur ontvangt.
+        """
+        ids = request.data.get('ids') or []
+        if not ids:
+            return Response(
+                {'error': 'Geen facturen geselecteerd'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from apps.core.views import get_smtp_config
+        try:
+            smtp_gegevens = get_smtp_config(
+                request.data.get('email_profile_id') or None, request.user
+            )
+        except (ValueError, PermissionError) as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not smtp_gegevens[0]:
+            return Response(
+                {'error': 'SMTP instellingen zijn niet geconfigureerd. Ga naar Instellingen om e-mail te configureren.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Alleen facturen die deze gebruiker mag zien.
+        gevonden = {str(f.id): f for f in self.get_queryset().filter(pk__in=ids)}
+
+        verzonden = 0
+        fouten = []
+        for factuur_id in ids:
+            factuur = gevonden.get(str(factuur_id))
+            if factuur is None:
+                fouten.append(f'Factuur {factuur_id} niet gevonden')
+                continue
+            if factuur.status not in [InvoiceStatus.DEFINITIEF, InvoiceStatus.VERZONDEN]:
+                fouten.append(
+                    f'{factuur.factuurnummer}: alleen definitieve of verzonden facturen kunnen gemaild worden'
+                )
+                continue
+            ontvangers = bepaal_factuur_ontvangers(factuur, request.data)
+            if not ontvangers:
+                fouten.append(f'{factuur.factuurnummer}: geen e-mailadres bekend')
+                continue
+            try:
+                verstuur_factuurmail(factuur, ontvangers, smtp_gegevens, request.user)
+                verzonden += 1
+            except Exception as exc:
+                logger.error(f"Bulk e-mail mislukt voor {factuur.factuurnummer}: {exc}")
+                fouten.append(f'{factuur.factuurnummer}: verzenden mislukt ({exc})')
+
+        logger.info(
+            f"Bulk e-mail afgerond: {verzonden} facturen verzonden door {request.user.email}"
+        )
+        return Response({
+            'verzonden': verzonden,
+            'errors': fouten,
+            'message': (
+                '1 factuur verzonden' if verzonden == 1
+                else f'{verzonden} facturen verzonden'
+            ),
+        })
+
 
 
 class InvoiceLineViewSet(viewsets.ModelViewSet):

@@ -238,6 +238,78 @@ export async function bulkAssignAdministratie(
   return response.data
 }
 
+/**
+ * Verstuur meerdere facturen tegelijk. De server maakt per factuur een losse
+ * mail met de bijbehorende bijlagen, dus iedere klant krijgt alleen de eigen
+ * factuur te zien.
+ */
+export async function bulkSendEmail(
+  ids: string[],
+  opties: { useMailingList?: boolean; emails?: string[]; emailProfileId?: string } = {}
+): Promise<{ verzonden: number; errors: string[]; message: string }> {
+  const data: Record<string, unknown> = { ids }
+  if (opties.useMailingList) data.use_mailing_list = true
+  if (opties.emails && opties.emails.length > 0) data.emails = opties.emails
+  if (opties.emailProfileId) data.email_profile_id = opties.emailProfileId
+  const response = await api.post('/invoicing/invoices/bulk_send_email/', data)
+  return response.data
+}
+
+/** Stand van zaken tijdens het downloaden van meerdere facturen. */
+export interface BulkDownloadVoortgang {
+  klaar: number
+  totaal: number
+  huidige: string
+}
+
+/**
+ * Download de gekozen facturen een voor een als los pdf-bestand. Browsers
+ * slikken geen stortvloed aan gelijktijdige downloads, dus de bestanden gaan
+ * netjes achter elkaar in een wachtrij met een korte pauze ertussen.
+ *
+ * Met `metTolheffing` komt het tolheffing-overzicht direct achter de bijbehorende
+ * factuur mee, voor de facturen die er een hebben.
+ */
+export async function downloadInvoicesEenVoorEen(
+  facturen: { id: string; factuurnummer: string }[],
+  metTolheffing: boolean,
+  onVoortgang?: (voortgang: BulkDownloadVoortgang) => void
+): Promise<{ gelukt: number; fouten: string[] }> {
+  const wacht = (ms: number) => new Promise((klaar) => setTimeout(klaar, ms))
+  const fouten: string[] = []
+  let gelukt = 0
+
+  for (let i = 0; i < facturen.length; i++) {
+    const factuur = facturen[i]
+    onVoortgang?.({ klaar: i, totaal: facturen.length, huidige: factuur.factuurnummer })
+
+    try {
+      await generatePdf(factuur.id, true)
+      gelukt++
+    } catch {
+      fouten.push(`${factuur.factuurnummer}: factuur kon niet gedownload worden`)
+      continue
+    }
+
+    if (metTolheffing) {
+      await wacht(400)
+      try {
+        await downloadTollingPdf(factuur.id, factuur.factuurnummer)
+      } catch (err: any) {
+        // Een 404 betekent alleen dat deze factuur geen tolheffing heeft.
+        if (err?.response?.status !== 404) {
+          fouten.push(`${factuur.factuurnummer}: tolheffing kon niet gedownload worden`)
+        }
+      }
+    }
+
+    if (i < facturen.length - 1) await wacht(400)
+  }
+
+  onVoortgang?.({ klaar: facturen.length, totaal: facturen.length, huidige: '' })
+  return { gelukt, fouten }
+}
+
 // Invoice actions
 
 export async function recalculateInvoice(id: string): Promise<Invoice> {

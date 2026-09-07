@@ -34,6 +34,9 @@ import {
   bulkDeleteInvoices,
   bulkStatusChange,
   bulkAssignAdministratie,
+  bulkSendEmail,
+  downloadInvoicesEenVoorEen,
+  BulkDownloadVoortgang,
   markDefinitief,
   markVerzonden,
   markBetaald,
@@ -105,6 +108,12 @@ export default function InvoicesPage() {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
   const [showBulkAssignAdminModal, setShowBulkAssignAdminModal] = useState(false)
   const [bulkAssignAdminId, setBulkAssignAdminId] = useState<string>('')
+  const [showBulkEmailModal, setShowBulkEmailModal] = useState(false)
+  const [showBulkDownloadModal, setShowBulkDownloadModal] = useState(false)
+  // Keuze in de downloaddialoog: alleen de facturen of ook de tolheffing.
+  const [bulkDownloadMetTolheffing, setBulkDownloadMetTolheffing] = useState(false)
+  const [bulkDownloadVoortgang, setBulkDownloadVoortgang] = useState<BulkDownloadVoortgang | null>(null)
+  const [bulkBezig, setBulkBezig] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [tollingModalInvoice, setTollingModalInvoice] = useState<Invoice | null>(null)
@@ -300,6 +309,79 @@ export default function InvoicesPage() {
       setError(err.response?.data?.error || err.response?.data?.detail || t('errors.saveFailed'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  /**
+   * Mail de geselecteerde facturen. De server maakt per factuur een losse mail
+   * naar de mailinglijst van het bijbehorende bedrijf, inclusief bijlagen.
+   */
+  const handleBulkSendEmail = async () => {
+    if (selectedIds.size === 0) return
+    try {
+      setBulkBezig(true)
+      setError(null)
+      const resultaat = await bulkSendEmail(Array.from(selectedIds), {
+        useMailingList: true,
+        emailProfileId: emailProfileId || undefined,
+      })
+      setShowBulkEmailModal(false)
+      if (resultaat.verzonden > 0) {
+        toast.success(resultaat.message)
+        setSuccessMessage(resultaat.message)
+        setTimeout(() => setSuccessMessage(null), 5000)
+      }
+      if (resultaat.errors && resultaat.errors.length > 0) {
+        setError(resultaat.errors.join(' | '))
+        toast.error(t('invoices.bulkEmailPartial', { defaultValue: 'Niet alle facturen konden verstuurd worden' }))
+      } else {
+        clearSelection()
+      }
+      loadInvoices()
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.response?.data?.detail || t('errors.saveFailed'))
+    } finally {
+      setBulkBezig(false)
+    }
+  }
+
+  /**
+   * Download de geselecteerde facturen een voor een, netjes achter elkaar.
+   * Met `metTolheffing` komt het tolheffing-overzicht direct achter de
+   * bijbehorende factuur mee.
+   */
+  const handleBulkDownload = async (metTolheffing: boolean) => {
+    if (selectedIds.size === 0) return
+    const teDownloaden = Array.from(selectedIds).map((id) => ({
+      id,
+      factuurnummer: selectedCache.get(id)?.factuurnummer || id,
+    }))
+    try {
+      setBulkBezig(true)
+      setError(null)
+      setBulkDownloadVoortgang({ klaar: 0, totaal: teDownloaden.length, huidige: '' })
+      const resultaat = await downloadInvoicesEenVoorEen(
+        teDownloaden,
+        metTolheffing,
+        setBulkDownloadVoortgang
+      )
+      setShowBulkDownloadModal(false)
+      if (resultaat.gelukt > 0) {
+        toast.success(
+          t('invoices.bulkDownloadReady', {
+            count: resultaat.gelukt,
+            defaultValue: `${resultaat.gelukt} ${resultaat.gelukt === 1 ? 'factuur' : 'facturen'} gedownload`,
+          })
+        )
+      }
+      if (resultaat.fouten.length > 0) {
+        setError(resultaat.fouten.join(' | '))
+      }
+    } catch (err: any) {
+      setError(err?.message || err.response?.data?.error || t('errors.saveFailed'))
+    } finally {
+      setBulkBezig(false)
+      setBulkDownloadVoortgang(null)
     }
   }
 
@@ -519,6 +601,22 @@ export default function InvoicesPage() {
               >
                 <BuildingOfficeIcon className="h-4 w-4" />
                 {t('invoices.assignAdministratie', 'Koppel administratie')}
+              </button>
+              <button
+                onClick={() => setShowBulkEmailModal(true)}
+                className="btn-secondary flex items-center gap-1.5 text-sm"
+                disabled={saving || bulkBezig}
+              >
+                <EnvelopeIcon className="h-4 w-4" />
+                {t('invoices.bulkEmail', 'Mailen')}
+              </button>
+              <button
+                onClick={() => { setBulkDownloadMetTolheffing(false); setShowBulkDownloadModal(true) }}
+                className="btn-secondary flex items-center gap-1.5 text-sm"
+                disabled={saving || bulkBezig}
+              >
+                <ArrowDownTrayIcon className="h-4 w-4" />
+                {t('common.download', 'Downloaden')}
               </button>
               <button 
                 onClick={() => setShowBulkDeleteModal(true)} 
@@ -1514,6 +1612,184 @@ export default function InvoicesPage() {
                     </button>
                     <button onClick={handleBulkAssignAdministratie} disabled={saving || !bulkAssignAdminId} className="btn-primary">
                       {saving ? t('common.saving') : t('common.save')}
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Meerdere facturen mailen: per factuur een losse mail */}
+      <Transition appear show={showBulkEmailModal} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => { if (!bulkBezig) setShowBulkEmailModal(false) }}>
+          <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+                <Dialog.Panel className="w-full max-w-lg transform overflow-hidden rounded-lg bg-white p-6 shadow-xl transition-all">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-primary-100">
+                      <EnvelopeIcon className="h-6 w-6 text-primary-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <Dialog.Title className="text-lg font-semibold text-gray-900">
+                        {t('invoices.bulkEmailTitle', { count: selectedIds.size, defaultValue: `${selectedIds.size} facturen mailen` })}
+                      </Dialog.Title>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {t('invoices.bulkEmailDesc', 'Elke factuur gaat als aparte mail naar het eigen bedrijf, met de factuur en het eventuele tolheffing-overzicht als bijlage.')}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('invoices.emailProfile', 'Verzendprofiel')}
+                    </label>
+                    <EmailProfileSelector value={emailProfileId} onChange={setEmailProfileId} />
+                  </div>
+
+                  <div className="mt-4 rounded-md bg-amber-50 p-3 text-xs text-amber-800">
+                    {t('invoices.bulkEmailNotice', 'Alleen definitieve en verzonden facturen worden gemaild. Facturen zonder e-mailadres worden overgeslagen en achteraf gemeld.')}
+                  </div>
+
+                  <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <button type="button" onClick={() => setShowBulkEmailModal(false)} disabled={bulkBezig} className="btn-secondary">
+                      {t('common.cancel')}
+                    </button>
+                    <button onClick={handleBulkSendEmail} disabled={bulkBezig} className="btn-primary flex items-center justify-center gap-2">
+                      <PaperAirplaneIcon className="h-4 w-4" />
+                      {bulkBezig ? t('common.sending', 'Versturen...') : t('invoices.bulkEmailSend', 'Versturen')}
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Meerdere facturen downloaden: met of zonder tolheffing */}
+      <Transition appear show={showBulkDownloadModal} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => { if (!bulkBezig) setShowBulkDownloadModal(false) }}>
+          <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+                <Dialog.Panel className="w-full max-w-lg transform overflow-hidden rounded-lg bg-white p-6 shadow-xl transition-all">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-primary-100">
+                      <ArrowDownTrayIcon className="h-6 w-6 text-primary-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <Dialog.Title className="text-lg font-semibold text-gray-900">
+                        {t('invoices.bulkDownloadTitle', { count: selectedIds.size, defaultValue: `${selectedIds.size} facturen downloaden` })}
+                      </Dialog.Title>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {t('invoices.bulkDownloadDesc', 'Wat wilt u downloaden?')}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    <label
+                      className={clsx(
+                        'flex items-start gap-3 rounded-lg border p-4 transition-colors',
+                        bulkBezig ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                        !bulkDownloadMetTolheffing ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:bg-gray-50'
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="bulk-download-keuze"
+                        checked={!bulkDownloadMetTolheffing}
+                        onChange={() => setBulkDownloadMetTolheffing(false)}
+                        disabled={bulkBezig}
+                        className="mt-0.5 h-4 w-4 border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-gray-900">
+                          {t('invoices.bulkDownloadOnlyInvoices', 'Alleen de facturen')}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-gray-500">
+                          {t('invoices.bulkDownloadOnlyInvoicesDesc', 'Per factuur een pdf-bestand.')}
+                        </span>
+                      </span>
+                    </label>
+                    <label
+                      className={clsx(
+                        'flex items-start gap-3 rounded-lg border p-4 transition-colors',
+                        bulkBezig ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                        bulkDownloadMetTolheffing ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:bg-gray-50'
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="bulk-download-keuze"
+                        checked={bulkDownloadMetTolheffing}
+                        onChange={() => setBulkDownloadMetTolheffing(true)}
+                        disabled={bulkBezig}
+                        className="mt-0.5 h-4 w-4 border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-gray-900">
+                          {t('invoices.bulkDownloadWithTolling', 'Facturen en tolheffing')}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-gray-500">
+                          {t('invoices.bulkDownloadWithTollingDesc', 'Ook het tolheffing-overzicht van de facturen die dat hebben.')}
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+
+                  {bulkDownloadVoortgang && bulkDownloadVoortgang.totaal > 0 && (
+                    <div className="mt-5">
+                      <div className="flex items-center justify-between text-xs text-gray-600">
+                        <span className="truncate">
+                          {bulkDownloadVoortgang.huidige
+                            ? t('invoices.bulkDownloadBusy', {
+                                nummer: bulkDownloadVoortgang.huidige,
+                                defaultValue: `Bezig met ${bulkDownloadVoortgang.huidige}...`,
+                              })
+                            : t('common.loading')}
+                        </span>
+                        <span className="ml-3 flex-shrink-0 tabular-nums">
+                          {bulkDownloadVoortgang.klaar} / {bulkDownloadVoortgang.totaal}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                        <div
+                          className="h-full rounded-full bg-primary-600 transition-all duration-300"
+                          style={{
+                            width: `${Math.round(
+                              (bulkDownloadVoortgang.klaar / bulkDownloadVoortgang.totaal) * 100
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-4 rounded-md bg-amber-50 p-3 text-xs text-amber-800">
+                    {t('invoices.bulkDownloadNotice', 'De bestanden komen een voor een binnen. Sta in uw browser zo nodig eenmalig toe dat meerdere bestanden gedownload worden.')}
+                  </div>
+
+                  <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <button type="button" onClick={() => setShowBulkDownloadModal(false)} disabled={bulkBezig} className="btn-secondary">
+                      {t('common.cancel')}
+                    </button>
+                    <button
+                      onClick={() => handleBulkDownload(bulkDownloadMetTolheffing)}
+                      disabled={bulkBezig}
+                      className="btn-primary flex items-center justify-center gap-2"
+                    >
+                      <ArrowDownTrayIcon className="h-4 w-4" />
+                      {bulkBezig ? t('common.loading') : t('common.download', 'Downloaden')}
                     </button>
                   </div>
                 </Dialog.Panel>
