@@ -64,6 +64,56 @@ def sanitize_filename(name: str) -> str:
     return name[:255]
 
 
+# Hoe diep een gesleepte mappenstructuur mag zijn. Ruim genoeg voor normaal
+# gebruik, maar het voorkomt dat iemand duizenden mappen laat aanmaken.
+MAX_FOLDER_DEPTH = 20
+
+
+def sanitize_folder_name(name: str) -> str:
+    """Zelfde schoonmaak als bij bestandsnamen, maar voor een mapnaam.
+
+    Geeft een lege string terug wanneer er niets bruikbaars overblijft; de
+    aanroeper beslist dan wat er moet gebeuren.
+    """
+    name = (name or '').strip()
+    name = name.replace('\\', '/').split('/')[-1]
+    name = _SAFE_NAME_RE.sub('_', name)
+    name = name.strip('. ')
+    return name[:255]
+
+
+def split_folder_path(path: str) -> list[str]:
+    """Splits een relatief pad in schone mapnamen.
+
+    Gooit ``ValueError`` bij een pad dat buiten de eigen boom probeert te
+    komen of dat te diep is. Zowel ``/`` als ``\\`` gelden als scheidingsteken,
+    want browsers op Windows leveren soms het laatste aan.
+    """
+    ruw = (path or '').replace('\\', '/')
+    # Een mapkeuze in de browser levert altijd een relatief pad. Iets wat op
+    # een absoluut pad lijkt komt dus ergens anders vandaan en wijzen we af.
+    if ruw.startswith('/'):
+        raise ValueError('Geef een relatief pad op, niet een absoluut pad.')
+    if re.match(r'^[A-Za-z]:', ruw):
+        raise ValueError('Geef een relatief pad op, niet een schijfletter.')
+    delen = []
+    for deel in ruw.split('/'):
+        deel = deel.strip()
+        if deel in ('', '.'):
+            continue
+        if deel == '..':
+            raise ValueError('Een pad mag niet omhoog wijzen.')
+        schoon = sanitize_folder_name(deel)
+        if not schoon:
+            raise ValueError(f'"{deel}" is geen bruikbare mapnaam.')
+        delen.append(schoon)
+    if not delen:
+        raise ValueError('Geef een mapnaam op.')
+    if len(delen) > MAX_FOLDER_DEPTH:
+        raise ValueError(f'Een mappenstructuur mag maximaal {MAX_FOLDER_DEPTH} niveaus diep zijn.')
+    return delen
+
+
 def get_extension(filename: str) -> str:
     if '.' not in filename:
         return ''

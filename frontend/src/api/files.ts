@@ -38,6 +38,14 @@ export interface FolderDetail extends Folder {
   ancestors: FolderAncestor[]
 }
 
+/** Antwoord van ensure-path: de diepste map van het aangevraagde pad. */
+export interface EnsuredFolder {
+  id: string
+  name: string
+  /** De mappen die hiervoor nieuw zijn aangemaakt. */
+  created: string[]
+}
+
 export interface FileEntry {
   id: string
   folder: string | null
@@ -111,6 +119,20 @@ export const filesApi = {
   },
   availableUsers: async (): Promise<FolderMember[]> => {
     const { data } = await api.get<FolderMember[]>(`${BASE}/folders/available-users/`)
+    return data
+  },
+  /**
+   * Zorgt dat een heel mappenpad bestaat en geeft de diepste map terug.
+   * Bestaande mappen worden hergebruikt, er ontstaan geen duplicaten.
+   */
+  ensureFolderPath: async (
+    parent: string | null,
+    path: string,
+  ): Promise<EnsuredFolder> => {
+    const { data } = await api.post<EnsuredFolder>(`${BASE}/folders/ensure-path/`, {
+      parent: parent ?? null,
+      path,
+    })
     return data
   },
   listFiles: async (params: { folder?: string | null; q?: string }): Promise<FileEntry[]> => {

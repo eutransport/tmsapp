@@ -4,7 +4,8 @@ from __future__ import annotations
 import logging
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.utils.encoding import smart_str
@@ -27,6 +28,7 @@ from .file_explorer import (
     filter_files_for_user,
     filter_folders_for_user,
     guess_mime,
+    split_folder_path,
     user_can_edit_folder,
     user_can_view_folder,
     user_is_admin,
@@ -180,6 +182,79 @@ class FolderViewSet(viewsets.ModelViewSet):
     def available_users(self, request):
         qs = User.objects.filter(is_active=True).order_by('username')[:500]
         return Response(FolderMemberSerializer(qs, many=True).data)
+
+    # -- Mappenpad klaarzetten voor een upload met mappen -------------------
+    @action(detail=False, methods=['post'], url_path='ensure-path')
+    @transaction.atomic
+    def ensure_path(self, request):
+        """Zorg dat een heel mappenpad bestaat en geef de diepste map terug.
+
+        Wordt gebruikt wanneer iemand een map sleept of kiest: de browser
+        levert per bestand een relatief pad aan en dat pad moet in de
+        verkenner dezelfde vorm krijgen. Bestaande mappen worden hergebruikt,
+        er wordt nooit een duplicaat gemaakt.
+
+        Verwacht ``{"parent": id of null, "path": "map/submap"}`` en geeft
+        ``{"id": ..., "name": ..., "created": ["submap"]}`` terug.
+        """
+        try:
+            delen = split_folder_path(request.data.get('path'))
+        except ValueError as exc:
+            return Response({'path': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        ouder_id = request.data.get('parent') or None
+        ouder = None
+        if ouder_id:
+            try:
+                ouder = Folder.objects.get(pk=ouder_id)
+            except (Folder.DoesNotExist, ValidationError, ValueError):
+                return Response({'parent': 'Bovenliggende map niet gevonden.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if not user_can_edit_folder(request.user, ouder):
+                return Response({'detail': 'Geen rechten om in deze map een submap te maken.'},
+                                status=status.HTTP_403_FORBIDDEN)
+        elif not user_is_admin(request.user):
+            return Response(
+                {'detail': 'Alleen beheerders mogen mappen in de hoofdmap aanmaken.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        aangemaakt = []
+        huidige = ouder
+        for naam in delen:
+            bestaande = Folder.objects.filter(parent=huidige, name__iexact=naam).first()
+            if bestaande is not None:
+                # Hergebruik alleen als deze gebruiker er ook echt in mag.
+                if not user_can_edit_folder(request.user, bestaande):
+                    return Response(
+                        {'detail': f'Geen rechten om in de bestaande map "{bestaande.name}" te schrijven.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+                huidige = bestaande
+                continue
+            try:
+                with transaction.atomic():
+                    huidige = Folder.objects.create(
+                        name=naam, parent=huidige, created_by=request.user,
+                    )
+            except IntegrityError:
+                # Twee uploads tegelijk kunnen dezelfde map willen maken.
+                # Degene die verloor pakt gewoon het resultaat van de winnaar.
+                bestaande = Folder.objects.filter(parent=huidige, name__iexact=naam).first()
+                if bestaande is None:
+                    raise
+                huidige = bestaande
+                continue
+            aangemaakt.append(huidige.name)
+
+        return Response(
+            {
+                'id': str(huidige.id),
+                'name': huidige.name,
+                'created': aangemaakt,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class FileEntryViewSet(viewsets.ModelViewSet):

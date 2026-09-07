@@ -7,6 +7,7 @@ import {
   DocumentTextIcon,
   ExclamationTriangleIcon,
   EyeIcon,
+  FolderArrowDownIcon,
   FolderIcon,
   FolderPlusIcon,
   MagnifyingGlassIcon,
@@ -48,6 +49,71 @@ function iconForExtension(ext: string) {
   if (['xlsx', 'xls', 'xlsm', 'csv', 'ods'].includes(e)) return TableCellsIcon
   if (['pdf', 'docx', 'doc', 'odt', 'rtf', 'txt', 'md'].includes(e)) return DocumentTextIcon
   return DocumentIcon
+}
+
+// ---------- uploads met mappen ----------
+/** Een te uploaden bestand met de map waarin het terecht moet komen. */
+interface UploadItem {
+  file: File
+  /** Relatief mappad zonder bestandsnaam. Leeg = direct in de huidige map. */
+  pad: string
+}
+
+/** Bestanden die het besturingssysteem toevoegt en die niemand wil uploaden. */
+const NEGEER_BESTANDEN = new Set(['.ds_store', 'thumbs.db', 'desktop.ini', '.localized'])
+
+function moetOverslaan(file: File): boolean {
+  return NEGEER_BESTANDEN.has((file.name || '').toLowerCase())
+}
+
+/**
+ * Zet de bestanden uit een <input> om naar uploaditems. Bij een mapkeuze
+ * vult de browser webkitRelativePath met het pad binnen de gekozen map.
+ */
+function uitBestandsinvoer(lijst: FileList): UploadItem[] {
+  return Array.from(lijst)
+    .filter(file => !moetOverslaan(file))
+    .map(file => {
+      const relatief = (file as File & { webkitRelativePath?: string }).webkitRelativePath || ''
+      const delen = relatief.split('/')
+      delen.pop() // de bestandsnaam hoort niet bij het pad
+      return { file, pad: delen.join('/') }
+    })
+}
+
+/**
+ * Leest een gesleepte selectie uit, inclusief alle onderliggende mappen.
+ *
+ * De entries moeten meteen in de drop-afhandeling uit de DataTransfer worden
+ * gehaald: die lijst is daarna niet meer bruikbaar.
+ */
+async function uitSleepactie(entries: FileSystemEntry[]): Promise<UploadItem[]> {
+  const resultaat: UploadItem[] = []
+
+  const leesMap = (reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> =>
+    new Promise((resolve, reject) => reader.readEntries(resolve, reject))
+
+  const verwerk = async (entry: FileSystemEntry, pad: string): Promise<void> => {
+    if (entry.isFile) {
+      const file = await new Promise<File>((resolve, reject) =>
+        (entry as FileSystemFileEntry).file(resolve, reject),
+      )
+      if (!moetOverslaan(file)) resultaat.push({ file, pad })
+      return
+    }
+    if (!entry.isDirectory) return
+    const map = pad ? `${pad}/${entry.name}` : entry.name
+    const reader = (entry as FileSystemDirectoryEntry).createReader()
+    // readEntries levert per keer maximaal 100 items, dus doorlezen tot leeg.
+    for (;;) {
+      const stapel = await leesMap(reader)
+      if (stapel.length === 0) break
+      for (const kind of stapel) await verwerk(kind, map)
+    }
+  }
+
+  for (const entry of entries) await verwerk(entry, '')
+  return resultaat
 }
 
 // ---------- new folder dialog ----------
@@ -407,6 +473,16 @@ export default function FilesExplorerPage() {
   const [confirmBusy, setConfirmBusy] = useState(false)
   const [previewEntry, setPreviewEntry] = useState<FileEntry | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const folderInputRef = useRef<HTMLInputElement | null>(null)
+  // Voortgang over de hele upload heen, niet alleen het huidige bestand.
+  const [uploadStatus, setUploadStatus] = useState<{
+    gedaan: number
+    totaal: number
+    naam: string
+  } | null>(null)
+  const [sleepActief, setSleepActief] = useState(false)
+  // dragleave vuurt ook bij elk onderliggend element, dus tellen we mee.
+  const sleepTeller = useRef(0)
 
   // Debounce zoekterm.
   useEffect(() => {
@@ -500,23 +576,134 @@ export default function FilesExplorerPage() {
     loadRoot()
   }
 
-  const handleUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return
-    const list = Array.from(files)
-    for (let i = 0; i < list.length; i++) {
-      const f = list[i]
+  /**
+   * Uploadt een reeks bestanden en maakt onderweg de mappen aan die bij hun
+   * pad horen, zodat een gesleepte map in de verkenner dezelfde vorm krijgt.
+   */
+  const verwerkUploads = async (items: UploadItem[]) => {
+    if (items.length === 0) {
+      toast.error('Geen bruikbare bestanden gevonden.')
+      return
+    }
+    const doelId = currentFolder?.id ?? null
+    // Onthoud per pad welke map erbij hoort, zodat we niet voor elk bestand
+    // opnieuw dezelfde mappen laten opzoeken.
+    const mapCache = new Map<string, string | null>([['', doelId]])
+    const nieuweMappen = new Set<string>()
+    let gelukt = 0
+    const mislukt: string[] = []
+
+    for (let i = 0; i < items.length; i++) {
+      const { file, pad } = items[i]
+      setUploadStatus({ gedaan: i, totaal: items.length, naam: file.name })
       setUploadProgress(0)
+
+      let doelmap = mapCache.get(pad)
+      if (doelmap === undefined) {
+        try {
+          const map = await filesApi.ensureFolderPath(doelId, pad)
+          map.created.forEach(naam => nieuweMappen.add(naam))
+          doelmap = map.id
+          mapCache.set(pad, doelmap)
+        } catch (err: any) {
+          const melding =
+            err?.response?.data?.detail ||
+            err?.response?.data?.path ||
+            err?.response?.data?.error ||
+            'map aanmaken mislukt'
+          mislukt.push(`${pad}: ${melding}`)
+          // Alles in dit pad zou dezelfde fout geven; onthoud dat.
+          mapCache.set(pad, null)
+          continue
+        }
+      }
+      if (doelmap === null && pad !== '') continue
+
       try {
-        await filesApi.uploadFile(f, currentFolder?.id ?? null, p => setUploadProgress(p))
-        toast.success(`"${f.name}" geÃ¼pload (${i + 1}/${list.length})`)
+        await filesApi.uploadFile(file, doelmap ?? null, p => setUploadProgress(p))
+        gelukt++
       } catch (err: any) {
-        const msg = err?.response?.data?.file || err?.response?.data?.detail || 'Upload mislukt.'
-        toast.error(`${f.name}: ${msg}`)
+        const melding =
+          err?.response?.data?.file ||
+          err?.response?.data?.detail ||
+          err?.response?.data?.error ||
+          'upload mislukt'
+        mislukt.push(`${file.name}: ${melding}`)
       }
     }
+
+    setUploadStatus(null)
     setUploadProgress(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
+    if (folderInputRef.current) folderInputRef.current.value = ''
+
+    if (gelukt > 0) {
+      const mapDeel = nieuweMappen.size > 0
+        ? ` in ${nieuweMappen.size} nieuwe map${nieuweMappen.size === 1 ? '' : 'pen'}`
+        : ''
+      toast.success(
+        gelukt === 1
+          ? `1 bestand geüpload${mapDeel}.`
+          : `${gelukt} bestanden geüpload${mapDeel}.`,
+      )
+    }
+    if (mislukt.length > 0) {
+      const eerste = mislukt.slice(0, 3).join(' • ')
+      const rest = mislukt.length > 3 ? ` (en nog ${mislukt.length - 3})` : ''
+      toast.error(
+        `${mislukt.length} ${mislukt.length === 1 ? 'bestand' : 'bestanden'} overgeslagen: ${eerste}${rest}`,
+        { duration: 8000 },
+      )
+    }
+
     loadFolder(currentFolder)
+    loadRoot()
+  }
+
+  const handleUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    await verwerkUploads(uitBestandsinvoer(files))
+  }
+
+  const handleDrop = async (event: React.DragEvent) => {
+    event.preventDefault()
+    sleepTeller.current = 0
+    setSleepActief(false)
+    if (!canEditCurrent) {
+      toast.error('Je mag hier geen bestanden plaatsen.')
+      return
+    }
+    // De entries moeten nu meteen opgehaald worden: na deze afhandeling is de
+    // sleepdata niet meer leesbaar.
+    const items = event.dataTransfer?.items
+    const entries: FileSystemEntry[] = []
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        const entry = items[i].webkitGetAsEntry?.()
+        if (entry) entries.push(entry)
+      }
+    }
+    if (entries.length > 0) {
+      try {
+        await verwerkUploads(await uitSleepactie(entries))
+      } catch {
+        toast.error('Kon de gesleepte mappen niet uitlezen.')
+      }
+      return
+    }
+    // Browsers zonder mapondersteuning geven alleen losse bestanden.
+    await handleUpload(event.dataTransfer?.files ?? null)
+  }
+
+  const handleDragEnter = (event: React.DragEvent) => {
+    if (!event.dataTransfer?.types?.includes('Files')) return
+    sleepTeller.current += 1
+    setSleepActief(true)
+  }
+
+  const handleDragLeave = () => {
+    sleepTeller.current = Math.max(0, sleepTeller.current - 1)
+    if (sleepTeller.current === 0) setSleepActief(false)
   }
 
   const handleDeleteFile = (entry: FileEntry) => {
@@ -627,11 +814,29 @@ export default function FilesExplorerPage() {
                   className="hidden"
                   onChange={e => handleUpload(e.target.files)}
                 />
+                <input
+                  ref={folderInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  // Niet-standaard maar breed ondersteund; laat een hele map kiezen.
+                  {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
+                  onChange={e => handleUpload(e.target.files)}
+                />
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
+                  disabled={uploadStatus !== null}
+                  className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
                 >
                   <ArrowUpTrayIcon className="h-4 w-4" /> Upload
+                </button>
+                <button
+                  onClick={() => folderInputRef.current?.click()}
+                  disabled={uploadStatus !== null}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  title="Een hele map met submappen uploaden"
+                >
+                  <FolderArrowDownIcon className="h-4 w-4" /> Map uploaden
                 </button>
               </>
             )}
@@ -645,9 +850,26 @@ export default function FilesExplorerPage() {
             )}
           </div>
         </div>
-        {uploadProgress !== null && (
-          <div className="mt-2 h-1 w-full overflow-hidden rounded bg-gray-100">
-            <div className="h-full bg-primary-600 transition-all" style={{ width: `${uploadProgress}%` }} />
+        {uploadStatus !== null && (
+          <div className="mt-2">
+            <div className="mb-1 flex items-center justify-between gap-2 text-xs text-gray-600">
+              <span className="truncate">
+                Bezig met uploaden: <span className="font-medium">{uploadStatus.naam}</span>
+              </span>
+              <span className="flex-shrink-0 tabular-nums">
+                {uploadStatus.gedaan + 1} van {uploadStatus.totaal}
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded bg-gray-100">
+              <div
+                className="h-full bg-primary-600 transition-all"
+                style={{
+                  width: `${Math.round(
+                    ((uploadStatus.gedaan + (uploadProgress ?? 0) / 100) / uploadStatus.totaal) * 100,
+                  )}%`,
+                }}
+              />
+            </div>
           </div>
         )}
       </div>
@@ -683,7 +905,33 @@ export default function FilesExplorerPage() {
         )}
 
         {/* Main area */}
-        <main className="flex-1 overflow-y-auto p-3 md:p-6">
+        <main
+          className="relative flex-1 overflow-y-auto p-3 md:p-6"
+          onDragEnter={handleDragEnter}
+          onDragOver={e => {
+            if (e.dataTransfer?.types?.includes('Files')) e.preventDefault()
+          }}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {sleepActief && (
+            <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-primary-400 bg-primary-50/90 md:inset-4">
+              <div className="px-4 text-center">
+                <FolderArrowDownIcon className="mx-auto h-10 w-10 text-primary-500" />
+                <p className="mt-2 text-sm font-medium text-primary-800">
+                  {canEditCurrent
+                    ? 'Laat los om hier te plaatsen'
+                    : 'Je mag hier geen bestanden plaatsen'}
+                </p>
+                {canEditCurrent && (
+                  <p className="mt-0.5 text-xs text-primary-700">
+                    Mappen behouden hun structuur in{' '}
+                    {currentFolder ? `"${currentFolder.name}"` : 'de hoofdmap'}.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
           {/* Breadcrumb */}
           <nav className="mb-3 flex flex-wrap items-center gap-1 text-sm text-gray-600">
             <button
@@ -727,7 +975,8 @@ export default function FilesExplorerPage() {
               <p className="mt-2 text-sm text-gray-500">Deze map is leeg.</p>
               {canEditCurrent && (
                 <p className="mt-1 text-xs text-gray-400">
-                  Gebruik "Upload" of "Nieuwe map" om te beginnen.
+                  Sleep bestanden of mappen hierheen, of gebruik "Upload", "Map uploaden"
+                  of "Nieuwe map".
                 </p>
               )}
             </div>
