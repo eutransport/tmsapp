@@ -119,11 +119,76 @@ def _extract_registered_km_from_invoice(invoice) -> float:
     return total
 
 
+def _geregistreerde_km_uit_ritten(events) -> float:
+    """Som van de gereden km uit de urenregistratie, voor dezelfde kentekens
+    en dezelfde dagen als de tolheffing-events.
+
+    Dit is de betrouwbaarste bron. De events weten zelf bij welk kenteken en
+    welke dagen ze horen, dus we tellen precies de ritten van die kentekens
+    over die dagen op. Daardoor staan teller en noemer altijd op dezelfde
+    periode, ook als er meerdere weken tolheffing aan een factuur hangen.
+    Eerder werd hiervoor de tekst van de factuurregels gelezen; die telt
+    alleen de weken die toevallig als ritregel op de factuur staan, waardoor
+    het percentage bij een afwijkende periode veel te hoog uitviel.
+
+    Levert 0.0 als er niets te bepalen valt. De aanroeper valt dan terug op
+    de oude methode.
+    """
+    try:
+        from apps.timetracking.models import TimeEntry
+        from .models import normalize_plate
+    except Exception:  # pragma: no cover - defensief; PDF blijft werken
+        return 0.0
+
+    # Per kenteken de eerste en laatste dag waarop tolheffing is geregistreerd.
+    periode_per_kenteken: dict[str, list] = {}
+    for ev in events:
+        if getattr(ev, 'is_private', False):
+            continue
+        sleutel = getattr(ev, 'license_plate_normalized', '')
+        start = getattr(ev, 'start_at', None)
+        if not sleutel or not start:
+            continue
+        try:
+            dag = start.date()
+        except AttributeError:
+            continue
+        vak = periode_per_kenteken.get(sleutel)
+        if vak is None:
+            periode_per_kenteken[sleutel] = [dag, dag]
+        else:
+            if dag < vak[0]:
+                vak[0] = dag
+            if dag > vak[1]:
+                vak[1] = dag
+
+    if not periode_per_kenteken:
+        return 0.0
+
+    vroegste = min(vak[0] for vak in periode_per_kenteken.values())
+    laatste = max(vak[1] for vak in periode_per_kenteken.values())
+    totaal = 0.0
+    try:
+        # Een query over het hele bereik; daarna per kenteken nauwkeurig
+        # afgrenzen, want het kenteken staat als vrije tekst in de uren.
+        for rit in TimeEntry.objects.filter(datum__gte=vroegste, datum__lte=laatste):
+            vak = periode_per_kenteken.get(normalize_plate(rit.kenteken or ''))
+            if vak and vak[0] <= rit.datum <= vak[1]:
+                totaal += float(rit.totaal_km or 0)
+    except Exception:  # pragma: no cover - defensief; PDF blijft werken
+        return 0.0
+    return totaal
+
+
 def _build_km_summary_panel(invoice, events):
     """3 sky-gekleurde kaartjes: totaal geregistreerd, totaal tolheffing, percentage.
     Retourneert lege lijst als niet beide waardes > 0.
     """
-    totaal_km = _extract_registered_km_from_invoice(invoice)
+    # Eerst de urenregistratie: die dekt exact dezelfde periode als de
+    # events. Zonder bruikbare uren terugvallen op de factuuromschrijvingen.
+    totaal_km = _geregistreerde_km_uit_ritten(events)
+    if totaal_km <= 0:
+        totaal_km = _extract_registered_km_from_invoice(invoice)
     # Tolheffing-km: som van gefactureerde (niet-privé) events
     tolheffing_km = 0.0
     try:
@@ -279,21 +344,6 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
     from .dagritnummers import binnen_rittijden
     tijdcontrole = binnen_rittijden(events)
 
-    # Bepaal ritnummer per (genormaliseerd) kenteken via Vehicle-tabel, zodat
-    # we hetzelfde ritnummer op de PDF tonen als op de bijbehorende factuurregel
-    # (bv. "Tolheffing - 36-BNL-9 - E&UTRANS4 (Totaal 513 KM)").
-    ritnummer_by_norm: dict[str, str] = {}
-    try:
-        from apps.fleet.models import Vehicle
-        from .models import normalize_plate
-        norm_keys = {ev.license_plate_normalized for ev in events if ev.license_plate_normalized}
-        for v in Vehicle.objects.filter(ritnummer__gt=''):
-            key = normalize_plate(v.kenteken)
-            if key in norm_keys and v.ritnummer:
-                ritnummer_by_norm[key] = v.ritnummer
-    except Exception:  # pragma: no cover - defensief; PDF blijft werken zonder ritnummer
-        ritnummer_by_norm = {}
-
     grand_km = Decimal('0')
     grand_amount = Decimal('0')
     grand_weekday_km = Decimal('0')
@@ -333,11 +383,11 @@ def generate_tolling_events_pdf(events: Iterable, invoice=None) -> bytes:
         grand_private_km += private_km
         grand_private_amount += private_amount
 
+        # In de kop staat bewust alleen het kenteken. Het ritnummer stond
+        # hier eerder ook, maar dat kwam uit de vloottabel en gaf dus het
+        # ritnummer van vandaag in plaats van dat van de gefactureerde
+        # periode. Het juiste ritnummer per rit staat in de kolom hieronder.
         header_text = f"Kenteken: {plate}"
-        norm_key = plate_events[0].license_plate_normalized if plate_events else ''
-        ritnummer = ritnummer_by_norm.get(norm_key, '')
-        if ritnummer:
-            header_text += f" &nbsp;&mdash;&nbsp; Ritnummer: {ritnummer}"
         header_text += f" &nbsp;&nbsp; ({len(billed_events)} events, {_format_km(total_km)} km, {_format_money(total_amount)})"
         story.append(Paragraph(header_text, section_style))
 
@@ -475,12 +525,16 @@ def get_tolling_events_for_invoice(invoice):
 
 
 def build_tolling_pdf_filename(events) -> str:
-    """Bestandsnaam op basis van ritnummer(s) en meest voorkomende ISO-week.
+    """Bestandsnaam op basis van kenteken(s) en meest voorkomende ISO-week.
 
-    Vorm: `tolheffing-<ritnummer>-week-<weeknummer>.pdf` als er één ritnummer is,
-    `tolheffing-<rit1>-<rit2>-week-<weeknummer>.pdf` bij meerdere (max 3 getoond,
-    daarna afgekort met "e.a."). Zonder bekend ritnummer: `tolheffing-week-<XX>.pdf`.
-    Bij lege input: `tolheffing.pdf`.
+    Vorm: `tolheffing-<kenteken>-week-<weeknummer>.pdf` bij een enkel kenteken,
+    met meerdere kentekens achter elkaar bij meer voertuigen (maximaal drie,
+    daarna afgekort met "e.a."). Zonder bruikbaar kenteken:
+    `tolheffing-week-<XX>.pdf`. Bij lege input: `tolheffing.pdf`.
+
+    Hier stond eerder het ritnummer uit de vloottabel. Dat is het ritnummer
+    van vandaag en niet dat van de gefactureerde periode; het kenteken hoort
+    bij het event zelf en klopt daarom altijd.
     """
     from collections import Counter
     import re
@@ -498,39 +552,25 @@ def build_tolling_pdf_filename(events) -> str:
 
     (_year, week), _count = counter.most_common(1)[0]
 
-    # Verzamel ritnummers via Vehicle-tabel op basis van kentekens in events
-    ritnummers: list[str] = []
-    try:
-        from apps.fleet.models import Vehicle
-        from .models import normalize_plate
-        norm_keys = {ev.license_plate_normalized for ev in events if ev.license_plate_normalized}
-        rit_by_norm: dict[str, str] = {}
-        for v in Vehicle.objects.filter(ritnummer__gt=''):
-            key = normalize_plate(v.kenteken)
-            if key in norm_keys and v.ritnummer:
-                rit_by_norm[key] = v.ritnummer
-        # Volgorde: gebruik volgorde waarin kentekens voor het eerst voorkomen
-        seen: set[str] = set()
-        for ev in events:
-            key = ev.license_plate_normalized
-            if key and key not in seen:
-                seen.add(key)
-                rit = rit_by_norm.get(key)
-                if rit:
-                    ritnummers.append(rit)
-    except Exception:  # pragma: no cover - defensief
-        ritnummers = []
+    # Kentekens in de volgorde waarin ze voor het eerst in de events voorkomen.
+    kentekens: list[str] = []
+    gezien: set[str] = set()
+    for ev in events:
+        sleutel = getattr(ev, 'license_plate_normalized', '')
+        if sleutel and sleutel not in gezien:
+            gezien.add(sleutel)
+            kentekens.append(getattr(ev, 'license_plate_raw', '') or sleutel)
 
     def _slug(s: str) -> str:
         s = re.sub(r'[^A-Za-z0-9_-]+', '-', s).strip('-')
         return s or ''
 
-    if ritnummers:
-        if len(ritnummers) <= 3:
-            rit_part = '-'.join(filter(None, (_slug(r) for r in ritnummers)))
+    if kentekens:
+        if len(kentekens) <= 3:
+            kenteken_deel = '-'.join(filter(None, (_slug(k) for k in kentekens)))
         else:
-            rit_part = '-'.join(filter(None, (_slug(r) for r in ritnummers[:3]))) + '-e.a.'
-        if rit_part:
-            return f"tolheffing-{rit_part}-week-{week:02d}.pdf"
+            kenteken_deel = '-'.join(filter(None, (_slug(k) for k in kentekens[:3]))) + '-e.a.'
+        if kenteken_deel:
+            return f"tolheffing-{kenteken_deel}-week-{week:02d}.pdf"
 
     return f"tolheffing-week-{week:02d}.pdf"
