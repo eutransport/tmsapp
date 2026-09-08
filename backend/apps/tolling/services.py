@@ -30,6 +30,7 @@ class ImportResult:
     duplicates: int
     invalid: int
     total: int
+    zero_amount: int = 0
 
 
 def _parse_decimal(value: str) -> Decimal | None:
@@ -174,6 +175,7 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
         return row.get(header_map[key], '') if key in header_map else ''
 
     imported = duplicates = invalid = total = 0
+    zero_amount = 0
     new_events: list[TollingEvent] = []
     # Momentopname van de vloot: het ritnummer en het bedrijf die op de datum
     # van de passage golden worden op het event vastgelegd, zodat een latere
@@ -196,6 +198,12 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
 
         if not (start and end and distance is not None and amount is not None and plate_raw):
             invalid += 1
+            continue
+
+        # Passages zonder kosten worden niet doorbelast. Ze wel opslaan maakt
+        # de kilometertotalen op de factuur scheef, dus we slaan ze over.
+        if amount == 0:
+            zero_amount += 1
             continue
 
         plate_norm = normalize_plate(plate_raw)
@@ -242,7 +250,9 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
     batch.rows_imported = imported
     batch.rows_duplicate = duplicates
     batch.rows_invalid = invalid
-    batch.save(update_fields=['rows_total', 'rows_imported', 'rows_duplicate', 'rows_invalid'])
+    batch.rows_zero_amount = zero_amount
+    batch.save(update_fields=['rows_total', 'rows_imported', 'rows_duplicate',
+                              'rows_invalid', 'rows_zero_amount'])
 
     # Match freshly imported events against existing private registrations
     try:
@@ -251,7 +261,8 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
     except Exception as exc:  # pragma: no cover
         logger.warning("Private-tolregistratie matching mislukt voor batch %s: %s", batch.id, exc)
 
-    return ImportResult(batch=batch, imported=imported, duplicates=duplicates, invalid=invalid, total=total)
+    return ImportResult(batch=batch, imported=imported, duplicates=duplicates,
+                        invalid=invalid, total=total, zero_amount=zero_amount)
 
 
 # ---------- Private toll matching ----------

@@ -205,6 +205,7 @@ class TollingImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
             'imported': result.imported,
             'duplicates': result.duplicates,
             'invalid': result.invalid,
+            'zero_amount': result.zero_amount,
             'total': result.total,
         }
         return Response(data, status=status.HTTP_201_CREATED)

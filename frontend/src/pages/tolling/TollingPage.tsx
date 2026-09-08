@@ -248,7 +248,13 @@ export default function TollingPage() {
       if (batch.error_message) {
         toast.error(batch.error_message)
       } else if (r) {
-        toast.success(`Geïmporteerd: ${r.imported} · duplicaten: ${r.duplicates} · ongeldig: ${r.invalid}`)
+        const delen = [
+          `Geïmporteerd: ${r.imported}`,
+          `duplicaten: ${r.duplicates}`,
+          `ongeldig: ${r.invalid}`,
+        ]
+        if (r.zero_amount) delen.push(`zonder kosten overgeslagen: ${r.zero_amount}`)
+        toast.success(delen.join(' · '))
       } else {
         toast.success('Import voltooid')
       }

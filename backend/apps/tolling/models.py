@@ -33,6 +33,9 @@ class TollingImportBatch(models.Model):
     rows_imported = models.PositiveIntegerField(default=0)
     rows_duplicate = models.PositiveIntegerField(default=0)
     rows_invalid = models.PositiveIntegerField(default=0)
+    # Passages van 0 euro worden niet doorbelast en dus niet opgeslagen; ze
+    # worden hier geteld zodat zichtbaar blijft wat er is overgeslagen.
+    rows_zero_amount = models.PositiveIntegerField(default=0)
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -291,12 +291,15 @@ export interface TollingImportBatch {
   rows_imported: number
   rows_duplicate: number
   rows_invalid: number
+  /** Passages van 0 euro; die worden niet doorbelast en dus niet opgeslagen. */
+  rows_zero_amount?: number
   error_message: string
   created_at: string
   result?: {
     imported: number
     duplicates: number
     invalid: number
+    zero_amount?: number
     total: number
   }
 }

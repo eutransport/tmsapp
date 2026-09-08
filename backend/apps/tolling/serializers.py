@@ -31,7 +31,8 @@ class TollingImportBatchSerializer(serializers.ModelSerializer):
         model = TollingImportBatch
         fields = (
             'id', 'filename', 'rows_total', 'rows_imported',
-            'rows_duplicate', 'rows_invalid', 'error_message', 'created_at',
+            'rows_duplicate', 'rows_invalid', 'rows_zero_amount',
+            'error_message', 'created_at',
         )
         read_only_fields = fields
 
