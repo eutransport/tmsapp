@@ -82,6 +82,7 @@ const defaultLayout: TemplateLayout = {
     showBtw: true,
     showTotaal: true,
     btwPercentage: 21,
+    btwEnabled: true,
   },
   tableStyle: {
     headerBackground: '#1f2937',
@@ -862,6 +863,8 @@ interface DefaultsEditorProps {
 
 function DefaultsEditor({ defaults, totals, onDefaultsChange, onTotalsChange }: DefaultsEditorProps) {
   const { t } = useTranslation()
+  // Bestaande templates hebben geen btwEnabled; die blijven met BTW werken.
+  const btwEnabled = totals.btwEnabled !== false
   return (
     <div className="mb-6 grid grid-cols-2 gap-6">
       {/* Default Tarieven */}
@@ -916,21 +919,35 @@ function DefaultsEditor({ defaults, totals, onDefaultsChange, onTotalsChange }: 
       <div className="bg-gray-50 rounded-lg p-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('templates.editor.totalsConfig')}</h3>
         <div className="space-y-3">
-          <label className="flex items-center">
+          <label className="flex items-start">
             <input
               type="checkbox"
-              checked={totals.showSubtotaal}
+              checked={btwEnabled}
+              onChange={(e) => onTotalsChange({ ...totals, btwEnabled: e.target.checked })}
+              className="mt-0.5 rounded border-gray-300 text-primary-600"
+            />
+            <span className="ml-2">
+              <span className="text-sm font-medium">{t('templates.editor.vatEnabled')}</span>
+              <span className="block text-xs text-gray-500">{t('templates.editor.vatEnabledHint')}</span>
+            </span>
+          </label>
+          <label className={`flex items-center ${btwEnabled ? '' : 'opacity-50'}`}>
+            <input
+              type="checkbox"
+              disabled={!btwEnabled}
+              checked={btwEnabled && totals.showSubtotaal}
               onChange={(e) => onTotalsChange({ ...totals, showSubtotaal: e.target.checked })}
-              className="rounded border-gray-300 text-primary-600"
+              className="rounded border-gray-300 text-primary-600 disabled:cursor-not-allowed"
             />
             <span className="ml-2 text-sm">{t('templates.editor.showSubtotal')}</span>
           </label>
-          <label className="flex items-center">
+          <label className={`flex items-center ${btwEnabled ? '' : 'opacity-50'}`}>
             <input
               type="checkbox"
-              checked={totals.showBtw}
+              disabled={!btwEnabled}
+              checked={btwEnabled && totals.showBtw}
               onChange={(e) => onTotalsChange({ ...totals, showBtw: e.target.checked })}
-              className="rounded border-gray-300 text-primary-600"
+              className="rounded border-gray-300 text-primary-600 disabled:cursor-not-allowed"
             />
             <span className="ml-2 text-sm">{t('templates.editor.showVat')}</span>
           </label>
@@ -943,14 +960,15 @@ function DefaultsEditor({ defaults, totals, onDefaultsChange, onTotalsChange }: 
             />
             <span className="ml-2 text-sm">{t('templates.editor.showTotal')}</span>
           </label>
-          <div>
+          <div className={btwEnabled ? '' : 'opacity-50'}>
             <label className="block text-xs text-gray-500">{t('templates.editor.vatPercentage')}</label>
             <input
               type="number"
               step="0.1"
+              disabled={!btwEnabled}
               value={totals.btwPercentage}
               onChange={(e) => onTotalsChange({ ...totals, btwPercentage: parseFloat(e.target.value) || 21 })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 disabled:bg-gray-100"
             />
           </div>
         </div>
@@ -1143,7 +1161,8 @@ function PDFPreview({ layout }: PDFPreviewProps) {
     { omschrijving: 'Extra kilometers', aantal: 50, prijs: 0.23, totaal: 11.50 },
   ]
   const subtotaal = sampleRows.reduce((sum, row) => sum + row.totaal, 0)
-  const btw = subtotaal * (layout.totals.btwPercentage / 100)
+  const btwEnabled = layout.totals.btwEnabled !== false
+  const btw = btwEnabled ? subtotaal * (layout.totals.btwPercentage / 100) : 0
   const totaal = subtotaal + btw
 
   return (
@@ -1209,13 +1228,13 @@ function PDFPreview({ layout }: PDFPreviewProps) {
         {/* Totals */}
         <div className="mt-4 flex justify-end">
           <div className="w-64 text-xs">
-            {layout.totals.showSubtotaal && (
+            {btwEnabled && layout.totals.showSubtotaal && (
               <div className="flex justify-between py-1">
                 <span>Subtotaal (excl. BTW):</span>
                 <span>€ {subtotaal.toFixed(2)}</span>
               </div>
             )}
-            {layout.totals.showBtw && (
+            {btwEnabled && layout.totals.showBtw && (
               <div className="flex justify-between py-1">
                 <span>BTW ({layout.totals.btwPercentage}%):</span>
                 <span>€ {btw.toFixed(2)}</span>
@@ -1223,7 +1242,7 @@ function PDFPreview({ layout }: PDFPreviewProps) {
             )}
             {layout.totals.showTotaal && (
               <div className="flex justify-between py-1 border-t border-gray-400 font-bold">
-                <span>Totaal (incl. BTW):</span>
+                <span>{btwEnabled ? 'Totaal (incl. BTW):' : 'Totaal:'}</span>
                 <span>€ {totaal.toFixed(2)}</span>
               </div>
             )}
@@ -1505,6 +1524,7 @@ export default function TemplateEditorPage() {
               companyKvk={appSettings?.company_kvk}
               companyBtw={appSettings?.company_btw}
               logoUrl={appSettings?.logo_url ?? null}
+              btwEnabled={layout.totals.btwEnabled !== false}
             />
           ) : (
             <div className="transform scale-75 origin-top">

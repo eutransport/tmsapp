@@ -152,6 +152,10 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'vervaldatum': "Vervaldatum moet na factuurdatum liggen"
                 })
+        # Template zonder BTW: altijd 0%, ongeacht wat de client meestuurt.
+        template = data.get('template')
+        if template and not template.btw_ingeschakeld:
+            data['btw_percentage'] = 0
         return data
 
 
@@ -180,6 +184,14 @@ class InvoiceUpdateSerializer(serializers.ModelSerializer):
         return value
     
     def validate(self, data):
+        # Template zonder BTW: percentage blijft 0, ook bij een handmatige wijziging.
+        if (
+            'btw_percentage' in data
+            and self.instance
+            and self.instance.template
+            and not self.instance.template.btw_ingeschakeld
+        ):
+            data['btw_percentage'] = 0
         # Concept facturen mogen alles wijzigen
         if self.instance and self.instance.status != InvoiceStatus.CONCEPT:
             # Niet-concept facturen mogen alleen status, opmerkingen en bijlage wijzigen

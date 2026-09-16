@@ -341,6 +341,9 @@ export interface TemplateTotals {
   showBtw: boolean
   showTotaal: boolean
   btwPercentage: number
+  // Uit = geen BTW berekenen of tonen op facturen met deze template.
+  // Niet ingevuld betekent aan (bestaande templates blijven ongewijzigd).
+  btwEnabled?: boolean
 }
 
 // Tabel styling configuratie

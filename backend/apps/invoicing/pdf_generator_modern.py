@@ -767,8 +767,11 @@ class ModernInvoicePDFGenerator:
 
     def _build_totals(self):
         totals_cfg = ((self.template.layout if self.template else {}) or {}).get('totals') or {}
-        show_sub = totals_cfg.get('showSubtotaal', True)
-        show_btw = totals_cfg.get('showBtw', True)
+        # Template met BTW uitgezet: alleen een 'TOTAAL'-regel, geen subtotaal
+        # en geen BTW-regel.
+        btw_enabled = totals_cfg.get('btwEnabled') is not False
+        show_sub = btw_enabled and totals_cfg.get('showSubtotaal', True)
+        show_btw = btw_enabled and totals_cfg.get('showBtw', True)
         show_tot = totals_cfg.get('showTotaal', True)
 
         cfg_pct = totals_cfg.get('btwPercentage')

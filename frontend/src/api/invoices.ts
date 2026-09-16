@@ -245,11 +245,20 @@ export async function bulkAssignAdministratie(
  */
 export async function bulkSendEmail(
   ids: string[],
-  opties: { useMailingList?: boolean; emails?: string[]; emailProfileId?: string } = {}
+  opties: {
+    useMailingList?: boolean
+    emails?: string[]
+    emailProfileId?: string
+    /** Ontvangers per bedrijf: { bedrijfId: [adres, ...] } */
+    emailsPerBedrijf?: Record<string, string[]>
+  } = {}
 ): Promise<{ verzonden: number; errors: string[]; message: string }> {
   const data: Record<string, unknown> = { ids }
   if (opties.useMailingList) data.use_mailing_list = true
   if (opties.emails && opties.emails.length > 0) data.emails = opties.emails
+  if (opties.emailsPerBedrijf && Object.keys(opties.emailsPerBedrijf).length > 0) {
+    data.emails_per_bedrijf = opties.emailsPerBedrijf
+  }
   if (opties.emailProfileId) data.email_profile_id = opties.emailProfileId
   const response = await api.post('/invoicing/invoices/bulk_send_email/', data)
   return response.data

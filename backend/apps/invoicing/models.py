@@ -43,6 +43,16 @@ class InvoiceTemplate(models.Model):
     def __str__(self):
         return self.naam
 
+    @property
+    def btw_ingeschakeld(self) -> bool:
+        """Of facturen met deze template BTW berekenen.
+
+        Staat in `layout['totals']['btwEnabled']`. Ontbreekt die sleutel (alle
+        bestaande templates), dan wordt er gewoon BTW berekend.
+        """
+        totals = ((self.layout or {}).get('totals') or {})
+        return totals.get('btwEnabled') is not False
+
 
 class Invoice(models.Model):
     """Factuur model."""
@@ -158,15 +168,21 @@ class Invoice(models.Model):
         subtotaal, maar worden uitgesloten van de BTW-grondslag. Tolheffing is
         een doorlopende post die door de overheid zonder BTW wordt geheven en
         wordt zo één-op-één doorbelast.
+
+        Templates waarin BTW is uitgezet leveren altijd € 0,00 BTW op.
         """
         from decimal import Decimal
         lines = list(self.lines.all())
         self.subtotaal = sum((line.totaal for line in lines), Decimal('0'))
-        btw_base = sum(
-            (line.totaal for line in lines if (line.extra_data or {}).get('source') != 'tolling'),
-            Decimal('0'),
-        )
-        self.btw_bedrag = btw_base * (self.btw_percentage / 100)
+        if self.template and not self.template.btw_ingeschakeld:
+            self.btw_percentage = Decimal('0')
+            self.btw_bedrag = Decimal('0')
+        else:
+            btw_base = sum(
+                (line.totaal for line in lines if (line.extra_data or {}).get('source') != 'tolling'),
+                Decimal('0'),
+            )
+            self.btw_bedrag = btw_base * (self.btw_percentage / 100)
         self.totaal = self.subtotaal + self.btw_bedrag
         # Creditfacturen: bedragen negatief opslaan
         if self.type == 'credit':

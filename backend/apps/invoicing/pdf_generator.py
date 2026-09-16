@@ -775,7 +775,10 @@ class InvoicePDFGenerator:
     def _build_totals(self):
         """Bouw de totalen sectie."""
         elements = []
-        
+
+        # Template met BTW uitgezet: geen BTW-regel en geen excl./incl.-labels.
+        btw_enabled = self.totals_config.get('btwEnabled') is not False
+
         # Toon het BTW-percentage zoals opgeslagen op de factuur (kan 0 zijn,
         # bijv. bij tolheffing-facturen). Val alleen terug op template-config /
         # 21% wanneer er echt geen waarde is ingesteld.
@@ -789,14 +792,17 @@ class InvoicePDFGenerator:
         
         totals_data = []
         
-        if self.totals_config.get('showSubtotaal', True):
+        # Zonder BTW is er geen verschil tussen subtotaal en totaal: dan tonen
+        # we alleen één regel 'Totaal'.
+        if btw_enabled and self.totals_config.get('showSubtotaal', True):
             totals_data.append(['Subtotaal (excl. BTW):', f"€ {self.invoice.subtotaal:.2f}"])
         
-        if self.totals_config.get('showBtw', True):
+        if btw_enabled and self.totals_config.get('showBtw', True):
             totals_data.append([f'BTW ({btw_pct}%):', f"€ {self.invoice.btw_bedrag:.2f}"])
         
         if self.totals_config.get('showTotaal', True):
-            totals_data.append(['Totaal (incl. BTW):', f"€ {self.invoice.totaal:.2f}"])
+            label = 'Totaal (incl. BTW):' if btw_enabled else 'Totaal:'
+            totals_data.append([label, f"€ {self.invoice.totaal:.2f}"])
         
         if not totals_data:
             return elements

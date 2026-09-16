@@ -82,6 +82,11 @@ def bepaal_factuur_ontvangers(invoice, data):
     Combineert een los adres, een meegegeven lijst en de mailinglijst van het
     bedrijf. Levert dat niets op, dan valt het terug op het e-mailadres van het
     bedrijf zelf. Dubbele adressen vervallen, de volgorde blijft behouden.
+
+    Bij meerdere facturen tegelijk kan per bedrijf een eigen ontvangerslijst
+    meegegeven worden via `emails_per_bedrijf` ({bedrijf_id: [adres, ...]}).
+    Staat het bedrijf van deze factuur daarin, dan telt precies die keuze en
+    wordt de mailinglijst niet nog eens toegevoegd.
     """
     adressen = []
 
@@ -93,15 +98,27 @@ def bepaal_factuur_ontvangers(invoice, data):
     if isinstance(meegegeven, list):
         adressen.extend(meegegeven)
 
-    if data.get('use_mailing_list'):
-        from apps.companies.models import MailingListContact
-        for contact in MailingListContact.objects.filter(bedrijf=invoice.bedrijf, is_active=True):
-            adressen.append(contact.email)
+    per_bedrijf = data.get('emails_per_bedrijf')
+    keuze_voor_bedrijf = None
+    if isinstance(per_bedrijf, dict):
+        waarde = per_bedrijf.get(str(invoice.bedrijf_id))
+        if isinstance(waarde, list):
+            keuze_voor_bedrijf = [adres for adres in waarde if adres]
 
-    if not adressen:
-        bedrijfsadres = getattr(invoice.bedrijf, 'email', '') or ''
-        if bedrijfsadres:
-            adressen.append(bedrijfsadres)
+    if keuze_voor_bedrijf is not None:
+        # Expliciete keuze van de gebruiker: geen mailinglijst of bedrijfsadres
+        # er nog bij, ook niet als de keuze leeg is.
+        adressen.extend(keuze_voor_bedrijf)
+    else:
+        if data.get('use_mailing_list'):
+            from apps.companies.models import MailingListContact
+            for contact in MailingListContact.objects.filter(bedrijf=invoice.bedrijf, is_active=True):
+                adressen.append(contact.email)
+
+        if not adressen:
+            bedrijfsadres = getattr(invoice.bedrijf, 'email', '') or ''
+            if bedrijfsadres:
+                adressen.append(bedrijfsadres)
 
     gezien = set()
     uniek = []

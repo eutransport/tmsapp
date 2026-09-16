@@ -66,6 +66,16 @@ const TYPE_COLORS: Record<string, string> = {
   inkoop: 'text-red-600',
 }
 
+/** Ontvangerskeuze per bedrijf bij het mailen van meerdere facturen. */
+interface BulkMailBedrijf {
+  bedrijfId: string
+  naam: string
+  aantalFacturen: number
+  contacten: MailingListContact[]
+  geselecteerd: Set<string>
+  extra: string
+}
+
 export default function InvoicesPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -133,6 +143,9 @@ export default function InvoicesPage() {
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
   const [emailMode, setEmailMode] = useState<'mailing' | 'manual'>('mailing')
   const [emailProfileId, setEmailProfileId] = useState('')
+  // Ontvangers per bedrijf voor het mailen van meerdere facturen tegelijk.
+  const [bulkMailBedrijven, setBulkMailBedrijven] = useState<BulkMailBedrijf[]>([])
+  const [bulkMailLaden, setBulkMailLaden] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -313,16 +326,98 @@ export default function InvoicesPage() {
   }
 
   /**
+   * Haal per bedrijf van de geselecteerde facturen de mailinglijst op, zodat
+   * de gebruiker ook bij meerdere facturen kan kiezen wie de mail krijgt.
+   * Standaard staan alle actieve contactpersonen aangevinkt, dus wie niets
+   * aanpast houdt precies het gedrag van voorheen.
+   */
+  const openBulkEmailModal = async () => {
+    if (selectedIds.size === 0) return
+    setShowBulkEmailModal(true)
+    setBulkMailBedrijven([])
+    setBulkMailLaden(true)
+
+    const perBedrijf = new Map<string, { naam: string; aantal: number }>()
+    selectedIds.forEach((id) => {
+      const factuur = selectedCache.get(id)
+      if (!factuur?.bedrijf) return
+      const bestaand = perBedrijf.get(factuur.bedrijf)
+      if (bestaand) {
+        bestaand.aantal += 1
+      } else {
+        perBedrijf.set(factuur.bedrijf, { naam: factuur.bedrijf_naam || '', aantal: 1 })
+      }
+    })
+
+    try {
+      const rijen = await Promise.all(
+        Array.from(perBedrijf.entries()).map(async ([bedrijfId, info]) => {
+          let contacten: MailingListContact[] = []
+          try {
+            contacten = (await getMailingContacts(bedrijfId)).filter((c) => c.is_active)
+          } catch {
+            // Zonder mailinglijst valt de server terug op het bedrijfsadres.
+            contacten = []
+          }
+          return {
+            bedrijfId,
+            naam: info.naam,
+            aantalFacturen: info.aantal,
+            contacten,
+            geselecteerd: new Set(contacten.map((c) => c.email)),
+            extra: '',
+          } as BulkMailBedrijf
+        })
+      )
+      rijen.sort((a, b) => a.naam.localeCompare(b.naam))
+      setBulkMailBedrijven(rijen)
+    } finally {
+      setBulkMailLaden(false)
+    }
+  }
+
+  /** Vink een adres van een bedrijf aan of uit. */
+  const toggleBulkMailAdres = (bedrijfId: string, email: string, aan: boolean) => {
+    setBulkMailBedrijven((rijen) =>
+      rijen.map((rij) => {
+        if (rij.bedrijfId !== bedrijfId) return rij
+        const geselecteerd = new Set(rij.geselecteerd)
+        if (aan) geselecteerd.add(email)
+        else geselecteerd.delete(email)
+        return { ...rij, geselecteerd }
+      })
+    )
+  }
+
+  /** Extra (handmatig) adres voor een bedrijf. */
+  const setBulkMailExtra = (bedrijfId: string, waarde: string) => {
+    setBulkMailBedrijven((rijen) =>
+      rijen.map((rij) => (rij.bedrijfId === bedrijfId ? { ...rij, extra: waarde } : rij))
+    )
+  }
+
+  /**
    * Mail de geselecteerde facturen. De server maakt per factuur een losse mail
-   * naar de mailinglijst van het bijbehorende bedrijf, inclusief bijlagen.
+   * naar de gekozen ontvangers van het bijbehorende bedrijf, inclusief bijlagen.
    */
   const handleBulkSendEmail = async () => {
     if (selectedIds.size === 0) return
     try {
       setBulkBezig(true)
       setError(null)
+      // Alleen bedrijven waarvoor er echt iets te kiezen viel sturen we mee;
+      // voor de rest houdt de server de bestaande werkwijze aan.
+      const emailsPerBedrijf: Record<string, string[]> = {}
+      bulkMailBedrijven.forEach((rij) => {
+        const extra = rij.extra.trim()
+        if (rij.contacten.length === 0 && !extra) return
+        const adressen = Array.from(rij.geselecteerd)
+        if (extra) adressen.push(extra)
+        emailsPerBedrijf[rij.bedrijfId] = adressen
+      })
       const resultaat = await bulkSendEmail(Array.from(selectedIds), {
         useMailingList: true,
+        emailsPerBedrijf,
         emailProfileId: emailProfileId || undefined,
       })
       setShowBulkEmailModal(false)
@@ -603,7 +698,7 @@ export default function InvoicesPage() {
                 {t('invoices.assignAdministratie', 'Koppel administratie')}
               </button>
               <button
-                onClick={() => setShowBulkEmailModal(true)}
+                onClick={() => openBulkEmailModal()}
                 className="btn-secondary flex items-center gap-1.5 text-sm"
                 disabled={saving || bulkBezig}
               >
@@ -1652,6 +1747,63 @@ export default function InvoicesPage() {
                     <EmailProfileSelector value={emailProfileId} onChange={setEmailProfileId} />
                   </div>
 
+                  {/* Ontvangers per bedrijf */}
+                  <div className="mt-5">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('invoices.selectRecipients')}
+                    </label>
+                    {bulkMailLaden ? (
+                      <p className="text-sm text-gray-500">{t('common.loading')}</p>
+                    ) : bulkMailBedrijven.length === 0 ? (
+                      <p className="text-sm text-gray-500">
+                        {t('invoices.bulkEmailNoRecipients', 'Geen ontvangers gevonden; de facturen gaan naar het e-mailadres van het bedrijf.')}
+                      </p>
+                    ) : (
+                      <div className="max-h-64 overflow-y-auto space-y-3 rounded-lg border p-3">
+                        {bulkMailBedrijven.map((rij) => (
+                          <div key={rij.bedrijfId} className="rounded-md bg-gray-50 p-3">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="text-sm font-medium text-gray-900 truncate">
+                                {rij.naam || t('invoices.company')}
+                              </span>
+                              <span className="text-xs text-gray-500 shrink-0">
+                                {rij.aantalFacturen}x
+                              </span>
+                            </div>
+                            {rij.contacten.length === 0 ? (
+                              <p className="mt-1 text-xs text-gray-500">
+                                {t('invoices.bulkEmailCompanyFallback', 'Geen mailinglijst; valt terug op het e-mailadres van het bedrijf.')}
+                              </p>
+                            ) : (
+                              <div className="mt-2 space-y-1">
+                                {rij.contacten.map((contact) => (
+                                  <label key={contact.id} className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={rij.geselecteerd.has(contact.email)}
+                                      onChange={(e) => toggleBulkMailAdres(rij.bedrijfId, contact.email, e.target.checked)}
+                                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                    />
+                                    <span className="min-w-0 flex-1 truncate text-xs text-gray-700">
+                                      {contact.naam} <span className="text-gray-500">({contact.email})</span>
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                            <input
+                              type="email"
+                              value={rij.extra}
+                              onChange={(e) => setBulkMailExtra(rij.bedrijfId, e.target.value)}
+                              placeholder={t('invoices.bulkEmailExtraPlaceholder', 'Extra e-mailadres (optioneel)')}
+                              className="mt-2 w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="mt-4 rounded-md bg-amber-50 p-3 text-xs text-amber-800">
                     {t('invoices.bulkEmailNotice', 'Alleen definitieve en verzonden facturen worden gemaild. Facturen zonder e-mailadres worden overgeslagen en achteraf gemeld.')}
                   </div>
@@ -1660,7 +1812,7 @@ export default function InvoicesPage() {
                     <button type="button" onClick={() => setShowBulkEmailModal(false)} disabled={bulkBezig} className="btn-secondary">
                       {t('common.cancel')}
                     </button>
-                    <button onClick={handleBulkSendEmail} disabled={bulkBezig} className="btn-primary flex items-center justify-center gap-2">
+                    <button onClick={handleBulkSendEmail} disabled={bulkBezig || bulkMailLaden} className="btn-primary flex items-center justify-center gap-2">
                       <PaperAirplaneIcon className="h-4 w-4" />
                       {bulkBezig ? t('common.sending', 'Versturen...') : t('invoices.bulkEmailSend', 'Versturen')}
                     </button>

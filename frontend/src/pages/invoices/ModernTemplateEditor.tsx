@@ -303,6 +303,8 @@ interface ModernPreviewProps {
   companyKvk?: string
   companyBtw?: string
   logoUrl?: string | null
+  /** Uit = geen BTW-regel in de preview (template met BTW uitgezet). */
+  btwEnabled?: boolean
 }
 
 const DEMO_LINES = [
@@ -363,6 +365,7 @@ export function ModernPreview({
   companyKvk,
   companyBtw,
   logoUrl,
+  btwEnabled = true,
 }: ModernPreviewProps) {
   const accent = config.accentColor || '#7c3aed'
   const name = (config.companyNameOverride?.trim() || companyName || 'Uw Bedrijf B.V.').trim()
@@ -458,21 +461,25 @@ export function ModernPreview({
     <div className="mt-4 flex justify-end">
       <table className="text-xs">
         <tbody>
-          <tr>
-            <td className="text-gray-600 pr-6 py-1 uppercase font-semibold">Subtotaal</td>
-            <td className="text-right py-1">€ 1.020,00</td>
-          </tr>
-          <tr>
-            <td className="text-gray-600 pr-6 py-1 uppercase font-semibold">BTW (21%)</td>
-            <td className="text-right py-1">€ 214,20</td>
-          </tr>
+          {btwEnabled && (
+            <>
+              <tr>
+                <td className="text-gray-600 pr-6 py-1 uppercase font-semibold">Subtotaal</td>
+                <td className="text-right py-1">€ 1.020,00</td>
+              </tr>
+              <tr>
+                <td className="text-gray-600 pr-6 py-1 uppercase font-semibold">BTW (21%)</td>
+                <td className="text-right py-1">€ 214,20</td>
+              </tr>
+            </>
+          )}
           {isMinimal ? (
             <tr style={{ borderTop: `2px solid ${accent}` }}>
               <td className="pr-6 py-2 uppercase font-bold" style={{ color: accent }}>
                 Totaal
               </td>
               <td className="text-right py-2 font-bold" style={{ color: accent }}>
-                € 1.234,20
+                {btwEnabled ? '€ 1.234,20' : '€ 1.020,00'}
               </td>
             </tr>
           ) : (
@@ -487,7 +494,7 @@ export function ModernPreview({
                 className="text-right py-2 font-bold text-white"
                 style={{ backgroundColor: accent, paddingRight: 12 }}
               >
-                € 1.234,20
+                {btwEnabled ? '€ 1.234,20' : '€ 1.020,00'}
               </td>
             </tr>
           )}

@@ -1830,11 +1830,20 @@ export default function InvoiceCreatePage() {
     }
     return base
   }, [templateLayout, dotPercentageOverride])
-  const totalsConfig = useMemo(() => templateLayout?.totals || {
-    showSubtotaal: true,
-    showBtw: true,
-    showTotaal: true,
-    btwPercentage: 21,
+  const totalsConfig = useMemo(() => {
+    const config = templateLayout?.totals || {
+      showSubtotaal: true,
+      showBtw: true,
+      showTotaal: true,
+      btwPercentage: 21,
+    }
+    // Template zonder BTW: 0% rekenen, geen BTW-regel en geen subtotaal.
+    // Er is dan immers maar één bedrag: het totaal. Templates zonder deze
+    // instelling blijven ongewijzigd met BTW werken.
+    if (config.btwEnabled === false) {
+      return { ...config, showSubtotaal: false, showBtw: false, btwPercentage: 0 }
+    }
+    return config
   }, [templateLayout])
 
   // Load next invoice number when type or administratie changes
@@ -3965,7 +3974,7 @@ export default function InvoiceCreatePage() {
                 )}
                 {totalsConfig.showTotaal && (
                   <div className="flex justify-between py-2 border-t border-gray-300 mt-2 text-lg font-bold">
-                    <span>{t('invoices.totalInclVat')}:</span>
+                    <span>{totalsConfig.btwEnabled === false ? t('common.total') : t('invoices.totalInclVat')}:</span>
                     <span className="text-primary-600">{formatCurrency(calculateTotals.totaal)}</span>
                   </div>
                 )}
@@ -4105,7 +4114,7 @@ export default function InvoiceCreatePage() {
                               )}
                               {totalsConfig.showTotaal && (
                                 <div className="flex justify-between py-2 border-t border-gray-300 mt-2 text-lg font-bold">
-                                  <span>{t('invoices.totalInclVat')}:</span>
+                                  <span>{totalsConfig.btwEnabled === false ? t('common.total') : t('invoices.totalInclVat')}:</span>
                                   <span className="text-primary-600">{formatCurrency(draftTotals.totaal)}</span>
                                 </div>
                               )}
