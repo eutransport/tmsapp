@@ -132,6 +132,13 @@ export default function MaintenanceOverviewPage() {
             {t('maintenance.apk.title')}
           </button>
           <button
+            onClick={() => navigate('/maintenance/adr')}
+            className="btn-secondary flex items-center gap-2"
+          >
+            <ExclamationTriangleIcon className="w-5 h-5" />
+            {t('maintenance.adr.title')}
+          </button>
+          <button
             onClick={() => navigate('/maintenance/tasks')}
             className="btn-primary flex items-center gap-2"
           >

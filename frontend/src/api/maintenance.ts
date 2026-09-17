@@ -9,6 +9,8 @@ import {
   VehicleMaintenanceProfile,
   APKRecord,
   APKCountdown,
+  ADRRecord,
+  ADRSettings,
   MaintenanceTask,
   MaintenanceTaskList,
   MaintenancePart,
@@ -180,6 +182,73 @@ export async function renewAPK(id: string, data: { inspection_date: string; expi
 
 export async function getAPKHistory(vehicleId: string): Promise<APKRecord[]> {
   const response = await api.get(`${BASE}/apk/history/?vehicle_id=${vehicleId}`)
+  return response.data
+}
+
+// =============================================================================
+// ADR
+// =============================================================================
+
+export interface ADRFilters {
+  vehicle?: string
+  search?: string
+  page?: number
+  page_size?: number
+  ordering?: string
+}
+
+export type ADRPayload = {
+  vehicle: string
+  route?: string
+  has_adr: boolean
+  case_sealed: boolean
+  inspection_date: string
+  next_inspection_date: string
+  notify_users?: string[]
+  notify_extra_emails?: string[]
+  remarks?: string
+}
+
+export async function getADRRecords(filters?: ADRFilters): Promise<PaginatedResponse<ADRRecord>> {
+  const params = new URLSearchParams()
+  if (filters?.vehicle) params.append('vehicle', filters.vehicle)
+  if (filters?.search) params.append('search', filters.search)
+  if (filters?.page) params.append('page', filters.page.toString())
+  if (filters?.page_size) params.append('page_size', filters.page_size.toString())
+  if (filters?.ordering) params.append('ordering', filters.ordering)
+  const response = await api.get(`${BASE}/adr/?${params.toString()}`)
+  return response.data
+}
+
+export async function createADRRecord(data: ADRPayload): Promise<ADRRecord> {
+  const response = await api.post(`${BASE}/adr/`, data)
+  return response.data
+}
+
+export async function updateADRRecord(id: string, data: Partial<ADRPayload>): Promise<ADRRecord> {
+  const response = await api.patch(`${BASE}/adr/${id}/`, data)
+  return response.data
+}
+
+export async function deleteADRRecord(id: string): Promise<void> {
+  await api.delete(`${BASE}/adr/${id}/`)
+}
+
+export type ADRSettingsPayload = {
+  email_profile: string | null
+  send_hour: number
+  send_minute: number
+  default_notify_users: string[]
+  default_notify_extra_emails: string[]
+}
+
+export async function getADRSettings(): Promise<ADRSettings> {
+  const response = await api.get(`${BASE}/adr-settings/`)
+  return response.data
+}
+
+export async function updateADRSettings(data: ADRSettingsPayload): Promise<ADRSettings> {
+  const response = await api.put(`${BASE}/adr-settings/`, data)
   return response.data
 }
 

@@ -8,6 +8,8 @@ from .views import (
     MaintenanceTypeViewSet,
     VehicleMaintenanceProfileViewSet,
     APKRecordViewSet,
+    ADRRecordViewSet,
+    ADRSettingsView,
     MaintenanceTaskViewSet,
     MaintenancePartViewSet,
     TireRecordViewSet,
@@ -27,6 +29,7 @@ router.register(r'categories', MaintenanceCategoryViewSet, basename='maintenance
 router.register(r'types', MaintenanceTypeViewSet, basename='maintenance-types')
 router.register(r'profiles', VehicleMaintenanceProfileViewSet, basename='maintenance-profiles')
 router.register(r'apk', APKRecordViewSet, basename='apk-records')
+router.register(r'adr', ADRRecordViewSet, basename='adr-records')
 router.register(r'tasks', MaintenanceTaskViewSet, basename='maintenance-tasks')
 router.register(r'parts', MaintenancePartViewSet, basename='maintenance-parts')
 router.register(r'tires', TireRecordViewSet, basename='tire-records')
@@ -39,6 +42,7 @@ router.register(r'obd/devices', OBDDeviceViewSet, basename='obd-devices')
 router.register(r'obd/readings', OBDReadingViewSet, basename='obd-readings')
 
 urlpatterns = [
+    path('adr-settings/', ADRSettingsView.as_view(), name='adr-settings'),
     path('', include(router.urls)),
     path('stats/', MaintenanceStatsView.as_view(), name='maintenance-stats'),
     path('reports/vehicle-cost/', VehicleCostReportView.as_view(), name='vehicle-cost-report'),

@@ -23,6 +23,8 @@ from .models import (
     MaintenanceType,
     VehicleMaintenanceProfile,
     APKRecord,
+    ADRRecord,
+    ADRSettings,
     MaintenanceTask,
     MaintenancePart,
     TireRecord,
@@ -42,6 +44,8 @@ from .serializers import (
     VehicleMaintenanceProfileSerializer,
     APKRecordSerializer,
     APKCountdownSerializer,
+    ADRRecordSerializer,
+    ADRSettingsSerializer,
     MaintenanceTaskSerializer,
     MaintenanceTaskCreateSerializer,
     MaintenanceTaskListSerializer,
@@ -277,6 +281,72 @@ class APKRecordViewSet(viewsets.ModelViewSet):
             vehicle_id=vehicle_id
         ).select_related('vehicle', 'created_by').order_by('-inspection_date')
         serializer = APKRecordSerializer(records, many=True)
+        return Response(serializer.data)
+
+
+# =============================================================================
+# ADR
+# =============================================================================
+
+class ADRRecordViewSet(viewsets.ModelViewSet):
+    """CRUD voor ADR-controles met countdown tot de volgende controle."""
+    queryset = ADRRecord.objects.select_related(
+        'vehicle', 'vehicle__bedrijf', 'created_by'
+    ).prefetch_related('notify_users').all()
+    serializer_class = ADRRecordSerializer
+    permission_classes = [IsAuthenticated, IsAdminOrManager, HasModulePermission]
+    module_permission = 'view_maintenance'
+    filterset_fields = ['vehicle', 'has_adr', 'case_sealed']
+    search_fields = ['vehicle__kenteken', 'route', 'remarks']
+    ordering_fields = ['next_inspection_date', 'inspection_date', 'created_at']
+    ordering = ['next_inspection_date']
+
+    def perform_create(self, serializer):
+        record = serializer.save(created_by=self.request.user)
+        logger.info(
+            f"ADR record created: {record.vehicle.kenteken} next check "
+            f"{record.next_inspection_date} by {self.request.user.email}"
+        )
+
+    @action(detail=False, methods=['get'])
+    def expiring_soon(self, request):
+        """ADR-controles die binnen X dagen moeten gebeuren (of al te laat zijn)."""
+        days = int(request.query_params.get('days', 14))
+        cutoff = date.today() + timedelta(days=days)
+        records = self.get_queryset().filter(next_inspection_date__lte=cutoff)
+        serializer = self.get_serializer(records, many=True)
+        return Response(serializer.data)
+
+
+class ADRSettingsView(APIView):
+    """Instellingen voor de ADR-herinneringen: lezen door beheerders/managers,
+    wijzigen alleen door admins."""
+    permission_classes = [IsAuthenticated, IsAdminOrManager, HasModulePermission]
+    module_permission = 'view_maintenance'
+
+    def get_permissions(self):
+        if self.request.method in ('PUT', 'PATCH'):
+            return [IsAuthenticated(), IsAdminOnly()]
+        return super().get_permissions()
+
+    def get(self, request):
+        instellingen = ADRSettings.get_settings()
+        return Response(ADRSettingsSerializer(instellingen, context={'request': request}).data)
+
+    def put(self, request):
+        return self._update(request)
+
+    def patch(self, request):
+        return self._update(request, partial=True)
+
+    def _update(self, request, partial=False):
+        instellingen = ADRSettings.get_settings()
+        serializer = ADRSettingsSerializer(
+            instellingen, data=request.data, partial=partial, context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        logger.info(f"ADR settings updated by {request.user.email}")
         return Response(serializer.data)
 
 

@@ -30,6 +30,12 @@ app.conf.beat_schedule = {
         'task': 'apps.leave.tasks.send_leave_reminders',
         'schedule': crontab(hour=8, minute=15),
     },
+    'send-adr-reminders': {
+        # Elk kwartier kijken of de ingestelde verzendtijd (standaard 06:00)
+        # bereikt is; de taak verstuurt maximaal één keer per dag.
+        'task': 'apps.maintenance.tasks.send_adr_reminders',
+        'schedule': crontab(minute='*/15'),
+    },
     'pakmiddelen-scheduled-check': {
         'task': 'apps.pakmiddelen.tasks.run_scheduled_check',
         'schedule': crontab(minute='*'),

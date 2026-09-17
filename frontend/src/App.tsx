@@ -125,6 +125,7 @@ const UrenImportPage = React.lazy(() => import('@/pages/uren-import/UrenImportPa
 // Maintenance
 const MaintenanceOverviewPage = React.lazy(() => import('@/pages/maintenance/MaintenanceOverviewPage'))
 const APKPage = React.lazy(() => import('@/pages/maintenance/APKPage'))
+const ADRPage = React.lazy(() => import('@/pages/maintenance/ADRPage'))
 const MaintenanceTasksPage = React.lazy(() => import('@/pages/maintenance/MaintenanceTasksPage'))
 const TiresPage = React.lazy(() => import('@/pages/maintenance/TiresPage'))
 const MaintenanceSettingsPage = React.lazy(() => import('@/pages/maintenance/MaintenanceSettingsPage'))
@@ -321,6 +322,7 @@ function App() {
         {/* Maintenance */}
         <Route path="/maintenance" element={<MaintenanceOverviewPage />} />
         <Route path="/maintenance/apk" element={<APKPage />} />
+        <Route path="/maintenance/adr" element={<ADRPage />} />
         <Route path="/maintenance/tasks" element={<MaintenanceTasksPage />} />
         <Route path="/maintenance/tires" element={<TiresPage />} />
         <Route path="/maintenance/settings" element={<AdminRoute><MaintenanceSettingsPage /></AdminRoute>} />

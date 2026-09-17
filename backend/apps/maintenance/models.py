@@ -15,6 +15,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -388,6 +389,174 @@ class APKRecord(models.Model):
                 self.status = APKStatus.FAILED
         
         super().save(*args, **kwargs)
+
+
+# =============================================================================
+# ADR
+# =============================================================================
+
+class ADRRecord(models.Model):
+    """
+    ADR-controle per voertuig: is er ADR aanwezig, is de ADR-koffer verzegeld
+    en wanneer moet de volgende controle plaatsvinden.
+
+    Vanaf twee weken voor de volgende controle gaat er een herinnering uit naar
+    de gekozen ontvangers; in de laatste week (en daarna) elke dag opnieuw,
+    totdat de controledatum is bijgewerkt.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vehicle = models.ForeignKey(
+        'fleet.Vehicle',
+        on_delete=models.CASCADE,
+        related_name='adr_records',
+        verbose_name='Voertuig'
+    )
+    route = models.CharField(
+        max_length=50, blank=True,
+        verbose_name='Route',
+        help_text='Ritnummer/route van het voertuig. Leeg = automatisch van de wagen overnemen.'
+    )
+
+    has_adr = models.BooleanField(default=True, verbose_name='ADR')
+    case_sealed = models.BooleanField(default=False, verbose_name='ADR koffer verzegeld')
+
+    inspection_date = models.DateField(verbose_name='Controle uitgevoerd op')
+    next_inspection_date = models.DateField(verbose_name='Volgende controle op')
+
+    notify_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='adr_notifications',
+        verbose_name='Notificatie naar'
+    )
+    notify_extra_emails = models.JSONField(
+        default=list, blank=True,
+        verbose_name='Extra e-mailadressen',
+        help_text='Losse adressen die naast de gekozen gebruikers een herinnering krijgen.'
+    )
+
+    remarks = models.TextField(blank=True, verbose_name='Opmerkingen')
+
+    last_reminder_sent_on = models.DateField(
+        null=True, blank=True,
+        verbose_name='Laatste herinnering',
+        help_text='Datum waarop voor het laatst een herinnering is verstuurd.'
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='created_adr_records',
+        verbose_name='Aangemaakt door'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'ADR Controle'
+        verbose_name_plural = 'ADR Controles'
+        ordering = ['next_inspection_date']
+        indexes = [
+            models.Index(fields=['next_inspection_date']),
+        ]
+
+    def __str__(self):
+        return f"ADR {self.vehicle.kenteken} - {self.next_inspection_date}"
+
+    @property
+    def days_remaining(self):
+        """Aantal dagen tot de volgende controle (negatief = te laat)."""
+        if self.next_inspection_date:
+            return (self.next_inspection_date - date.today()).days
+        return None
+
+    @property
+    def is_expired(self):
+        """Is de controledatum verstreken?"""
+        if self.next_inspection_date:
+            return self.next_inspection_date < date.today()
+        return False
+
+    @property
+    def countdown_status(self):
+        """Status voor de kleurcodering: ok, warning, critical, expired."""
+        days = self.days_remaining
+        if days is None:
+            return 'unknown'
+        if days < 0:
+            return 'expired'
+        if days <= 7:
+            return 'critical'
+        if days <= 14:
+            return 'warning'
+        return 'ok'
+
+    def save(self, *args, **kwargs):
+        # Route overnemen van de wagen zolang er niets is ingevuld.
+        if not self.route and self.vehicle_id:
+            self.route = self.vehicle.ritnummer or ''
+        super().save(*args, **kwargs)
+
+
+class ADRSettings(models.Model):
+    """Instellingen voor de ADR-herinneringen (singleton)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email_profile = models.ForeignKey(
+        'core.EmailProfile',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='adr_settings',
+        verbose_name='Verzend-account',
+        help_text='Leeg = de algemene SMTP-instellingen gebruiken.'
+    )
+    send_hour = models.PositiveSmallIntegerField(
+        default=6,
+        validators=[MinValueValidator(0), MaxValueValidator(23)],
+        verbose_name='Verzenduur'
+    )
+    send_minute = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(59)],
+        verbose_name='Verzendminuut'
+    )
+    default_notify_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='adr_default_notifications',
+        verbose_name='Standaard ontvangers'
+    )
+    default_notify_extra_emails = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Standaard extra e-mailadressen'
+    )
+    last_run_on = models.DateField(null=True, blank=True, verbose_name='Laatste run op')
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_adr_settings'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'ADR Instellingen'
+        verbose_name_plural = 'ADR Instellingen'
+
+    def __str__(self):
+        return f"ADR instellingen ({self.send_hour:02d}:{self.send_minute:02d})"
+
+    @classmethod
+    def get_settings(cls):
+        """Haal de instellingen op en maak ze aan als ze nog niet bestaan."""
+        obj = cls.objects.first()
+        if obj is None:
+            obj = cls.objects.create()
+        return obj
 
 
 # =============================================================================

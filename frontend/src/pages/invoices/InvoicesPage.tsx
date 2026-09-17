@@ -328,8 +328,8 @@ export default function InvoicesPage() {
   /**
    * Haal per bedrijf van de geselecteerde facturen de mailinglijst op, zodat
    * de gebruiker ook bij meerdere facturen kan kiezen wie de mail krijgt.
-   * Standaard staan alle actieve contactpersonen aangevinkt, dus wie niets
-   * aanpast houdt precies het gedrag van voorheen.
+   * Standaard staat niets aangevinkt: de gebruiker kiest bewust de ontvangers.
+   * Wie niets aanvinkt valt terug op het e-mailadres van het bedrijf zelf.
    */
   const openBulkEmailModal = async () => {
     if (selectedIds.size === 0) return
@@ -364,7 +364,7 @@ export default function InvoicesPage() {
             naam: info.naam,
             aantalFacturen: info.aantal,
             contacten,
-            geselecteerd: new Set(contacten.map((c) => c.email)),
+            geselecteerd: new Set<string>(),
             extra: '',
           } as BulkMailBedrijf
         })
@@ -389,6 +389,17 @@ export default function InvoicesPage() {
     )
   }
 
+  /** Zet alle adressen van een bedrijf in een keer aan of uit. */
+  const toggleBulkMailBedrijf = (bedrijfId: string, aan: boolean) => {
+    setBulkMailBedrijven((rijen) =>
+      rijen.map((rij) =>
+        rij.bedrijfId === bedrijfId
+          ? { ...rij, geselecteerd: aan ? new Set(rij.contacten.map((c) => c.email)) : new Set<string>() }
+          : rij
+      )
+    )
+  }
+
   /** Extra (handmatig) adres voor een bedrijf. */
   const setBulkMailExtra = (bedrijfId: string, waarde: string) => {
     setBulkMailBedrijven((rijen) =>
@@ -410,9 +421,10 @@ export default function InvoicesPage() {
       const emailsPerBedrijf: Record<string, string[]> = {}
       bulkMailBedrijven.forEach((rij) => {
         const extra = rij.extra.trim()
-        if (rij.contacten.length === 0 && !extra) return
         const adressen = Array.from(rij.geselecteerd)
         if (extra) adressen.push(extra)
+        // Niets aangevinkt? Dan laten we de server terugvallen op het bedrijfsadres.
+        if (adressen.length === 0) return
         emailsPerBedrijf[rij.bedrijfId] = adressen
       })
       const resultaat = await bulkSendEmail(Array.from(selectedIds), {
@@ -1759,47 +1771,96 @@ export default function InvoicesPage() {
                         {t('invoices.bulkEmailNoRecipients', 'Geen ontvangers gevonden; de facturen gaan naar het e-mailadres van het bedrijf.')}
                       </p>
                     ) : (
-                      <div className="max-h-64 overflow-y-auto space-y-3 rounded-lg border p-3">
-                        {bulkMailBedrijven.map((rij) => (
-                          <div key={rij.bedrijfId} className="rounded-md bg-gray-50 p-3">
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="text-sm font-medium text-gray-900 truncate">
-                                {rij.naam || t('invoices.company')}
-                              </span>
-                              <span className="text-xs text-gray-500 shrink-0">
-                                {rij.aantalFacturen}x
-                              </span>
-                            </div>
-                            {rij.contacten.length === 0 ? (
-                              <p className="mt-1 text-xs text-gray-500">
-                                {t('invoices.bulkEmailCompanyFallback', 'Geen mailinglijst; valt terug op het e-mailadres van het bedrijf.')}
-                              </p>
-                            ) : (
-                              <div className="mt-2 space-y-1">
-                                {rij.contacten.map((contact) => (
-                                  <label key={contact.id} className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={rij.geselecteerd.has(contact.email)}
-                                      onChange={(e) => toggleBulkMailAdres(rij.bedrijfId, contact.email, e.target.checked)}
-                                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                                    />
-                                    <span className="min-w-0 flex-1 truncate text-xs text-gray-700">
-                                      {contact.naam} <span className="text-gray-500">({contact.email})</span>
-                                    </span>
-                                  </label>
-                                ))}
-                              </div>
-                            )}
-                            <input
-                              type="email"
-                              value={rij.extra}
-                              onChange={(e) => setBulkMailExtra(rij.bedrijfId, e.target.value)}
-                              placeholder={t('invoices.bulkEmailExtraPlaceholder', 'Extra e-mailadres (optioneel)')}
-                              className="mt-2 w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                            />
-                          </div>
-                        ))}
+                      <div className="max-h-72 overflow-y-auto rounded-md border border-gray-200">
+                        <table className="w-full table-fixed border-collapse text-xs">
+                          <colgroup>
+                            <col className="w-8" />
+                            <col className="w-2/5" />
+                            <col />
+                          </colgroup>
+                          <tbody>
+                            {bulkMailBedrijven.map((rij) => {
+                              const allesAan =
+                                rij.contacten.length > 0 && rij.geselecteerd.size === rij.contacten.length
+                              return (
+                                <Fragment key={rij.bedrijfId}>
+                                  <tr className="border-b border-gray-200 bg-gray-50">
+                                    <td className="px-2 py-1.5 align-middle">
+                                      {rij.contacten.length > 0 && (
+                                        <input
+                                          type="checkbox"
+                                          checked={allesAan}
+                                          onChange={(e) => toggleBulkMailBedrijf(rij.bedrijfId, e.target.checked)}
+                                          className="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                        />
+                                      )}
+                                    </td>
+                                    <td colSpan={2} className="px-2 py-1.5 align-middle">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="truncate font-semibold text-gray-900">
+                                          {rij.naam || t('invoices.company')}
+                                        </span>
+                                        <span className="shrink-0 tabular-nums text-gray-500">
+                                          {rij.aantalFacturen}x
+                                        </span>
+                                      </div>
+                                    </td>
+                                  </tr>
+
+                                  {rij.contacten.length === 0 ? (
+                                    <tr className="border-b border-gray-100">
+                                      <td />
+                                      <td colSpan={2} className="px-2 py-1.5 text-gray-500">
+                                        {t('invoices.bulkEmailCompanyFallback', 'Geen mailinglijst; valt terug op het e-mailadres van het bedrijf.')}
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    rij.contacten.map((contact) => (
+                                      <tr
+                                        key={contact.id}
+                                        className="border-b border-gray-100 hover:bg-gray-50"
+                                      >
+                                        <td className="px-2 py-1 align-middle">
+                                          <input
+                                            id={`bulkmail-${contact.id}`}
+                                            type="checkbox"
+                                            checked={rij.geselecteerd.has(contact.email)}
+                                            onChange={(e) => toggleBulkMailAdres(rij.bedrijfId, contact.email, e.target.checked)}
+                                            className="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                          />
+                                        </td>
+                                        <td className="px-2 py-1 align-middle">
+                                          <label
+                                            htmlFor={`bulkmail-${contact.id}`}
+                                            className="block cursor-pointer truncate text-gray-900"
+                                          >
+                                            {contact.naam}
+                                          </label>
+                                        </td>
+                                        <td className="px-2 py-1 align-middle">
+                                          <span className="block truncate text-gray-500">{contact.email}</span>
+                                        </td>
+                                      </tr>
+                                    ))
+                                  )}
+
+                                  <tr className="border-b border-gray-200">
+                                    <td />
+                                    <td colSpan={2} className="px-2 py-1.5">
+                                      <input
+                                        type="email"
+                                        value={rij.extra}
+                                        onChange={(e) => setBulkMailExtra(rij.bedrijfId, e.target.value)}
+                                        placeholder={t('invoices.bulkEmailExtraPlaceholder', 'Extra e-mailadres (optioneel)')}
+                                        className="h-7 w-full rounded border-gray-300 px-2 py-0 text-xs shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                                      />
+                                    </td>
+                                  </tr>
+                                </Fragment>
+                              )
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </div>

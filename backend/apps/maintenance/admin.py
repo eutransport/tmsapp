@@ -5,6 +5,8 @@ from .models import (
     MaintenanceType,
     VehicleMaintenanceProfile,
     APKRecord,
+    ADRRecord,
+    ADRSettings,
     MaintenanceTask,
     MaintenancePart,
     TireRecord,
@@ -38,6 +40,21 @@ class VehicleMaintenanceProfileAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'maintenance_type__category']
     search_fields = ['vehicle__kenteken']
     raw_id_fields = ['vehicle', 'maintenance_type']
+
+
+@admin.register(ADRRecord)
+class ADRRecordAdmin(admin.ModelAdmin):
+    list_display = ['vehicle', 'route', 'has_adr', 'case_sealed', 'inspection_date', 'next_inspection_date']
+    list_filter = ['has_adr', 'case_sealed']
+    search_fields = ['vehicle__kenteken', 'route']
+    raw_id_fields = ['vehicle']
+    filter_horizontal = ['notify_users']
+
+
+@admin.register(ADRSettings)
+class ADRSettingsAdmin(admin.ModelAdmin):
+    list_display = ['__str__', 'email_profile', 'last_run_on', 'updated_at']
+    filter_horizontal = ['default_notify_users']
 
 
 @admin.register(APKRecord)
