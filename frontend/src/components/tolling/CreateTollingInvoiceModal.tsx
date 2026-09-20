@@ -23,9 +23,11 @@ import {
 import api from '@/api/client'
 import {
   tollingApi,
+  tollingFactuurDetailApi,
   TollingOpenWeek,
   TollingVehicleRow,
 } from '@/api/tolling'
+import TollingSelectiePaneel from './TollingSelectiePaneel'
 import {
   getTemplates,
   getNextInvoiceNumber,
@@ -96,6 +98,9 @@ export default function CreateTollingInvoiceModal({
   const [excludeWeekend, setExcludeWeekend] = useState<boolean>(true)
   const [cutoffEnabled, setCutoffEnabled] = useState<boolean>(false)
   const [cutoffTime, setCutoffTime] = useState<string>('20:00')
+  // Tolregels rond de rittijd die de gebruiker alsnog wil meenemen; die
+  // worden pas na het aanmaken van de factuur bijgeplaatst.
+  const [margeIds, setMargeIds] = useState<string[]>([])
 
   // Preview number
   const [previewNumber, setPreviewNumber] = useState<string>('')
@@ -156,6 +161,7 @@ export default function CreateTollingInvoiceModal({
         setExcludeWeekend(true)
         setCutoffEnabled(false)
         setCutoffTime('20:00')
+        setMargeIds([])
       })
       .catch((e: any) => {
         toast.error(e?.response?.data?.detail || 'Kon gegevens niet laden')
@@ -278,6 +284,36 @@ export default function CreateTollingInvoiceModal({
           events_count: l.events_count,
         })),
       })
+      // Gekozen tolregels rond de rittijd komen er daarna bovenop. Gaat dat
+      // mis, dan blijft de factuur zelf gewoon staan.
+      if (margeIds.length > 0) {
+        try {
+          const extra = await tollingFactuurDetailApi.voegMargeToe(res.invoice_id, margeIds)
+          if (extra.toegevoegd > 0) {
+            setCreated(prev =>
+              prev
+                ? {
+                    ...prev,
+                    subtotaal: extra.subtotaal ?? prev.subtotaal,
+                    totaal: extra.totaal ?? prev.totaal,
+                    events_marked: prev.events_marked + extra.toegevoegd,
+                  }
+                : prev,
+            )
+            toast.success(
+              `${extra.toegevoegd} tolregel(s) rond de rittijd toegevoegd (${currency(extra.bedrag)})`,
+            )
+          }
+          if (extra.overgeslagen > 0) {
+            toast(`${extra.overgeslagen} tolregel(s) konden niet worden toegevoegd.`)
+          }
+        } catch (margeErr: any) {
+          toast.error(
+            margeErr?.response?.data?.detail ||
+              'Factuur is gemaakt, maar de regels rond de rittijd konden niet worden toegevoegd.',
+          )
+        }
+      }
       // Load PDF preview
       try {
         const resp = await api.get(
@@ -530,6 +566,18 @@ export default function CreateTollingInvoiceModal({
                             </div>
                           )}
                         </div>
+
+                        {/* Wat komt er wel en niet op de factuur */}
+                        <TollingSelectiePaneel
+                          plate={row.plate_normalized}
+                          year={selectedWeeks[0]?.year ?? null}
+                          weekStart={selectedWeeks[0]?.week ?? null}
+                          periodWeeks={selectedWeeks.length || periodWeeks}
+                          bedrijfId={bedrijfId || null}
+                          excludeWeekend={excludeWeekend}
+                          cutoffTime={cutoffEnabled && cutoffTime ? cutoffTime : null}
+                          onSelectionChange={setMargeIds}
+                        />
 
                         {/* Template */}
                         <div>

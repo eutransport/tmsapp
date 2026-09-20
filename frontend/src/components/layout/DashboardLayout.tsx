@@ -100,6 +100,8 @@ const navigation: NavItem[] = [
   { name: 'nav.pakmiddelen', href: '/pakmiddelen', icon: EnvelopeIcon, roles: ['admin', 'gebruiker'], permission: 'view_pakmiddelen' },
   { name: 'nav.laadlijst', href: '/laadlijst', icon: TruckIcon, permission: 'view_loadlist' },
   { name: 'nav.tolheffing', href: '/tolheffing', icon: CurrencyEuroIcon, permission: 'view_tolling' },
+  { name: 'nav.tolheffingSync', href: '/tolheffing/sync', icon: CurrencyEuroIcon, roles: ['admin'], permission: 'view_tolling' },
+  { name: 'nav.tolheffingBuitenUren', href: '/tolheffing/buiten-uren', icon: ClockIcon, permission: 'view_tolling' },
 ]
 
 const adminNavigation: NavItem[] = [
@@ -118,7 +120,7 @@ const navGroups: NavGroupDef[] = [
   { id: 'overview',     labelKey: 'nav.group.overview',     fallback: 'Overzicht',              hrefs: ['/', '/planning', '/notifications'] },
   { id: 'masterdata',   labelKey: 'nav.group.masterdata',   fallback: 'Basisgegevens',          hrefs: ['/companies', '/drivers', '/fleet', '/pakmiddelen'] },
   { id: 'hours',        labelKey: 'nav.group.hours',        fallback: 'Uren & verlof',          hrefs: ['/time-entries', '/my-hours', '/submitted-hours', '/uren-import', '/leave', '/leave/balances', '/leave/admin'] },
-  { id: 'registration', labelKey: 'nav.group.registration', fallback: 'Registraties',           hrefs: ['/toll', '/toll/admin', '/kilometerheffing', '/track-trace', '/tachograph', '/tachograph/comparison', '/laadlijst', '/tolheffing'] },
+  { id: 'registration', labelKey: 'nav.group.registration', fallback: 'Registraties',           hrefs: ['/toll', '/toll/admin', '/kilometerheffing', '/track-trace', '/tachograph', '/tachograph/comparison', '/laadlijst', '/tolheffing', '/tolheffing/sync', '/tolheffing/buiten-uren'] },
   { id: 'invoicing',    labelKey: 'nav.group.invoicing',    fallback: 'Facturatie',             hrefs: ['/invoices', '/factuurwizard', '/factuurwizard/beheer', '/invoices/templates', '/imports', '/revenue'] },
   { id: 'documents',    labelKey: 'nav.group.documents',    fallback: 'Documenten & rapporten', hrefs: ['/documents', '/bestanden', '/tasks', '/reports', '/spreadsheets', '/spreadsheets/templates', '/maintenance'] },
   { id: 'admin',        labelKey: 'nav.group.admin',        fallback: 'Beheer',                 hrefs: ['/admin/users', '/settings'] },

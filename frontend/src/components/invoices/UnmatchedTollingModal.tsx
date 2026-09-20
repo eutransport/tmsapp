@@ -4,7 +4,7 @@
  * kiezen om alleen de binnen-tijden events te factureren, of ook de events
  * buiten de tijden mee te nemen.
  */
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import {
   XMarkIcon,
@@ -71,8 +71,28 @@ interface Props {
   /** Ritten waarvoor geen tol is opgehaald, bv. door ontbrekende tijden. */
   skipped?: SkippedRange[]
   bufferMinutes: number
-  /** Alleen binnen tijden factureren (aanbevolen). */
-  onConfirmStrict: () => void
+  /**
+   * Per event-id de gereden tijd van die dag: status, uren, chauffeur en hoe
+   * ver de passage ernaast ligt. Regels met status `marge` krijgen een eigen
+   * vakje; de rest is per regel aan te vinken in het oranje vak.
+   */
+  margeStatus?: Record<string, {
+    status: string
+    venster: string
+    dag_uren?: string
+    dag_chauffeur?: string
+    dag_bron?: string
+    dag_ritnummers?: string
+    afwijking_minuten?: number | null
+    afwijking_richting?: string
+  }>
+  /** Marge rond de rittijd in minuten; alleen voor de tekst. */
+  margeMinuten?: number
+  /**
+   * Alleen binnen tijden factureren (aanbevolen). De aangevinkte randregels
+   * komen daar bovenop.
+   */
+  onConfirmStrict: (extraEventIds: string[]) => void
   /** Ook alle events buiten tijden meenemen. */
   onConfirmIncludeAll: () => void
   /** Totaal geregistreerde km op de factuur (uit de rit-regels). Optioneel. */
@@ -128,6 +148,8 @@ export default function UnmatchedTollingModal({
   unmatched,
   skipped = [],
   bufferMinutes,
+  margeStatus,
+  margeMinuten = 15,
   onConfirmStrict,
   onConfirmIncludeAll,
   totalRegisteredKm,
@@ -156,8 +178,108 @@ export default function UnmatchedTollingModal({
     }
   }, [unmatched])
 
+  // Randregels: tol die net voor de begintijd of net na de eindtijd van de
+  // rit ligt. Die mogen er los bij, net als weekend en avonduren.
+  const randRegels = useMemo(
+    () => unmatched.filter(u => margeStatus?.[u.id]?.status === 'marge'),
+    [unmatched, margeStatus],
+  )
+  const buitenRegels = useMemo(
+    () => unmatched.filter(u => margeStatus?.[u.id]?.status !== 'marge'),
+    [unmatched, margeStatus],
+  )
+  const buitenTotals = useMemo(() => ({
+    count: buitenRegels.length,
+    km: buitenRegels.reduce((s, u) => s + (u.distance_km || 0), 0),
+    amount: buitenRegels.reduce((s, u) => s + (u.amount || 0), 0),
+  }), [buitenRegels])
+
+  // Standaard staat er niets aan: meenemen is een bewuste keuze.
+  const [gekozenRand, setGekozenRand] = useState<string[]>([])
+  useEffect(() => {
+    if (open) setGekozenRand([])
+  }, [open, unmatched])
+
+  const randTotals = useMemo(() => {
+    const regels = randRegels.filter(u => gekozenRand.includes(u.id))
+    return {
+      count: regels.length,
+      km: regels.reduce((s, u) => s + (u.distance_km || 0), 0),
+      amount: regels.reduce((s, u) => s + (u.amount || 0), 0),
+    }
+  }, [randRegels, gekozenRand])
+
+  /** Alles wat de gebruiker zelf heeft aangevinkt, blauw én oranje. */
+  const extraTotals = useMemo(() => {
+    const regels = unmatched.filter(u => gekozenRand.includes(u.id))
+    return {
+      count: regels.length,
+      km: regels.reduce((s, u) => s + (u.distance_km || 0), 0),
+      amount: regels.reduce((s, u) => s + (u.amount || 0), 0),
+    }
+  }, [unmatched, gekozenRand])
+
+  /** Aangevinkt in het oranje vak. */
+  const buitenSelectie = useMemo(() => {
+    const regels = buitenRegels.filter(u => gekozenRand.includes(u.id))
+    return {
+      count: regels.length,
+      km: regels.reduce((s, u) => s + (u.distance_km || 0), 0),
+      amount: regels.reduce((s, u) => s + (u.amount || 0), 0),
+    }
+  }, [buitenRegels, gekozenRand])
+
+  const wisselRand = (id: string) =>
+    setGekozenRand(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))
+
+  /** Ritnummers van de niet-meegenomen regels, samengevat boven de tabel. */
+  const buitenRitnummers = useMemo(
+    () =>
+      Array.from(
+        new Set(buitenRegels.map(u => u.ritnummer || u.dag_ritnummer).filter(Boolean) as string[]),
+      ).join(', '),
+    [buitenRegels],
+  )
+
+  const randAllesAan = randRegels.length > 0 && randRegels.every(u => gekozenRand.includes(u.id))
+
+  /** "06:30 - 19:00 · Jan Jansen" van de dag van die tolregel. */
+  const urenTekst = (id: string): string => {
+    const info = margeStatus?.[id]
+    if (!info?.dag_uren) return ''
+    const stukken = [info.dag_uren]
+    if (info.dag_chauffeur) stukken.push(info.dag_chauffeur)
+    return stukken.join(' · ')
+  }
+
+  /** Badge die laat zien waar die uren vandaan komen. */
+  const BronLabel = ({ id }: { id: string }) => {
+    const bron = margeStatus?.[id]?.dag_bron
+    if (!bron) return <span className="text-gray-400">—</span>
+    const isImport = bron === 'urenimport'
+    return (
+      <span
+        className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${
+          isImport ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-700'
+        }`}
+        title={isImport ? 'Uit de geïmporteerde urenlijst' : 'Uit de door de chauffeur ingediende uren'}
+      >
+        {isImport ? 'Urenimport' : 'Ingediend'}
+      </span>
+    )
+  }
+
+  /** "16 min vóór" / "43 min ná" de rit. */
+  const afwijkingTekst = (id: string): string => {
+    const info = margeStatus?.[id]
+    if (!info || info.afwijking_minuten == null || !info.afwijking_richting) return ''
+    return `${info.afwijking_minuten} min ${info.afwijking_richting === 'voor' ? 'vóór' : 'ná'} de rit`
+  }
+
   const hasMatched = matched.length > 0
   const hasUnmatched = unmatched.length > 0
+  const hasBuiten = buitenRegels.length > 0
+  const hasRand = randRegels.length > 0
   const hasSkipped = skipped.length > 0
 
   // Flat list met per-event details voor de "Details"-tab.
@@ -246,7 +368,7 @@ export default function UnmatchedTollingModal({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-3xl transform overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 flex flex-col max-h-[92vh] sm:max-h-[90vh]">
+              <Dialog.Panel className="w-full max-w-6xl transform overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 flex flex-col max-h-[92vh] sm:max-h-[90vh]">
                 {/* Header */}
                 <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-gradient-to-r from-primary-50 to-white px-4 sm:px-5 py-3 shrink-0">
                   <div className="flex items-center gap-2 min-w-0">
@@ -414,40 +536,62 @@ export default function UnmatchedTollingModal({
                   )}
 
                   {/* Details buiten tijden */}
-                  {hasUnmatched && (
+                  {hasBuiten && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <ClockIcon className="h-5 w-5 text-amber-600" />
                         <h3 className="text-sm font-semibold text-amber-900">
-                          Niet automatisch meegenomen ({unmatchedTotals.count} event{unmatchedTotals.count === 1 ? '' : 's'})
+                          Niet automatisch meegenomen ({buitenTotals.count} event{buitenTotals.count === 1 ? '' : 's'})
                         </h3>
                       </div>
-                      <div className="max-h-64 overflow-y-auto rounded border border-amber-200 bg-white">
+                      {buitenRitnummers && (
+                        <p className="mb-2 text-[11px] text-amber-800">
+                          Ritnummers: <span className="font-medium">{buitenRitnummers}</span>
+                        </p>
+                      )}
+                      <div className="max-h-64 overflow-y-auto overflow-x-auto rounded border border-amber-200 bg-white">
                         {/* Mobile: card list */}
                         <div className="sm:hidden divide-y divide-amber-100">
-                          {unmatched.map(u => (
-                            <div key={u.id} className="p-2.5">
-                              <div className="flex items-start justify-between gap-2">
-                                <span className="text-sm font-medium text-gray-900">{u.plate_display}</span>
-                                <span className="text-sm font-semibold text-gray-900 tabular-nums">{fmtMoney(u.amount)}</span>
+                          {buitenRegels.map(u => (
+                            <label key={u.id} className="flex cursor-pointer gap-2 p-2.5">
+                              <input
+                                type="checkbox"
+                                checked={gekozenRand.includes(u.id)}
+                                onChange={() => wisselRand(u.id)}
+                                className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <span className="text-sm font-medium text-gray-900">{u.plate_display}</span>
+                                  <span className="text-sm font-semibold text-gray-900 tabular-nums">{fmtMoney(u.amount)}</span>
+                                </div>
+                                <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-gray-600">
+                                  <span>{fmtDateTime(u.start_at)}</span>
+                                  <span className="tabular-nums">{fmtKm(u.distance_km)}</span>
+                                </div>
+                                {urenTekst(u.id) && (
+                                  <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-gray-600">
+                                    <BronLabel id={u.id} />
+                                    <span>
+                                      {urenTekst(u.id)}
+                                      {afwijkingTekst(u.id) && ` · ${afwijkingTekst(u.id)}`}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="mt-0.5 text-[11px] text-gray-500">
+                                  Rit {u.ritnummer || u.dag_ritnummer || '—'} · {redenTekst(u.reason)}
+                                  {isWeekend(u.start_at) && <WeekendLabel />}
+                                </div>
                               </div>
-                              <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-gray-600">
-                                <span>{fmtDateTime(u.start_at)}</span>
-                                <span className="tabular-nums">{fmtKm(u.distance_km)}</span>
-                              </div>
-                              <div className="mt-0.5 text-[11px] text-gray-500">
-                                Rit {u.ritnummer || u.dag_ritnummer || '—'} · {redenTekst(u.reason)}
-                                {isWeekend(u.start_at) && <WeekendLabel />}
-                              </div>
-                            </div>
+                            </label>
                           ))}
                           <div className="bg-amber-100 p-2.5">
                             <div className="flex items-center justify-between gap-2 text-sm font-semibold text-amber-900">
                               <span>Totaal buiten tijden</span>
-                              <span className="tabular-nums">{fmtMoney(unmatchedTotals.amount)}</span>
+                              <span className="tabular-nums">{fmtMoney(buitenTotals.amount)}</span>
                             </div>
                             <div className="mt-0.5 text-right text-[11px] text-amber-800 tabular-nums">
-                              {fmtKm(unmatchedTotals.km)}
+                              {fmtKm(buitenTotals.km)}
                             </div>
                           </div>
                         </div>
@@ -456,20 +600,62 @@ export default function UnmatchedTollingModal({
                         <table className="hidden sm:table min-w-full text-xs">
                           <thead className="bg-amber-100 text-amber-900 sticky top-0">
                             <tr>
+                              <th className="px-2 py-1.5 text-left font-semibold">
+                                <input
+                                  type="checkbox"
+                                  aria-label="Alles aanvinken"
+                                  checked={buitenRegels.length > 0 && buitenRegels.every(u => gekozenRand.includes(u.id))}
+                                  onChange={() => {
+                                    const ids = buitenRegels.map(u => u.id)
+                                    const allesAan = ids.every(id => gekozenRand.includes(id))
+                                    setGekozenRand(prev =>
+                                      allesAan
+                                        ? prev.filter(id => !ids.includes(id))
+                                        : [...prev, ...ids.filter(id => !prev.includes(id))],
+                                    )
+                                  }}
+                                  className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                />
+                              </th>
                               <th className="px-3 py-1.5 text-left font-semibold">Kenteken</th>
-                              <th className="px-3 py-1.5 text-left font-semibold">Ritnummer</th>
-                              <th className="px-3 py-1.5 text-left font-semibold">Datum / tijd</th>
+                              <th className="px-3 py-1.5 text-left font-semibold whitespace-nowrap">Datum / tijd tol</th>
+                              <th className="px-3 py-1.5 text-left font-semibold whitespace-nowrap">Uren chauffeur</th>
+                              <th className="px-3 py-1.5 text-left font-semibold">Bron uren</th>
                               <th className="px-3 py-1.5 text-right font-semibold">KM</th>
                               <th className="px-3 py-1.5 text-right font-semibold">Bedrag</th>
                               <th className="px-3 py-1.5 text-left font-semibold">Reden</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-amber-100">
-                            {unmatched.map(u => (
-                              <tr key={u.id}>
-                                <td className="px-3 py-1.5 font-medium text-gray-900">{u.plate_display}</td>
-                                <td className="px-3 py-1.5 text-gray-700">{u.ritnummer || u.dag_ritnummer || '—'}</td>
-                                <td className="px-3 py-1.5 text-gray-700">{fmtDateTime(u.start_at)}</td>
+                            {buitenRegels.map(u => (
+                              <tr
+                                key={u.id}
+                                className={gekozenRand.includes(u.id) ? 'bg-amber-50' : undefined}
+                              >
+                                <td className="px-2 py-1.5">
+                                  <input
+                                    type="checkbox"
+                                    aria-label="Meenemen op de factuur"
+                                    checked={gekozenRand.includes(u.id)}
+                                    onChange={() => wisselRand(u.id)}
+                                    className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                  />
+                                </td>
+                                <td className="px-3 py-1.5 font-medium text-gray-900 whitespace-nowrap">{u.plate_display}</td>
+                                <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap tabular-nums">{fmtDateTime(u.start_at)}</td>
+                                <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">
+                                  {urenTekst(u.id) ? (
+                                    <>
+                                      <span className="tabular-nums">{urenTekst(u.id)}</span>
+                                      {afwijkingTekst(u.id) && (
+                                        <span className="block text-[10px] text-gray-500">{afwijkingTekst(u.id)}</span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="text-gray-400">geen uren die dag</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-1.5"><BronLabel id={u.id} /></td>
                                 <td className="px-3 py-1.5 text-right text-gray-700">{fmtKm(u.distance_km)}</td>
                                 <td className="px-3 py-1.5 text-right font-semibold text-gray-900">{fmtMoney(u.amount)}</td>
                                 <td className="px-3 py-1.5 text-gray-500 text-[11px]">
@@ -481,9 +667,9 @@ export default function UnmatchedTollingModal({
                           </tbody>
                           <tfoot>
                             <tr className="bg-amber-100 font-semibold text-amber-900">
-                              <td className="px-3 py-1.5" colSpan={3}>Totaal buiten tijden</td>
-                              <td className="px-3 py-1.5 text-right">{fmtKm(unmatchedTotals.km)}</td>
-                              <td className="px-3 py-1.5 text-right">{fmtMoney(unmatchedTotals.amount)}</td>
+                              <td className="px-3 py-1.5" colSpan={5}>Totaal buiten tijden</td>
+                              <td className="px-3 py-1.5 text-right">{fmtKm(buitenTotals.km)}</td>
+                              <td className="px-3 py-1.5 text-right">{fmtMoney(buitenTotals.amount)}</td>
                               <td />
                             </tr>
                           </tfoot>
@@ -492,14 +678,89 @@ export default function UnmatchedTollingModal({
                       <p className="mt-2 text-[11px] text-amber-800">
                         Dit zijn tolheffing-events die niet vanzelf bij deze factuur horen: ze
                         overlappen niet met een rit uit de geïmporteerde uren, of ze staan op een
-                        ander ritnummer. Vaak zijn dit ritten van een andere chauffeur, ritten
-                        buiten werktijd of tol die op een andere factuur thuishoort.
+                        ander ritnummer. De kolom <span className="font-medium">Uren chauffeur</span> toont
+                        de tijden die voor die wagen op die dag geregistreerd zijn, zodat je per regel
+                        kunt beoordelen of hij erbij hoort. Vink aan wat er alsnog op de factuur
+                        én in het toloverzicht moet.
                       </p>
+                      {buitenSelectie.count > 0 && (
+                        <p className="mt-1 text-[11px] font-medium text-amber-900">
+                          Aangevinkt: {buitenSelectie.count} regel{buitenSelectie.count === 1 ? '' : 's'} ·{' '}
+                          {fmtKm(buitenSelectie.km)} · {fmtMoney(buitenSelectie.amount)} — komt bovenop de factuur.
+                        </p>
+                      )}
                       {weekendTotals.count > 0 && (
                         <p className="mt-1 text-[11px] font-medium text-indigo-800">
                           Waarvan in het weekend: {weekendTotals.count} event
                           {weekendTotals.count === 1 ? '' : 's'} · {fmtKm(weekendTotals.km)} ·{' '}
                           {fmtMoney(weekendTotals.amount)}.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Randregels: net voor of na de rittijd */}
+                  {hasRand && (
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <ClockIcon className="h-5 w-5 text-sky-600" />
+                          <h3 className="text-sm font-semibold text-sky-900">
+                            Tolheffing rond de rittijd (± {margeMinuten} min) — {randRegels.length} regel
+                            {randRegels.length === 1 ? '' : 's'}
+                          </h3>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ids = randRegels.map(u => u.id)
+                            setGekozenRand(prev =>
+                              randAllesAan
+                                ? prev.filter(id => !ids.includes(id))
+                                : [...prev, ...ids.filter(id => !prev.includes(id))],
+                            )
+                          }}
+                          className="shrink-0 rounded border border-sky-300 bg-white px-2 py-1 text-[11px] font-medium text-sky-800 hover:bg-sky-100"
+                        >
+                          {randAllesAan ? 'Geen' : 'Alles'}
+                        </button>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto rounded border border-sky-200 bg-white divide-y divide-sky-100">
+                        {randRegels.map(u => (
+                          <label
+                            key={u.id}
+                            className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs hover:bg-sky-50"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={gekozenRand.includes(u.id)}
+                              onChange={() => wisselRand(u.id)}
+                              className="h-4 w-4 shrink-0 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                            />
+                            <span className="w-24 shrink-0 font-medium text-gray-900">{u.plate_display}</span>
+                            <span className="w-20 shrink-0"><BronLabel id={u.id} /></span>
+                            <span className="flex-1 truncate text-gray-700 tabular-nums" title={margeStatus?.[u.id]?.venster || ''}>
+                              {fmtDateTime(u.start_at)}
+                              {margeStatus?.[u.id]?.venster && (
+                                <span className="ml-2 text-[11px] text-gray-500">
+                                  rit {margeStatus[u.id].venster}
+                                </span>
+                              )}
+                            </span>
+                            <span className="w-20 shrink-0 text-right text-gray-700 tabular-nums">{fmtKm(u.distance_km)}</span>
+                            <span className="w-20 shrink-0 text-right font-semibold text-gray-900 tabular-nums">{fmtMoney(u.amount)}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[11px] text-sky-800">
+                        Deze tolregels vallen net buiten de gereden tijd, maar binnen een kwartier
+                        voor de begintijd of na de eindtijd. Vink aan wat er bovenop de factuur
+                        mag; wat je aanvinkt gaat ook mee in het rapport.
+                      </p>
+                      {randTotals.count > 0 && (
+                        <p className="mt-1 text-[11px] font-medium text-sky-900">
+                          Aangevinkt: {randTotals.count} regel{randTotals.count === 1 ? '' : 's'} ·{' '}
+                          {fmtKm(randTotals.km)} · {fmtMoney(randTotals.amount)} — komt bovenop de factuur.
                         </p>
                       )}
                     </div>
@@ -631,12 +892,14 @@ export default function UnmatchedTollingModal({
                   {hasMatched && (
                     <button
                       type="button"
-                      onClick={onConfirmStrict}
+                      onClick={() => onConfirmStrict(gekozenRand)}
                       className="inline-flex justify-center rounded-md border border-transparent bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700"
                     >
-                      {hasUnmatched
-                        ? `Alleen binnen tijden (${fmtMoney(matchedTotals.amount)})`
-                        : `Toevoegen aan factuur (${fmtMoney(matchedTotals.amount)})`}
+                      {extraTotals.count > 0
+                        ? `Toevoegen incl. ${extraTotals.count} gekozen regel${extraTotals.count === 1 ? '' : 's'} (${fmtMoney(matchedTotals.amount + extraTotals.amount)})`
+                        : hasBuiten
+                          ? `Alleen binnen tijden (${fmtMoney(matchedTotals.amount)})`
+                          : `Toevoegen aan factuur (${fmtMoney(matchedTotals.amount)})`}
                     </button>
                   )}
                 </div>

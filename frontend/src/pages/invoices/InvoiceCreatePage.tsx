@@ -28,7 +28,7 @@ import { getMijnAdministraties, Administratie } from '@/api/administraties'
 import { getTimeEntries, markKilometerheffingGefactureerd } from '@/api/timetracking'
 import { getSpreadsheets } from '@/api/spreadsheets'
 import { getImportedEntries, ImportedTimeEntry } from '@/api/urenImport'
-import { tollingApi, TollingInvoicePreviewRow, TollingPeriod } from '@/api/tolling'
+import { tollingApi, tollingFactuurDetailApi, TollingInvoicePreviewRow, TollingPeriod, TollingTijdStatusRegel } from '@/api/tolling'
 import { getAllVehicles } from '@/api/fleet'
 import { getTolRegistraties, markTolGefactureerd, TolRegistratie } from '@/api/tolregistratie'
 import UnmatchedTollingModal, {
@@ -1792,6 +1792,8 @@ export default function InvoiceCreatePage() {
     totalRegisteredKm?: number
     /** Dagen waarvoor geen tol is opgehaald, bv. door ontbrekende tijden. */
     skipped?: ModalSkippedRange[]
+    /** Per event de status + de uren van die chauffeur op die dag. */
+    margeStatus?: Record<string, TollingTijdStatusRegel>
   } | null>(null)
 
   // UI state
@@ -2644,6 +2646,18 @@ export default function InvoiceCreatePage() {
       // Toon altijd de review-modal met het overzicht van gekoppelde
       // (én eventueel niet-gekoppelde) tolheffing-events, zodat de
       // gebruiker altijd ziet welke ritten worden meegenomen op de factuur.
+      // Van de niet-gekoppelde events halen we op welke net voor of na de
+      // gereden tijd liggen; die krijgen een eigen keuze in de modal.
+      let margeStatus: Record<string, TollingTijdStatusRegel> | undefined
+      if (unmatched.length > 0) {
+        try {
+          const res = await tollingFactuurDetailApi.tijdStatus(unmatched.map(u => u.id), 15)
+          margeStatus = res.statussen
+        } catch (err) {
+          console.warn('[auto-tolling] tijd-status ophalen faalt', err)
+        }
+      }
+
       setTollingReview({
         matched: withMoney.map(r => ({
           plate_normalized: r.plate_normalized,
@@ -2661,6 +2675,7 @@ export default function InvoiceCreatePage() {
         bufferMinutes: buffer_minutes ?? bufferMinutes,
         totalRegisteredKm,
         skipped: overgeslagen,
+        margeStatus,
       })
       return true
     } catch (err) {
@@ -2670,8 +2685,10 @@ export default function InvoiceCreatePage() {
   }
 
   // Callback vanuit de UnmatchedTollingModal — voegt de gekozen tolheffing
-  // regels toe aan de factuur en sluit de modal.
-  const applyTollingReview = (includeUnmatched: boolean) => {
+  // regels toe aan de factuur en sluit de modal. `extraEventIds` zijn de
+  // aangevinkte randregels (± kwartier rond de rittijd); die komen er
+  // bovenop, net als weekend en avonduren een keuze zijn.
+  const applyTollingReview = (includeUnmatched: boolean, extraEventIds: string[] = []) => {
     if (!tollingReview) return
     const { matched, unmatched } = tollingReview
 
@@ -2709,6 +2726,23 @@ export default function InvoiceCreatePage() {
           row.events_count += 1
           if (row.event_ids) row.event_ids = [...row.event_ids, u.id]
           else row.event_ids = [u.id]
+        } else {
+          byPlate.set(u.plate_normalized, asPreviewRow(
+            u.plate_normalized, u.plate_display, null,
+            u.distance_km || 0, u.amount || 0, 1,
+            [u.id],
+          ))
+        }
+      }
+    } else if (extraEventIds.length > 0) {
+      // Alleen de aangevinkte randregels erbij.
+      for (const u of unmatched.filter(e => extraEventIds.includes(e.id))) {
+        const row = byPlate.get(u.plate_normalized)
+        if (row) {
+          row.total_km += u.distance_km || 0
+          row.total_amount = Number((row.total_amount + (u.amount || 0)).toFixed(2))
+          row.events_count += 1
+          row.event_ids = row.event_ids ? [...row.event_ids, u.id] : [u.id]
         } else {
           byPlate.set(u.plate_normalized, asPreviewRow(
             u.plate_normalized, u.plate_display, null,
@@ -4170,8 +4204,9 @@ export default function InvoiceCreatePage() {
         unmatched={tollingReview?.unmatched ?? []}
         skipped={tollingReview?.skipped ?? []}
         bufferMinutes={tollingReview?.bufferMinutes ?? 0}
+        margeStatus={tollingReview?.margeStatus}
         totalRegisteredKm={tollingReview?.totalRegisteredKm}
-        onConfirmStrict={() => applyTollingReview(false)}
+        onConfirmStrict={(extraIds) => applyTollingReview(false, extraIds)}
         onConfirmIncludeAll={() => applyTollingReview(true)}
       />
 

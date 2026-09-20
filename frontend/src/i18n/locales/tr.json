@@ -185,6 +185,8 @@
     "pakmiddelen": "Ambalaj malzemeleri",
     "laadlijst": "Yükleme listeleri",
     "tolheffing": "Geçiş ücreti içe aktarma",
+    "tolheffingSync": "Geçiş ücreti eşitleme",
+    "tolheffingBuitenUren": "Mesai dışı geçiş ücreti",
     "tolregistratie": "Geçiş ücreti kaydı",
     "tolregistratieAdmin": "Geçiş genel bakışı (Yönetici)",
     "privateToll": "Özel geçiş ücretlerim",

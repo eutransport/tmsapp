@@ -866,3 +866,329 @@ export const privateTollAdminApi = {
     return data
   },
 }
+
+// -------- Sync: tolregels terugkoppelen aan bestaande factuurregels --------
+
+/** Hoe zeker het systeem is van een gevonden koppeling. */
+export type TollingSyncVertrouwen = 'zeker' | 'waarschijnlijk' | 'onzeker' | 'geen'
+
+export interface TollingSyncRow {
+  line_id: string
+  invoice_id: string
+  factuurnummer: string
+  factuurdatum: string | null
+  invoice_type: string
+  invoice_status: string
+  bedrijf_id: string | null
+  bedrijf_naam: string
+  omschrijving: string
+  /** Bedrag van de factuurregel (ex btw). */
+  bedrag: number
+  kenteken: string
+  /** Kentekens die in de omschrijving gevonden zijn (>1 = niet te bepalen). */
+  kenteken_opties: string[]
+  regel_km: number | null
+  gevonden_events: number
+  gevonden_bedrag: number
+  gevonden_km: number
+  periode_van: string | null
+  periode_tot: string | null
+  /** Hoe de match gevonden is, bijv. "dagen 06-07 t/m 10-07". */
+  methode: string
+  vertrouwen: TollingSyncVertrouwen
+  event_ids: string[]
+  reden: string
+}
+
+export interface TollingSyncPreview {
+  samenvatting: {
+    regels: number
+    zeker: number
+    waarschijnlijk: number
+    onzeker: number
+    geen: number
+    events_open: number
+    events_gefactureerd: number
+  }
+  regels: TollingSyncRow[]
+}
+
+export interface TollingSyncSearchResult {
+  kenteken: string
+  gevonden_events: number
+  gevonden_bedrag: number
+  gevonden_km: number
+  periode_van: string | null
+  periode_tot: string | null
+  methode: string
+  vertrouwen: string
+  event_ids: string[]
+}
+
+export interface TollingSyncApplyResult {
+  gekoppeld: number
+  regels: Array<{
+    line_id: string
+    factuurnummer?: string
+    gekoppeld: number
+    detail: string
+  }>
+}
+
+export const tollingSyncApi = {
+  /** Voorstel ophalen; verandert niets in de database. */
+  preview: async (params: {
+    date_from?: string
+    date_to?: string
+    bedrijf_id?: string
+  } = {}): Promise<TollingSyncPreview> => {
+    const { data } = await api.get('/tolling/sync/preview/', { params })
+    return data
+  },
+
+  /** De bevestigde regels daadwerkelijk koppelen (status wordt gefactureerd). */
+  apply: async (
+    items: Array<{ line_id: string; event_ids: string[] }>,
+  ): Promise<TollingSyncApplyResult> => {
+    const { data } = await api.post('/tolling/sync/apply/', { items })
+    return data
+  },
+
+  /** Handmatig open tolregels zoeken op kenteken en periode. */
+  search: async (params: {
+    plate: string
+    date_from: string
+    date_to: string
+    exclude_weekend?: boolean
+    cutoff_hour?: number
+  }): Promise<TollingSyncSearchResult> => {
+    const { data } = await api.get('/tolling/sync/search/', { params })
+    return data
+  },
+
+  /** Tolregels van een factuurregel weer op open zetten. */
+  unlink: async (lineId: string): Promise<{ ontkoppeld: number }> => {
+    const { data } = await api.post('/tolling/sync/unlink/', { line_id: lineId })
+    return data
+  },
+}
+
+
+// ---------------------------------------------------------------------------
+// Wat komt er wel en niet op de tolheffing-factuur
+// ---------------------------------------------------------------------------
+
+export type TollingTijdStatus = 'binnen' | 'marge' | 'buiten' | 'onbekend'
+
+/** Per tolregel de status plus de uren die op die dag geregistreerd zijn. */
+export interface TollingTijdStatusRegel {
+  status: TollingTijdStatus
+  venster: string
+  /** Bijv. "06:30 - 19:00" van die wagen op die dag. */
+  dag_uren: string
+  dag_chauffeur: string
+  /** 'urenimport' of 'ingediende uren'. */
+  dag_bron: string
+  dag_ritnummers: string
+  dag_datum: string
+  /** Minuten dat de passage buiten de rittijd valt, 0 als hij erbinnen ligt. */
+  afwijking_minuten: number | null
+  afwijking_richting: 'voor' | 'na' | ''
+}
+
+export interface TollingSelectieRegel {
+  id: string
+  datum: string | null
+  start: string
+  eind: string
+  km: number
+  bedrag: number
+  ritnummer: string
+  tijd_status: TollingTijdStatus
+  rit_venster: string
+  /** Alleen gevuld bij regels die niet meegaan. */
+  reden?: 'weekend' | 'na_afkapuur' | 'ander_bedrijf'
+  reden_label?: string
+}
+
+export interface TollingSelectieTotalen {
+  aantal: number
+  km: number
+  bedrag: number
+}
+
+export interface TollingSelectieOverzicht {
+  plate: string
+  marge_minuten: number
+  weken: Array<{ year: number; week: number; label: string }>
+  samenvatting: {
+    meegenomen: TollingSelectieTotalen
+    niet_meegenomen: TollingSelectieTotalen
+    marge: TollingSelectieTotalen
+  }
+  meegenomen_per_dag: Array<{ datum: string; aantal: number; km: number; bedrag: number }>
+  niet_meegenomen: TollingSelectieRegel[]
+  marge_regels: TollingSelectieRegel[]
+}
+
+export interface TollingMargeResultaat {
+  toegevoegd: number
+  overgeslagen: number
+  bedrag: number
+  km: number
+  subtotaal?: number
+  totaal?: number
+  detail?: string
+}
+
+export const tollingFactuurDetailApi = {
+  /** Overzicht van meegenomen en niet-meegenomen tolregels; verandert niets. */
+  selectie: async (params: {
+    plate: string
+    year: number
+    week_start: number
+    period_weeks: number
+    bedrijf_id?: string | null
+    exclude_weekend: boolean
+    cutoff_time?: string | null
+    marge_minuten?: number
+  }): Promise<TollingSelectieOverzicht> => {
+    const { data } = await api.get('/tolling/factuur-detail/selectie/', { params })
+    return data
+  },
+
+  /**
+   * Status per tolregel: valt hij binnen de gereden tijd, in de marge van een
+   * kwartier eromheen, of er helemaal buiten? Leest alleen.
+   */
+  tijdStatus: async (
+    eventIds: string[],
+    margeMinuten?: number,
+  ): Promise<{
+    marge_minuten: number
+    statussen: Record<string, TollingTijdStatusRegel>
+  }> => {
+    const { data } = await api.post('/tolling/factuur-detail/tijd-status/', {
+      event_ids: eventIds,
+      marge_minuten: margeMinuten,
+    })
+    return data
+  },
+
+  /** Gekozen randregels alsnog op de zojuist gemaakte concept-factuur zetten. */
+  voegMargeToe: async (
+    invoiceId: string,
+    eventIds: string[],
+    margeMinuten?: number,
+  ): Promise<TollingMargeResultaat> => {
+    const { data } = await api.post('/tolling/factuur-detail/voeg-marge-toe/', {
+      invoice_id: invoiceId,
+      event_ids: eventIds,
+      marge_minuten: margeMinuten,
+    })
+    return data
+  },
+}
+
+// --- Administratief overzicht: tol buiten de gewerkte uren -----------------
+
+export interface TollingBuitenUrenTotalen {
+  events: number
+  km: number
+  bedrag: number
+  binnen_events: number
+  binnen_km: number
+  binnen_bedrag: number
+  marge_events: number
+  marge_km: number
+  marge_bedrag: number
+  buiten_events: number
+  buiten_km: number
+  buiten_bedrag: number
+  onbekend_events: number
+  onbekend_km: number
+  onbekend_bedrag: number
+  gefactureerd_events: number
+  gefactureerd_km: number
+  gefactureerd_bedrag: number
+  open_events: number
+  open_km: number
+  open_bedrag: number
+  /** Buiten de uren + geen uren, uitgesplitst naar wel/niet gefactureerd. */
+  afwijkend_gefactureerd_events: number
+  afwijkend_gefactureerd_km: number
+  afwijkend_gefactureerd_bedrag: number
+  afwijkend_open_events: number
+  afwijkend_open_km: number
+  afwijkend_open_bedrag: number
+}
+
+export interface TollingBuitenUrenRegel {
+  id: string
+  start_at: string
+  datum: string
+  tijd: string
+  weekend: boolean
+  distance_km: number
+  amount: number
+  ritnummer: string
+  status: TollingTijdStatus
+  dag_uren: string
+  dag_chauffeur: string
+  dag_bron: string
+  /** Staan de uren van die dag nog in concept? */
+  dag_definitief: boolean
+  dag_ritnummers: string
+  /** Van welke dag komen de getoonde uren (bij een nachtrit de dag ervoor). */
+  dag_datum: string
+  afwijking_minuten: number | null
+  afwijking_richting: 'voor' | 'na' | ''
+  invoiced: boolean
+}
+
+export interface TollingBuitenUrenWagen {
+  plate_normalized: string
+  plate_display: string
+  ritnummer: string
+  totalen: TollingBuitenUrenTotalen
+  regels: TollingBuitenUrenRegel[]
+}
+
+export interface TollingBuitenUrenBedrijf {
+  bedrijf_id: string | null
+  bedrijf_naam: string
+  totalen: TollingBuitenUrenTotalen
+  /** Passages zonder bedrijf op de tolregel, toegewezen via de vloot. */
+  afgeleid_events: number
+  afgeleid_bedrag: number
+  wagens: TollingBuitenUrenWagen[]
+}
+
+export interface TollingBuitenUrenOverzicht {
+  date_from: string
+  date_to: string
+  marge_minuten: number
+  /** Moment waarop de server dit overzicht heeft berekend. */
+  gegenereerd_op: string
+  totalen: TollingBuitenUrenTotalen
+  bedrijven: TollingBuitenUrenBedrijf[]
+  afgekapt: boolean
+}
+
+export const tollingBuitenUrenApi = {
+  /** Tolregels die buiten de geregistreerde rittijden vallen. Leest alleen. */
+  overzicht: async (params: {
+    date_from: string
+    date_to: string
+    bedrijf_id?: string | null
+    plate?: string
+    marge_minuten?: number
+    alleen_open?: boolean
+    toon_marge?: boolean
+    alleen_definitief?: boolean
+  }): Promise<TollingBuitenUrenOverzicht> => {
+    const { data } = await api.get('/tolling/buiten-uren/overzicht/', { params })
+    return data
+  },
+}
+

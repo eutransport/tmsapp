@@ -185,6 +185,8 @@
     "pakmiddelen": "Pakmiddelen",
     "laadlijst": "Load lists",
     "tolheffing": "Toll import",
+    "tolheffingSync": "Toll sync",
+    "tolheffingBuitenUren": "Toll outside hours",
     "tolregistratie": "Toll Registration",
     "tolregistratieAdmin": "Toll Overview (Admin)",
     "privateToll": "My Private Toll",

@@ -332,6 +332,10 @@ export default function TollingPage() {
             <ArrowPathIcon className={`h-4 w-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
             Vernieuwen
           </button>
+          <Link to="/tolheffing/sync" className="btn btn-secondary">
+            <ArrowPathIcon className="h-4 w-4 mr-1.5" />
+            Sync facturen
+          </Link>
           <button
             type="button"
             className="btn btn-primary"
