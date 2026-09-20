@@ -102,7 +102,7 @@ class TrackingSessionSerializer(serializers.ModelSerializer):
     def get_user_name(self, obj):
         if hasattr(obj.user, 'driver_profile') and obj.user.driver_profile:
             return obj.user.driver_profile.naam
-        return obj.user.get_full_name() or obj.user.username
+        return (obj.user.full_name or '').strip() or obj.user.username
 
     def get_last_location(self, obj):
         """Return the most recent location point for this session."""

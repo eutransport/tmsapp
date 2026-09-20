@@ -130,7 +130,7 @@ class APKRecordSerializer(serializers.ModelSerializer):
 
     def get_created_by_name(self, obj):
         if obj.created_by:
-            return obj.created_by.get_full_name() or obj.created_by.email
+            return (obj.created_by.full_name or '').strip() or obj.created_by.email
         return None
 
 
@@ -352,17 +352,17 @@ class MaintenanceTaskSerializer(serializers.ModelSerializer):
 
     def get_assigned_to_name(self, obj):
         if obj.assigned_to:
-            return obj.assigned_to.get_full_name() or obj.assigned_to.email
+            return (obj.assigned_to.full_name or '').strip() or obj.assigned_to.email
         return None
 
     def get_created_by_name(self, obj):
         if obj.created_by:
-            return obj.created_by.get_full_name() or obj.created_by.email
+            return (obj.created_by.full_name or '').strip() or obj.created_by.email
         return None
 
     def get_completed_by_name(self, obj):
         if obj.completed_by:
-            return obj.completed_by.get_full_name() or obj.completed_by.email
+            return (obj.completed_by.full_name or '').strip() or obj.completed_by.email
         return None
 
 
@@ -473,7 +473,7 @@ class MaintenanceAlertSerializer(serializers.ModelSerializer):
 
     def get_resolved_by_name(self, obj):
         if obj.resolved_by:
-            return obj.resolved_by.get_full_name() or obj.resolved_by.email
+            return (obj.resolved_by.full_name or '').strip() or obj.resolved_by.email
         return None
 
 
@@ -515,7 +515,7 @@ class MaintenanceDashboardSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user', 'created_at', 'updated_at']
 
     def get_user_name(self, obj):
-        return obj.user.get_full_name() or obj.user.email
+        return (obj.user.full_name or '').strip() or obj.user.email
 
 
 class MaintenanceDashboardListSerializer(serializers.ModelSerializer):
@@ -546,7 +546,7 @@ class MaintenanceQuerySerializer(serializers.ModelSerializer):
 
     def get_created_by_name(self, obj):
         if obj.created_by:
-            return obj.created_by.get_full_name() or obj.created_by.email
+            return (obj.created_by.full_name or '').strip() or obj.created_by.email
         return None
 
 
