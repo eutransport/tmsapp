@@ -1,6 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from .afrekening_views import TolAfrekeningViewSet
 from .buiten_uren_views import TollingBuitenUrenViewSet
 from .factuur_detail_views import TollingFactuurDetailViewSet
 from .sync_views import TollingSyncViewSet
@@ -23,6 +24,7 @@ router.register(r'factuur-detail', TollingFactuurDetailViewSet,
 router.register(r'buiten-uren', TollingBuitenUrenViewSet,
                 basename='tolling-buiten-uren')
 router.register(r'private', PrivateTollRegistrationViewSet, basename='tolling-private')
+router.register(r'afrekeningen', TolAfrekeningViewSet, basename='tolling-afrekeningen')
 
 urlpatterns = [
     path('', include(router.urls)),

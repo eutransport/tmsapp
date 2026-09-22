@@ -102,6 +102,7 @@ const navigation: NavItem[] = [
   { name: 'nav.tolheffing', href: '/tolheffing', icon: CurrencyEuroIcon, permission: 'view_tolling' },
   { name: 'nav.tolheffingSync', href: '/tolheffing/sync', icon: CurrencyEuroIcon, roles: ['admin'], permission: 'view_tolling' },
   { name: 'nav.tolheffingBuitenUren', href: '/tolheffing/buiten-uren', icon: ClockIcon, permission: 'view_tolling' },
+  { name: 'nav.tolheffingAfrekening', href: '/tolheffing/afrekening', icon: DocumentTextIcon, roles: ['admin'], permission: 'view_tolling' },
 ]
 
 const adminNavigation: NavItem[] = [

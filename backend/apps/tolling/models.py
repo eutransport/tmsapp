@@ -9,6 +9,7 @@ we kunnen matchen met `Vehicle.kenteken` waar streepjes in staan.
 """
 import re
 import uuid
+from datetime import time
 
 from django.conf import settings
 from django.db import models
@@ -232,3 +233,117 @@ class RitnummerCorrectie(models.Model):
     def __str__(self) -> str:
         return (f'{self.license_plate_normalized} {self.van}..{self.tot} '
                 f'-> {self.naar_ritnummer} ({self.aantal} regels)')
+
+
+class TolAfrekening(models.Model):
+    """Een van de opdrachtgever ontvangen afrekening met tolvergoeding.
+
+    De opdrachtgever stuurt per periode een PDF met per voertuig het bedrag dat
+    hij ons voor tolheffing vergoedt (de 'Maut'). Hier bewaren we wat er in dat
+    bestand stond; de vergelijking met onze eigen tolregels wordt steeds
+    opnieuw berekend zodat latere tolimports en correcties meetellen.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    bestandsnaam = models.CharField(max_length=255, blank=True, verbose_name='Bestandsnaam')
+    bestand = models.FileField(
+        upload_to='tolling/afrekeningen/%Y/%m/', null=True, blank=True,
+        verbose_name='Bestand')
+    bedrijf = models.ForeignKey(
+        'companies.Company', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='tol_afrekeningen', verbose_name='Opdrachtgever')
+    bonnummer = models.CharField(max_length=64, blank=True, verbose_name='Bonnummer')
+    klantnummer = models.CharField(max_length=64, blank=True, verbose_name='Klantnummer')
+    factuurdatum = models.DateField(null=True, blank=True, verbose_name='Factuurdatum')
+    periode_van = models.DateField(verbose_name='Periode van')
+    periode_tot = models.DateField(verbose_name='Periode tot en met')
+
+    # De werkdagvensters waarbinnen de vergoeding van de opdrachtgever geldt.
+    werktijd_van = models.TimeField(default=time(6, 0), verbose_name='Werktijd van')
+    werktijd_tot = models.TimeField(default=time(18, 0), verbose_name='Werktijd tot')
+
+    totaal_netto = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, verbose_name='Totaal netto')
+    totaal_maut = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, verbose_name='Totaal tolvergoeding')
+    waarschuwingen = models.JSONField(default=list, blank=True, verbose_name='Waarschuwingen')
+
+    geuploaded_door = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='tol_afrekeningen', verbose_name='Geupload door')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-periode_van', '-created_at']
+        verbose_name = 'Tolafrekening opdrachtgever'
+        verbose_name_plural = 'Tolafrekeningen opdrachtgever'
+        constraints = [
+            # Dezelfde bon twee keer inlezen levert dubbele bedragen op.
+            models.UniqueConstraint(
+                fields=['bonnummer', 'periode_van', 'periode_tot'],
+                condition=models.Q(bonnummer__gt=''),
+                name='tol_afrekening_unieke_bon',
+            ),
+        ]
+        indexes = [models.Index(fields=['periode_van', 'periode_tot'])]
+
+    def __str__(self) -> str:
+        return f'{self.bonnummer or self.bestandsnaam} ({self.periode_van}..{self.periode_tot})'
+
+
+class TolAfrekeningRegel(models.Model):
+    """Een voertuigregel van de afrekening, gekoppeld aan onze eigen wagen."""
+
+    class Koppeling(models.TextChoices):
+        GEKOPPELD = 'gekoppeld', 'Gekoppeld'
+        GEEN_VOERTUIG = 'geen_voertuig', 'Ritnummer onbekend'
+        MEERDERE = 'meerdere', 'Meerdere voertuigen'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    afrekening = models.ForeignKey(
+        TolAfrekening, on_delete=models.CASCADE, related_name='regels')
+    regelnummer = models.CharField(max_length=8, blank=True, verbose_name='Regelnummer')
+    voertuig_label = models.CharField(max_length=64, verbose_name='Voertuig op afrekening')
+    ritnummer = models.CharField(max_length=50, db_index=True, verbose_name='Ritnummer')
+
+    inzetdagen = models.PositiveIntegerField(default=0, verbose_name='Inzetdagen')
+    ritten = models.PositiveIntegerField(default=0, verbose_name='Aantal ritten')
+    kilometers = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, verbose_name='Kilometers')
+    netto_bedrag = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, verbose_name='Netto bedrag')
+    dagforfait = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, verbose_name='Dagforfait')
+    brandstoftoeslag = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, verbose_name='Brandstoftoeslag')
+    maut_ontvangen = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, verbose_name='Ontvangen tolvergoeding')
+    maut_gevonden = models.BooleanField(default=False, verbose_name='Tolvergoeding op afrekening')
+
+    vehicle = models.ForeignKey(
+        'fleet.Vehicle', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='tol_afrekening_regels', verbose_name='Voertuig')
+    kenteken = models.CharField(max_length=64, blank=True, verbose_name='Kenteken')
+    # Een ritnummer hoort bij een wagen, maar staat er per ongeluk op twee,
+    # dan tellen de tolregels van beide mee. Daarom een lijst.
+    kentekens = models.JSONField(
+        default=list, blank=True, verbose_name='Kentekens (genormaliseerd)')
+    koppeling = models.CharField(
+        max_length=20, choices=Koppeling.choices, default=Koppeling.GEEN_VOERTUIG,
+        verbose_name='Koppeling')
+
+    dagen = models.JSONField(default=list, blank=True, verbose_name='Dagregels')
+
+    class Meta:
+        ordering = ['afrekening', 'regelnummer']
+        verbose_name = 'Tolafrekening regel'
+        verbose_name_plural = 'Tolafrekening regels'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['afrekening', 'voertuig_label'],
+                name='tol_afrekening_regel_uniek_voertuig',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.voertuig_label} -> {self.kenteken or "?"} (EUR {self.maut_ontvangen})'

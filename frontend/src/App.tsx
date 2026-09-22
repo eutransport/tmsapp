@@ -100,6 +100,7 @@ const LoadListPage = React.lazy(() => import('@/pages/loadlist/LoadListPage'))
 const TollingPage = React.lazy(() => import('@/pages/tolling/TollingPage'))
 const TollingSyncPage = React.lazy(() => import('@/pages/tolling/TollingSyncPage'))
 const TollingBuitenUrenPage = React.lazy(() => import('@/pages/tolling/TollingBuitenUrenPage'))
+const TolAfrekeningPage = React.lazy(() => import('@/pages/tolling/TolAfrekeningPage'))
 const PrivateTollPage = React.lazy(() => import('@/pages/tolling/PrivateTollPage'))
 const PrivateTollAdminPage = React.lazy(() => import('@/pages/tolling/PrivateTollAdminPage'))
 
@@ -405,6 +406,7 @@ function App() {
         <Route path="/tolheffing" element={<PermissionRoute permission="view_tolling"><TollingPage /></PermissionRoute>} />
         <Route path="/tolheffing/sync" element={<PermissionRoute permission="view_tolling"><TollingSyncPage /></PermissionRoute>} />
         <Route path="/tolheffing/buiten-uren" element={<PermissionRoute permission="view_tolling"><TollingBuitenUrenPage /></PermissionRoute>} />
+        <Route path="/tolheffing/afrekening" element={<PermissionRoute permission="view_tolling"><TolAfrekeningPage /></PermissionRoute>} />
 
         {/* Privé tolregistratie (chauffeur) */}
         <Route path="/mijn-tolheffing" element={<PrivateTollPage />} />
