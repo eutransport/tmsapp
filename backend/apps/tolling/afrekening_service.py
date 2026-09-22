@@ -100,6 +100,19 @@ def importeer(
 
     afrekening.waarschuwingen = waarschuwingen
 
+    # Een bon zonder nummer valt buiten de unieke sleutel in de database.
+    # Dan vergelijken we op periode en bedragen, zodat ook die niet dubbel
+    # ingelezen kan worden.
+    if not gelezen.bonnummer and TolAfrekening.objects.filter(
+        periode_van=gelezen.periode_van,
+        periode_tot=gelezen.periode_tot,
+        totaal_netto=gelezen.totaal_netto,
+        totaal_maut=gelezen.totaal_maut,
+    ).exists():
+        raise AfrekeningBestaatAl(
+            f'Een afrekening over {gelezen.periode_van:%d-%m-%Y} t/m '
+            f'{gelezen.periode_tot:%d-%m-%Y} met dezelfde bedragen is al ingelezen.')
+
     if inhoud:
         afrekening.bestand.save(veilige_naam, ContentFile(inhoud), save=False)
 
