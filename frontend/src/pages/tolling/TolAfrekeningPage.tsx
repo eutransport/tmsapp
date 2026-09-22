@@ -6,13 +6,16 @@
  * kenteken in de vloot en zet daar de tolheffing naast die wij in dezelfde
  * periode werkelijk betaald hebben.
  *
+ * Het overzicht is te bekijken per week, maand, kwartaal, jaar, over alles of
+ * over één losse bon. Een bon telt mee in de periode waarin hij *begint*, zodat
+ * een bon nooit over twee perioden verdeeld of dubbel geteld wordt. Vallen er
+ * meerdere bonnen in de periode, dan worden de vergoedingen opgeteld en worden
+ * de tolpassages één keer over het geheel van de perioden geteld.
+ *
  * Passages worden verdeeld over drie tijdvakken: binnen de werkdag (standaard
  * 06:00-18:00, maandag t/m vrijdag), in het weekend en 's avonds of 's nachts.
  * De vergoeding van de opdrachtgever hoort de werkdag te dekken; wat daarbuiten
  * gereden is, is het bedrag dat wij te weinig ontvangen hebben.
- *
- * De tolheffing binnen de werkdag kan in één keer als gefactureerd gemarkeerd
- * worden, en dat is ook weer terug te draaien.
  */
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
@@ -25,23 +28,36 @@ import {
   ArrowUturnLeftIcon,
   CheckCircleIcon,
   ChevronDownIcon,
+  ChevronLeftIcon,
   ChevronRightIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
+  LinkIcon,
   TableCellsIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline'
 
 import {
-  AfrekeningDetail,
+  AfrekeningOverzicht,
   AfrekeningPassage,
   AfrekeningRegel,
-  AfrekeningRij,
   AfrekeningSignaal,
+  PeriodeSoort,
+  SelectieParams,
   tolAfrekeningApi,
 } from '@/api/tolAfrekening'
 
 const MAX_UPLOAD_MB = 25
+/** Aantal voertuigregels per pagina. */
+const PER_PAGINA = 10
+
+const SOORTEN: { waarde: PeriodeSoort; label: string }[] = [
+  { waarde: 'week', label: 'Week' },
+  { waarde: 'maand', label: 'Maand' },
+  { waarde: 'kwartaal', label: 'Kwartaal' },
+  { waarde: 'jaar', label: 'Jaar' },
+  { waarde: 'alles', label: 'Alles' },
+]
 
 function currency(n: number): string {
   return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(n || 0)
@@ -67,7 +83,8 @@ function tijdstip(iso: string): string {
   })
 }
 
-function periodeLabel(van: string, tot: string): string {
+function periodeLabel(van: string | null, tot: string | null): string {
+  if (!van || !tot) return '—'
   return `${korteDatum(van)} t/m ${korteDatum(tot)}`
 }
 
@@ -136,8 +153,8 @@ function Kaart({ titel, waarde, bijschrift, klasse = 'text-gray-900' }: KaartPro
 }
 
 export default function TolAfrekeningPage() {
-  const [lijst, setLijst] = useState<AfrekeningRij[]>([])
-  const [detail, setDetail] = useState<AfrekeningDetail | null>(null)
+  const [selectie, setSelectie] = useState<SelectieParams>({ periode: 'maand' })
+  const [data, setData] = useState<AfrekeningOverzicht | null>(null)
   const [laden, setLaden] = useState(true)
   const [bezig, setBezig] = useState(false)
   const [uploaden, setUploaden] = useState(false)
@@ -146,54 +163,64 @@ export default function TolAfrekeningPage() {
   const [bevestigVerwijder, setBevestigVerwijder] = useState<string | null>(null)
   const [werktijdVan, setWerktijdVan] = useState('06:00')
   const [werktijdTot, setWerktijdTot] = useState('18:00')
+  const [pagina, setPagina] = useState(1)
   const bestandRef = useRef<HTMLInputElement>(null)
 
-  const haalLijst = useCallback(async () => {
-    try {
-      const rijen = await tolAfrekeningApi.lijst()
-      setLijst(rijen)
-      return rijen
-    } catch (fout) {
-      meldFout(fout, 'De afrekeningen konden niet worden opgehaald.')
-      return []
-    }
+  /** Het overzicht opnieuw ophalen; dit is ook de terugval na elke bewerking. */
+  const haalOp = useCallback(async (keuze: SelectieParams) => {
+    const uitkomst = await tolAfrekeningApi.overzicht(keuze)
+    setData(uitkomst)
+    setOpen(null)
+    setPassages({})
+    return uitkomst
   }, [])
 
   useEffect(() => {
     let actief = true
+    setBezig(true)
     ;(async () => {
-      const rijen = await haalLijst()
-      if (!actief) return
-      if (rijen.length > 0) {
-        try {
-          setDetail(await tolAfrekeningApi.detail(rijen[0].id))
-        } catch (fout) {
-          meldFout(fout, 'Het overzicht kon niet worden geladen.')
+      try {
+        const uitkomst = await tolAfrekeningApi.overzicht(selectie)
+        if (!actief) return
+        setData(uitkomst)
+        setOpen(null)
+        setPassages({})
+        setPagina(1)
+      } catch (fout) {
+        if (actief) meldFout(fout, 'Het overzicht kon niet worden geladen.')
+      } finally {
+        if (actief) {
+          setLaden(false)
+          setBezig(false)
         }
       }
-      if (actief) setLaden(false)
     })()
     return () => { actief = false }
-  }, [haalLijst])
+  }, [selectie])
 
   useEffect(() => {
-    if (!detail) return
-    setWerktijdVan(detail.werktijd_van)
-    setWerktijdTot(detail.werktijd_tot)
-  }, [detail?.id, detail?.werktijd_van, detail?.werktijd_tot])
+    if (!data) return
+    setWerktijdVan(data.werktijd_van)
+    setWerktijdTot(data.werktijd_tot)
+  }, [data?.werktijd_van, data?.werktijd_tot])
 
-  const kiesAfrekening = async (id: string) => {
-    if (detail?.id === id) return
-    setBezig(true)
-    setOpen(null)
-    setPassages({})
-    try {
-      setDetail(await tolAfrekeningApi.detail(id))
-    } catch (fout) {
-      meldFout(fout, 'Het overzicht kon niet worden geladen.')
-    } finally {
-      setBezig(false)
-    }
+  const regels = data?.regels ?? []
+  const paginas = Math.max(1, Math.ceil(regels.length / PER_PAGINA))
+  const huidigePagina = Math.min(pagina, paginas)
+  const zichtbaar = useMemo(
+    () => regels.slice((huidigePagina - 1) * PER_PAGINA, huidigePagina * PER_PAGINA),
+    [regels, huidigePagina],
+  )
+
+  const kiesSoort = (nieuw: PeriodeSoort) => {
+    // Zonder jaar en index kiest de server zelf de periode van de nieuwste bon.
+    setSelectie(nieuw === 'alles' ? { periode: 'alles' } : { periode: nieuw })
+  }
+
+  const verschuif = (richting: 'vorige' | 'volgende') => {
+    const doel = data?.filter[richting]
+    if (!doel || !data) return
+    setSelectie({ periode: data.filter.soort, jaar: doel.jaar, index: doel.index })
   }
 
   const upload = async (bestand: File) => {
@@ -208,14 +235,14 @@ export default function TolAfrekeningPage() {
     setUploaden(true)
     try {
       const nieuw = await tolAfrekeningApi.upload(bestand)
-      setDetail(nieuw)
-      setOpen(null)
-      setPassages({})
-      await haalLijst()
       toast.success(
-        `Afrekening ingelezen: ${nieuw.totalen.voertuigen} voertuigen, `
+        `Bon ${nieuw.bonnummer || nieuw.bestandsnaam} ingelezen: `
+        + `${nieuw.totalen.voertuigen} voertuigen, `
         + `${currency(nieuw.totalen.ontvangen)} vergoeding.`,
       )
+      // Meteen naar de zojuist ingelezen bon, ook als die in een andere
+      // periode valt dan het huidige filter.
+      setSelectie({ afrekening: nieuw.id })
     } catch (fout) {
       meldFout(fout, 'Het bestand kon niet worden ingelezen.')
     } finally {
@@ -225,17 +252,16 @@ export default function TolAfrekeningPage() {
   }
 
   const pasWerktijdenAan = async () => {
-    if (!detail) return
+    if (!data) return
     if (werktijdVan === werktijdTot) {
       toast.error('Begin- en eindtijd mogen niet gelijk zijn.')
       return
     }
     setBezig(true)
     try {
-      setDetail(await tolAfrekeningApi.werktijden(detail.id, werktijdVan, werktijdTot))
+      setData(await tolAfrekeningApi.werktijden(selectie, werktijdVan, werktijdTot))
       setPassages({})
-      await haalLijst()
-      toast.success('Werktijden aangepast.')
+      toast.success('Werktijden aangepast voor alle bonnen in deze periode.')
     } catch (fout) {
       meldFout(fout, 'De werktijden konden niet worden aangepast.')
     } finally {
@@ -244,11 +270,9 @@ export default function TolAfrekeningPage() {
   }
 
   const ververs = async () => {
-    if (!detail) return
     setBezig(true)
     try {
-      setDetail(await tolAfrekeningApi.detail(detail.id))
-      setPassages({})
+      await haalOp(selectie)
       toast.success('Overzicht bijgewerkt.')
     } catch (fout) {
       meldFout(fout, 'Het overzicht kon niet worden ververst.')
@@ -257,12 +281,27 @@ export default function TolAfrekeningPage() {
     }
   }
 
-  const markeer = async () => {
-    if (!detail) return
+  const herkoppel = async () => {
     setBezig(true)
     try {
-      const uitkomst = await tolAfrekeningApi.markeerGefactureerd(detail.id)
-      setDetail(uitkomst.analyse)
+      const uitkomst = await tolAfrekeningApi.herkoppel(selectie)
+      setData(uitkomst.analyse)
+      setPassages({})
+      toast.success(uitkomst.aangepast
+        ? `${uitkomst.aangepast} regels opnieuw aan de vloot gekoppeld.`
+        : 'De koppeling was al bij de tijd.')
+    } catch (fout) {
+      meldFout(fout, 'Het opnieuw koppelen is niet gelukt.')
+    } finally {
+      setBezig(false)
+    }
+  }
+
+  const markeer = async () => {
+    setBezig(true)
+    try {
+      const uitkomst = await tolAfrekeningApi.markeerGefactureerd(selectie)
+      setData(uitkomst.analyse)
       setPassages({})
       toast.success(uitkomst.gemarkeerd
         ? `${uitkomst.gemarkeerd} tolregels binnen de werktijd op gefactureerd gezet.`
@@ -275,11 +314,10 @@ export default function TolAfrekeningPage() {
   }
 
   const draaiTerug = async () => {
-    if (!detail) return
     setBezig(true)
     try {
-      const uitkomst = await tolAfrekeningApi.markeringOngedaan(detail.id)
-      setDetail(uitkomst.analyse)
+      const uitkomst = await tolAfrekeningApi.markeringOngedaan(selectie)
+      setData(uitkomst.analyse)
       setPassages({})
       toast.success(uitkomst.teruggedraaid
         ? `${uitkomst.teruggedraaid} tolregels weer opengezet.`
@@ -296,11 +334,11 @@ export default function TolAfrekeningPage() {
     try {
       await tolAfrekeningApi.verwijder(id)
       setBevestigVerwijder(null)
-      const rijen = await haalLijst()
-      if (detail?.id === id) {
-        setDetail(rijen.length ? await tolAfrekeningApi.detail(rijen[0].id) : null)
-        setOpen(null)
-        setPassages({})
+      if (selectie.afrekening === id) {
+        // De getoonde bon bestaat niet meer; terug naar het maandoverzicht.
+        setSelectie({ periode: 'maand' })
+      } else {
+        await haalOp(selectie)
       }
       toast.success('Afrekening verwijderd.')
     } catch (fout) {
@@ -316,9 +354,9 @@ export default function TolAfrekeningPage() {
       return
     }
     setOpen(regel.id)
-    if (passages[regel.id] || !detail) return
+    if (passages[regel.id]) return
     try {
-      const uitkomst = await tolAfrekeningApi.passages(detail.id, regel.id)
+      const uitkomst = await tolAfrekeningApi.passages(selectie, regel.ritnummer || regel.id)
       setPassages((vorig) => ({ ...vorig, [regel.id]: uitkomst.passages }))
     } catch (fout) {
       meldFout(fout, 'De tolpassages konden niet worden opgehaald.')
@@ -326,7 +364,7 @@ export default function TolAfrekeningPage() {
   }
 
   const exportKolommen = useMemo(() => ([
-    'Rit', 'Voertuig', 'Kenteken', 'Status', 'Dagen', 'Ritten',
+    'Rit', 'Voertuig', 'Kenteken', 'Status', 'Bonnen', 'Dagen', 'Ritten',
     'Km afrekening', 'Ontvangen', 'Betaald', 'Verschil',
     'Werkdag', 'Weekend', 'Avond/nacht', 'Passages',
   ]), [])
@@ -336,6 +374,7 @@ export default function TolAfrekeningPage() {
     r.voertuig_label,
     r.kenteken || '—',
     SIGNAAL[r.signaal].label,
+    r.afrekeningen,
     r.inzetdagen,
     r.ritten,
     r.kilometers_afrekening,
@@ -348,26 +387,32 @@ export default function TolAfrekeningPage() {
     r.passages,
   ])), [])
 
+  const bestandsnaam = data
+    ? `tolafrekening-${data.filter.label.replace(/[^\w]+/g, '-').toLowerCase()}`
+    : 'tolafrekening'
+
   const naarExcel = async () => {
-    if (!detail) return
+    if (!data) return
     try {
       const ExcelJS = await import('exceljs')
       const werkboek = new ExcelJS.Workbook()
       const blad = werkboek.addWorksheet('Tolafrekening')
-      blad.addRow([`Tolafrekening ${detail.bonnummer || detail.bestandsnaam}`])
-      blad.addRow([`Periode: ${periodeLabel(detail.periode_van, detail.periode_tot)}`])
-      blad.addRow([`Werktijd: ${detail.werktijd_van} - ${detail.werktijd_tot}`])
-      blad.addRow([`Opdrachtgever: ${detail.bedrijf_naam || '—'}`])
+      blad.addRow([`Tolafrekening ${data.filter.label}`])
+      blad.addRow([`Periode: ${periodeLabel(data.periode_van, data.periode_tot)}`])
+      blad.addRow([`Werktijd: ${data.werktijd_van} - ${data.werktijd_tot}`])
+      blad.addRow([`Opdrachtgever: ${data.bedrijf_naam || '—'}`])
+      blad.addRow([`Bonnen: ${data.afrekeningen.map((a) => a.bonnummer).join(', ') || '—'}`])
       blad.addRow([])
       blad.getRow(1).font = { bold: true, size: 14 }
 
       const kop = blad.addRow(exportKolommen)
       kop.font = { bold: true }
-      exportRijen(detail.regels).forEach((rij) => blad.addRow(rij))
+      // De export bevat alle regels, niet alleen de zichtbare pagina.
+      exportRijen(data.regels).forEach((rij) => blad.addRow(rij))
 
-      const t = detail.totalen
+      const t = data.totalen
       const totaal = blad.addRow([
-        'Totaal', '', '', '', t.inzetdagen, t.ritten, t.kilometers_afrekening,
+        'Totaal', '', '', '', '', t.inzetdagen, t.ritten, t.kilometers_afrekening,
         t.ontvangen, t.betaald, t.verschil, t.binnen_bedrag, t.weekend_bedrag,
         t.avond_bedrag, t.passages,
       ])
@@ -382,7 +427,7 @@ export default function TolAfrekeningPage() {
         }),
       )
       link.href = url
-      link.download = `tolafrekening-${detail.bonnummer || 'export'}.xlsx`
+      link.download = `${bestandsnaam}.xlsx`
       link.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -391,27 +436,28 @@ export default function TolAfrekeningPage() {
   }
 
   const naarPdf = () => {
-    if (!detail) return
+    if (!data) return
     try {
       const doc = new jsPDF({ orientation: 'landscape' })
       doc.setFontSize(14)
-      doc.text(`Tolafrekening ${detail.bonnummer || detail.bestandsnaam}`, 14, 16)
+      doc.text(`Tolafrekening ${data.filter.label}`, 14, 16)
       doc.setFontSize(10)
       doc.text(
-        `Periode ${periodeLabel(detail.periode_van, detail.periode_tot)}  •  `
-        + `werktijd ${detail.werktijd_van}-${detail.werktijd_tot}  •  `
-        + `${detail.bedrijf_naam || 'onbekende opdrachtgever'}`,
+        `Periode ${periodeLabel(data.periode_van, data.periode_tot)}  •  `
+        + `werktijd ${data.werktijd_van}-${data.werktijd_tot}  •  `
+        + `${data.bedrijf_naam || 'onbekende opdrachtgever'}  •  `
+        + `${data.afrekeningen.length} bon(nen)`,
         14, 23,
       )
-      const t = detail.totalen
+      const t = data.totalen
       autoTable(doc, {
         startY: 28,
         head: [exportKolommen],
-        body: exportRijen(detail.regels).map((rij) => rij.map((cel, i) => (
-          i >= 7 && i <= 12 ? currency(Number(cel)) : String(cel)
+        body: exportRijen(data.regels).map((rij) => rij.map((cel, i) => (
+          i >= 8 && i <= 13 ? currency(Number(cel)) : String(cel)
         ))),
         foot: [[
-          'Totaal', '', '', '', String(t.inzetdagen), String(t.ritten),
+          'Totaal', '', '', '', '', String(t.inzetdagen), String(t.ritten),
           kmFmt(t.kilometers_afrekening), currency(t.ontvangen), currency(t.betaald),
           currency(t.verschil), currency(t.binnen_bedrag), currency(t.weekend_bedrag),
           currency(t.avond_bedrag), String(t.passages),
@@ -419,7 +465,7 @@ export default function TolAfrekeningPage() {
         styles: { fontSize: 8 },
         headStyles: { fillColor: [31, 41, 55] },
       })
-      doc.save(`tolafrekening-${detail.bonnummer || 'export'}.pdf`)
+      doc.save(`${bestandsnaam}.pdf`)
     } catch {
       toast.error('De PDF-export is niet gelukt.')
     }
@@ -436,7 +482,9 @@ export default function TolAfrekeningPage() {
     )
   }
 
-  const t = detail?.totalen
+  const t = data?.totalen
+  const filter = data?.filter
+  const kanVerschuiven = filter && filter.soort !== 'alles' && filter.soort !== 'afrekening'
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -444,7 +492,7 @@ export default function TolAfrekeningPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tolafrekening opdrachtgever</h1>
           <p className="mt-1 max-w-3xl text-sm text-gray-600">
-            Lees de afrekening van de opdrachtgever in en vergelijk de ontvangen
+            Lees de afrekeningen van de opdrachtgever in en vergelijk de ontvangen
             tolvergoeding met de tolheffing die wij werkelijk betaald hebben.
             Ritten in het weekend en na werktijd worden apart geteld: dat is wat
             wij te weinig ontvangen hebben.
@@ -473,49 +521,151 @@ export default function TolAfrekeningPage() {
         </div>
       </div>
 
-      {lijst.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-          <div className="border-b border-gray-200 px-4 py-2 text-sm font-medium text-gray-700">
-            Ingelezen afrekeningen
+      {/* Filterbalk: per week, maand, kwartaal, jaar of alles. */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex overflow-hidden rounded-lg border border-gray-300">
+            {SOORTEN.map((soort) => (
+              <button
+                key={soort.waarde}
+                type="button"
+                onClick={() => kiesSoort(soort.waarde)}
+                className={`px-3 py-1.5 text-sm ${
+                  filter?.soort === soort.waarde
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {soort.label}
+              </button>
+            ))}
           </div>
-          <div className="max-h-56 overflow-y-auto divide-y divide-gray-100">
-            {lijst.map((rij) => {
-              const gekozen = detail?.id === rij.id
-              return (
+
+          {kanVerschuiven && (
+            <div className="inline-flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => verschuif('vorige')}
+                disabled={bezig}
+                title="Vorige periode"
+                className="rounded-lg border border-gray-300 p-1.5 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              >
+                <ChevronLeftIcon className="h-4 w-4" />
+              </button>
+              <span className="min-w-[14rem] text-center text-sm font-medium text-gray-900">
+                {filter?.label}
+              </span>
+              <button
+                type="button"
+                onClick={() => verschuif('volgende')}
+                disabled={bezig}
+                title="Volgende periode"
+                className="rounded-lg border border-gray-300 p-1.5 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              >
+                <ChevronRightIcon className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          {!kanVerschuiven && (
+            <span className="text-sm font-medium text-gray-900">{filter?.label}</span>
+          )}
+
+          {data && data.beschikbaar.length > 0 && (
+            <label className="text-xs text-gray-600">
+              Spring naar
+              <select
+                value={filter?.jaar != null && filter?.index != null
+                  ? `${filter.jaar}-${filter.index}` : ''}
+                onChange={(e) => {
+                  const [jaar, index] = e.target.value.split('-').map(Number)
+                  if (!Number.isNaN(jaar)) {
+                    setSelectie({ periode: filter?.soort as PeriodeSoort, jaar, index })
+                  }
+                }}
+                className="ml-2 rounded border border-gray-300 px-2 py-1 text-sm"
+              >
+                <option value="">Periode met afrekeningen…</option>
+                {data.beschikbaar.map((keuze) => (
+                  <option key={`${keuze.jaar}-${keuze.index}`} value={`${keuze.jaar}-${keuze.index}`}>
+                    {keuze.label} ({keuze.aantal})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {filter?.soort === 'afrekening' && (
+            <button
+              type="button"
+              onClick={() => setSelectie({ periode: 'maand' })}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+            >
+              Terug naar maandoverzicht
+            </button>
+          )}
+        </div>
+        <p className="mt-2 text-xs text-gray-500">
+          Een afrekening telt mee in de periode waarin hij <strong>begint</strong>. Zo wordt
+          een bon die over twee maanden loopt nooit gesplitst of dubbel geteld. De
+          tolpassages worden één keer geteld over alle bonperioden samen.
+        </p>
+      </div>
+
+      {data && data.afrekeningen.length === 0 && (
+        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-10 text-center">
+          <DocumentTextIcon className="mx-auto h-10 w-10 text-gray-400" />
+          <p className="mt-3 text-sm font-medium text-gray-900">
+            Geen afrekening in {filter?.label}
+          </p>
+          <p className="mt-1 text-sm text-gray-600">
+            Kies een andere periode of upload de PDF die u van de opdrachtgever ontvangt.
+          </p>
+        </div>
+      )}
+
+      {data && t && data.afrekeningen.length > 0 && (
+        <>
+          {/* Welke bonnen tellen mee, met hun eigen periode. */}
+          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+            <div className="border-b border-gray-200 px-4 py-2 text-sm font-medium text-gray-700">
+              {data.afrekeningen.length} afrekening(en) in {filter?.label}
+              <span className="ml-2 font-normal text-gray-500">
+                samen {periodeLabel(data.periode_van, data.periode_tot)}
+              </span>
+            </div>
+            <div className="max-h-56 divide-y divide-gray-100 overflow-y-auto">
+              {data.afrekeningen.map((bon) => (
                 <div
-                  key={rij.id}
-                  className={`flex flex-wrap items-center gap-3 px-4 py-3 text-sm ${
-                    gekozen ? 'bg-blue-50' : 'hover:bg-gray-50'
-                  }`}
+                  key={bon.id}
+                  className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm hover:bg-gray-50"
                 >
                   <button
                     type="button"
-                    onClick={() => void kiesAfrekening(rij.id)}
+                    onClick={() => setSelectie({ afrekening: bon.id })}
+                    title="Alleen deze bon tonen"
                     className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1 text-left"
                   >
                     <span className="font-medium text-gray-900">
-                      Bon {rij.bonnummer || rij.bestandsnaam}
+                      Bon {bon.bonnummer || bon.bestandsnaam}
                     </span>
                     <span className="text-gray-600">
-                      {periodeLabel(rij.periode_van, rij.periode_tot)}
+                      {periodeLabel(bon.periode_van, bon.periode_tot)}
                     </span>
-                    <span className="text-gray-600">{rij.bedrijf_naam || '—'}</span>
-                    <span className="text-gray-600">{rij.voertuigen} voertuigen</span>
+                    <span className="text-gray-600">{bon.voertuigen} voertuigen</span>
                     <span className="font-medium text-gray-900">
-                      {currency(rij.totaal_maut)} vergoeding
+                      {currency(bon.totaal_maut)} vergoeding
                     </span>
-                    {rij.waarschuwingen > 0 && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
-                        <ExclamationTriangleIcon className="h-3.5 w-3.5" />
-                        {rij.waarschuwingen}
-                      </span>
-                    )}
+                    <span className="text-xs text-gray-500">
+                      ingelezen {tijdstip(bon.created_at)}
+                      {bon.geuploaded_door && ` door ${bon.geuploaded_door}`}
+                    </span>
                   </button>
-                  {bevestigVerwijder === rij.id ? (
+                  {bevestigVerwijder === bon.id ? (
                     <span className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => void verwijder(rij.id)}
+                        onClick={() => void verwijder(bon.id)}
                         disabled={bezig}
                         className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700 disabled:opacity-50"
                       >
@@ -532,7 +682,7 @@ export default function TolAfrekeningPage() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setBevestigVerwijder(rij.id)}
+                      onClick={() => setBevestigVerwijder(bon.id)}
                       title="Afrekening verwijderen"
                       className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
                     >
@@ -540,42 +690,19 @@ export default function TolAfrekeningPage() {
                     </button>
                   )}
                 </div>
-              )
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
 
-      {!detail && (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-10 text-center">
-          <DocumentTextIcon className="mx-auto h-10 w-10 text-gray-400" />
-          <p className="mt-3 text-sm font-medium text-gray-900">
-            Nog geen afrekening ingelezen
-          </p>
-          <p className="mt-1 text-sm text-gray-600">
-            Upload de PDF die u van de opdrachtgever ontvangt. Het ritnummer en de
-            tolvergoeding worden automatisch herkend.
-          </p>
-        </div>
-      )}
-
-      {detail && t && (
-        <>
           <div className="rounded-lg border border-gray-200 bg-white p-4">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="space-y-1 text-sm">
                 <p className="text-base font-semibold text-gray-900">
-                  Bon {detail.bonnummer || detail.bestandsnaam}
-                  {detail.bedrijf_naam && ` — ${detail.bedrijf_naam}`}
+                  {filter?.label}
+                  {data.bedrijf_naam && ` — ${data.bedrijf_naam}`}
                 </p>
                 <p className="text-gray-600">
-                  Periode {periodeLabel(detail.periode_van, detail.periode_tot)}
-                  {detail.factuurdatum && ` • factuurdatum ${korteDatum(detail.factuurdatum)}`}
-                  {detail.klantnummer && ` • klantnummer ${detail.klantnummer}`}
-                </p>
-                <p className="text-xs text-gray-500">
-                  Ingelezen op {tijdstip(detail.created_at)}
-                  {detail.geuploaded_door && ` door ${detail.geuploaded_door}`}
+                  Tolpassages van {periodeLabel(data.periode_van, data.periode_tot)}
                 </p>
               </div>
               <div className="flex flex-wrap items-end gap-2">
@@ -601,7 +728,7 @@ export default function TolAfrekeningPage() {
                   type="button"
                   onClick={() => void pasWerktijdenAan()}
                   disabled={bezig
-                    || (werktijdVan === detail.werktijd_van && werktijdTot === detail.werktijd_tot)}
+                    || (werktijdVan === data.werktijd_van && werktijdTot === data.werktijd_tot)}
                   className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
                 >
                   Toepassen
@@ -640,7 +767,7 @@ export default function TolAfrekeningPage() {
             <Kaart
               titel="Ontvangen vergoeding"
               waarde={currency(t.ontvangen)}
-              bijschrift={`${t.voertuigen} voertuigen op de afrekening`}
+              bijschrift={`${t.voertuigen} voertuigen • ${data.afrekeningen.length} bon(nen)`}
             />
             <Kaart
               titel="Zelf betaalde tolheffing"
@@ -664,14 +791,27 @@ export default function TolAfrekeningPage() {
             />
           </div>
 
-          {detail.waarschuwingen.length > 0 && (
+          {data.waarschuwingen.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
-                <ExclamationTriangleIcon className="h-5 w-5" />
-                Let op ({detail.waarschuwingen.length})
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                  <ExclamationTriangleIcon className="h-5 w-5" />
+                  Let op ({data.waarschuwingen.length})
+                </p>
+                {data.verouderde_koppelingen > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void herkoppel()}
+                    disabled={bezig}
+                    className="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    <LinkIcon className="h-4 w-4" />
+                    Opnieuw koppelen ({data.verouderde_koppelingen})
+                  </button>
+                )}
+              </div>
               <ul className="mt-2 list-disc space-y-1 pl-6 text-sm text-amber-900">
-                {detail.waarschuwingen.map((melding) => (
+                {data.waarschuwingen.map((melding) => (
                   <li key={melding}>{melding}</li>
                 ))}
               </ul>
@@ -729,7 +869,7 @@ export default function TolAfrekeningPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {detail.regels.map((regel) => {
+                  {zichtbaar.map((regel) => {
                     const stijl = SIGNAAL[regel.signaal]
                     const uitgeklapt = open === regel.id
                     const rijen = passages[regel.id]
@@ -749,10 +889,19 @@ export default function TolAfrekeningPage() {
                             <span className="ml-5 text-xs text-gray-500">
                               {regel.inzetdagen} dagen • {regel.ritten} ritten •{' '}
                               {kmFmt(regel.kilometers_afrekening)}
+                              {regel.afrekeningen > 1 && ` • ${regel.afrekeningen} bonnen`}
                             </span>
                           </td>
                           <td className="px-3 py-2 font-mono text-xs text-gray-700">
                             {regel.kenteken || '—'}
+                            {regel.koppeling_verouderd && (
+                              <span
+                                title={`Staat in de vloot nu op ${regel.huidig_kenteken}`}
+                                className="ml-1 rounded bg-amber-100 px-1 text-amber-800"
+                              >
+                                verouderd
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 py-2">
                             <span
@@ -853,7 +1002,12 @@ export default function TolAfrekeningPage() {
                 </tbody>
                 <tfoot className="bg-gray-50 font-medium text-gray-900">
                   <tr>
-                    <td className="px-3 py-2" colSpan={3}>Totaal</td>
+                    <td className="px-3 py-2" colSpan={3}>
+                      Totaal
+                      <span className="ml-1 font-normal text-xs text-gray-500">
+                        (alle {regels.length} voertuigen)
+                      </span>
+                    </td>
                     <td className="px-3 py-2 text-right">{currency(t.ontvangen)}</td>
                     <td className="px-3 py-2 text-right">{currency(t.betaald)}</td>
                     <td className={`px-3 py-2 text-right ${
@@ -874,22 +1028,65 @@ export default function TolAfrekeningPage() {
                 </tfoot>
               </table>
             </div>
+
+            {/* Paginering: tien voertuigen per pagina. */}
+            {regels.length > PER_PAGINA && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-4 py-3">
+                <p className="text-xs text-gray-600">
+                  Regel {(huidigePagina - 1) * PER_PAGINA + 1} t/m{' '}
+                  {Math.min(huidigePagina * PER_PAGINA, regels.length)} van {regels.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPagina(huidigePagina - 1)}
+                    disabled={huidigePagina <= 1}
+                    className="rounded border border-gray-300 p-1.5 text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+                  >
+                    <ChevronLeftIcon className="h-4 w-4" />
+                  </button>
+                  {Array.from({ length: paginas }, (_, i) => i + 1).map((nummer) => (
+                    <button
+                      key={nummer}
+                      type="button"
+                      onClick={() => setPagina(nummer)}
+                      className={`min-w-[2rem] rounded border px-2 py-1 text-sm ${
+                        nummer === huidigePagina
+                          ? 'border-blue-600 bg-blue-600 text-white'
+                          : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {nummer}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setPagina(huidigePagina + 1)}
+                    disabled={huidigePagina >= paginas}
+                    className="rounded border border-gray-300 p-1.5 text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+                  >
+                    <ChevronRightIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">
             <p className="font-medium text-gray-900">Hoe lees ik dit overzicht?</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>
-                <strong>Ontvangen</strong> is de tolvergoeding (Maut) die op de afrekening
-                van de opdrachtgever staat.
+                <strong>Ontvangen</strong> is de tolvergoeding (Maut) die op de afrekeningen
+                van de opdrachtgever staat, opgeteld over alle bonnen in deze periode.
               </li>
               <li>
                 <strong>Betaald</strong> is de tolheffing die in dezelfde periode op het
-                gekoppelde kenteken geboekt is. Privéritten tellen niet mee.
+                gekoppelde kenteken geboekt is. Privéritten tellen niet mee, en een passage
+                telt maar één keer mee, ook als twee bonnen elkaar overlappen.
               </li>
               <li>
                 <strong>Weekend</strong> en <strong>avond/nacht</strong> vallen buiten de
-                werkdag van {detail.werktijd_van} tot {detail.werktijd_tot}. Samen
+                werkdag van {data.werktijd_van} tot {data.werktijd_tot}. Samen
                 {' '}{currency(t.buiten_bedrag)} — dat is gereden voor de opdrachtgever
                 zonder dat de dagvergoeding daarop van toepassing is.
               </li>
@@ -897,6 +1094,11 @@ export default function TolAfrekeningPage() {
                 <strong>Markeren als gefactureerd</strong> zet alleen de tolregels binnen
                 de werkdag op afgerekend. Weekend en avond blijven open zodat ze nog
                 nagefactureerd kunnen worden.
+              </li>
+              <li>
+                <strong>Opnieuw koppelen</strong> haalt de kentekens opnieuw uit de vloot.
+                Gebruik dit als een kenteken of ritnummer in de vloot gecorrigeerd is nadat
+                de afrekening al ingelezen was.
               </li>
             </ul>
           </div>

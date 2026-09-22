@@ -46,6 +46,20 @@ def _koppel(regel_data, index) -> dict:
     }
 
 
+def _koppelwaarschuwingen(paren) -> list[str]:
+    """Meldingen over ritnummers die niet netjes op één wagen uitkomen."""
+    meldingen = []
+    for ritnummer, koppeling in paren:
+        if koppeling['koppeling'] == TolAfrekeningRegel.Koppeling.GEEN_VOERTUIG:
+            meldingen.append(
+                f'Ritnummer {ritnummer} hoort bij geen enkele wagen in de vloot.')
+        elif koppeling['koppeling'] == TolAfrekeningRegel.Koppeling.MEERDERE:
+            meldingen.append(
+                f'Ritnummer {ritnummer} staat op meerdere wagens '
+                f'({koppeling["kenteken"]}); de tolheffing van alle wagens telt mee.')
+    return meldingen
+
+
 @transaction.atomic
 def importeer(
     inhoud: bytes,
@@ -89,15 +103,8 @@ def importeer(
     if len(bedrijven) == 1:
         afrekening.bedrijf_id = bedrijven.pop()
 
-    for regel_data, koppeling in gekoppeld:
-        if koppeling['koppeling'] == TolAfrekeningRegel.Koppeling.GEEN_VOERTUIG:
-            waarschuwingen.append(
-                f'Ritnummer {regel_data.ritnummer} hoort bij geen enkele wagen in de vloot.')
-        elif koppeling['koppeling'] == TolAfrekeningRegel.Koppeling.MEERDERE:
-            waarschuwingen.append(
-                f'Ritnummer {regel_data.ritnummer} staat op meerdere wagens '
-                f'({koppeling["kenteken"]}); de tolheffing van alle wagens telt mee.')
-
+    waarschuwingen.extend(_koppelwaarschuwingen(
+        [(r.ritnummer, k) for r, k in gekoppeld]))
     afrekening.waarschuwingen = waarschuwingen
 
     # Een bon zonder nummer valt buiten de unieke sleutel in de database.
@@ -161,6 +168,47 @@ def importeer(
     return afrekening
 
 
+@transaction.atomic
+def herkoppel(afrekeningen) -> dict:
+    """Koppel de voertuigen opnieuw aan de hand van de huidige vloot.
+
+    De koppeling is bij het inlezen een momentopname. Wordt een kenteken in de
+    vloot daarna gecorrigeerd, dan blijft de afrekening naar het oude kenteken
+    wijzen. Hiermee wordt de koppeling bijgewerkt zonder opnieuw in te lezen.
+    """
+    aangepast = 0
+    for afrekening in afrekeningen:
+        index = analyse.ritnummer_index(afrekening.periode_tot)
+        paren = []
+        for regel in afrekening.regels.all():
+            nieuw = _koppel(regel, index)
+            paren.append((regel.ritnummer, nieuw))
+            nieuwe_id = nieuw['vehicle'].id if nieuw['vehicle'] else None
+            if (regel.vehicle_id == nieuwe_id
+                    and regel.kenteken == nieuw['kenteken']
+                    and list(regel.kentekens or []) == nieuw['kentekens']
+                    and regel.koppeling == nieuw['koppeling']):
+                continue
+            regel.vehicle = nieuw['vehicle']
+            regel.kenteken = nieuw['kenteken']
+            regel.kentekens = nieuw['kentekens']
+            regel.koppeling = nieuw['koppeling']
+            regel.save(update_fields=['vehicle', 'kenteken', 'kentekens', 'koppeling'])
+            aangepast += 1
+
+        # De meldingen over de koppeling opnieuw opbouwen; meldingen uit het
+        # bestand zelf blijven staan.
+        overig = [
+            melding for melding in (afrekening.waarschuwingen or [])
+            if not melding.startswith('Ritnummer ')
+        ]
+        afrekening.waarschuwingen = overig + _koppelwaarschuwingen(paren)
+        afrekening.save(update_fields=['waarschuwingen', 'updated_at'])
+
+    logger.info('Tolafrekeningen opnieuw gekoppeld: %s regels aangepast', aangepast)
+    return {'aangepast': aangepast}
+
+
 def _binnen_werktijd_events(afrekening, regel_ids=None):
     """De nog niet gefactureerde passages binnen de werkdag van de afrekening."""
     regels = afrekening.regels.all()
@@ -169,8 +217,8 @@ def _binnen_werktijd_events(afrekening, regel_ids=None):
 
     ids = []
     for regel in regels:
-        rij = analyse.events_van_regel(
-            regel, afrekening.periode_van, afrekening.periode_tot,
+        rij = analyse.events_van_groep(
+            [regel], [(afrekening.periode_van, afrekening.periode_tot)],
         ).filter(is_private=False, invoiced_at__isnull=True)
         for event_id, start_at in rij.values_list('id', 'start_at'):
             vak = analyse.tijdvak(
@@ -207,8 +255,8 @@ def maak_markering_ongedaan(afrekening, regel_ids=None) -> dict:
 
     totaal = 0
     for regel in regels:
-        rij = analyse.events_van_regel(
-            regel, afrekening.periode_van, afrekening.periode_tot,
+        rij = analyse.events_van_groep(
+            [regel], [(afrekening.periode_van, afrekening.periode_tot)],
         ).filter(invoiced_at__isnull=False, invoice_line__isnull=True)
         ids = []
         for event_id, start_at in rij.values_list('id', 'start_at'):
