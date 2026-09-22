@@ -40,6 +40,9 @@ export interface AfrekeningRegel {
   vehicle_id: string | null
   /** Op hoeveel bonnen deze wagen in de periode voorkomt. */
   afrekeningen: number
+  /** Over welke dagen deze wagen vergeleken is. */
+  periode_van: string | null
+  periode_tot: string | null
   inzetdagen: number
   ritten: number
   kilometers_afrekening: number
@@ -180,6 +183,23 @@ export interface AfrekeningPassages {
   passages: AfrekeningPassage[]
 }
 
+/** Alle passages van één wagen, met de periode waarover vergeleken is. */
+export interface PassageGroep {
+  ritnummer: string
+  voertuig_label: string
+  kenteken: string
+  periode_van: string | null
+  periode_tot: string | null
+  passages: AfrekeningPassage[]
+}
+
+export interface AllePassages {
+  label: string
+  werktijd_van: string
+  werktijd_tot: string
+  groepen: PassageGroep[]
+}
+
 /** Wat het inlezen van één PDF teruggeeft. */
 export interface UploadResultaat {
   id: string
@@ -286,6 +306,16 @@ export const tolAfrekeningApi = {
   async passages(params: SelectieParams, rit: string): Promise<AfrekeningPassages> {
     const { data } = await api.get<AfrekeningPassages>(`${BASIS}/passages/`, {
       params: { ...schoon(params), rit },
+    })
+    return data
+  },
+
+  /** Alle passages van de selectie, gebundeld per ritnummer. Voor de export. */
+  async allePassages(params: SelectieParams): Promise<AllePassages> {
+    const { data } = await api.get<AllePassages>(`${BASIS}/passages-alles/`, {
+      params: schoon(params),
+      // Een heel jaar aan passages mag wat langer duren.
+      timeout: 120000,
     })
     return data
   },

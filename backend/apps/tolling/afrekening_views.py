@@ -339,6 +339,26 @@ class TolAfrekeningViewSet(viewsets.ViewSet):
         uitkomst['analyse'] = self._overzicht(request.data)
         return Response(uitkomst)
 
+    def _passages_van(self, regels, nieuwste) -> list[dict]:
+        """De tolpassages van één wagen, klaar voor het scherm of de export."""
+        velden = ('id', 'start_at', 'amount', 'distance_km', 'license_plate_raw',
+                  'is_private', 'invoiced_at')
+        rijen = analyse.events_van_groep(regels).order_by('start_at')
+        return [
+            {
+                'id': str(rij[0]),
+                'start_at': rij[1],
+                'bedrag': float(rij[2] or 0),
+                'km': float(rij[3] or 0),
+                'kenteken': rij[4],
+                'prive': rij[5],
+                'gefactureerd': rij[6] is not None,
+                'tijdvak': analyse.tijdvak(
+                    rij[1], nieuwste.werktijd_van, nieuwste.werktijd_tot),
+            }
+            for rij in rijen.values_list(*velden)
+        ]
+
     @action(detail=False, methods=['get'], url_path='passages')
     def passages(self, request):
         """De onderliggende tolpassages van één wagen binnen de selectie."""
@@ -360,28 +380,46 @@ class TolAfrekeningViewSet(viewsets.ViewSet):
                             status=status.HTTP_404_NOT_FOUND)
 
         nieuwste = max(gekozen, key=lambda a: a.periode_van)
-        perioden = [(a.periode_van, a.periode_tot) for a in gekozen]
-        rijen = analyse.events_van_groep(regels, perioden).order_by('start_at')
-        velden = ('id', 'start_at', 'amount', 'distance_km', 'license_plate_raw',
-                  'is_private', 'invoiced_at')
         return Response({
             'regel': {
                 'ritnummer': rit,
                 'voertuig_label': regels[0].voertuig_label,
                 'kenteken': regels[0].kenteken,
             },
-            'passages': [
-                {
-                    'id': str(rij[0]),
-                    'start_at': rij[1],
-                    'bedrag': float(rij[2] or 0),
-                    'km': float(rij[3] or 0),
-                    'kenteken': rij[4],
-                    'prive': rij[5],
-                    'gefactureerd': rij[6] is not None,
-                    'tijdvak': analyse.tijdvak(
-                        rij[1], nieuwste.werktijd_van, nieuwste.werktijd_tot),
-                }
-                for rij in rijen.values_list(*velden)
-            ],
+            'passages': self._passages_van(regels, nieuwste),
+        })
+
+    @action(detail=False, methods=['get'], url_path='passages-alles')
+    def passages_alles(self, request):
+        """Alle tolpassages van de selectie, gebundeld per wagen.
+
+        Voor de export: elke passage staat onder het ritnummer waar hij bij
+        hoort, zodat in het bestand duidelijk is om welke wagen het gaat.
+        """
+        try:
+            gekozen, filterinfo = self._selectie(request.query_params)
+        except AfrekeningFout as fout:
+            return Response({'detail': str(fout)}, status=status.HTTP_400_BAD_REQUEST)
+        if not gekozen:
+            return Response({'label': '', 'groepen': []})
+
+        nieuwste = max(gekozen, key=lambda a: a.periode_van)
+        groepen = analyse.groepeer(gekozen)
+        uit = []
+        for sleutel in sorted(groepen):
+            regels = groepen[sleutel]
+            perioden = analyse.perioden_van_groep(regels)
+            uit.append({
+                'ritnummer': regels[0].ritnummer,
+                'voertuig_label': regels[0].voertuig_label,
+                'kenteken': regels[0].kenteken,
+                'periode_van': min(p[0] for p in perioden) if perioden else None,
+                'periode_tot': max(p[1] for p in perioden) if perioden else None,
+                'passages': self._passages_van(regels, nieuwste),
+            })
+        return Response({
+            'label': filterinfo['label'],
+            'werktijd_van': nieuwste.werktijd_van.strftime('%H:%M'),
+            'werktijd_tot': nieuwste.werktijd_tot.strftime('%H:%M'),
+            'groepen': uit,
         })

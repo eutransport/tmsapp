@@ -144,8 +144,28 @@ def events_voor(kentekens, vehicle_ids, perioden):
     return TollingEvent.objects.filter(doel & _periodefilter(perioden))
 
 
-def events_van_groep(regels, perioden):
-    """De tolpassages die horen bij de afrekeningsregels van één wagen."""
+def perioden_van_groep(regels) -> list[tuple]:
+    """De bonperioden waarin deze wagen daadwerkelijk voorkomt.
+
+    Een wagen die wel op de juli-bon staat maar niet op die van september, mag
+    ook alleen over juli vergeleken worden. Anders zetten we tol af tegen een
+    vergoeding die voor die periode nooit gefactureerd is.
+    """
+    perioden = []
+    for regel in regels:
+        periode = getattr(regel, 'bonperiode', None)
+        if periode and periode not in perioden:
+            perioden.append(periode)
+    return perioden
+
+
+def events_van_groep(regels, perioden=None):
+    """De tolpassages die horen bij de afrekeningsregels van één wagen.
+
+    Zonder ``perioden`` worden de perioden van de bonnen zelf gebruikt.
+    """
+    if perioden is None:
+        perioden = perioden_van_groep(regels)
     kentekens: list[str] = []
     vehicle_ids: list = []
     for regel in regels:
@@ -169,12 +189,15 @@ def _signaal(koppeling: str, ontvangen: Decimal, betaald: Decimal, passages: int
     return OK
 
 
-def analyseer_groep(regels, perioden, werktijd_van: time, werktijd_tot: time) -> dict:
+def analyseer_groep(regels, werktijd_van: time, werktijd_tot: time) -> dict:
     """Betaald versus ontvangen voor één wagen, gesplitst naar tijdvak.
 
     ``regels`` zijn alle afrekeningsregels van dezelfde wagen: bij één
-    afrekening is dat er één, over een heel jaar zijn het er meer.
+    afrekening is dat er één, over een heel jaar zijn het er meer. De tol wordt
+    opgehaald over de bonperioden van deze wagen, niet over die van de hele
+    selectie.
     """
+    perioden = perioden_van_groep(regels)
     vakken = {BINNEN: _leeg_vak(), WEEKEND: _leeg_vak(), AVOND: _leeg_vak()}
     prive = _leeg_vak()
     gefactureerd_bedrag = Decimal('0')
@@ -221,6 +244,9 @@ def analyseer_groep(regels, perioden, werktijd_van: time, werktijd_tot: time) ->
         'koppeling': koppeling,
         'vehicle_id': str(eerste.vehicle_id) if eerste.vehicle_id else None,
         'afrekeningen': len(regels),
+        # Over welke dagen deze wagen vergeleken is.
+        'periode_van': min(p[0] for p in perioden) if perioden else None,
+        'periode_tot': max(p[1] for p in perioden) if perioden else None,
         'inzetdagen': sum(r.inzetdagen for r in regels),
         'ritten': sum(r.ritten for r in regels),
         'kilometers_afrekening': float(_rond(som('kilometers'))),
@@ -276,10 +302,15 @@ def _tel_op(regels: list[dict]) -> dict:
 
 
 def groepeer(afrekeningen: list) -> dict[str, list]:
-    """Alle afrekeningsregels gebundeld per wagen (op ritnummer)."""
+    """Alle afrekeningsregels gebundeld per wagen (op ritnummer).
+
+    Elke regel onthoudt de periode van zijn eigen bon, zodat de tol per wagen
+    over de juiste dagen opgehaald wordt.
+    """
     groepen: dict[str, list] = {}
     for afrekening in sorted(afrekeningen, key=lambda a: a.periode_van):
         for regel in afrekening.regels.all():
+            regel.bonperiode = (afrekening.periode_van, afrekening.periode_tot)
             sleutel = regel.ritnummer or regel.voertuig_label
             groepen.setdefault(sleutel, []).append(regel)
     return groepen
@@ -298,9 +329,10 @@ def analyseer_selectie(afrekeningen: list) -> dict:
     """Het overzicht over een of meer afrekeningen samen.
 
     Regels van dezelfde wagen worden samengevoegd. Elke voertuigdag staat maar
-    op één bon, dus de vergoedingen mogen opgeteld worden. De tolpassages
-    worden over de vereniging van de perioden opgehaald zodat een dag die in
-    twee bonperioden valt niet dubbel telt.
+    op één bon, dus de vergoedingen mogen opgeteld worden. De tolpassages van
+    een wagen worden opgehaald over de perioden van de bonnen waarop die wagen
+    staat: overlappen die elkaar, dan telt een passage toch maar één keer, en
+    een wagen die op een bon ontbreekt krijgt die periode niet toegerekend.
     """
     if not afrekeningen:
         return lege_analyse()
@@ -309,11 +341,10 @@ def analyseer_selectie(afrekeningen: list) -> dict:
     nieuwste = op_datum[-1]
     werktijd_van = nieuwste.werktijd_van
     werktijd_tot = nieuwste.werktijd_tot
-    perioden = [(a.periode_van, a.periode_tot) for a in op_datum]
 
     groepen = groepeer(op_datum)
     regels = [
-        analyseer_groep(groepen[sleutel], perioden, werktijd_van, werktijd_tot)
+        analyseer_groep(groepen[sleutel], werktijd_van, werktijd_tot)
         for sleutel in sorted(groepen)
     ]
 

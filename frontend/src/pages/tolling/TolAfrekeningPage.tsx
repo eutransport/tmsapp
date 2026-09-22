@@ -42,6 +42,7 @@ import {
   AfrekeningPassage,
   AfrekeningRegel,
   AfrekeningSignaal,
+  PassageGroep,
   PeriodeSoort,
   SelectieParams,
   tolAfrekeningApi,
@@ -150,6 +151,154 @@ function Kaart({ titel, waarde, bijschrift, klasse = 'text-gray-900' }: KaartPro
       {bijschrift && <p className="mt-1 text-xs text-gray-500">{bijschrift}</p>}
     </div>
   )
+}
+
+/** Kolommen van de passagelijst; het ritnummer staat voorop zodat in het
+ *  bestand altijd duidelijk is bij welke wagen een passage hoort. */
+const PASSAGE_KOLOMMEN = [
+  'Rit', 'Voertuig', 'Kenteken wagen', 'Datum', 'Tijd', 'Tijdvak',
+  'Kenteken passage', 'Km', 'Bedrag', 'Soort', 'Status',
+]
+
+function passageRijen(groep: PassageGroep): (string | number)[][] {
+  return groep.passages.map((p) => {
+    const moment = new Date(p.start_at)
+    return [
+      groep.ritnummer,
+      groep.voertuig_label,
+      groep.kenteken || '—',
+      moment.toLocaleDateString('nl-NL'),
+      moment.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
+      TIJDVAK_LABEL[p.tijdvak],
+      p.kenteken,
+      p.km,
+      p.bedrag,
+      p.prive ? 'privé' : 'zakelijk',
+      p.gefactureerd ? 'gefactureerd' : 'open',
+    ]
+  })
+}
+
+/** Telling per wagen, voor het samenvattingsblad van de export. */
+function groepTotaal(groep: PassageGroep) {
+  const zakelijk = groep.passages.filter((p) => !p.prive)
+  const som = (vak: AfrekeningPassage['tijdvak']) => zakelijk
+    .filter((p) => p.tijdvak === vak)
+    .reduce((totaal, p) => totaal + p.bedrag, 0)
+  return {
+    aantal: zakelijk.length,
+    bedrag: zakelijk.reduce((totaal, p) => totaal + p.bedrag, 0),
+    binnen: som('binnen'),
+    weekend: som('weekend'),
+    avond: som('avond'),
+  }
+}
+
+async function passagesNaarExcel(
+  groepen: PassageGroep[],
+  titel: string,
+  werktijd: string,
+  naam: string,
+): Promise<void> {
+  const ExcelJS = await import('exceljs')
+  const werkboek = new ExcelJS.Workbook()
+
+  const blad = werkboek.addWorksheet('Tolpassages')
+  blad.addRow([`Tolpassages ${titel}`])
+  blad.addRow([`Werkdag: ${werktijd}`])
+  blad.addRow([`${groepen.length} voertuig(en), `
+    + `${groepen.reduce((n, g) => n + g.passages.length, 0)} passages`])
+  blad.addRow([])
+  blad.getRow(1).font = { bold: true, size: 14 }
+
+  const kop = blad.addRow(PASSAGE_KOLOMMEN)
+  kop.font = { bold: true }
+  groepen.forEach((groep) => passageRijen(groep).forEach((rij) => blad.addRow(rij)))
+  // Filterknoppen op de kop, zodat er in Excel per rit gefilterd kan worden.
+  blad.autoFilter = {
+    from: { row: kop.number, column: 1 },
+    to: { row: kop.number, column: PASSAGE_KOLOMMEN.length },
+  }
+  blad.views = [{ state: 'frozen', ySplit: kop.number }]
+  blad.columns.forEach((kolom) => { kolom.width = 17 })
+
+  const samenvatting = werkboek.addWorksheet('Per rit')
+  samenvatting.addRow([`Samenvatting ${titel}`])
+  samenvatting.getRow(1).font = { bold: true, size: 14 }
+  samenvatting.addRow([])
+  const kop2 = samenvatting.addRow([
+    'Rit', 'Voertuig', 'Kenteken', 'Periode van', 'Periode tot',
+    'Passages', 'Totaal', 'Werkdag', 'Weekend', 'Avond/nacht',
+  ])
+  kop2.font = { bold: true }
+  groepen.forEach((groep) => {
+    const t = groepTotaal(groep)
+    samenvatting.addRow([
+      groep.ritnummer, groep.voertuig_label, groep.kenteken || '—',
+      groep.periode_van ? korteDatum(groep.periode_van) : '—',
+      groep.periode_tot ? korteDatum(groep.periode_tot) : '—',
+      t.aantal, t.bedrag, t.binnen, t.weekend, t.avond,
+    ])
+  })
+  samenvatting.columns.forEach((kolom) => { kolom.width = 15 })
+
+  const buffer = await werkboek.xlsx.writeBuffer()
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  }))
+  link.href = url
+  link.download = `${naam}.xlsx`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function passagesNaarPdf(
+  groepen: PassageGroep[],
+  titel: string,
+  werktijd: string,
+  naam: string,
+): void {
+  const doc = new jsPDF({ orientation: 'landscape' })
+  doc.setFontSize(14)
+  doc.text(`Tolpassages ${titel}`, 14, 16)
+  doc.setFontSize(10)
+  doc.text(`Werkdag ${werktijd}  •  ${groepen.length} voertuig(en)  •  `
+    + `${groepen.reduce((n, g) => n + g.passages.length, 0)} passages`, 14, 23)
+
+  let y = 30
+  groepen.forEach((groep, nummer) => {
+    const t = groepTotaal(groep)
+    if (nummer > 0) doc.addPage()
+    y = nummer > 0 ? 16 : y
+    doc.setFontSize(12)
+    doc.text(
+      `Rit ${groep.ritnummer} — ${groep.voertuig_label}`
+      + `${groep.kenteken ? ` (${groep.kenteken})` : ''}`,
+      14, y,
+    )
+    doc.setFontSize(9)
+    doc.text(
+      `${periodeLabel(groep.periode_van, groep.periode_tot)}  •  `
+      + `${t.aantal} passages  •  ${currency(t.bedrag)} `
+      + `(werkdag ${currency(t.binnen)}, weekend ${currency(t.weekend)}, `
+      + `avond/nacht ${currency(t.avond)})`,
+      14, y + 5,
+    )
+    autoTable(doc, {
+      startY: y + 9,
+      // Het ritnummer blijft in de tabel staan, ook na een paginawissel.
+      head: [PASSAGE_KOLOMMEN],
+      body: passageRijen(groep).map((rij) => rij.map((cel, i) => (
+        i === 8 ? currency(Number(cel))
+          : i === 7 ? Number(cel).toLocaleString('nl-NL', { maximumFractionDigits: 1 })
+            : String(cel)
+      ))),
+      styles: { fontSize: 7 },
+      headStyles: { fillColor: [31, 41, 55] },
+    })
+  })
+  doc.save(`${naam}.pdf`)
 }
 
 export default function TolAfrekeningPage() {
@@ -391,6 +540,56 @@ export default function TolAfrekeningPage() {
     ? `tolafrekening-${data.filter.label.replace(/[^\w]+/g, '-').toLowerCase()}`
     : 'tolafrekening'
 
+  /** De passages van één wagen exporteren; die staan al op het scherm. */
+  const exporteerRegel = async (regel: AfrekeningRegel, soort: 'excel' | 'pdf') => {
+    const rijen = passages[regel.id]
+    if (!rijen || !data) return
+    const groep: PassageGroep = {
+      ritnummer: regel.ritnummer,
+      voertuig_label: regel.voertuig_label,
+      kenteken: regel.kenteken,
+      periode_van: regel.periode_van,
+      periode_tot: regel.periode_tot,
+      passages: rijen,
+    }
+    const titel = `rit ${regel.ritnummer} — ${data.filter.label}`
+    const werktijd = `${data.werktijd_van} - ${data.werktijd_tot}`
+    const naam = `tolpassages-rit-${regel.ritnummer}-`
+      + `${data.filter.label.replace(/[^\w]+/g, '-').toLowerCase()}`
+    try {
+      if (soort === 'excel') await passagesNaarExcel([groep], titel, werktijd, naam)
+      else passagesNaarPdf([groep], titel, werktijd, naam)
+    } catch {
+      toast.error('De export van de passages is niet gelukt.')
+    }
+  }
+
+  /** Alle passages van de periode exporteren, gegroepeerd per ritnummer. */
+  const exporteerAllePassages = async (soort: 'excel' | 'pdf') => {
+    if (!data) return
+    setBezig(true)
+    try {
+      const alles = await tolAfrekeningApi.allePassages(selectie)
+      const gevuld = alles.groepen.filter((g) => g.passages.length > 0)
+      if (gevuld.length === 0) {
+        toast.error('Er zijn geen tolpassages in deze periode.')
+        return
+      }
+      const werktijd = `${alles.werktijd_van} - ${alles.werktijd_tot}`
+      const naam = `tolpassages-${alles.label.replace(/[^\w]+/g, '-').toLowerCase()}`
+      if (soort === 'excel') await passagesNaarExcel(gevuld, alles.label, werktijd, naam)
+      else passagesNaarPdf(gevuld, alles.label, werktijd, naam)
+      toast.success(
+        `${gevuld.reduce((n, g) => n + g.passages.length, 0)} passages van `
+        + `${gevuld.length} voertuigen geëxporteerd.`,
+      )
+    } catch (fout) {
+      meldFout(fout, 'De export van de passages is niet gelukt.')
+    } finally {
+      setBezig(false)
+    }
+  }
+
   const naarExcel = async () => {
     if (!data) return
     try {
@@ -435,8 +634,7 @@ export default function TolAfrekeningPage() {
     }
   }
 
-  const naarPdf = () => {
-    if (!data) return
+  const naarPdf = () => {    if (!data) return
     try {
       const doc = new jsPDF({ orientation: 'landscape' })
       doc.setFontSize(14)
@@ -471,8 +669,7 @@ export default function TolAfrekeningPage() {
     }
   }
 
-  if (laden) {
-    return (
+  if (laden) {    return (
       <div className="p-6">
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-64 rounded bg-gray-200" />
@@ -761,6 +958,29 @@ export default function TolAfrekeningPage() {
                 </button>
               </div>
             </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+              <span className="text-xs text-gray-600">
+                Alle tolpassages van deze periode, per ritnummer gegroepeerd:
+              </span>
+              <button
+                type="button"
+                onClick={() => void exporteerAllePassages('excel')}
+                disabled={bezig}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+              >
+                <TableCellsIcon className="h-4 w-4" />
+                Passages naar Excel
+              </button>
+              <button
+                type="button"
+                onClick={() => void exporteerAllePassages('pdf')}
+                disabled={bezig}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+              >
+                <ArrowDownTrayIcon className="h-4 w-4" />
+                Passages naar PDF
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -942,8 +1162,39 @@ export default function TolAfrekeningPage() {
                                 </p>
                               )}
                               {rijen && rijen.length > 0 && (
-                                <div className="max-h-72 overflow-y-auto">
-                                  <table className="min-w-full text-xs">
+                                <>
+                                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                    <p className="text-xs text-gray-600">
+                                      {rijen.length} passages van rit {regel.ritnummer}
+                                      {' '}({periodeLabel(regel.periode_van, regel.periode_tot)})
+                                    </p>
+                                    <span className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          void exporteerRegel(regel, 'excel')
+                                        }}
+                                        className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                                      >
+                                        <TableCellsIcon className="h-3.5 w-3.5" />
+                                        Excel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          void exporteerRegel(regel, 'pdf')
+                                        }}
+                                        className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                                      >
+                                        <ArrowDownTrayIcon className="h-3.5 w-3.5" />
+                                        PDF
+                                      </button>
+                                    </span>
+                                  </div>
+                                  <div className="max-h-72 overflow-y-auto">
+                                    <table className="min-w-full text-xs">
                                     <thead className="text-left text-gray-500">
                                       <tr>
                                         <th className="py-1 pr-4">Moment</th>
@@ -990,8 +1241,9 @@ export default function TolAfrekeningPage() {
                                         </tr>
                                       ))}
                                     </tbody>
-                                  </table>
-                                </div>
+                                    </table>
+                                  </div>
+                                </>
                               )}
                             </td>
                           </tr>
