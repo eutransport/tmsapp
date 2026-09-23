@@ -580,6 +580,20 @@ class AppSettings(models.Model):
         verbose_name='Tachograaf startdatum',
         help_text='Vanaf welke datum tachograaf gegevens automatisch verwerkt moeten worden.'
     )
+
+    # Radius / VelocityFleet telematics integratie
+    radius_api_token = EncryptedCharField(
+        max_length=512,
+        blank=True,
+        verbose_name='Radius API Token',
+        help_text='Refresh token uit het Radius Velocity Portal (Account > API integratie).'
+    )
+    radius_start_datum = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Radius startdatum',
+        help_text='Vanaf welke datum Radius rit- en GPS-gegevens opgehaald moeten worden.'
+    )
     secondary_font = models.ForeignKey(
         'CustomFont',
         on_delete=models.SET_NULL,

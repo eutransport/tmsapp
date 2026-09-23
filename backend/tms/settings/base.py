@@ -164,6 +164,10 @@ REST_FRAMEWORK = {
         'loadlist_upload': '20/hour',   # Load-list photo upload (OCR + LLM cost)
         'loadlist_optimize': '60/hour', # Route optimization
         'loadlist_suggest': '120/hour', # Address autocomplete
+        'tracking_submit': '120/minute', # GPS position submissions
+        'tracking_read': '60/minute',    # Map polling / telematics reads
+        'radius_sync': '10/hour',        # Handmatige Radius-sync (zware externe call)
+        'radius_export': '30/hour',      # Archief-export naar CSV/Excel/PDF
     },
 }
 

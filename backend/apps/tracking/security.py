@@ -75,6 +75,44 @@ class TrackingReadThrottle(SimpleRateThrottle):
         return self.get_ident(request)
 
 
+class RadiusSyncThrottle(SimpleRateThrottle):
+    """
+    Strenge limiet op het handmatig synchroniseren van de Radius-ritgeschiedenis.
+
+    Een sync haalt tot 31 dagen aan ritten op bij Radius en schrijft die weg.
+    Dat is zwaar voor zowel de externe API als onze database, dus we staan
+    maar een paar handmatige syncs per uur toe. De geplande Celery-taken
+    gaan hier niet doorheen; die draaien buiten de request-cyclus om.
+    """
+    scope = 'radius_sync'
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            return self.cache_format % {
+                'scope': self.scope,
+                'ident': request.user.pk,
+            }
+        return self.get_ident(request)
+
+
+class RadiusExportThrottle(SimpleRateThrottle):
+    """
+    Limiet op archief-exports (CSV/Excel/PDF).
+
+    Een export kan een jaar aan ritten in een bestand gieten; dat is te duur
+    om ongelimiteerd toe te staan.
+    """
+    scope = 'radius_export'
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            return self.cache_format % {
+                'scope': self.scope,
+                'ident': request.user.pk,
+            }
+        return self.get_ident(request)
+
+
 # ============ Anomaly Detection ============
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

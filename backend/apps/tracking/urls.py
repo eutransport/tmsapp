@@ -1,6 +1,7 @@
 """Track & Trace URL configuration."""
 from django.urls import path
 from . import views
+from . import radius_views
 
 urlpatterns = [
     # Session management
@@ -28,6 +29,15 @@ urlpatterns = [
     path('tachograph/archive/', views.TachographArchiveListView.as_view(), name='tachograph-archive-list'),
     path('tachograph/archive/sync/', views.TachographArchiveSyncView.as_view(), name='tachograph-archive-sync'),
     path('tachograph/comparison/', views.TachographComparisonView.as_view(), name='tachograph-comparison'),
+
+    # Radius / VelocityFleet telematics
+    path('radius/test/', radius_views.RadiusConnectionTestView.as_view(), name='radius-test'),
+    path('radius/customers/', radius_views.RadiusCustomersView.as_view(), name='radius-customers'),
+    path('radius/vehicles/', radius_views.RadiusVehiclesView.as_view(), name='radius-vehicles'),
+    path('radius/journeys/', radius_views.RadiusJourneysView.as_view(), name='radius-journeys'),
+    path('radius/journeys/summary/', radius_views.RadiusJourneySummaryView.as_view(), name='radius-journeys-summary'),
+    path('radius/archive/', radius_views.RadiusArchiveView.as_view(), name='radius-archive'),
+    path('radius/sync/', radius_views.RadiusSyncView.as_view(), name='radius-sync'),
     
     # Assigned vehicle for current user
     path('my-vehicle/', views.AssignedVehicleView.as_view(), name='tracking-my-vehicle'),

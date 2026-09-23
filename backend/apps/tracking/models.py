@@ -232,3 +232,70 @@ class TachographArchiveEntry(models.Model):
 
     def __str__(self):
         return f"{self.date} - {self.plate_number or self.vehicle_name}"
+
+
+class RadiusJourney(models.Model):
+    """
+    Eén rit uit de Radius Velocity ritgeschiedenis.
+
+    Radius bewaart zelf maar ongeveer 30 dagen. Door dagelijks te synchroniseren
+    bouwen we hier een archief op dat verder terug gaat dan de API zelf.
+    """
+    id = models.BigAutoField(primary_key=True)
+    service_id = models.CharField(max_length=64, verbose_name='Service ID')
+    plate_number = models.CharField(max_length=20, blank=True, verbose_name='Kenteken')
+    driver_name = models.CharField(max_length=150, blank=True, verbose_name='Chauffeur')
+    date = models.DateField(verbose_name='Datum', help_text='Lokale datum waarop de rit begon.')
+    start_time = models.DateTimeField(verbose_name='Starttijd')
+    end_time = models.DateTimeField(null=True, blank=True, verbose_name='Eindtijd')
+    start_latitude = models.FloatField(null=True, blank=True, verbose_name='Start breedtegraad')
+    start_longitude = models.FloatField(null=True, blank=True, verbose_name='Start lengtegraad')
+    end_latitude = models.FloatField(null=True, blank=True, verbose_name='Eind breedtegraad')
+    end_longitude = models.FloatField(null=True, blank=True, verbose_name='Eind lengtegraad')
+    start_address = models.CharField(max_length=255, blank=True, verbose_name='Startadres')
+    start_city = models.CharField(max_length=120, blank=True, verbose_name='Startplaats')
+    start_country = models.CharField(max_length=100, blank=True, verbose_name='Startland')
+    end_address = models.CharField(max_length=255, blank=True, verbose_name='Eindadres')
+    end_city = models.CharField(max_length=120, blank=True, verbose_name='Eindplaats')
+    end_country = models.CharField(max_length=100, blank=True, verbose_name='Eindland')
+    distance_km = models.FloatField(default=0, verbose_name='Afstand (km)')
+    duration_seconds = models.PositiveIntegerField(default=0, verbose_name='Duur (s)')
+    customer_id = models.CharField(max_length=32, blank=True, verbose_name='Radius klant-id')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Radius Rit'
+        verbose_name_plural = 'Radius Ritten'
+        ordering = ['-start_time', 'plate_number']
+        # Een rit is uniek per tracker en starttijdstip; daarmee is opnieuw
+        # synchroniseren van dezelfde periode veilig.
+        unique_together = ['service_id', 'start_time']
+        indexes = [
+            models.Index(fields=['date']),
+            models.Index(fields=['date', 'plate_number']),
+            models.Index(fields=['plate_number', '-start_time']),
+        ]
+
+    def __str__(self):
+        return f"{self.plate_number or self.service_id} - {self.start_time:%d-%m-%Y %H:%M}"
+
+
+class RadiusSyncLog(models.Model):
+    """Houdt bij welke dagen uit Radius zijn opgehaald."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    date = models.DateField(unique=True, verbose_name='Datum')
+    journeys_synced = models.PositiveIntegerField(default=0, verbose_name='Ritten gesynchroniseerd')
+    journeys_created = models.PositiveIntegerField(default=0, verbose_name='Nieuwe ritten')
+    vehicles_seen = models.PositiveIntegerField(default=0, verbose_name='Voertuigen gezien')
+    errors = models.TextField(blank=True, verbose_name='Fouten')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Radius Sync Log'
+        verbose_name_plural = 'Radius Sync Logs'
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"Radius sync {self.date} - {self.journeys_synced} ritten"

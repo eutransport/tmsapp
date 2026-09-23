@@ -86,12 +86,6 @@ class AppSettingsSerializer(serializers.ModelSerializer):
             'primary_color',
             'login_background_color',
             'company_name',
-            'company_address',
-            'company_phone',
-            'company_email',
-            'company_kvk',
-            'company_btw',
-            'company_iban',
         ]
     
     def get_logo_url(self, obj):
@@ -117,6 +111,7 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
     secondary_font_data = CustomFontSerializer(source='secondary_font', read_only=True)
     ai_status = serializers.SerializerMethodField()
     has_linqo_api_key = serializers.SerializerMethodField()
+    has_radius_api_token = serializers.SerializerMethodField()
     
     class Meta:
         model = AppSettings
@@ -145,9 +140,16 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
             'linqo_api_key',
             'has_linqo_api_key',
             'tachograaf_start_datum',
+            # Radius Velocity / Telematics
+            'radius_api_token',
+            'has_radius_api_token',
+            'radius_start_datum',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'ai_status', 'has_linqo_api_key']
+        read_only_fields = [
+            'id', 'created_at', 'updated_at', 'ai_status',
+            'has_linqo_api_key', 'has_radius_api_token',
+        ]
         extra_kwargs = {
             'smtp_password': {'write_only': True},
             'oauth_client_secret': {'write_only': True},
@@ -157,6 +159,7 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
             'ai_openai_api_key': {'write_only': True},
             'ai_azure_api_key': {'write_only': True},
             'linqo_api_key': {'write_only': True},
+            'radius_api_token': {'write_only': True},
         }
 
     def to_representation(self, instance):
@@ -171,6 +174,10 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
     def get_has_linqo_api_key(self, obj):
         """Return whether a Linqo API key is configured."""
         return bool(obj.linqo_api_key)
+
+    def get_has_radius_api_token(self, obj):
+        """Return whether a Radius API token is configured (never the value)."""
+        return bool(getattr(obj, 'radius_api_token', ''))
 
     def get_ai_status(self, obj):
         """Check if AI is properly configured and working."""
@@ -215,6 +222,9 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
         # Don't overwrite linqo_api_key with empty string
         if 'linqo_api_key' in data and not data['linqo_api_key']:
             del data['linqo_api_key']
+        # Idem voor het Radius-token: leeg laten betekent "niet wijzigen"
+        if 'radius_api_token' in data and not data['radius_api_token']:
+            del data['radius_api_token']
         return data
 
 
@@ -314,9 +324,6 @@ class AdministratieSerializer(serializers.ModelSerializer):
     bedrijf_count = serializers.SerializerMethodField()
     user_count = serializers.SerializerMethodField()
     created_by_name = serializers.SerializerMethodField()
-    # Signed URL naar het administratie-logo (read-only). Het echte ImageField
-    # is write-only via het aparte upload_logo endpoint (multipart).
-    logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Administratie
@@ -329,21 +336,9 @@ class AdministratieSerializer(serializers.ModelSerializer):
             'invoice_start_number_verkoop',
             'invoice_start_number_inkoop',
             'invoice_start_number_credit',
-            # Bedrijfsgegevens per administratie
-            'logo_url',
-            'straat', 'huisnummer', 'postcode', 'plaats', 'land',
-            'kvk', 'btw', 'iban',
-            'telefoon', 'email',
             'created_by_name', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'logo_url']
-
-    def get_logo_url(self, obj):
-        url = sign_file_field(obj.logo)
-        if not url:
-            return None
-        request = self.context.get('request')
-        return request.build_absolute_uri(url) if request else url
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate(self, data):
         """Eigen nummering vereist een prefix om collisions met algemene of

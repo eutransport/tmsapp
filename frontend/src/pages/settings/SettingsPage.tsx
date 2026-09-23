@@ -30,6 +30,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { Link } from 'react-router-dom'
 import { settingsApi } from '@/api/settings'
+import { testRadiusConnection } from '@/api/radius'
 import { useAppStore } from '@/stores/appStore'
 import { useServerConfigStore } from '@/stores/serverConfigStore'
 import ThemeSelector from '@/components/settings/ThemeSelector'
@@ -89,6 +90,29 @@ export default function SettingsPage() {
   const [testingEmail, setTestingEmail] = useState(false)
   const [uploadingSignatureImage, setUploadingSignatureImage] = useState(false)
 
+  // Radius verbindingstest
+  const [radiusTesting, setRadiusTesting] = useState(false)
+  const [radiusTestResult, setRadiusTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const handleRadiusTest = async () => {
+    setRadiusTesting(true)
+    setRadiusTestResult(null)
+    try {
+      const result = await testRadiusConnection()
+      setRadiusTestResult({
+        ok: true,
+        message: t('settings.radiusTestOk', 'Verbinding gelukt ({{type}}).', { type: result.token_type }),
+      })
+    } catch (err: any) {
+      setRadiusTestResult({
+        ok: false,
+        message: err?.response?.data?.detail || t('settings.radiusTestFailed', 'Verbinding mislukt.'),
+      })
+    } finally {
+      setRadiusTesting(false)
+    }
+  }
+
   // Load settings on mount
   useEffect(() => {
     loadSettings()
@@ -130,6 +154,8 @@ export default function SettingsPage() {
         // Integrations
         linqo_api_key: '',
         tachograaf_start_datum: data.tachograaf_start_datum || '',
+        radius_api_token: '',
+        radius_start_datum: data.radius_start_datum || '',
         // Reminder settings
         reminder_enabled: data.reminder_enabled ?? false,
         reminder_time: data.reminder_time || '08:00',
@@ -1244,6 +1270,74 @@ export default function SettingsPage() {
                     </p>
                   </div>
                 </div>
+              </div>
+
+              {/* Radius / VelocityFleet */}
+              <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 space-y-4">
+                <h3 className="text-md font-medium text-gray-900 dark:text-white">
+                  {t('settings.radiusTitle', 'Radius Velocity (Telematics)')}
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {t('settings.radiusDescription', 'Koppel de Radius Velocity API om voertuigen, GPS- en ritgegevens op te halen.')}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {t('settings.radiusApiToken', 'API Token')}
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.radius_api_token || ''}
+                      onChange={(e) => handleInputChange('radius_api_token', e.target.value)}
+                      placeholder={settings?.has_radius_api_token ? '••••••••••••••••' : t('settings.radiusApiTokenPlaceholder', 'Voer het Radius refresh token in...')}
+                      className="input"
+                      autoComplete="off"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {settings?.has_radius_api_token
+                        ? t('settings.radiusApiTokenSaved', 'Token is opgeslagen. Laat leeg om het huidige token te behouden.')
+                        : t('settings.radiusApiTokenHint', 'Het refresh token vind je in het Radius Velocity Portal onder Account > API integratie.')}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {t('settings.radiusStartDatum', 'Startdatum Radius')}
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.radius_start_datum || ''}
+                      onChange={(e) => handleInputChange('radius_start_datum', e.target.value || null)}
+                      className="input"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {t('settings.radiusStartDatumHint', 'Vanaf deze datum worden rit- en GPS-gegevens opgehaald en gearchiveerd.')}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleRadiusTest}
+                    disabled={radiusTesting || !settings?.has_radius_api_token}
+                    className="btn-secondary disabled:opacity-50"
+                  >
+                    {radiusTesting
+                      ? t('settings.radiusTesting', 'Bezig met testen...')
+                      : t('settings.radiusTest', 'Verbinding testen')}
+                  </button>
+                  {radiusTestResult && (
+                    <span
+                      className={`text-sm ${radiusTestResult.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                    >
+                      {radiusTestResult.message}
+                    </span>
+                  )}
+                </div>
+                {!settings?.has_radius_api_token && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {t('settings.radiusSaveFirst', 'Sla het token eerst op voordat je de verbinding test.')}
+                  </p>
+                )}
               </div>
             </div>
           )}

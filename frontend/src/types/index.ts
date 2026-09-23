@@ -110,6 +110,9 @@ export interface AppSettingsAdmin extends AppSettings {
   linqo_api_key?: string // Write-only
   has_linqo_api_key?: boolean // Read-only
   tachograaf_start_datum?: string | null
+  radius_api_token?: string // Write-only
+  has_radius_api_token?: boolean // Read-only
+  radius_start_datum?: string | null
   // Reminder settings
   reminder_enabled: boolean
   reminder_time: string

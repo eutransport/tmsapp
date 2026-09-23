@@ -244,6 +244,70 @@ def force_resync_tachograph_hours():
     return result
 
 
+@shared_task
+def sync_radius_journeys(dagen=None):
+    """
+    Haal de Radius Velocity ritgeschiedenis op en bouw het archief.
+
+    Radius bewaart zelf maar ongeveer 30 dagen, dus zonder deze taak gaan
+    oudere ritten verloren. We halen standaard de laatste paar dagen opnieuw
+    op omdat Radius ritten met terugwerkende kracht kan aanvullen.
+
+    Draait zowel elke 5 minuten (korte terugblik, voor de lopende dag) als
+    's nachts met de standaard terugblik.
+    """
+    from apps.core.models import AppSettings
+    from apps.tracking.radius_archive_service import STANDAARD_TERUGBLIK_DAGEN, sync_recente_dagen
+    from apps.tracking.radius_service import JOURNEYS_MAX_DAGEN, RadiusError
+
+    settings = AppSettings.get_settings()
+    if not getattr(settings, 'radius_api_token', ''):
+        logger.info('Radius sync overgeslagen: geen API token ingesteld')
+        return {'status': 'skipped', 'reason': 'geen_token'}
+
+    if dagen is None:
+        dagen = STANDAARD_TERUGBLIK_DAGEN
+    dagen = max(1, min(int(dagen), JOURNEYS_MAX_DAGEN))
+
+    try:
+        resultaat = sync_recente_dagen(dagen=dagen)
+    except RadiusError as exc:
+        logger.error('Radius sync mislukt: %s', exc)
+        return {'status': 'error', 'detail': str(exc)}
+    except Exception:
+        logger.exception('Onverwachte fout bij de Radius sync')
+        return {'status': 'error', 'detail': 'onverwachte fout'}
+
+    logger.info(
+        'Radius sync klaar: %s ritten opgehaald, %s nieuw, %s bijgewerkt',
+        resultaat['journeys_fetched'], resultaat['journeys_created'], resultaat['journeys_updated'],
+    )
+    resultaat['status'] = 'completed'
+    return resultaat
+
+
+@shared_task
+def backfill_radius_journeys(dagen=30):
+    """
+    Haal eenmalig zoveel mogelijk historie uit Radius op.
+
+    Handig direct na het inschakelen van de koppeling: alles wat Radius nog
+    bewaart wordt dan in één keer in het archief gezet.
+    """
+    from apps.tracking.radius_archive_service import sync_recente_dagen
+    from apps.tracking.radius_service import JOURNEYS_MAX_DAGEN, RadiusError
+
+    dagen = max(1, min(int(dagen or 1), JOURNEYS_MAX_DAGEN))
+    try:
+        resultaat = sync_recente_dagen(dagen=dagen)
+    except RadiusError as exc:
+        logger.error('Radius backfill mislukt: %s', exc)
+        return {'status': 'error', 'detail': str(exc)}
+
+    resultaat['status'] = 'completed'
+    return resultaat
+
+
 def _build_driver_lookup():
     """
     Build a lookup dict mapping normalized FM-Track driver names to TMS Driver objects.

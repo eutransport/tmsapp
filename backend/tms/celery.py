@@ -36,16 +36,6 @@ app.conf.beat_schedule = {
         'task': 'apps.maintenance.tasks.send_adr_reminders',
         'schedule': crontab(minute='*/15'),
     },
-    'send-fire-extinguisher-reminders': {
-        # Zelfde ritme als ADR: elk kwartier kijken of de verzendtijd bereikt is.
-        'task': 'apps.maintenance.tasks.send_fire_extinguisher_reminders',
-        'schedule': crontab(minute='*/15'),
-    },
-    'send-apk-reminders': {
-        # Zelfde ritme als ADR en de brandblussers.
-        'task': 'apps.maintenance.tasks.send_apk_reminders',
-        'schedule': crontab(minute='*/15'),
-    },
     'pakmiddelen-scheduled-check': {
         'task': 'apps.pakmiddelen.tasks.run_scheduled_check',
         'schedule': crontab(minute='*'),
@@ -58,6 +48,19 @@ app.conf.beat_schedule = {
         'task': 'apps.tracking.tasks.sync_tachograph_hours',
         # Run daily at 03:00 — yesterday's tachograph data is then complete
         'schedule': crontab(hour=3, minute=0),
+    },
+    'sync-radius-journeys': {
+        # Radius bewaart maar ~30 dagen ritgeschiedenis; dagelijks ophalen
+        # zodat het eigen archief verder terug blijft gaan.
+        'task': 'apps.tracking.tasks.sync_radius_journeys',
+        'schedule': crontab(hour=3, minute=20),
+    },
+    'sync-radius-journeys-recent': {
+        # Elke 5 minuten de lopende en vorige dag bijwerken, zodat het archief
+        # en de kilometers vrijwel actueel zijn. Dit is één API-aanroep.
+        'task': 'apps.tracking.tasks.sync_radius_journeys',
+        'schedule': crontab(minute='*/5'),
+        'kwargs': {'dagen': 2},
     },
     'send-daily-task-reminders': {
         # Runs every minute; the task itself checks the configured send time.

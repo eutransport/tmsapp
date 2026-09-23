@@ -47,6 +47,10 @@ REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
     'document_email': None,
     'document_sign': None,
     'email_import': None,
+    'tracking_submit': None,
+    'tracking_read': None,
+    'radius_sync': None,
+    'radius_export': None,
 }
 
 # Static files

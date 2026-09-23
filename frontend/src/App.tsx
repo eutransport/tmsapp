@@ -129,20 +129,19 @@ const UrenImportPage = React.lazy(() => import('@/pages/uren-import/UrenImportPa
 const MaintenanceOverviewPage = React.lazy(() => import('@/pages/maintenance/MaintenanceOverviewPage'))
 const APKPage = React.lazy(() => import('@/pages/maintenance/APKPage'))
 const ADRPage = React.lazy(() => import('@/pages/maintenance/ADRPage'))
-const BrandblussersPage = React.lazy(() => import('@/pages/maintenance/BrandblussersPage'))
 const MaintenanceTasksPage = React.lazy(() => import('@/pages/maintenance/MaintenanceTasksPage'))
 const TiresPage = React.lazy(() => import('@/pages/maintenance/TiresPage'))
 const MaintenanceSettingsPage = React.lazy(() => import('@/pages/maintenance/MaintenanceSettingsPage'))
 
-// Tachograph
-const TachographPage = React.lazy(() => import('@/pages/tachograph/TachographPage'))
+// Tachograph (tabbladen per aanbieder: Linqo / Radius)
+const TachographTabsPage = React.lazy(() => import('@/pages/tachograph/TachographTabsPage'))
 const TachographComparisonPage = React.lazy(() => import('@/pages/tachograph/TachographComparisonPage'))
 
 // Reports
 const ReportsPage = React.lazy(() => import('@/pages/reports/ReportsPage'))
 
-// Track & Trace
-const TrackingPage = React.lazy(() => import('@/pages/tracking/TrackingPage'))
+// Track & Trace (tabbladen per aanbieder: Linqo / Radius)
+const TrackTracePage = React.lazy(() => import('@/pages/tracking/TrackTracePage'))
 
 // Shared loading fallback used by every Suspense boundary
 const RouteFallback = () => (
@@ -327,16 +326,15 @@ function App() {
         <Route path="/maintenance" element={<MaintenanceOverviewPage />} />
         <Route path="/maintenance/apk" element={<APKPage />} />
         <Route path="/maintenance/adr" element={<ADRPage />} />
-        <Route path="/maintenance/brandblussers" element={<BrandblussersPage />} />
         <Route path="/maintenance/tasks" element={<MaintenanceTasksPage />} />
         <Route path="/maintenance/tires" element={<TiresPage />} />
         <Route path="/maintenance/settings" element={<AdminRoute><MaintenanceSettingsPage /></AdminRoute>} />
         
         {/* Track & Trace */}
-        <Route path="/track-trace" element={<AdminRoute><TrackingPage /></AdminRoute>} />
+        <Route path="/track-trace" element={<AdminRoute><TrackTracePage /></AdminRoute>} />
 
         {/* Tachograph */}
-        <Route path="/tachograph" element={<AdminRoute><TachographPage /></AdminRoute>} />
+        <Route path="/tachograph" element={<AdminRoute><TachographTabsPage /></AdminRoute>} />
         <Route path="/tachograph/comparison" element={<AdminRoute><TachographComparisonPage /></AdminRoute>} />
         
         {/* Time tracking */}
@@ -406,9 +404,9 @@ function App() {
 
         {/* Tolheffing import */}
         <Route path="/tolheffing" element={<PermissionRoute permission="view_tolling"><TollingPage /></PermissionRoute>} />
-        <Route path="/tolheffing/sync" element={<PermissionRoute permission="view_tolling"><TollingSyncPage /></PermissionRoute>} />
+        <Route path="/tolheffing/sync" element={<AdminRoute><TollingSyncPage /></AdminRoute>} />
         <Route path="/tolheffing/buiten-uren" element={<PermissionRoute permission="view_tolling"><TollingBuitenUrenPage /></PermissionRoute>} />
-        <Route path="/tolheffing/afrekening" element={<PermissionRoute permission="view_tolling"><TolAfrekeningPage /></PermissionRoute>} />
+        <Route path="/tolheffing/afrekening" element={<AdminRoute><TolAfrekeningPage /></AdminRoute>} />
 
         {/* Privé tolregistratie (chauffeur) */}
         <Route path="/mijn-tolheffing" element={<PrivateTollPage />} />
