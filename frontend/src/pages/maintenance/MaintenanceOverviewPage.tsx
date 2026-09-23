@@ -14,10 +14,10 @@ import {
   ChevronRightIcon,
   Cog6ToothIcon,
 } from '@heroicons/react/24/outline'
-import { MaintenanceStats, APKCountdown, MaintenanceAlert, MaintenanceTaskList } from '@/types'
+import { MaintenanceStats, ExpiringItem, MaintenanceAlert, MaintenanceTaskList } from '@/types'
 import {
   getMaintenanceStats,
-  getAPKCountdown,
+  getExpiringOverview,
   getActiveAlerts,
   getOverdueTasks,
   getUpcomingTasks,
@@ -28,7 +28,8 @@ export default function MaintenanceOverviewPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [stats, setStats] = useState<MaintenanceStats | null>(null)
-  const [apkCountdowns, setApkCountdowns] = useState<APKCountdown[]>([])
+  const [expiring, setExpiring] = useState<ExpiringItem[]>([])
+  const [expiredCount, setExpiredCount] = useState(0)
   const [alerts, setAlerts] = useState<MaintenanceAlert[]>([])
   const [overdueTasks, setOverdueTasks] = useState<MaintenanceTaskList[]>([])
   const [upcomingTasks, setUpcomingTasks] = useState<MaintenanceTaskList[]>([])
@@ -37,15 +38,16 @@ export default function MaintenanceOverviewPage() {
   const fetchData = useCallback(async () => {
     setIsLoading(true)
     try {
-      const [statsData, apkData, alertsData, overdueData, upcomingData] = await Promise.all([
+      const [statsData, expiringData, alertsData, overdueData, upcomingData] = await Promise.all([
         getMaintenanceStats(),
-        getAPKCountdown(),
+        getExpiringOverview(30),
         getActiveAlerts(),
         getOverdueTasks(),
         getUpcomingTasks(14),
       ])
       setStats(statsData)
-      setApkCountdowns(apkData)
+      setExpiring(expiringData.results)
+      setExpiredCount(expiringData.expired_count)
       setAlerts(alertsData)
       setOverdueTasks(overdueData)
       setUpcomingTasks(upcomingData)
@@ -73,6 +75,13 @@ export default function MaintenanceOverviewPage() {
       case 'warning': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
       default: return 'bg-green-100 text-green-800 border-green-200'
     }
+  }
+
+  /** Doorklikken vanuit het verloopoverzicht naar de juiste beheerpagina. */
+  const expiringLink = (item: ExpiringItem) => {
+    if (item.soort === 'adr') return `/maintenance/adr?record=${item.id}`
+    if (item.soort === 'brandblusser') return `/maintenance/brandblussers?record=${item.id}`
+    return '/maintenance/apk'
   }
 
   const getAlertIcon = (severity: string) => {
@@ -186,43 +195,55 @@ export default function MaintenanceOverviewPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* APK Countdown */}
+        {/* Verloopt binnenkort: APK, ADR en brandblussers bij elkaar */}
         <div className="bg-white rounded-xl shadow-sm border">
           <div className="flex items-center justify-between p-4 border-b">
             <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-              <ShieldCheckIcon className="w-5 h-5 text-primary-600" />
-              {t('maintenance.apk.countdown')}
+              <ClockIcon className="w-5 h-5 text-primary-600" />
+              {t('maintenance.expiring.title')}
+              {expiredCount > 0 && (
+                <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {t('maintenance.expiring.expiredBadge', { count: expiredCount })}
+                </span>
+              )}
             </h2>
-            <button
-              onClick={() => navigate('/maintenance/apk')}
-              className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
-            >
-              {t('common.viewAll')}
-              <ChevronRightIcon className="w-4 h-4" />
-            </button>
+            <span className="text-xs text-gray-400">{t('maintenance.expiring.window')}</span>
           </div>
           <div className="divide-y max-h-80 overflow-y-auto">
-            {apkCountdowns.length === 0 ? (
-              <div className="p-6 text-center text-gray-500">
-                {t('maintenance.apk.noRecords')}
+            {expiring.length === 0 ? (
+              <div className="p-6 text-center text-gray-500 flex flex-col items-center gap-2">
+                <CheckCircleIcon className="w-8 h-8 text-green-400" />
+                {t('maintenance.expiring.none')}
               </div>
             ) : (
-              apkCountdowns.slice(0, 8).map((apk) => (
-                <div key={apk.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 hover:bg-gray-50 gap-2">
-                  <div className="flex items-center gap-3">
-                    <LicensePlate kenteken={apk.vehicle_kenteken} size="sm" />
-                    <div className="text-xs text-gray-500">
-                      {apk.vehicle_type || '—'}
+              expiring.map((item) => (
+                <div
+                  key={`${item.soort}-${item.id}`}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 hover:bg-gray-50 gap-2 cursor-pointer"
+                  onClick={() => navigate(expiringLink(item))}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <LicensePlate kenteken={item.vehicle_kenteken} size="sm" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">
+                        {t(`maintenance.expiring.kind.${item.soort}`)}
+                        {item.omschrijving && (
+                          <span className="text-gray-500 font-normal"> {item.omschrijving}</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {item.route || item.vehicle_type || '—'}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 ml-0 sm:ml-0">
+                  <div className="flex items-center gap-3 shrink-0">
                     <div className="text-xs text-gray-500">
-                      {new Date(apk.expiry_date).toLocaleDateString('nl-NL')}
+                      {new Date(item.datum).toLocaleDateString('nl-NL')}
                     </div>
-                    <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${getCountdownColor(apk.countdown_status)}`}>
-                      {apk.days_until_expiry > 0
-                        ? `${apk.days_until_expiry} ${t('maintenance.apk.daysLeft')}`
-                        : t('maintenance.apk.expired')
+                    <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${getCountdownColor(item.status)}`}>
+                      {item.dagen !== null && item.dagen >= 0
+                        ? `${item.dagen} ${t('maintenance.apk.daysLeft')}`
+                        : t('maintenance.expiring.expired', { count: Math.abs(item.dagen ?? 0) })
                       }
                     </span>
                   </div>

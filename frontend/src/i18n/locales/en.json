@@ -2315,6 +2315,18 @@
       "dismiss": "Dismiss",
       "dismissAll": "Dismiss all"
     },
+    "expiring": {
+      "title": "Expiring soon",
+      "window": "Next 30 days",
+      "none": "Nothing expires soon",
+      "expired": "{{count}} days overdue",
+      "expiredBadge": "{{count}} expired",
+      "kind": {
+        "apk": "MOT",
+        "adr": "ADR",
+        "brandblusser": "Fire extinguisher"
+      }
+    },
     "settings": {
       "title": "Settings",
       "subtitle": "Manage maintenance categories and types",

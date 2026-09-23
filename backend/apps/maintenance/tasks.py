@@ -85,7 +85,21 @@ def _inbox_users(record, instellingen=None) -> list:
     users = list(record.notify_users.all())
     if not users and instellingen is not None:
         users = list(instellingen.default_notify_users.all())
+    # Staat er nergens iemand ingesteld? Dan valt de melding stil terwijl hij
+    # juist zichtbaar hoort te zijn. Daarom als laatste terugval iedereen die
+    # het onderhoudsmodule mag zien.
+    if not users:
+        users = _onderhoud_beheerders()
     return users
+
+
+def _onderhoud_beheerders() -> list:
+    """Actieve gebruikers die het onderhoudsmodule mogen inzien."""
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    kandidaten = User.objects.filter(is_active=True).exclude(rol='chauffeur')
+    return [u for u in kandidaten if u.has_module_permission('view_maintenance')]
 
 
 def _build_texts(record, days: int) -> tuple[str, str, str]:

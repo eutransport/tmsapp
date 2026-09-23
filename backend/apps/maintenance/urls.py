@@ -12,6 +12,7 @@ from .views import (
     ADRSettingsView,
     FireExtinguisherRecordViewSet,
     FireExtinguisherSettingsView,
+    ExpiringOverviewView,
     MaintenanceTaskViewSet,
     MaintenancePartViewSet,
     TireRecordViewSet,
@@ -47,6 +48,7 @@ router.register(r'obd/readings', OBDReadingViewSet, basename='obd-readings')
 urlpatterns = [
     path('adr-settings/', ADRSettingsView.as_view(), name='adr-settings'),
     path('fire-extinguisher-settings/', FireExtinguisherSettingsView.as_view(), name='fire-extinguisher-settings'),
+    path('expiring-overview/', ExpiringOverviewView.as_view(), name='expiring-overview'),
     path('', include(router.urls)),
     path('stats/', MaintenanceStatsView.as_view(), name='maintenance-stats'),
     path('reports/vehicle-cost/', VehicleCostReportView.as_view(), name='vehicle-cost-report'),

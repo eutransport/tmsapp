@@ -25,6 +25,7 @@ import {
   MaintenanceStats,
   FleetHealth,
   VehicleCostSummary,
+  ExpiringOverview,
   PaginatedResponse,
 } from '@/types'
 
@@ -341,6 +342,16 @@ export async function updateBrandblusserSettings(
   data: BrandblusserSettingsPayload
 ): Promise<FireExtinguisherSettings> {
   const response = await api.put(`${BASE}/fire-extinguisher-settings/`, data)
+  return response.data
+}
+
+// =============================================================================
+// VERLOOPOVERZICHT
+// =============================================================================
+
+/** APK, ADR en brandblussers die bijna verlopen of al verlopen zijn. */
+export async function getExpiringOverview(days = 30): Promise<ExpiringOverview> {
+  const response = await api.get(`${BASE}/expiring-overview/?days=${days}`)
   return response.data
 }
 

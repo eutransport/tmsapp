@@ -2315,6 +2315,18 @@
       "dismiss": "Negeren",
       "dismissAll": "Alles negeren"
     },
+    "expiring": {
+      "title": "Verloopt binnenkort",
+      "window": "Komende 30 dagen",
+      "none": "Niets verloopt binnenkort",
+      "expired": "{{count}} dagen te laat",
+      "expiredBadge": "{{count}} verlopen",
+      "kind": {
+        "apk": "APK",
+        "adr": "ADR",
+        "brandblusser": "Brandblusser"
+      }
+    },
     "settings": {
       "title": "Instellingen",
       "subtitle": "Beheer onderhoudscategorieën en types",

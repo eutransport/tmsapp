@@ -2315,6 +2315,18 @@
       "dismiss": "Yoksay",
       "dismissAll": "Tümünü yoksay"
     },
+    "expiring": {
+      "title": "Yakında doluyor",
+      "window": "Önümüzdeki 30 gün",
+      "none": "Yakında dolan bir şey yok",
+      "expired": "{{count}} gün gecikmiş",
+      "expiredBadge": "{{count}} süresi doldu",
+      "kind": {
+        "apk": "Muayene",
+        "adr": "ADR",
+        "brandblusser": "Yangın söndürücü"
+      }
+    },
     "settings": {
       "title": "Ayarlar",
       "subtitle": "Bakım kategorilerini ve türlerini yönetin",

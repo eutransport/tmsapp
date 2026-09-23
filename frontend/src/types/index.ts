@@ -768,6 +768,26 @@ export interface FireExtinguisherSettings {
   updated_at: string
 }
 
+/** Eén regel uit het gecombineerde verloopoverzicht (APK, ADR, brandblussers). */
+export interface ExpiringItem {
+  id: string
+  soort: 'apk' | 'adr' | 'brandblusser'
+  vehicle_kenteken: string
+  vehicle_type: string
+  route: string
+  omschrijving: string
+  datum: string
+  dagen: number | null
+  status: string
+}
+
+export interface ExpiringOverview {
+  days: number
+  count: number
+  expired_count: number
+  results: ExpiringItem[]
+}
+
 export interface MaintenanceTask {
   id: string
   vehicle: string

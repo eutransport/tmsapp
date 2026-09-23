@@ -441,6 +441,93 @@ class FireExtinguisherSettingsView(APIView):
 
 
 # =============================================================================
+# VERLOOPOVERZICHT (APK, ADR EN BRANDBLUSSERS BIJ ELKAAR)
+# =============================================================================
+
+class ExpiringOverviewView(APIView):
+    """Alles wat bijna verloopt of al verlopen is, in één lijst.
+
+    Bundelt APK, ADR en brandblussers zodat het onderhoudsoverzicht in één
+    oogopslag laat zien waar actie op nodig is. Verlopen items staan bovenaan.
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrManager, HasModulePermission]
+    module_permission = 'view_maintenance'
+
+    def get(self, request):
+        try:
+            days = int(request.query_params.get('days', 30))
+        except (TypeError, ValueError):
+            days = 30
+        days = max(0, min(days, 365))
+
+        today = date.today()
+        cutoff = today + timedelta(days=days)
+        items = []
+
+        apks = APKRecord.objects.filter(
+            is_current=True, expiry_date__lte=cutoff
+        ).select_related('vehicle')
+        for apk in apks:
+            items.append({
+                'id': str(apk.id),
+                'soort': 'apk',
+                'vehicle_kenteken': apk.vehicle.kenteken,
+                'vehicle_type': apk.vehicle.type_wagen or '',
+                'route': apk.vehicle.ritnummer or '',
+                'omschrijving': '',
+                'datum': apk.expiry_date,
+                'dagen': apk.days_until_expiry,
+                'status': apk.countdown_status,
+            })
+
+        adrs = ADRRecord.objects.filter(
+            has_adr=True, next_inspection_date__lte=cutoff
+        ).select_related('vehicle')
+        for adr in adrs:
+            items.append({
+                'id': str(adr.id),
+                'soort': 'adr',
+                'vehicle_kenteken': adr.vehicle.kenteken,
+                'vehicle_type': adr.vehicle.type_wagen or '',
+                'route': adr.route or '',
+                'omschrijving': '',
+                'datum': adr.next_inspection_date,
+                'dagen': adr.days_remaining,
+                'status': adr.countdown_status,
+            })
+
+        blussers = FireExtinguisherRecord.objects.filter(
+            next_inspection_date__lte=cutoff
+        ).select_related('vehicle')
+        for blusser in blussers:
+            omschrijving = f"nr. {blusser.volgnummer}"
+            if blusser.positie:
+                omschrijving = f"{omschrijving} — {blusser.positie}"
+            items.append({
+                'id': str(blusser.id),
+                'soort': 'brandblusser',
+                'vehicle_kenteken': blusser.vehicle.kenteken,
+                'vehicle_type': blusser.vehicle.type_wagen or '',
+                'route': blusser.route or '',
+                'omschrijving': omschrijving,
+                'datum': blusser.next_inspection_date,
+                'dagen': blusser.days_remaining,
+                'status': blusser.countdown_status,
+            })
+
+        # Vroegste datum eerst, dus verlopen items bovenaan.
+        items.sort(key=lambda item: item['datum'])
+
+        verlopen = sum(1 for item in items if (item['dagen'] or 0) < 0)
+        return Response({
+            'days': days,
+            'count': len(items),
+            'expired_count': verlopen,
+            'results': items,
+        })
+
+
+# =============================================================================
 # ONDERHOUDSTAKEN
 # =============================================================================
 
