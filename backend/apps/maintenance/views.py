@@ -23,6 +23,7 @@ from .models import (
     MaintenanceType,
     VehicleMaintenanceProfile,
     APKRecord,
+    APKSettings,
     ADRRecord,
     ADRSettings,
     FireExtinguisherRecord,
@@ -46,6 +47,7 @@ from .serializers import (
     VehicleMaintenanceProfileSerializer,
     APKRecordSerializer,
     APKCountdownSerializer,
+    APKSettingsSerializer,
     ADRRecordSerializer,
     ADRSettingsSerializer,
     FireExtinguisherRecordSerializer,
@@ -201,7 +203,7 @@ class APKRecordViewSet(viewsets.ModelViewSet):
     """CRUD voor APK records met countdown functionaliteit."""
     queryset = APKRecord.objects.select_related(
         'vehicle', 'vehicle__bedrijf', 'created_by'
-    ).all()
+    ).prefetch_related('notify_users').all()
     serializer_class = APKRecordSerializer
     permission_classes = [IsAuthenticated, IsAdminOrManager, HasModulePermission]
     module_permission = 'view_maintenance'
@@ -286,6 +288,38 @@ class APKRecordViewSet(viewsets.ModelViewSet):
             vehicle_id=vehicle_id
         ).select_related('vehicle', 'created_by').order_by('-inspection_date')
         serializer = APKRecordSerializer(records, many=True)
+        return Response(serializer.data)
+
+
+class APKSettingsView(APIView):
+    """Instellingen voor de APK-herinneringen: lezen door beheerders/managers,
+    wijzigen alleen door admins."""
+    permission_classes = [IsAuthenticated, IsAdminOrManager, HasModulePermission]
+    module_permission = 'view_maintenance'
+
+    def get_permissions(self):
+        if self.request.method in ('PUT', 'PATCH'):
+            return [IsAuthenticated(), IsAdminOnly()]
+        return super().get_permissions()
+
+    def get(self, request):
+        instellingen = APKSettings.get_settings()
+        return Response(APKSettingsSerializer(instellingen, context={'request': request}).data)
+
+    def put(self, request):
+        return self._update(request)
+
+    def patch(self, request):
+        return self._update(request, partial=True)
+
+    def _update(self, request, partial=False):
+        instellingen = APKSettings.get_settings()
+        serializer = APKSettingsSerializer(
+            instellingen, data=request.data, partial=partial, context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        logger.info(f"APK settings updated by {request.user.email}")
         return Response(serializer.data)
 
 

@@ -1,9 +1,9 @@
 """Celery-taken voor het onderhoudsmodule.
 
-Op dit moment alleen de ADR-herinneringen: vanaf twee weken voor de volgende
-controle gaat er een mail uit, en in de laatste week (en daarna) elke dag
-opnieuw totdat de controledatum is bijgewerkt. Tegelijk met de mail komt er
-een notificatie in de app met een link naar de betreffende ADR-regel.
+Herinneringen voor de ADR-controles, de brandblussers en de APK. Vanaf een
+vast aantal dagen voor de vervaldatum gaat er een mail uit, en in de laatste
+periode (en daarna) elke dag opnieuw totdat de datum is bijgewerkt. Tegelijk
+met de mail komt er een notificatie in de app met een link naar de regel.
 """
 from __future__ import annotations
 
@@ -433,6 +433,176 @@ def send_fire_extinguisher_reminders(force: bool = False):
                 f'Brandblusser {record.volgnummer} van {record.vehicle.kenteken} '
                 f'vervalt op {record.next_inspection_date.strftime("%d-%m-%Y")}.'
             ),
+        )
+
+        if mail_ok:
+            record.last_reminder_sent_on = today
+            record.save(update_fields=['last_reminder_sent_on'])
+            verstuurd += 1
+
+    if not force:
+        instellingen.last_run_on = today
+        instellingen.save(update_fields=['last_run_on'])
+
+    return {'status': 'done', 'sent': verstuurd, 'errors': fouten}
+
+
+# =============================================================================
+# APK
+# =============================================================================
+
+# Een APK is lastiger op korte termijn in te plannen, dus daar begint de
+# waarschuwing een maand van tevoren in plaats van twee weken.
+APK_FIRST_REMINDER_DAYS = 30
+APK_DAILY_REMINDER_DAYS = 14
+
+
+def _apk_path(record) -> str:
+    return f'/maintenance/apk?record={record.id}'
+
+
+def _apk_should_send(record, today: date) -> bool:
+    """Bepaal of er vandaag een APK-herinnering uit moet."""
+    if not record.expiry_date:
+        return False
+
+    days = (record.expiry_date - today).days
+    if days > APK_FIRST_REMINDER_DAYS:
+        return False
+
+    laatste = record.last_reminder_sent_on
+    if days <= APK_DAILY_REMINDER_DAYS:
+        # Laatste twee weken en te laat: elke dag, maar niet twee keer op een dag.
+        return laatste != today
+
+    # Tussen een maand en twee weken: eenmalig, zodra het venster is ingegaan.
+    venster_start = record.expiry_date - timedelta(days=APK_FIRST_REMINDER_DAYS)
+    return laatste is None or laatste < venster_start
+
+
+def _apk_texts(record, days: int) -> tuple[str, str, str]:
+    """Onderwerp, platte tekst en html voor de APK-herinnering."""
+    kenteken = record.vehicle.kenteken
+    datum = record.expiry_date.strftime('%d-%m-%Y')
+    link = f'{_app_base_url()}{_apk_path(record)}'
+
+    if days < 0:
+        termijn = f'is {abs(days)} dag(en) geleden verlopen'
+        subject = f'APK verlopen: {kenteken}'
+    elif days == 0:
+        termijn = 'is vandaag'
+        subject = f'APK vervalt vandaag: {kenteken}'
+    else:
+        termijn = f'is over {days} dag(en)'
+        subject = f'APK vervalt over {days} dag(en): {kenteken}'
+
+    regels = [
+        f'Voertuig: {kenteken}',
+        f'Type: {record.vehicle.type_wagen or "-"}',
+        f'Route: {record.vehicle.ritnummer or "-"}',
+        f'Laatst gekeurd: {record.inspection_date.strftime("%d-%m-%Y")}',
+        f'Keuringsstation: {record.inspection_station or "-"}',
+        f'Vervaldatum: {datum} ({termijn})',
+    ]
+    body_text = (
+        f'De APK van {kenteken} {termijn} (vervaldatum {datum}).\n\n'
+        + '\n'.join(regels)
+        + f'\n\nBekijk de keuring: {link}\n'
+    )
+    body_html = (
+        f'<p>De APK van <strong>{escape(kenteken)}</strong> {escape(termijn)} '
+        f'(vervaldatum <strong>{datum}</strong>).</p><ul>'
+        + ''.join(f'<li>{escape(r)}</li>' for r in regels)
+        + f'</ul><p><a href="{escape(link)}">Bekijk de APK-keuring</a></p>'
+    )
+    return subject, body_text, body_html
+
+
+def _apk_notify_in_app(record, users, title: str, body: str) -> None:
+    """Zet de APK-herinnering ook in de notificatie-inbox."""
+    if not users:
+        return
+
+    url = _apk_path(record)
+    data = {'type': 'apk_reminder', 'apk_id': str(record.id)}
+
+    from apps.notifications.models import PushNotification, UserNotification
+    from apps.notifications.services import PushNotificationService
+
+    try:
+        service = PushNotificationService()
+        if service.is_configured():
+            service.send_to_users(users=users, title=title, body=body, url=url, data=data)
+            return
+    except Exception as exc:  # noqa: BLE001 - notificatie mag de taak nooit breken
+        logger.warning('Push voor APK-herinnering mislukt: %s', exc)
+
+    log = PushNotification.objects.create(
+        title=title, body=body, url=url, data=data,
+        success_count=0, failure_count=0,
+    )
+    UserNotification.objects.bulk_create(
+        [UserNotification(notification=log, user=user) for user in users],
+        ignore_conflicts=True,
+    )
+
+
+@shared_task
+def send_apk_reminders(force: bool = False):
+    """Verstuur de APK-herinneringen.
+
+    Alleen de huidige keuring per wagen telt mee; oude records uit de historie
+    blijven buiten beschouwing.
+    """
+    from .models import APKRecord, APKSettings
+
+    instellingen = APKSettings.get_settings()
+    today = timezone.localdate()
+
+    if not force:
+        if instellingen.last_run_on == today:
+            return {'status': 'skipped', 'reason': 'already_run_today', 'sent': 0, 'errors': []}
+        nu = timezone.localtime()
+        gepland = nu.replace(
+            hour=instellingen.send_hour, minute=instellingen.send_minute,
+            second=0, microsecond=0,
+        )
+        if nu < gepland:
+            return {'status': 'skipped', 'reason': 'before_send_time', 'sent': 0, 'errors': []}
+
+    profile_id = instellingen.email_profile_id
+    records = (
+        APKRecord.objects
+        .filter(is_current=True, expiry_date__lte=today + timedelta(days=APK_FIRST_REMINDER_DAYS))
+        .select_related('vehicle')
+        .prefetch_related('notify_users')
+    )
+
+    verstuurd = 0
+    fouten: list[str] = []
+
+    for record in records:
+        if not _apk_should_send(record, today):
+            continue
+
+        days = (record.expiry_date - today).days
+        subject, body_text, body_html = _apk_texts(record, days)
+        recipients = _recipients(record, instellingen)
+
+        mail_ok = True
+        if recipients:
+            try:
+                _send_mail(recipients, subject, body_text, body_html, profile_id=profile_id)
+            except Exception as exc:  # noqa: BLE001
+                mail_ok = False
+                fouten.append(f'{record.vehicle.kenteken}: {exc}')
+                logger.warning('APK-herinnering mislukt voor %s: %s', record.vehicle.kenteken, exc)
+
+        _apk_notify_in_app(
+            record,
+            _inbox_users(record, instellingen),
+            title=subject,
+            body=f'De APK van {record.vehicle.kenteken} verloopt op {record.expiry_date.strftime("%d-%m-%Y")}.',
         )
 
         if mail_ok:

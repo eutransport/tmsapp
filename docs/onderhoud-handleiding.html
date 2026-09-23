@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Onderhoud &amp; Keuringen — APK, ADR en brandblussers</title>
+<style>
+  /* Onderaan blijft ruimte vrij voor de voettekst; de omslag loopt wel door tot de rand. */
+  @page { size: A4; margin: 0 0 18mm 0; }
+  @page :first { margin: 0; }
+
+  :root {
+    --indigo: #4338ca;
+    --indigo-licht: #eef2ff;
+    --inkt: #0f172a;
+    --grijs: #475569;
+    --lijn: #e2e8f0;
+    --rood: #dc2626;
+    --amber: #b45309;
+    --groen: #15803d;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: "Segoe UI", -apple-system, Roboto, Arial, sans-serif;
+    color: var(--inkt);
+    font-size: 11.2pt;
+    line-height: 1.62;
+  }
+
+  p { margin: 0 0 11px; orphans: 3; widows: 3; }
+  li { orphans: 3; widows: 3; }
+  strong { font-weight: 650; }
+
+  /* ---------- omslag ---------- */
+  .omslag {
+    height: 281mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    page-break-after: always;
+    background: linear-gradient(150deg, #312e81 0%, #4338ca 55%, #6366f1 100%);
+    color: #fff;
+    padding: 0 22mm;
+  }
+  .omslag .label {
+    font-size: 11pt;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    opacity: .75;
+    margin-bottom: 18px;
+  }
+  .omslag h1 {
+    font-size: 36pt;
+    line-height: 1.12;
+    margin: 0 0 20px;
+    font-weight: 700;
+  }
+  .omslag .onder {
+    font-size: 14pt;
+    opacity: .92;
+    max-width: 135mm;
+    line-height: 1.55;
+  }
+  .omslag .voet {
+    margin-top: 42px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,.28);
+    font-size: 10.5pt;
+    opacity: .8;
+  }
+
+  /* ---------- koppen ---------- */
+  h2 {
+    font-size: 19pt;
+    margin: 0 0 6px;
+    color: var(--inkt);
+    page-break-after: avoid;
+  }
+  h2 .nr {
+    display: inline-block;
+    min-width: 34px;
+    height: 34px;
+    line-height: 34px;
+    text-align: center;
+    background: var(--indigo);
+    color: #fff;
+    border-radius: 9px;
+    font-size: 14pt;
+    margin-right: 12px;
+    vertical-align: 2px;
+  }
+  h3 {
+    font-size: 13pt;
+    margin: 24px 0 8px;
+    color: #1e1b4b;
+    page-break-after: avoid;
+    page-break-inside: avoid;
+  }
+  /* Een kop mag nooit los onderaan een pagina eindigen. */
+  h2 + p, h3 + p, h3 + table, h3 + ol, h3 + ul, h3 + figure { page-break-before: avoid; }
+  .lead {
+    color: var(--grijs);
+    font-size: 11.5pt;
+    margin: 0 0 22px;
+    padding-bottom: 14px;
+    border-bottom: 2px solid var(--lijn);
+  }
+
+  section {
+    page-break-before: always;
+    padding: 16mm 16mm 0;
+  }
+  section.eerste { page-break-before: avoid; }
+
+  /* ---------- beeld ---------- */
+  figure {
+    margin: 18px 0 22px;
+    page-break-inside: avoid;
+  }
+  figure img {
+    width: 100%;
+    display: block;
+    border: 1px solid var(--lijn);
+    border-radius: 8px;
+  }
+  figure img.smal { width: 82%; margin: 0 auto; }
+  figcaption {
+    margin-top: 8px;
+    font-size: 9.6pt;
+    color: var(--grijs);
+    font-style: italic;
+    text-align: center;
+  }
+
+  /* ---------- blokken ---------- */
+  .kader {
+    background: var(--indigo-licht);
+    border-left: 4px solid var(--indigo);
+    border-radius: 0 8px 8px 0;
+    padding: 13px 18px;
+    margin: 18px 0;
+    page-break-inside: avoid;
+  }
+  .kader p:last-child { margin-bottom: 0; }
+  .kader .titel {
+    font-weight: 700;
+    color: #312e81;
+    margin-bottom: 5px;
+  }
+
+  .stappen {
+    counter-reset: stap;
+    list-style: none;
+    padding: 0;
+    margin: 16px 0 20px;
+    page-break-inside: avoid;
+  }
+  .stappen li {
+    counter-increment: stap;
+    position: relative;
+    padding: 0 0 0 40px;
+    margin-bottom: 11px;
+    page-break-inside: avoid;
+  }
+  .stappen li::before {
+    content: counter(stap);
+    position: absolute;
+    left: 0;
+    top: 1px;
+    width: 26px;
+    height: 26px;
+    line-height: 26px;
+    text-align: center;
+    border-radius: 50%;
+    background: var(--indigo);
+    color: #fff;
+    font-size: 10pt;
+    font-weight: 700;
+  }
+
+  ul.punten { padding-left: 20px; margin: 12px 0 18px; }
+  ul.punten li { margin-bottom: 7px; page-break-inside: avoid; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 22px;
+    font-size: 10.3pt;
+    page-break-inside: avoid;
+  }
+  th {
+    background: #f1f5f9;
+    text-align: left;
+    padding: 9px 11px;
+    border-bottom: 2px solid var(--lijn);
+    font-size: 9.6pt;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #334155;
+  }
+  td {
+    padding: 9px 11px;
+    border-bottom: 1px solid var(--lijn);
+    vertical-align: top;
+  }
+
+  .pil {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 9.4pt;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .pil.rood   { background: #fee2e2; color: var(--rood); }
+  .pil.amber  { background: #fef3c7; color: var(--amber); }
+  .pil.geel   { background: #fefce8; color: #a16207; }
+  .pil.groen  { background: #dcfce7; color: var(--groen); }
+
+  .slot {
+    margin-top: 26px;
+    padding: 20px 24px;
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 10px;
+    page-break-inside: avoid;
+  }
+  .slot .titel { color: #fff; font-size: 13pt; font-weight: 700; margin-bottom: 8px; }
+  .slot p:last-child { margin-bottom: 0; }
+
+  .inhoud li { margin-bottom: 9px; }
+  .inhoud .hst { font-weight: 650; }
+  .inhoud .sub { color: var(--grijs); font-size: 10.3pt; }
+</style>
+</head>
+<body>
+
+<!-- ======================= OMSLAG ======================= -->
+<div class="omslag">
+  <div class="label">Handleiding voor onze opdrachtgevers</div>
+  <h1>Onderhoud &amp;<br>Keuringen</h1>
+  <div class="onder">
+    Hoe wij de APK, de ADR-controle en de brandblussers van elke wagen
+    bewaken — en hoe ons systeem ons op tijd waarschuwt.
+  </div>
+  <div class="voet">
+    Moveo B.V. &middot; Transport Management Systeem<br>
+    Alle kentekens, datums, namen, e-mailadressen en bedrijfsnamen in deze handleiding zijn
+    verzonnen voorbeelden uit onze testomgeving.
+  </div>
+</div>
+
+<!-- ======================= INLEIDING ======================= -->
+<section class="eerste">
+  <h2><span class="nr">1</span>Waarom wij dit bijhouden</h2>
+  <p class="lead">Een wagen zonder geldige APK mag de weg niet op. Een trekker zonder geldige
+  ADR-controle mag geen gevaarlijke stoffen vervoeren. Een blusser die over datum is, telt bij een
+  controle niet mee. Daar willen wij nooit achter komen op het moment dat de chauffeur al onderweg is.</p>
+
+  <p>Daarom houden wij van elke wagen in ons systeem bij wanneer de keuringen aflopen. Niet in een
+  map, niet in een los spreadsheet, maar in hetzelfde systeem waarin wij plannen en factureren. Zo
+  kijkt iedereen naar hetzelfde overzicht en kan er niets tussen wal en schip vallen.</p>
+
+  <p>Het systeem doet drie dingen voor ons:</p>
+  <ul class="punten">
+    <li><strong>Het telt af.</strong> Bij elke wagen staat hoeveel dagen een keuring nog geldig is.</li>
+    <li><strong>Het waarschuwt.</strong> Ruim voor de vervaldatum krijgen de verantwoordelijke
+        collega's een e-mail én een melding in de app. Is de datum toch gepasseerd, dan blijft die
+        melding elke dag terugkomen tot het geregeld is.</li>
+    <li><strong>Het laat niets los.</strong> Een keuring verdwijnt pas uit de waarschuwingen als er
+        een nieuwe datum is ingevuld. Wegklikken helpt niet.</li>
+  </ul>
+
+  <div class="kader">
+    <div class="titel">Wat u hiervan merkt</div>
+    <p>U merkt er idealiter niets van — en dat is precies de bedoeling. De wagens die voor u rijden,
+    zijn gekeurd, hebben een geldige ADR-controle en de brandblussers aan boord zijn in orde. Deze
+    handleiding laat zien hoe wij dat borgen.</p>
+  </div>
+
+  <h3>Wat u in deze handleiding vindt</h3>
+  <ul class="inhoud punten">
+    <li><span class="hst">2. Het onderhoudsscherm in één oogopslag</span><br>
+        <span class="sub">Waar wij elke ochtend als eerste naar kijken.</span></li>
+    <li><span class="hst">3. APK — de periodieke keuring</span><br>
+        <span class="sub">De aftelklok per wagen, de herinneringen en hoe een nieuwe keuring wordt vastgelegd.</span></li>
+    <li><span class="hst">4. ADR — vervoer van gevaarlijke stoffen</span><br>
+        <span class="sub">Per wagen een controleregel met eigen vervaldatum en eigen ontvangers.</span></li>
+    <li><span class="hst">5. Brandblussers — per blusser, niet per wagen</span><br>
+        <span class="sub">Elke blusser krijgt een eigen regel met plaats, serienummer en datum.</span></li>
+    <li><span class="hst">6. Hoe wij op de hoogte worden gebracht</span><br>
+        <span class="sub">De e-mail, de melding in de app en het ritme van de herinneringen.</span></li>
+    <li><span class="hst">7. De instellingen achter de schermen</span><br>
+        <span class="sub">Wie de meldingen krijgt en op welk tijdstip ze verstuurd worden.</span></li>
+  </ul>
+</section>
+
+<!-- ======================= 2. DASHBOARD ======================= -->
+<section>
+  <h2><span class="nr">2</span>Het onderhoudsscherm in één oogopslag</h2>
+  <p class="lead">Dit is het scherm waar wij beginnen. Bovenin staat hoeveel onderhoudsklussen er
+  openstaan en hoeveel er in uitvoering zijn. Daaronder staat het blok dat er voor deze handleiding
+  het meest toe doet: <strong>Verloopt binnenkort</strong>.</p>
+
+  <figure>
+    <img src="handleiding-img/01-onderhoud-dashboard.png" alt="Het onderhoudsscherm">
+    <figcaption>Het onderhoudsscherm. Links de menubalk, rechtsboven het belletje met openstaande meldingen.</figcaption>
+  </figure>
+
+  <h3>Het blok "Verloopt binnenkort"</h3>
+  <p>In dit ene blok staan de APK's, de ADR-controles en de brandblussers bij elkaar. Geen drie
+  aparte lijstjes, maar één lijst met alles wat binnen dertig dagen afloopt. Wat al verlopen is,
+  staat bovenaan. In de kop van het blok staat een rode teller met het aantal zaken dat echt te laat is.</p>
+
+  <figure>
+    <img src="handleiding-img/02-verloopt-binnenkort.png" alt="Het blok Verloopt binnenkort">
+    <figcaption>Elke regel toont het kenteken, om welke keuring het gaat, de route, de datum en het aantal dagen.</figcaption>
+  </figure>
+
+  <p>De kleur van het bolletje rechts zegt in één oogopslag hoe dringend het is:</p>
+
+  <table>
+    <tr>
+      <th style="width:26%">Kleur</th>
+      <th>Betekenis</th>
+    </tr>
+    <tr>
+      <td><span class="pil rood">Verlopen</span></td>
+      <td>De datum is gepasseerd. Deze wagen moet nu geregeld worden.</td>
+    </tr>
+    <tr>
+      <td><span class="pil amber">4d</span></td>
+      <td>Nog een paar dagen. Er moet nú een afspraak staan.</td>
+    </tr>
+    <tr>
+      <td><span class="pil geel">19d</span></td>
+      <td>Binnen een maand. Inplannen in overleg met de planning.</td>
+    </tr>
+    <tr>
+      <td><span class="pil groen">96d</span></td>
+      <td>Ruim op tijd. Geen actie nodig.</td>
+    </tr>
+  </table>
+
+  <div class="kader">
+    <div class="titel">Doorklikken werkt</div>
+    <p>Klikt u op een regel in dit blok, dan springt het systeem direct naar de bijbehorende
+    beheerpagina — naar de APK-lijst, de ADR-lijst of de brandblussers. U hoeft dus niet zelf te
+    gaan zoeken welke wagen bedoeld wordt.</p>
+  </div>
+</section>
+
+<!-- ======================= 3. APK ======================= -->
+<section>
+  <h2><span class="nr">3</span>APK — de periodieke keuring</h2>
+  <p class="lead">Van elke wagen in de vloot staat de APK-vervaldatum vast in het systeem. Het scherm
+  APK Beheer toont die als een wand van kaartjes, gesorteerd op wie het eerst aan de beurt is.</p>
+
+  <figure>
+    <img src="handleiding-img/03-apk-beheer.png" alt="Het scherm APK Beheer met de countdown">
+    <figcaption>APK Beheer. Elk kaartje is één wagen: kenteken, type, opdrachtgever, vervaldatum en het aantal resterende dagen.</figcaption>
+  </figure>
+
+  <p>De volgorde is bewust zo gekozen: linksboven staat de wagen die als eerste aan de beurt is,
+  rechtsonder die met de meeste speling. Wie het scherm opent, ziet dus meteen waar het knelt zonder
+  te hoeven filteren of sorteren.</p>
+
+  <h3>Wanneer het systeem begint te waarschuwen</h3>
+  <table>
+    <tr>
+      <th style="width:30%">Nog te gaan</th>
+      <th>Wat er gebeurt</th>
+    </tr>
+    <tr>
+      <td>Meer dan 30 dagen</td>
+      <td>Groen. Het kaartje staat er gewoon, verder niets.</td>
+    </tr>
+    <tr>
+      <td>30 tot 14 dagen</td>
+      <td>Geel. De wagen verschijnt in het blok "Verloopt binnenkort" én er gaat een eerste
+          herinnering uit per mail en in de app.</td>
+    </tr>
+    <tr>
+      <td>14 dagen of minder</td>
+      <td>Oranje. Vanaf hier komt de herinnering <strong>elke dag</strong> terug. Dit is het moment
+          waarop er een afspraak moet staan.</td>
+    </tr>
+    <tr>
+      <td>Datum gepasseerd</td>
+      <td>Rood, met het label <strong>Verlopen</strong>. De wagen springt naar boven in de lijst en
+          de dagelijkse herinnering blijft komen.</td>
+    </tr>
+  </table>
+
+  <h3>Wie er bericht krijgt</h3>
+  <p>Net als bij ADR en de brandblussers kunt u per keuring aanvinken welke collega's een bericht
+  moeten krijgen. Vult u dat niet in, dan pakt het systeem de standaardontvangers uit de
+  APK-instellingen — te openen via de knop <strong>Instellingen</strong> rechtsboven in het scherm.
+  Hoofdstuk 7 laat dat scherm zien.</p>
+
+  <h3>Een nieuwe keuring vastleggen</h3>
+  <ol class="stappen">
+    <li>Open <strong>Onderhoud → APK Beheer</strong>.</li>
+    <li>Klik rechtsboven op <strong>Nieuwe keuring</strong>, of klik op het kaartje van de wagen om de
+        bestaande datum bij te werken.</li>
+    <li>Vul de datum in waarop de wagen is goedgekeurd en de datum waarop de keuring verloopt.</li>
+    <li>Sla op. Het kaartje verschuift meteen naar de juiste plek in de lijst en kleurt weer groen.</li>
+  </ol>
+
+  <div class="kader">
+    <div class="titel">De keuringshistorie blijft bewaard</div>
+    <p>Bovenin het scherm staat naast <em>Countdown</em> ook het tabblad <em>Keuringshistorie</em>.
+    Daar staan alle eerdere keuringen van een wagen. Wilt u weten wanneer een bepaalde wagen de
+    afgelopen jaren gekeurd is, dan is dat terug te halen.</p>
+  </div>
+</section>
+
+<!-- ======================= 4. ADR ======================= -->
+<section>
+  <h2><span class="nr">4</span>ADR — vervoer van gevaarlijke stoffen</h2>
+  <p class="lead">Voor het vervoer van gevaarlijke stoffen gelden aparte eisen. Wij leggen per wagen
+  een ADR-regel vast met een eigen vervaldatum, een eigen omschrijving en een eigen lijst van
+  collega's die gewaarschuwd moeten worden.</p>
+
+  <figure>
+    <img src="handleiding-img/04-adr-beheer.png" alt="Het scherm ADR Beheer">
+    <figcaption>ADR Beheer. Per regel: kenteken, route, omschrijving, laatst gekeurd, vervaldatum, resterende dagen en wie er bericht krijgt.</figcaption>
+  </figure>
+
+  <h3>Waarom een aparte lijst per wagen</h3>
+  <p>Niet elke wagen rijdt ADR, en niet elke ADR-verplichting loopt op dezelfde datum af. Door er
+  losse regels van te maken kunnen wij per wagen vastleggen waar het precies om gaat — de
+  ADR-keuring zelf, de blusuitrusting, de documentatie — en kan elke regel zijn eigen
+  vervaldatum en eigen ontvangers hebben.</p>
+
+  <figure>
+    <img src="handleiding-img/11-adr-formulier.png" alt="Het formulier voor een nieuwe ADR-regel">
+    <figcaption>Een nieuwe ADR-regel aanmaken: wagen kiezen, omschrijving, gekeurd op, vervaldatum en de ontvangers.</figcaption>
+  </figure>
+
+  <ol class="stappen">
+    <li>Kies de <strong>wagen</strong>. De route wordt automatisch overgenomen uit de vlootgegevens.</li>
+    <li>Beschrijf kort <strong>waar het om gaat</strong>, bijvoorbeeld "ADR-keuring tank" of
+        "ADR-uitrusting cabine".</li>
+    <li>Vul <strong>gekeurd op</strong> en <strong>vervaldatum</strong> in.</li>
+    <li>Vink aan <strong>wie er bericht moet krijgen</strong>. Laat u dit leeg, dan gebruikt het
+        systeem de standaardontvangers uit de instellingen.</li>
+    <li>Eventueel kunt u <strong>extra e-mailadressen</strong> toevoegen van mensen die geen account
+        in het systeem hebben, bijvoorbeeld een externe keuringsinstantie.</li>
+  </ol>
+
+  <div class="kader">
+    <div class="titel">Voor ADR gelden strakkere grenzen dan voor de APK</div>
+    <p>Een ADR-regel wordt al oranje bij <strong>veertien dagen</strong> en rood bij
+    <strong>zeven dagen</strong>. De reden is simpel: een ADR-controle is lastiger op korte termijn
+    in te plannen dan een APK, dus bouwen wij meer marge in.</p>
+  </div>
+</section>
+
+<!-- ======================= 5. BRANDBLUSSERS ======================= -->
+<section>
+  <h2><span class="nr">5</span>Brandblussers — per blusser, niet per wagen</h2>
+  <p class="lead">Een trekker met oplegger heeft vaak meerdere blussers aan boord, en die zijn
+  zelden op dezelfde dag gekeurd. Daarom legt ons systeem <strong>elke blusser apart</strong> vast:
+  met een eigen nummer, een eigen plaats op de wagen, een eigen serienummer en een eigen vervaldatum.</p>
+
+  <figure>
+    <img src="handleiding-img/05-brandblussers-lijst.png" alt="De lijst met brandblussers">
+    <figcaption>De brandblusserlijst. Eén regel per blusser, gesorteerd op wie het eerst verloopt.</figcaption>
+  </figure>
+
+  <p>In de lijst staat per blusser:</p>
+  <ul class="punten">
+    <li><strong>Kenteken en route</strong> — bij welke wagen de blusser hoort.</li>
+    <li><strong>Blussernummer</strong> — #1, #2, #3, zodat duidelijk is welke van de blussers bedoeld wordt.</li>
+    <li><strong>Plaats op de wagen</strong> — bijvoorbeeld "Cabine, naast bestuurdersstoel" of
+        "Achterzijde oplegger". Zo weet de monteur meteen waar hij moet zijn.</li>
+    <li><strong>Serienummer</strong> — het nummer op de blusser zelf, zodat er geen verwisseling ontstaat.</li>
+    <li><strong>Gekeurd op en vervaldatum</strong>, met het aantal resterende dagen ernaast.</li>
+    <li><strong>Notificatie naar</strong> — wie er bericht krijgt als deze blusser verloopt.</li>
+  </ul>
+
+  <h3>Meerdere blussers in één keer invoeren</h3>
+  <p>Komt een wagen terug van de blusserkeuring, dan hoeft er niet drie keer een formulier ingevuld
+  te worden. U kiest de wagen, geeft aan hoeveel blussers er aan boord zijn, en het systeem zet het
+  juiste aantal invulblokken klaar.</p>
+
+  <figure>
+    <img src="handleiding-img/07-blusser-formulier.png" alt="Het formulier voor nieuwe brandblussers">
+    <figcaption>Na het kiezen van de wagen en het aantal verschijnen er net zoveel invulblokken.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="handleiding-img/08-blusser-formulier-ingevuld.png" alt="Het ingevulde formulier">
+    <figcaption>Drie blussers op één wagen, elk met een eigen plaats, serienummer en vervaldatum.</figcaption>
+  </figure>
+
+  <p>Onderaan hetzelfde formulier staat wie er bericht krijgt zodra een van deze blussers bijna
+  verloopt. Onder de lijst staat letterlijk: <em>"Deze gebruikers krijgen vanaf 2 weken voor de
+  vervaldatum een mail en een melding in de app."</em></p>
+
+  <figure>
+    <img src="handleiding-img/09-blusser-ontvangers.png" alt="De ontvangers onderaan het formulier">
+    <figcaption>De ontvangers worden per regel vastgelegd, met de mogelijkheid extra adressen toe te voegen.</figcaption>
+  </figure>
+
+  <div class="kader">
+    <div class="titel">Waarom zoveel detail?</div>
+    <p>Omdat bij een controle langs de weg niet gevraagd wordt of "de blussers in orde zijn", maar
+    gekeken wordt naar de sticker op díé ene blusser. Door plaats en serienummer vast te leggen,
+    kunnen wij bij elke melding precies benoemen welke blusser vervangen of gekeurd moet worden.</p>
+  </div>
+</section>
+
+<!-- ======================= 6. MELDINGEN ======================= -->
+<section>
+  <h2><span class="nr">6</span>Hoe wij op de hoogte worden gebracht</h2>
+  <p class="lead">Een aftelklok in een scherm helpt alleen als iemand dat scherm opent. Daarom stuurt
+  het systeem de waarschuwing actief naar ons toe, langs twee wegen tegelijk: een e-mail en een
+  melding in de app.</p>
+
+  <h3>De e-mail</h3>
+  <p>Elke ochtend om <strong>07:00 uur</strong> kijkt het systeem de hele vloot na. Alles wat binnen
+  de waarschuwingstermijn valt of al verlopen is, levert een e-mail op. Die mail is bewust kort en
+  concreet — geen tabel met vijftig regels, maar één bericht per zaak die aandacht nodig heeft.</p>
+
+  <figure>
+    <img src="handleiding-img/16-mail-apk.png" alt="Voorbeeld van een APK-herinnering per e-mail">
+    <figcaption>Voorbeeld van een APK-herinnering. In de mail staan het kenteken, het type, de route,
+    het keuringsstation en beide datums.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="handleiding-img/13-mail-adr.png" alt="Voorbeeld van een ADR-herinnering per e-mail">
+    <figcaption>Voorbeeld van een ADR-herinnering. Onderwerp, wagen, omschrijving, datums en een knop naar het systeem.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="handleiding-img/14-mail-blusser.png" alt="Voorbeeld van een brandblusserherinnering per e-mail">
+    <figcaption>Bij een brandblusser staan ook het blussernummer, de plaats op de wagen en het serienummer in de mail.</figcaption>
+  </figure>
+
+  <p>De knop onderaan brengt de ontvanger met één klik naar de juiste regel in het systeem. Er hoeft
+  dus niemand te zoeken welke wagen bedoeld werd.</p>
+
+  <h3>De melding in de app</h3>
+  <p>Dezelfde waarschuwing komt binnen in het postvak in het systeem zelf, achter het belletje
+  rechtsboven. Het rode cijfer geeft aan hoeveel meldingen er nog openstaan. Zo ziet iedereen die
+  inlogt meteen dat er iets ligt, ook wie zijn mail nog niet heeft gelezen.</p>
+
+  <figure>
+    <img src="handleiding-img/10-meldingen-postvak.png" alt="Het meldingenpostvak in het systeem">
+    <figcaption>Het postvak achter het belletje, met APK, ADR en brandblussers door elkaar. Elke
+    melding vermeldt de wagen en waar het om gaat.</figcaption>
+  </figure>
+
+  <h3>Het ritme van de herinneringen</h3>
+  <p>Alle drie de onderdelen werken volgens hetzelfde principe: eerst één keer een vooraankondiging,
+  daarna dagelijks tot het geregeld is. Alleen de termijnen verschillen.</p>
+
+  <table>
+    <tr>
+      <th style="width:26%">Onderdeel</th>
+      <th style="width:30%">Eerste herinnering</th>
+      <th>Daarna elke dag vanaf</th>
+    </tr>
+    <tr>
+      <td><strong>APK</strong></td>
+      <td>30 dagen voor de vervaldatum</td>
+      <td>14 dagen voor de vervaldatum</td>
+    </tr>
+    <tr>
+      <td><strong>ADR</strong></td>
+      <td>14 dagen voor de vervaldatum</td>
+      <td>7 dagen voor de vervaldatum</td>
+    </tr>
+    <tr>
+      <td><strong>Brandblussers</strong></td>
+      <td>14 dagen voor de vervaldatum</td>
+      <td>7 dagen voor de vervaldatum</td>
+    </tr>
+  </table>
+
+  <table>
+    <tr>
+      <th style="width:34%">Moment</th>
+      <th>Wat er gebeurt</th>
+    </tr>
+    <tr>
+      <td>De eerste waarschuwing</td>
+      <td>Eén bericht per mail en in de app, zodat de afspraak ingepland kan worden.</td>
+    </tr>
+    <tr>
+      <td>De laatste twee weken (APK) of<br>de laatste week (ADR en blussers)</td>
+      <td>De herinnering komt <strong>elke dag</strong> opnieuw.</td>
+    </tr>
+    <tr>
+      <td>Na de vervaldatum</td>
+      <td>De herinnering blijft <strong>dagelijks</strong> komen, met de tekst hoeveel dagen het
+          inmiddels te laat is.</td>
+    </tr>
+    <tr>
+      <td>Na het invullen van de nieuwe datum</td>
+      <td>De herinneringen stoppen vanzelf. Er hoeft niets weggeklikt of afgevinkt te worden.</td>
+    </tr>
+  </table>
+
+  <div class="kader">
+    <div class="titel">Een melding kan niet in het niets verdwijnen</div>
+    <p>Staat er bij een regel per ongeluk niemand als ontvanger ingesteld, én zijn er ook geen
+    standaardontvangers ingevuld, dan valt de waarschuwing niet stil. In dat geval krijgt
+    <strong>iedereen met toegang tot de onderhoudsmodule</strong> de melding in zijn postvak. Er is
+    dus altijd iemand die het ziet.</p>
+  </div>
+</section>
+
+<!-- ======================= 7. INSTELLINGEN ======================= -->
+<section>
+  <h2><span class="nr">7</span>De instellingen achter de schermen</h2>
+  <p class="lead">APK, ADR en brandblussers hebben elk een eigen instellingenscherm. Die zijn bewust
+  identiek opgebouwd. Daarin ligt vast wanneer de herinneringen uitgaan en wie ze standaard ontvangt.</p>
+
+  <figure>
+    <img src="handleiding-img/15-apk-instellingen.png" alt="Het instellingenscherm voor de APK">
+    <figcaption>De APK-instellingen: verzendtijd, standaardontvangers en extra e-mailadressen.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="handleiding-img/06-adr-instellingen.png" alt="Het instellingenscherm voor ADR">
+    <figcaption>De ADR-instellingen: dezelfde opzet, eigen ontvangers.</figcaption>
+  </figure>
+
+  <ul class="punten">
+    <li><strong>Verzenden vanaf</strong> — vanaf welk e-mailadres de herinneringen verstuurd worden.</li>
+    <li><strong>Verzendtijd</strong> — het tijdstip waarop de dagelijkse ronde draait. Bij ons staat
+        dat op 07:00 uur, zodat de meldingen er liggen voordat de eerste wagens vertrekken.</li>
+    <li><strong>Standaard ontvangers</strong> — deze collega's worden automatisch voorgevuld bij een
+        nieuwe regel, en gebruikt als een regel zelf geen ontvangers heeft.</li>
+    <li><strong>Standaard extra e-mailadressen</strong> — adressen buiten het systeem die altijd
+        meegenomen moeten worden, bijvoorbeeld de planning of een externe werkplaats.</li>
+  </ul>
+
+  <figure>
+    <img src="handleiding-img/12-blusser-instellingen.png" alt="Het instellingenscherm voor brandblussers">
+    <figcaption>Dezelfde opzet voor de brandblussers — en voor de APK — zodat alle drie de modules
+    zich hetzelfde gedragen.</figcaption>
+  </figure>
+
+  <p>Onderaan het instellingenscherm staat ook wanneer de laatste ronde is gedraaid. Daarmee kunnen
+  wij controleren dat het systeem daadwerkelijk elke dag heeft gekeken — en niet stilletjes is
+  blijven staan.</p>
+
+  <div class="slot">
+    <div class="titel">Wat dit voor u betekent</div>
+    <p>Wij wachten niet tot een keuring verloopt en gaan er ook niet vanuit dat iemand het wel
+    onthoudt. Elke wagen die voor u rijdt, staat in een systeem dat dagelijks meekijkt, dat
+    waarschuwt voordat het misgaat, en dat blijft doorwaarschuwen tot het is opgelost.</p>
+    <p>Heeft u vragen over de keuringsstatus van een specifieke wagen, dan kunnen wij die binnen
+    enkele seconden opzoeken en aan u doorgeven.</p>
+  </div>
+</section>
+
+</body>
+</html>

@@ -323,6 +323,23 @@ class APKRecord(models.Model):
         verbose_name='Huidige APK',
         help_text='Is dit de meest recente APK voor dit voertuig?'
     )
+
+    notify_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='apk_notifications',
+        verbose_name='Notificatie naar'
+    )
+    notify_extra_emails = models.JSONField(
+        default=list, blank=True,
+        verbose_name='Extra e-mailadressen',
+        help_text='Losse adressen die naast de gekozen gebruikers een herinnering krijgen.'
+    )
+    last_reminder_sent_on = models.DateField(
+        null=True, blank=True,
+        verbose_name='Laatste herinnering',
+        help_text='Datum waarop voor het laatst een herinnering is verstuurd.'
+    )
     
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -389,6 +406,70 @@ class APKRecord(models.Model):
                 self.status = APKStatus.FAILED
         
         super().save(*args, **kwargs)
+
+
+class APKSettings(models.Model):
+    """Instellingen voor de APK-herinneringen (singleton).
+
+    Werkt hetzelfde als de ADR- en brandblusserinstellingen, zodat de drie
+    onderdelen van het onderhoudsmodule zich op dezelfde manier gedragen.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email_profile = models.ForeignKey(
+        'core.EmailProfile',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='apk_settings',
+        verbose_name='Verzend-account',
+        help_text='Leeg = de algemene SMTP-instellingen gebruiken.'
+    )
+    send_hour = models.PositiveSmallIntegerField(
+        default=6,
+        validators=[MinValueValidator(0), MaxValueValidator(23)],
+        verbose_name='Verzenduur'
+    )
+    send_minute = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(59)],
+        verbose_name='Verzendminuut'
+    )
+    default_notify_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='apk_default_notifications',
+        verbose_name='Standaard ontvangers'
+    )
+    default_notify_extra_emails = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Standaard extra e-mailadressen'
+    )
+    last_run_on = models.DateField(null=True, blank=True, verbose_name='Laatste run op')
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_apk_settings'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'APK Instellingen'
+        verbose_name_plural = 'APK Instellingen'
+
+    def __str__(self):
+        return f"APK instellingen ({self.send_hour:02d}:{self.send_minute:02d})"
+
+    @classmethod
+    def get_settings(cls):
+        """Haal de instellingen op en maak ze aan als ze nog niet bestaan."""
+        obj = cls.objects.first()
+        if obj is None:
+            obj = cls.objects.create()
+        return obj
 
 
 # =============================================================================

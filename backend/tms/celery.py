@@ -41,6 +41,11 @@ app.conf.beat_schedule = {
         'task': 'apps.maintenance.tasks.send_fire_extinguisher_reminders',
         'schedule': crontab(minute='*/15'),
     },
+    'send-apk-reminders': {
+        # Zelfde ritme als ADR en de brandblussers.
+        'task': 'apps.maintenance.tasks.send_apk_reminders',
+        'schedule': crontab(minute='*/15'),
+    },
     'pakmiddelen-scheduled-check': {
         'task': 'apps.pakmiddelen.tasks.run_scheduled_check',
         'schedule': crontab(minute='*'),

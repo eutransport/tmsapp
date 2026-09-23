@@ -9,6 +9,7 @@ import {
   VehicleMaintenanceProfile,
   APKRecord,
   APKCountdown,
+  APKSettings,
   ADRRecord,
   ADRSettings,
   FireExtinguisherRecord,
@@ -185,6 +186,24 @@ export async function renewAPK(id: string, data: { inspection_date: string; expi
 
 export async function getAPKHistory(vehicleId: string): Promise<APKRecord[]> {
   const response = await api.get(`${BASE}/apk/history/?vehicle_id=${vehicleId}`)
+  return response.data
+}
+
+export type APKSettingsPayload = {
+  email_profile: string | null
+  send_hour: number
+  send_minute: number
+  default_notify_users: string[]
+  default_notify_extra_emails: string[]
+}
+
+export async function getAPKSettings(): Promise<APKSettings> {
+  const response = await api.get(`${BASE}/apk-settings/`)
+  return response.data
+}
+
+export async function updateAPKSettings(data: APKSettingsPayload): Promise<APKSettings> {
+  const response = await api.put(`${BASE}/apk-settings/`, data)
   return response.data
 }
 

@@ -13,17 +13,24 @@ import {
   XMarkIcon,
   ChevronUpIcon,
   ChevronDownIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline'
-import { APKRecord, APKCountdown, Vehicle } from '@/types'
+import { APKRecord, APKCountdown, APKSettings, User, Vehicle } from '@/types'
 import {
   getAPKRecords,
   getAPKCountdown,
   createAPKRecord,
   deleteAPKRecord,
   renewAPK,
+  getAPKSettings,
+  updateAPKSettings,
   APKFilters,
+  APKSettingsPayload,
 } from '@/api/maintenance'
 import { getAllVehicles } from '@/api/fleet'
+import { getUsers } from '@/api/users'
+import { listEmailProfiles, EmailProfile } from '@/api/emailProfiles'
+import { useAuthStore } from '@/stores/authStore'
 import LicensePlate from '@/components/common/LicensePlate'
 import Pagination, { PageSize } from '@/components/common/Pagination'
 
@@ -53,9 +60,15 @@ function Modal({ isOpen, onClose, title, children, size = 'md' }: {
 
 export default function APKPage() {
   const { t } = useTranslation()
+  const { user } = useAuthStore()
+  const isAdmin = user?.rol === 'admin'
   const [countdowns, setCountdowns] = useState<APKCountdown[]>([])
   const [records, setRecords] = useState<APKRecord[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [users, setUsers] = useState<User[]>([])
+  const [settings, setSettings] = useState<APKSettings | null>(null)
+  const [emailProfiles, setEmailProfiles] = useState<EmailProfile[]>([])
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [totalCount, setTotalCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -109,7 +122,30 @@ export default function APKPage() {
       const data = await getAllVehicles()
       setVehicles(data)
     } catch { /* ignore */ }
+
+    try {
+      const userData = await getUsers({ is_active: 'true', page_size: 200, ordering: 'voornaam' })
+      setUsers(userData.results.filter(u => !!u.email))
+    } catch { /* selectielijst is niet kritiek */ }
+
+    try {
+      setSettings(await getAPKSettings())
+    } catch { /* instellingen zijn optioneel voor het overzicht */ }
+
+    try {
+      setEmailProfiles(await listEmailProfiles())
+    } catch { /* alleen nodig voor het instellingenscherm */ }
   }, [])
+
+  const handleSaveSettings = async (data: APKSettingsPayload) => {
+    setIsActionLoading(true)
+    try {
+      setSettings(await updateAPKSettings(data))
+      setShowSettingsModal(false)
+      setSuccessMessage(t('maintenance.apk.settingsSaved'))
+    } catch { setError(t('common.error')) }
+    finally { setIsActionLoading(false) }
+  }
 
   useEffect(() => { fetchCountdowns(); fetchVehicles() }, [fetchCountdowns, fetchVehicles])
   useEffect(() => { fetchRecords() }, [fetchRecords])
@@ -224,13 +260,24 @@ export default function APKPage() {
           </h1>
           <p className="text-gray-500 mt-1">{t('maintenance.apk.subtitle')}</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <PlusIcon className="w-5 h-5" />
-          {t('maintenance.apk.newRecord')}
-        </button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={() => setShowSettingsModal(true)}
+              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center gap-2"
+            >
+              <Cog6ToothIcon className="w-5 h-5" />
+              {t('maintenance.apk.settings')}
+            </button>
+          )}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <PlusIcon className="w-5 h-5" />
+            {t('maintenance.apk.newRecord')}
+          </button>
+        </div>
       </div>
 
       {/* Success/Error messages */}
@@ -473,7 +520,28 @@ export default function APKPage() {
 
       {/* Create Modal */}
       <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title={t('maintenance.apk.newRecord')} size="lg">
-        <APKForm vehicles={vehicles} onSave={handleCreate} onCancel={() => setShowCreateModal(false)} isLoading={isActionLoading} t={t} />
+        <APKForm
+          vehicles={vehicles}
+          users={users}
+          settings={settings}
+          onSave={handleCreate}
+          onCancel={() => setShowCreateModal(false)}
+          isLoading={isActionLoading}
+          t={t}
+        />
+      </Modal>
+
+      {/* Settings Modal */}
+      <Modal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} title={t('maintenance.apk.settingsTitle')} size="lg">
+        <APKSettingsForm
+          settings={settings}
+          users={users}
+          profiles={emailProfiles}
+          onSave={handleSaveSettings}
+          onCancel={() => setShowSettingsModal(false)}
+          isLoading={isActionLoading}
+          t={t}
+        />
       </Modal>
 
       {/* Renew Modal */}
@@ -498,8 +566,14 @@ export default function APKPage() {
 }
 
 // APK Form
-function APKForm({ vehicles, onSave, onCancel, isLoading, t }: {
-  vehicles: Vehicle[]; onSave: (data: Partial<APKRecord>) => void; onCancel: () => void; isLoading: boolean; t: (key: string) => string
+function APKForm({ vehicles, users, settings, onSave, onCancel, isLoading, t }: {
+  vehicles: Vehicle[]
+  users: User[]
+  settings: APKSettings | null
+  onSave: (data: Partial<APKRecord>) => void
+  onCancel: () => void
+  isLoading: boolean
+  t: (key: string) => string
 }) {
   const [formData, setFormData] = useState({
     vehicle: '',
@@ -511,6 +585,20 @@ function APKForm({ vehicles, onSave, onCancel, isLoading, t }: {
     cost: '',
     remarks: '',
   })
+  // Nieuwe keuring? Dan de standaard ontvangers uit de instellingen voorvullen.
+  const [notifyUsers, setNotifyUsers] = useState<string[]>([])
+  const [extraEmails, setExtraEmails] = useState('')
+
+  useEffect(() => {
+    if (settings) {
+      setNotifyUsers(settings.default_notify_users || [])
+      setExtraEmails((settings.default_notify_extra_emails || []).join(', '))
+    }
+  }, [settings])
+
+  const toggleUser = (id: string, aan: boolean) => {
+    setNotifyUsers(prev => (aan ? [...prev, id] : prev.filter(u => u !== id)))
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target
@@ -525,6 +613,8 @@ function APKForm({ vehicles, onSave, onCancel, isLoading, t }: {
     onSave({
       ...formData,
       cost: formData.cost || undefined,
+      notify_users: notifyUsers,
+      notify_extra_emails: extraEmails.split(/[,;\s]+/).map(a => a.trim()).filter(Boolean),
     } as Partial<APKRecord>)
   }
 
@@ -570,6 +660,146 @@ function APKForm({ vehicles, onSave, onCancel, isLoading, t }: {
         <label className="block text-sm font-medium text-gray-700 mb-1">{t('common.notes')}</label>
         <textarea name="remarks" value={formData.remarks} onChange={handleChange} className="input" rows={2} />
       </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('maintenance.apk.notifyTo')}</label>
+        <div className="max-h-44 overflow-y-auto rounded-lg border divide-y">
+          {users.length === 0 ? (
+            <p className="p-3 text-sm text-gray-500">—</p>
+          ) : (
+            users.map(u => (
+              <label key={u.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={notifyUsers.includes(u.id)}
+                  onChange={(e) => toggleUser(u.id, e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="min-w-0 flex-1 truncate text-sm text-gray-900">
+                  {u.full_name || u.email} <span className="text-gray-500">({u.email})</span>
+                </span>
+              </label>
+            ))
+          )}
+        </div>
+        <p className="mt-1 text-xs text-gray-500">{t('maintenance.apk.notifyHint')}</p>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('maintenance.apk.extraEmails')}</label>
+        <input
+          type="text"
+          value={extraEmails}
+          onChange={(e) => setExtraEmails(e.target.value)}
+          placeholder="naam@bedrijf.nl, tweede@bedrijf.nl"
+          className="input"
+        />
+      </div>
+      <div className="flex justify-end gap-3 pt-4 border-t">
+        <button type="button" onClick={onCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200" disabled={isLoading}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn-primary" disabled={isLoading}>
+          {isLoading ? t('common.saving') : t('common.save')}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+/** Instellingen voor de APK-herinneringen: verzendtijd en standaard ontvangers. */
+function APKSettingsForm({ settings, users, profiles, onSave, onCancel, isLoading, t }: {
+  settings: APKSettings | null
+  users: User[]
+  profiles: EmailProfile[]
+  onSave: (data: APKSettingsPayload) => void
+  onCancel: () => void
+  isLoading: boolean
+  t: (key: string) => string
+}) {
+  const [emailProfile, setEmailProfile] = useState(settings?.email_profile || '')
+  const [tijd, setTijd] = useState(
+    `${String(settings?.send_hour ?? 6).padStart(2, '0')}:${String(settings?.send_minute ?? 0).padStart(2, '0')}`
+  )
+  const [defaultUsers, setDefaultUsers] = useState<string[]>(settings?.default_notify_users || [])
+  const [defaultExtra, setDefaultExtra] = useState((settings?.default_notify_extra_emails || []).join(', '))
+
+  const toggleUser = (id: string, aan: boolean) => {
+    setDefaultUsers(prev => (aan ? [...prev, id] : prev.filter(u => u !== id)))
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const [uur, minuut] = tijd.split(':')
+    onSave({
+      email_profile: emailProfile || null,
+      send_hour: Number(uur),
+      send_minute: Number(minuut),
+      default_notify_users: defaultUsers,
+      default_notify_extra_emails: defaultExtra.split(/[,;\s]+/).map(a => a.trim()).filter(Boolean),
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('maintenance.apk.sendAccount')}</label>
+          <select value={emailProfile} onChange={(e) => setEmailProfile(e.target.value)} className="input">
+            <option value="">{t('maintenance.apk.sendAccountDefault')}</option>
+            {profiles.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.smtp_from_email ? ` (${p.smtp_from_email})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('maintenance.apk.sendTime')}</label>
+          <input type="time" value={tijd} onChange={(e) => setTijd(e.target.value)} className="input" required />
+          <p className="mt-1 text-xs text-gray-500">{t('maintenance.apk.sendTimeHint')}</p>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('maintenance.apk.defaultRecipients')}</label>
+        <div className="max-h-44 overflow-y-auto rounded-lg border divide-y">
+          {users.length === 0 ? (
+            <p className="p-3 text-sm text-gray-500">—</p>
+          ) : (
+            users.map(u => (
+              <label key={u.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={defaultUsers.includes(u.id)}
+                  onChange={(e) => toggleUser(u.id, e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="min-w-0 flex-1 truncate text-sm text-gray-900">
+                  {u.full_name || u.email} <span className="text-gray-500">({u.email})</span>
+                </span>
+              </label>
+            ))
+          )}
+        </div>
+        <p className="mt-1 text-xs text-gray-500">{t('maintenance.apk.defaultRecipientsHint')}</p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t('maintenance.apk.defaultExtraEmails')}</label>
+        <input
+          type="text"
+          value={defaultExtra}
+          onChange={(e) => setDefaultExtra(e.target.value)}
+          placeholder="naam@bedrijf.nl, tweede@bedrijf.nl"
+          className="input"
+        />
+      </div>
+
+      {settings?.last_run_on && (
+        <p className="text-xs text-gray-500">
+          {t('maintenance.apk.lastRun')}: {new Date(settings.last_run_on).toLocaleDateString('nl-NL')}
+        </p>
+      )}
+
       <div className="flex justify-end gap-3 pt-4 border-t">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200" disabled={isLoading}>
           {t('common.cancel')}

@@ -8,6 +8,7 @@ from .views import (
     MaintenanceTypeViewSet,
     VehicleMaintenanceProfileViewSet,
     APKRecordViewSet,
+    APKSettingsView,
     ADRRecordViewSet,
     ADRSettingsView,
     FireExtinguisherRecordViewSet,
@@ -46,6 +47,7 @@ router.register(r'obd/devices', OBDDeviceViewSet, basename='obd-devices')
 router.register(r'obd/readings', OBDReadingViewSet, basename='obd-readings')
 
 urlpatterns = [
+    path('apk-settings/', APKSettingsView.as_view(), name='apk-settings'),
     path('adr-settings/', ADRSettingsView.as_view(), name='adr-settings'),
     path('fire-extinguisher-settings/', FireExtinguisherSettingsView.as_view(), name='fire-extinguisher-settings'),
     path('expiring-overview/', ExpiringOverviewView.as_view(), name='expiring-overview'),

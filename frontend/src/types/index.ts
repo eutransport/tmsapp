@@ -662,12 +662,30 @@ export interface APKRecord {
   defects: string
   certificate_file: string | null
   is_current: boolean
+  notify_users: string[]
+  notify_users_detail: ADRNotifyUser[]
+  notify_extra_emails: string[]
+  last_reminder_sent_on: string | null
   days_until_expiry: number
   is_expired: boolean
   countdown_status: string
   created_by: string | null
   created_by_name: string | null
   created_at: string
+  updated_at: string
+}
+
+export interface APKSettings {
+  id: string
+  email_profile: string | null
+  email_profile_name: string | null
+  send_hour: number
+  send_minute: number
+  default_notify_users: string[]
+  default_notify_users_detail: ADRNotifyUser[]
+  default_notify_extra_emails: string[]
+  last_run_on: string | null
+  updated_by_name: string | null
   updated_at: string
 }
 

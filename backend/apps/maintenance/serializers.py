@@ -18,6 +18,7 @@ from .models import (
     MaintenanceType,
     VehicleMaintenanceProfile,
     APKRecord,
+    APKSettings,
     ADRRecord,
     ADRSettings,
     FireExtinguisherRecord,
@@ -114,6 +115,7 @@ class APKRecordSerializer(serializers.ModelSerializer):
     is_expired = serializers.BooleanField(read_only=True)
     countdown_status = serializers.CharField(read_only=True)
     created_by_name = serializers.SerializerMethodField()
+    notify_users_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = APKRecord
@@ -122,10 +124,12 @@ class APKRecordSerializer(serializers.ModelSerializer):
             'inspection_date', 'expiry_date', 'status', 'passed',
             'inspection_station', 'inspector_name', 'mileage_at_inspection',
             'cost', 'remarks', 'defects', 'certificate_file', 'is_current',
+            'notify_users', 'notify_users_detail', 'notify_extra_emails',
+            'last_reminder_sent_on',
             'days_until_expiry', 'is_expired', 'countdown_status',
             'created_by', 'created_by_name', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'last_reminder_sent_on', 'created_at', 'updated_at']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -141,6 +145,39 @@ class APKRecordSerializer(serializers.ModelSerializer):
         if obj.created_by:
             return (obj.created_by.full_name or '').strip() or obj.created_by.email
         return None
+
+    def get_notify_users_detail(self, obj):
+        return [
+            {
+                'id': str(user.id),
+                'naam': user.full_name or user.email,
+                'email': user.email,
+            }
+            for user in obj.notify_users.all()
+        ]
+
+    def validate_notify_extra_emails(self, value):
+        if value in (None, ''):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Verwacht een lijst met e-mailadressen.')
+        schoon = []
+        validator = EmailValidator()
+        for adres in value:
+            adres = str(adres).strip()
+            if not adres:
+                continue
+            validator(adres)
+            if adres not in schoon:
+                schoon.append(adres)
+        return schoon
+
+    def update(self, instance, validated_data):
+        # Vervaldatum opgeschoven? Dan mag de herinnering vandaag weer opnieuw.
+        nieuwe_datum = validated_data.get('expiry_date')
+        if nieuwe_datum and nieuwe_datum != instance.expiry_date:
+            instance.last_reminder_sent_on = None
+        return super().update(instance, validated_data)
 
 
 class APKCountdownSerializer(serializers.ModelSerializer):
@@ -300,6 +337,59 @@ class ADRSettingsSerializer(serializers.ModelSerializer):
             if adres not in schoon:
                 schoon.append(adres)
         return schoon
+
+
+class APKSettingsSerializer(serializers.ModelSerializer):
+    """Instellingen voor de APK-herinneringen.
+
+    Bevat bewust geen SMTP-gegevens: er wordt alleen naar een bestaand
+    e-mailprofiel verwezen, zodat wachtwoorden nooit via deze API gaan.
+    """
+    email_profile_name = serializers.SerializerMethodField(read_only=True)
+    default_notify_users_detail = serializers.SerializerMethodField(read_only=True)
+    updated_by_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = APKSettings
+        fields = [
+            'id', 'email_profile', 'email_profile_name',
+            'send_hour', 'send_minute',
+            'default_notify_users', 'default_notify_users_detail',
+            'default_notify_extra_emails',
+            'last_run_on', 'updated_by_name', 'updated_at',
+        ]
+        read_only_fields = ['id', 'last_run_on', 'updated_by_name', 'updated_at']
+
+    def get_email_profile_name(self, obj):
+        return obj.email_profile.name if obj.email_profile else None
+
+    def get_default_notify_users_detail(self, obj):
+        return [
+            {
+                'id': str(user.id),
+                'naam': user.full_name or user.email,
+                'email': user.email,
+            }
+            for user in obj.default_notify_users.all()
+        ]
+
+    def get_updated_by_name(self, obj):
+        if obj.updated_by:
+            return obj.updated_by.full_name or obj.updated_by.email
+        return None
+
+    def validate_email_profile(self, value):
+        """Alleen profielen waar de gebruiker zelf toegang toe heeft."""
+        if value is None:
+            return value
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if user is not None and not value.user_has_access(user):
+            raise serializers.ValidationError('Geen toegang tot dit e-mailprofiel.')
+        return value
+
+    def validate_default_notify_extra_emails(self, value):
+        return _schone_emails(value)
 
 
 # =============================================================================
