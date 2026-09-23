@@ -199,6 +199,8 @@
     "profile": "Profiel",
     "tasks": "Taken",
     "addFavorite": "Favorite toevoegen",
+    "refreshApp": "App verversen",
+    "refreshingApp": "Bezig met verversen…",
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
     "favorites": "Favorites",

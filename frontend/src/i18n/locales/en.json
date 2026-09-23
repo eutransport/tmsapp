@@ -199,6 +199,8 @@
     "profile": "Profile",
     "tasks": "Tasks",
     "addFavorite": "Add favorite",
+    "refreshApp": "Refresh app",
+    "refreshingApp": "Refreshing…",
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
     "favorites": "Favorites",

@@ -199,6 +199,8 @@
     "profile": "Profil",
     "tasks": "Görevler",
     "addFavorite": "Favori ekle",
+    "refreshApp": "Uygulamayı yenile",
+    "refreshingApp": "Yenileniyor…",
     "collapseSidebar": "Kenar çubuğunu daralt",
     "expandSidebar": "Kenar çubuğunu genişlet",
     "favorites": "Favoriler",

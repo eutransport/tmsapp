@@ -40,6 +40,7 @@ import {
   FolderIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline'
 import { useAuthStore } from '@/stores/authStore'
 import { useAppStore } from '@/stores/appStore'
@@ -47,6 +48,7 @@ import { useThemeStore } from '@/stores/themeStore'
 import { AppSettings } from '@/types'
 import { authApi } from '@/api/auth'
 import clsx from '@/utils/clsx'
+import { verversApp } from '@/utils/appVerversen'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import PushNotificationPrompt from '@/components/pwa/PushNotificationPrompt'
 import ActiveTasksPopup from '@/components/tasks/ActiveTasksPopup'
@@ -141,6 +143,14 @@ export default function DashboardLayout() {
   useEffect(() => { applyTheme(currentTheme) }, [currentTheme, applyTheme])
 
   const handleLogout = () => { logout(); navigate('/login') }
+
+  // Op de iPhone draait de app zonder browserbalk: geen herlaadknop en geen
+  // "naar beneden trekken". Deze knop doet dat werk, zonder uit te loggen.
+  const [verversen, setVerversen] = useState(false)
+  const handleVerversen = () => {
+    setVerversen(true)
+    void verversApp()
+  }
 
   const userRole = user?.rol || 'chauffeur'
   const userPermissions = user?.module_permissions || []
@@ -366,6 +376,26 @@ export default function DashboardLayout() {
                       >
                         <KeyIcon className="mr-3 h-5 w-5 text-gray-400 pointer-events-none" />
                         {t('auth.changePassword')}
+                      </button>
+                    )}
+                  </Menu.Item>
+                  <Menu.Item>
+                    {({ active }) => (
+                      <button
+                        type="button"
+                        onClick={handleVerversen}
+                        disabled={verversen}
+                        className={clsx(active ? 'bg-gray-50' : '', 'flex w-full items-center px-4 py-2 text-sm text-gray-700 touch-manipulation disabled:opacity-60')}
+                      >
+                        <ArrowPathIcon
+                          className={clsx(
+                            'mr-3 h-5 w-5 text-gray-400 pointer-events-none',
+                            verversen && 'animate-spin',
+                          )}
+                        />
+                        {verversen
+                          ? t('nav.refreshingApp', 'Bezig met verversen…')
+                          : t('nav.refreshApp', 'App verversen')}
                       </button>
                     )}
                   </Menu.Item>
