@@ -14,6 +14,7 @@ import logging
 import re
 import time
 from datetime import date, datetime
+from datetime import timezone as dt_timezone
 
 import requests
 from django.core.cache import cache
@@ -435,14 +436,32 @@ def _valideer_periode(van, tot):
 
 
 def _naar_tijdstip(waarde):
-    """Zet een naïeve ISO-tijd van Radius om naar een aware datetime."""
+    """
+    Zet een tijdstip van Radius om naar een aware datetime.
+
+    Radius levert ritdatums zonder tijdzone, bijvoorbeeld
+    ``2026-09-23T03:59:25``. Die waarden staan in **UTC**, niet in lokale tijd.
+    Dat is op drie manieren vastgesteld:
+
+    1. De vroegste rit van een werkdag staat rauw rond 04:00; als dat lokale
+       tijd zou zijn, begon de halve vloot voor 05:00 's ochtends. Met UTC
+       wordt het 06:00 lokaal, wat overeenkomt met de werkelijke starttijden.
+    2. De laatste rit-eindtijd per wagen ligt 120 minuten dichter bij de
+       bijbehorende live positie (een unix-timestamp, dus gegarandeerd UTC)
+       wanneer we de ritwaarde als UTC lezen.
+    3. Bevestigd door de gebruiker: een rit die als 03:59 werd getoond,
+       begon in werkelijkheid om 05:59.
+
+    Waarden met een expliciete tijdzone (``Z`` of een offset) worden
+    gerespecteerd zoals ze binnenkomen.
+    """
     if not waarde:
         return None
     tijdstip = parse_datetime(str(waarde))
     if tijdstip is None:
         return None
     if timezone.is_naive(tijdstip):
-        tijdstip = timezone.make_aware(tijdstip, timezone.get_current_timezone())
+        tijdstip = tijdstip.replace(tzinfo=dt_timezone.utc)
     return tijdstip
 
 

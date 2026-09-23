@@ -115,6 +115,42 @@ class RadiusRitNormalisatieTests(TestCase):
         self.assertIsNotNone(rit['start_time'])
         self.assertTrue(timezone.is_aware(rit['start_time']))
 
+    def test_tijden_zonder_zone_worden_als_utc_gelezen(self):
+        """
+        Radius levert ritdatums zonder tijdzone, maar die staan in UTC.
+
+        Dit is bewust vastgelegd omdat het eerder fout ging: de waarden werden
+        als Amsterdamse tijd gelezen, waardoor elke rit twee uur te vroeg werd
+        getoond (05:59 verscheen als 03:59).
+        """
+        rit = radius_service._normaliseer_rit(
+            _rit(start='2026-09-23T03:59:25', eind='2026-09-23T06:30:00')
+        )
+        self.assertEqual(rit['start_time'].utcoffset().total_seconds(), 0)
+        self.assertEqual(rit['start_time'].strftime('%H:%M'), '03:59')
+        # In de zomer is Nederland UTC+2, dus dit hoort 05:59 te worden.
+        self.assertEqual(
+            timezone.localtime(rit['start_time']).strftime('%H:%M'), '05:59'
+        )
+
+    def test_wintertijd_krijgt_een_uur_verschil(self):
+        """In de winter geldt UTC+1; de omzetting moet dat zelf afhandelen."""
+        rit = radius_service._normaliseer_rit(
+            _rit(start='2026-12-15T04:59:00', eind='2026-12-15T09:00:00')
+        )
+        self.assertEqual(
+            timezone.localtime(rit['start_time']).strftime('%H:%M'), '05:59'
+        )
+
+    def test_expliciete_tijdzone_wordt_gerespecteerd(self):
+        """Als Radius ooit wel een offset meestuurt, moeten we die volgen."""
+        rit = radius_service._normaliseer_rit(
+            _rit(start='2026-09-23T05:59:25+02:00', eind='2026-09-23T08:30:00+02:00')
+        )
+        self.assertEqual(
+            timezone.localtime(rit['start_time']).strftime('%H:%M'), '05:59'
+        )
+
 
 class RadiusPagineringTests(TestCase):
     """De paginering van Radius is 0-gebaseerd; dat mag niet misgaan."""
