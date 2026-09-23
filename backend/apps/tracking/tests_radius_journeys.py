@@ -253,6 +253,26 @@ class RadiusArchiefTests(TestCase):
         self.assertEqual(resultaat['journeys_updated'], 1)
         self.assertEqual(RadiusJourney.objects.get(service_id='a').distance_km, 125.0)
 
+    def test_rit_over_middernacht_wordt_niet_gedupliceerd(self):
+        """
+        Radius levert de starttijd in UTC; een rit van 22:30 UTC valt lokaal al
+        op de volgende dag. Bij het opzoeken van bestaande ritten wordt op de
+        lokale datum gefilterd, dus zo'n rit ligt net buiten het gevraagde
+        venster. Hij moet toch herkend en bijgewerkt worden.
+        """
+        laat = dict(service_id='a', start='2026-09-22T22:30:00',
+                    eind='2026-09-22T23:15:00')
+        self._sync([_rit(km=100.0, **laat)])
+
+        rit = RadiusJourney.objects.get(service_id='a')
+        self.assertEqual(rit.date, date(2026, 9, 23), 'lokale datum is de volgende dag')
+
+        resultaat = self._sync([_rit(km=140.0, **laat)])
+        self.assertEqual(resultaat['journeys_created'], 0)
+        self.assertEqual(resultaat['journeys_updated'], 1)
+        self.assertEqual(RadiusJourney.objects.count(), 1)
+        self.assertEqual(RadiusJourney.objects.get(service_id='a').distance_km, 140.0)
+
     def test_synclog_wordt_bijgehouden(self):
         self._sync([_rit(service_id='a')])
         log = RadiusSyncLog.objects.get(date=date(2026, 9, 22))

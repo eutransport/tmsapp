@@ -50,11 +50,20 @@ def sync_radius_journeys(van, tot, customer_id=None):
     klant_id = bepaal_klant_id(customer_id)
     resultaat = get_journeys(klant_id, van, tot)
 
+    # Eén dag speling aan beide kanten. Radius levert de starttijd in UTC en
+    # wij zoeken op de lokale datum; een rit die om 22:30 UTC begint valt
+    # lokaal al op de volgende dag. Zonder die speling wordt zo'n rit niet als
+    # bestaand herkend en zou een latere correctie van Radius niet worden
+    # overgenomen. Dubbele regels kan het nooit opleveren, want de database
+    # bewaakt de combinatie service_id + start_time.
+    venster_van = date.fromisoformat(str(resultaat['date_from'])) - timedelta(days=1)
+    venster_tot = date.fromisoformat(str(resultaat['date_to'])) + timedelta(days=1)
+
     bestaande = {
         (rit.service_id, rit.start_time): rit
         for rit in RadiusJourney.objects.filter(
-            start_time__date__gte=resultaat['date_from'],
-            start_time__date__lte=resultaat['date_to'],
+            start_time__date__gte=venster_van,
+            start_time__date__lte=venster_tot,
         )
     }
 
