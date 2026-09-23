@@ -5,6 +5,7 @@ import {
   WrenchScrewdriverIcon,
   ShieldCheckIcon,
   ExclamationTriangleIcon,
+  FireIcon,
   ClockIcon,
   CurrencyEuroIcon,
   ArrowTrendingUpIcon,
@@ -137,6 +138,13 @@ export default function MaintenanceOverviewPage() {
           >
             <ExclamationTriangleIcon className="w-5 h-5" />
             {t('maintenance.adr.title')}
+          </button>
+          <button
+            onClick={() => navigate('/maintenance/brandblussers')}
+            className="btn-secondary flex items-center gap-2"
+          >
+            <FireIcon className="w-5 h-5" />
+            {t('maintenance.brandblussers.title')}
           </button>
           <button
             onClick={() => navigate('/maintenance/tasks')}

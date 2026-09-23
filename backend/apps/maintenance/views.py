@@ -25,6 +25,8 @@ from .models import (
     APKRecord,
     ADRRecord,
     ADRSettings,
+    FireExtinguisherRecord,
+    FireExtinguisherSettings,
     MaintenanceTask,
     MaintenancePart,
     TireRecord,
@@ -46,6 +48,9 @@ from .serializers import (
     APKCountdownSerializer,
     ADRRecordSerializer,
     ADRSettingsSerializer,
+    FireExtinguisherRecordSerializer,
+    FireExtinguisherBulkSerializer,
+    FireExtinguisherSettingsSerializer,
     MaintenanceTaskSerializer,
     MaintenanceTaskCreateSerializer,
     MaintenanceTaskListSerializer,
@@ -347,6 +352,91 @@ class ADRSettingsView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(updated_by=request.user)
         logger.info(f"ADR settings updated by {request.user.email}")
+        return Response(serializer.data)
+
+
+# =============================================================================
+# BRANDBLUSSERS
+# =============================================================================
+
+class FireExtinguisherRecordViewSet(viewsets.ModelViewSet):
+    """CRUD voor brandblussers, één regel per blusser met eigen vervaldatum."""
+    queryset = FireExtinguisherRecord.objects.select_related(
+        'vehicle', 'vehicle__bedrijf', 'created_by'
+    ).prefetch_related('notify_users').all()
+    serializer_class = FireExtinguisherRecordSerializer
+    permission_classes = [IsAuthenticated, IsAdminOrManager, HasModulePermission]
+    module_permission = 'view_maintenance'
+    filterset_fields = ['vehicle', 'volgnummer']
+    search_fields = ['vehicle__kenteken', 'route', 'positie', 'serienummer', 'remarks']
+    ordering_fields = ['next_inspection_date', 'inspection_date', 'created_at', 'volgnummer']
+    ordering = ['next_inspection_date']
+
+    def perform_create(self, serializer):
+        record = serializer.save(created_by=self.request.user)
+        logger.info(
+            f"Fire extinguisher created: {record.vehicle.kenteken} #{record.volgnummer} "
+            f"expires {record.next_inspection_date} by {self.request.user.email}"
+        )
+
+    @action(detail=False, methods=['post'])
+    def bulk(self, request):
+        """Meerdere blussers voor één wagen in één keer aanmaken.
+
+        Bij aantal 3 worden er drie losse regels gemaakt, elk met een eigen
+        vervaldatum en dus een eigen herinnering.
+        """
+        serializer = FireExtinguisherBulkSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        records = serializer.save(created_by=request.user)
+        logger.info(
+            f"{len(records)} fire extinguishers created for "
+            f"{records[0].vehicle.kenteken} by {request.user.email}"
+        )
+        data = FireExtinguisherRecordSerializer(records, many=True, context={'request': request}).data
+        return Response(data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'])
+    def expiring_soon(self, request):
+        """Blussers die binnen X dagen vervallen (of al verlopen zijn)."""
+        days = int(request.query_params.get('days', 14))
+        cutoff = date.today() + timedelta(days=days)
+        records = self.get_queryset().filter(next_inspection_date__lte=cutoff)
+        serializer = self.get_serializer(records, many=True)
+        return Response(serializer.data)
+
+
+class FireExtinguisherSettingsView(APIView):
+    """Instellingen voor de brandblusser-herinneringen: lezen door
+    beheerders/managers, wijzigen alleen door admins."""
+    permission_classes = [IsAuthenticated, IsAdminOrManager, HasModulePermission]
+    module_permission = 'view_maintenance'
+
+    def get_permissions(self):
+        if self.request.method in ('PUT', 'PATCH'):
+            return [IsAuthenticated(), IsAdminOnly()]
+        return super().get_permissions()
+
+    def get(self, request):
+        instellingen = FireExtinguisherSettings.get_settings()
+        return Response(
+            FireExtinguisherSettingsSerializer(instellingen, context={'request': request}).data
+        )
+
+    def put(self, request):
+        return self._update(request)
+
+    def patch(self, request):
+        return self._update(request, partial=True)
+
+    def _update(self, request, partial=False):
+        instellingen = FireExtinguisherSettings.get_settings()
+        serializer = FireExtinguisherSettingsSerializer(
+            instellingen, data=request.data, partial=partial, context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        logger.info(f"Fire extinguisher settings updated by {request.user.email}")
         return Response(serializer.data)
 
 

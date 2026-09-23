@@ -728,6 +728,46 @@ export interface ADRSettings {
   updated_at: string
 }
 
+export interface FireExtinguisherRecord {
+  id: string
+  vehicle: string
+  vehicle_kenteken: string
+  vehicle_type: string
+  bedrijf_naam: string | null
+  route: string
+  volgnummer: number
+  positie: string
+  serienummer: string
+  inspection_date: string
+  next_inspection_date: string
+  notify_users: string[]
+  notify_users_detail: ADRNotifyUser[]
+  notify_extra_emails: string[]
+  remarks: string
+  days_remaining: number | null
+  is_expired: boolean
+  countdown_status: string
+  last_reminder_sent_on: string | null
+  created_by: string | null
+  created_by_name: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface FireExtinguisherSettings {
+  id: string
+  email_profile: string | null
+  email_profile_name: string | null
+  send_hour: number
+  send_minute: number
+  default_notify_users: string[]
+  default_notify_users_detail: ADRNotifyUser[]
+  default_notify_extra_emails: string[]
+  last_run_on: string | null
+  updated_by_name: string | null
+  updated_at: string
+}
+
 export interface MaintenanceTask {
   id: string
   vehicle: string

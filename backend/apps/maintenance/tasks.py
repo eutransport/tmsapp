@@ -258,3 +258,176 @@ def send_adr_reminders(force: bool = False):
         instellingen.save(update_fields=['last_run_on'])
 
     return {'status': 'done', 'sent': verstuurd, 'errors': fouten}
+
+
+# =============================================================================
+# BRANDBLUSSERS
+# =============================================================================
+
+def _blusser_path(record) -> str:
+    return f'/maintenance/brandblussers?record={record.id}'
+
+
+def _blusser_should_send(record, today: date) -> bool:
+    """Bepaal of er vandaag een herinnering voor deze blusser uit moet."""
+    if not record.next_inspection_date:
+        return False
+
+    days = (record.next_inspection_date - today).days
+    if days > FIRST_REMINDER_DAYS:
+        return False
+
+    laatste = record.last_reminder_sent_on
+    if days <= DAILY_REMINDER_DAYS:
+        # Laatste week en te laat: elke dag, maar niet twee keer op een dag.
+        return laatste != today
+
+    # Tussen 2 weken en 1 week: eenmalig, zodra het venster is ingegaan.
+    venster_start = record.next_inspection_date - timedelta(days=FIRST_REMINDER_DAYS)
+    return laatste is None or laatste < venster_start
+
+
+def _blusser_texts(record, days: int) -> tuple[str, str, str]:
+    """Onderwerp, platte tekst en html voor de blusser-herinnering."""
+    kenteken = record.vehicle.kenteken
+    datum = record.next_inspection_date.strftime('%d-%m-%Y')
+    link = f'{_app_base_url()}{_blusser_path(record)}'
+    label = f'brandblusser {record.volgnummer}'
+
+    if days < 0:
+        termijn = f'is {abs(days)} dag(en) geleden verlopen'
+        subject = f'Brandblusser {record.volgnummer} verlopen: {kenteken}'
+    elif days == 0:
+        termijn = 'is vandaag'
+        subject = f'Brandblusser {record.volgnummer} vervalt vandaag: {kenteken}'
+    else:
+        termijn = f'is over {days} dag(en)'
+        subject = f'Brandblusser {record.volgnummer} vervalt over {days} dag(en): {kenteken}'
+
+    regels = [
+        f'Voertuig: {kenteken}',
+        f'Route: {record.route or "-"}',
+        f'Blusser: nr. {record.volgnummer}',
+        f'Plaats op de wagen: {record.positie or "-"}',
+        f'Serienummer: {record.serienummer or "-"}',
+        f'Laatst gekeurd: {record.inspection_date.strftime("%d-%m-%Y")}',
+        f'Vervaldatum: {datum} ({termijn})',
+    ]
+    body_text = (
+        f'De keuring van {label} op {kenteken} {termijn} (vervaldatum {datum}).\n\n'
+        + '\n'.join(regels)
+        + f'\n\nBekijk de regel: {link}\n'
+    )
+    body_html = (
+        f'<p>De keuring van <strong>{escape(label)}</strong> op '
+        f'<strong>{escape(kenteken)}</strong> {escape(termijn)} '
+        f'(vervaldatum <strong>{datum}</strong>).</p><ul>'
+        + ''.join(f'<li>{escape(r)}</li>' for r in regels)
+        + f'</ul><p><a href="{escape(link)}">Bekijk de brandblusser</a></p>'
+    )
+    return subject, body_text, body_html
+
+
+def _blusser_notify_in_app(record, users, title: str, body: str) -> None:
+    """Zet de blusser-herinnering ook in de notificatie-inbox."""
+    if not users:
+        return
+
+    url = _blusser_path(record)
+    data = {'type': 'fire_extinguisher_reminder', 'fire_extinguisher_id': str(record.id)}
+
+    from apps.notifications.models import PushNotification, UserNotification
+    from apps.notifications.services import PushNotificationService
+
+    try:
+        service = PushNotificationService()
+        if service.is_configured():
+            service.send_to_users(users=users, title=title, body=body, url=url, data=data)
+            return
+    except Exception as exc:  # noqa: BLE001 - notificatie mag de taak nooit breken
+        logger.warning('Push voor brandblusser-herinnering mislukt: %s', exc)
+
+    log = PushNotification.objects.create(
+        title=title, body=body, url=url, data=data,
+        success_count=0, failure_count=0,
+    )
+    UserNotification.objects.bulk_create(
+        [UserNotification(notification=log, user=user) for user in users],
+        ignore_conflicts=True,
+    )
+
+
+@shared_task
+def send_fire_extinguisher_reminders(force: bool = False):
+    """Verstuur de brandblusser-herinneringen.
+
+    Elke blusser is een eigen regel met een eigen vervaldatum, dus drie
+    blussers op één wagen leveren ook drie losse herinneringen op.
+    """
+    from .models import FireExtinguisherRecord, FireExtinguisherSettings
+
+    instellingen = FireExtinguisherSettings.get_settings()
+    today = timezone.localdate()
+
+    if not force:
+        if instellingen.last_run_on == today:
+            return {'status': 'skipped', 'reason': 'already_run_today', 'sent': 0, 'errors': []}
+        nu = timezone.localtime()
+        gepland = nu.replace(
+            hour=instellingen.send_hour, minute=instellingen.send_minute,
+            second=0, microsecond=0,
+        )
+        if nu < gepland:
+            return {'status': 'skipped', 'reason': 'before_send_time', 'sent': 0, 'errors': []}
+
+    profile_id = instellingen.email_profile_id
+    records = (
+        FireExtinguisherRecord.objects
+        .filter(next_inspection_date__lte=today + timedelta(days=FIRST_REMINDER_DAYS))
+        .select_related('vehicle')
+        .prefetch_related('notify_users')
+    )
+
+    verstuurd = 0
+    fouten: list[str] = []
+
+    for record in records:
+        if not _blusser_should_send(record, today):
+            continue
+
+        days = (record.next_inspection_date - today).days
+        subject, body_text, body_html = _blusser_texts(record, days)
+        recipients = _recipients(record, instellingen)
+
+        mail_ok = True
+        if recipients:
+            try:
+                _send_mail(recipients, subject, body_text, body_html, profile_id=profile_id)
+            except Exception as exc:  # noqa: BLE001
+                mail_ok = False
+                fouten.append(f'{record.vehicle.kenteken} #{record.volgnummer}: {exc}')
+                logger.warning(
+                    'Brandblusser-herinnering mislukt voor %s #%s: %s',
+                    record.vehicle.kenteken, record.volgnummer, exc,
+                )
+
+        _blusser_notify_in_app(
+            record,
+            _inbox_users(record, instellingen),
+            title=subject,
+            body=(
+                f'Brandblusser {record.volgnummer} van {record.vehicle.kenteken} '
+                f'vervalt op {record.next_inspection_date.strftime("%d-%m-%Y")}.'
+            ),
+        )
+
+        if mail_ok:
+            record.last_reminder_sent_on = today
+            record.save(update_fields=['last_reminder_sent_on'])
+            verstuurd += 1
+
+    if not force:
+        instellingen.last_run_on = today
+        instellingen.save(update_fields=['last_run_on'])
+
+    return {'status': 'done', 'sent': verstuurd, 'errors': fouten}

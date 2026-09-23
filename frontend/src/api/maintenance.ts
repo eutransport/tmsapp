@@ -11,6 +11,8 @@ import {
   APKCountdown,
   ADRRecord,
   ADRSettings,
+  FireExtinguisherRecord,
+  FireExtinguisherSettings,
   MaintenanceTask,
   MaintenanceTaskList,
   MaintenancePart,
@@ -249,6 +251,96 @@ export async function getADRSettings(): Promise<ADRSettings> {
 
 export async function updateADRSettings(data: ADRSettingsPayload): Promise<ADRSettings> {
   const response = await api.put(`${BASE}/adr-settings/`, data)
+  return response.data
+}
+
+// =============================================================================
+// BRANDBLUSSERS
+// =============================================================================
+
+export interface BrandblusserFilters {
+  vehicle?: string
+  search?: string
+  page?: number
+  page_size?: number
+  ordering?: string
+}
+
+export type BrandblusserPayload = {
+  vehicle: string
+  route?: string
+  volgnummer?: number
+  positie?: string
+  serienummer?: string
+  inspection_date: string
+  next_inspection_date: string
+  notify_users?: string[]
+  notify_extra_emails?: string[]
+  remarks?: string
+}
+
+/** Eén blusser binnen een bulk-aanmaak. */
+export type BrandblusserItem = {
+  inspection_date: string
+  next_inspection_date: string
+  positie?: string
+  serienummer?: string
+  remarks?: string
+}
+
+export type BrandblusserBulkPayload = {
+  vehicle: string
+  route?: string
+  aantal: number
+  blussers: BrandblusserItem[]
+  notify_users?: string[]
+  notify_extra_emails?: string[]
+}
+
+export async function getBrandblussers(
+  filters?: BrandblusserFilters
+): Promise<PaginatedResponse<FireExtinguisherRecord>> {
+  const params = new URLSearchParams()
+  if (filters?.vehicle) params.append('vehicle', filters.vehicle)
+  if (filters?.search) params.append('search', filters.search)
+  if (filters?.page) params.append('page', filters.page.toString())
+  if (filters?.page_size) params.append('page_size', filters.page_size.toString())
+  if (filters?.ordering) params.append('ordering', filters.ordering)
+  const response = await api.get(`${BASE}/fire-extinguishers/?${params.toString()}`)
+  return response.data
+}
+
+/** Meerdere blussers voor één wagen in één keer aanmaken. */
+export async function createBrandblussersBulk(
+  data: BrandblusserBulkPayload
+): Promise<FireExtinguisherRecord[]> {
+  const response = await api.post(`${BASE}/fire-extinguishers/bulk/`, data)
+  return response.data
+}
+
+export async function updateBrandblusser(
+  id: string,
+  data: Partial<BrandblusserPayload>
+): Promise<FireExtinguisherRecord> {
+  const response = await api.patch(`${BASE}/fire-extinguishers/${id}/`, data)
+  return response.data
+}
+
+export async function deleteBrandblusser(id: string): Promise<void> {
+  await api.delete(`${BASE}/fire-extinguishers/${id}/`)
+}
+
+export type BrandblusserSettingsPayload = ADRSettingsPayload
+
+export async function getBrandblusserSettings(): Promise<FireExtinguisherSettings> {
+  const response = await api.get(`${BASE}/fire-extinguisher-settings/`)
+  return response.data
+}
+
+export async function updateBrandblusserSettings(
+  data: BrandblusserSettingsPayload
+): Promise<FireExtinguisherSettings> {
+  const response = await api.put(`${BASE}/fire-extinguisher-settings/`, data)
   return response.data
 }
 
