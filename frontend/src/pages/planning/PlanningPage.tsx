@@ -1,10 +1,14 @@
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Dialog, Transition } from '@headlessui/react'
 import {
   PlusIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
+  CheckIcon,
+  BuildingOffice2Icon,
   DocumentDuplicateIcon,
   TrashIcon,
   XMarkIcon,
@@ -636,11 +640,6 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
       })
   }, [planning])
 
-  // Get drivers for company
-  const companyDrivers = drivers.filter(d => 
-    !d.bedrijf || d.bedrijf === selectedCompany
-  )
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -830,7 +829,9 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
                         <td key={day.key} className="px-2 py-2">
                           {isEditing && !isReadOnly ? (
                             <DriverSelector
-                              drivers={companyDrivers}
+                              drivers={drivers}
+                              companies={companies}
+                              selectedCompany={selectedCompany}
                               value={entry.chauffeur}
                               onChange={(driverId) => handleUpdateEntry(entry.id, driverId)}
                               onCancel={() => setEditingEntry(null)}
@@ -925,10 +926,13 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
                           >
                             {editingEntry === entry.id && !isReadOnly ? (
                               <DriverSelector
-                                drivers={companyDrivers}
+                                drivers={drivers}
+                                companies={companies}
+                                selectedCompany={selectedCompany}
                                 value={entry.chauffeur}
                                 onChange={(driverId) => handleUpdateEntry(entry.id, driverId)}
                                 onCancel={() => setEditingEntry(null)}
+                                compact
                               />
                             ) : entry.chauffeur ? (
                               <div>
@@ -1315,31 +1319,324 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
 
 // Driver selector dropdown component
 interface DriverSelectorProps {
+  /** Alle chauffeurs, dus ook die van andere bedrijven. */
   drivers: Driver[]
+  companies: Company[]
+  /** Het bedrijf van het actieve tabblad; die groep staat meteen open. */
+  selectedCompany: string
   value: string | null
   onChange: (driverId: string | null) => void
   onCancel: () => void
+  /** Compacte knop voor de mobiele kaartweergave. */
+  compact?: boolean
 }
 
-function DriverSelector({ drivers, value, onChange, onCancel }: DriverSelectorProps) {
+interface DriverGroup {
+  id: string
+  naam: string
+  drivers: Driver[]
+}
+
+const GEEN_BEDRIJF = '__geen_bedrijf__'
+
+function DriverSelector({
+  drivers,
+  companies,
+  selectedCompany,
+  value,
+  onChange,
+  onCancel,
+  compact = false,
+}: DriverSelectorProps) {
   const { t } = useTranslation()
+  const knopRef = useRef<HTMLButtonElement>(null)
+  const paneelRef = useRef<HTMLDivElement>(null)
+  const zoekRef = useRef<HTMLInputElement>(null)
+  const [zoekterm, setZoekterm] = useState('')
+  const [positie, setPositie] = useState<{ top: number; left: number; width: number } | null>(null)
+
+  const gekozen = drivers.find((d) => d.id === value) || null
+
+  // Chauffeurs per bedrijf. Bedrijven zonder chauffeurs laten we weg, anders
+  // wordt de lijst onnodig lang.
+  const groepen = useMemo<DriverGroup[]>(() => {
+    const perBedrijf = new Map<string, Driver[]>()
+    for (const driver of drivers) {
+      const sleutel = driver.bedrijf || GEEN_BEDRIJF
+      const lijst = perBedrijf.get(sleutel)
+      if (lijst) {
+        lijst.push(driver)
+      } else {
+        perBedrijf.set(sleutel, [driver])
+      }
+    }
+
+    const sorteer = (lijst: Driver[]) =>
+      [...lijst].sort((a, b) => a.naam.localeCompare(b.naam, 'nl'))
+
+    const resultaat: DriverGroup[] = companies
+      .filter((company) => (perBedrijf.get(company.id)?.length ?? 0) > 0)
+      .map((company) => ({
+        id: company.id,
+        naam: company.naam,
+        drivers: sorteer(perBedrijf.get(company.id) as Driver[]),
+      }))
+
+    // Chauffeurs zonder bedrijf horen altijd onderaan.
+    const zonder = perBedrijf.get(GEEN_BEDRIJF)
+    if (zonder && zonder.length > 0) {
+      resultaat.push({
+        id: GEEN_BEDRIJF,
+        naam: t('planning.noCompanyGroup'),
+        drivers: sorteer(zonder),
+      })
+    }
+    return resultaat
+  }, [drivers, companies, t])
+
+  // Standaard staat de groep open waar de huidige chauffeur in zit; is er nog
+  // geen chauffeur gekozen, dan de groep van het actieve tabblad.
+  const [geopend, setGeopend] = useState<Set<string>>(() => {
+    const start = gekozen?.bedrijf || selectedCompany
+    return new Set(start ? [start] : [])
+  })
+
+  const gefilterd = useMemo<DriverGroup[]>(() => {
+    const term = zoekterm.trim().toLowerCase()
+    if (!term) return groepen
+    return groepen
+      .map((groep) => ({
+        ...groep,
+        drivers: groep.drivers.filter((d) => d.naam.toLowerCase().includes(term)),
+      }))
+      .filter((groep) => groep.drivers.length > 0)
+  }, [groepen, zoekterm])
+
+  // Tijdens het zoeken staat alles open, anders zie je de treffers niet.
+  const isOpen = (groepId: string) => zoekterm.trim() !== '' || geopend.has(groepId)
+
+  const klapOmschakelen = (groepId: string) => {
+    setGeopend((vorige) => {
+      const volgende = new Set(vorige)
+      if (volgende.has(groepId)) {
+        volgende.delete(groepId)
+      } else {
+        volgende.add(groepId)
+      }
+      return volgende
+    })
+  }
+
+  // De tabel zit in een container met overflow, dus het paneel moet buiten de
+  // DOM-boom gerenderd worden. Anders wordt het afgeknipt.
+  const bepaalPositie = useCallback(() => {
+    const knop = knopRef.current
+    if (!knop) return
+    // De desktoptabel en de mobiele kaarten staan allebei in de DOM; één van
+    // beide is met CSS verborgen. Het paneel rendert via een portal in
+    // document.body en zou die verberging dus niet volgen. Zonder deze
+    // controle verschijnt er een tweede paneel in de linkerbovenhoek.
+    if (knop.offsetParent === null) {
+      setPositie(null)
+      return
+    }
+    const vak = knop.getBoundingClientRect()
+    const breedte = Math.max(vak.width, 280)
+    const ruimteRechts = window.innerWidth - vak.left
+    const links = ruimteRechts < breedte + 8 ? Math.max(8, vak.right - breedte) : vak.left
+    setPositie({ top: vak.bottom + 4, left: links, width: breedte })
+  }, [])
+
+  useEffect(() => {
+    bepaalPositie()
+    // Bij scrollen of formaatwijziging schuift het paneel mee. `true` zodat we
+    // ook het horizontaal scrollen van de planningstabel opvangen.
+    window.addEventListener('scroll', bepaalPositie, true)
+    window.addEventListener('resize', bepaalPositie)
+    return () => {
+      window.removeEventListener('scroll', bepaalPositie, true)
+      window.removeEventListener('resize', bepaalPositie)
+    }
+  }, [bepaalPositie])
+
+  // Het zoekveld bestaat pas zodra de positie bekend is, dus de focus kan niet
+  // in de effecthook hierboven. Eenmalig, anders springt de cursor terug bij
+  // elke herberekening tijdens het scrollen.
+  const heeftFocusGehad = useRef(false)
+  useEffect(() => {
+    if (positie && !heeftFocusGehad.current) {
+      heeftFocusGehad.current = true
+      zoekRef.current?.focus()
+    }
+  }, [positie])
+
+  useEffect(() => {
+    // De verborgen tweelingweergave (desktop naast mobiel) mag niet meebeslissen;
+    // die zou elke klik als "buiten het paneel" zien en het bewerken afbreken.
+    const isZichtbaar = () => knopRef.current !== null && knopRef.current.offsetParent !== null
+    const buitenKlik = (e: MouseEvent) => {
+      if (!isZichtbaar()) return
+      const doel = e.target as Node
+      if (paneelRef.current?.contains(doel) || knopRef.current?.contains(doel)) return
+      onCancel()
+    }
+    const toets = (e: KeyboardEvent) => {
+      if (!isZichtbaar()) return
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onCancel()
+      }
+    }
+    document.addEventListener('mousedown', buitenKlik)
+    document.addEventListener('keydown', toets)
+    return () => {
+      document.removeEventListener('mousedown', buitenKlik)
+      document.removeEventListener('keydown', toets)
+    }
+  }, [onCancel])
+
+  const eersteTreffer = gefilterd[0]?.drivers[0]
+
+  const paneel = positie
+    ? createPortal(
+        <div
+          ref={paneelRef}
+          style={{ top: positie.top, left: positie.left, width: positie.width }}
+          className="fixed z-50 rounded-lg border border-gray-200 bg-white shadow-xl"
+        >
+          <div className="border-b border-gray-100 p-2">
+            <div className="relative">
+              <MagnifyingGlassIcon className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                ref={zoekRef}
+                type="text"
+                value={zoekterm}
+                onChange={(e) => setZoekterm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && eersteTreffer) {
+                    e.preventDefault()
+                    onChange(eersteTreffer.id)
+                  }
+                }}
+                placeholder={t('planning.searchDriver')}
+                className="w-full rounded-md border-gray-300 py-1.5 pl-8 pr-2 text-sm focus:border-primary-500 focus:ring-primary-500"
+              />
+            </div>
+          </div>
+
+          <div className="max-h-72 overflow-y-auto overscroll-contain py-1">
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              className={clsx(
+                'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-gray-50',
+                !value ? 'font-medium text-primary-700' : 'text-gray-500'
+              )}
+            >
+              <XMarkIcon className="h-4 w-4 flex-shrink-0" />
+              {t('planning.noDriver')}
+            </button>
+
+            {gefilterd.length === 0 && (
+              <div className="px-3 py-6 text-center text-sm text-gray-400">
+                {t('planning.noDriverFound')}
+              </div>
+            )}
+
+            {gefilterd.map((groep) => {
+              const open = isOpen(groep.id)
+              return (
+                <div key={groep.id} className="border-t border-gray-100 first:border-t-0">
+                  <button
+                    type="button"
+                    onClick={() => klapOmschakelen(groep.id)}
+                    aria-expanded={open}
+                    className="flex w-full items-center gap-1.5 px-2 py-2 text-left transition-colors hover:bg-gray-50"
+                  >
+                    <ChevronRightIcon
+                      className={clsx(
+                        'h-4 w-4 flex-shrink-0 text-gray-400 transition-transform',
+                        open && 'rotate-90'
+                      )}
+                    />
+                    <BuildingOffice2Icon className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <span className="flex-1 truncate text-sm font-medium text-gray-700">
+                      {groep.naam}
+                    </span>
+                    {groep.id === selectedCompany && (
+                      <span className="rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-medium text-primary-700">
+                        {t('planning.currentCompany')}
+                      </span>
+                    )}
+                    <span className="text-xs tabular-nums text-gray-400">
+                      {groep.drivers.length}
+                    </span>
+                  </button>
+
+                  {open && (
+                    <div className="pb-1">
+                      {groep.drivers.map((driver) => {
+                        const actief = driver.id === value
+                        return (
+                          <button
+                            key={driver.id}
+                            type="button"
+                            onClick={() => onChange(driver.id)}
+                            className={clsx(
+                              'flex w-full items-center gap-2 py-1.5 pl-9 pr-3 text-left text-sm transition-colors',
+                              actief
+                                ? 'bg-primary-50 font-medium text-primary-700'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            )}
+                          >
+                            <span className="flex-1 truncate">{driver.naam}</span>
+                            {driver.adr && (
+                              <span className="rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-800">
+                                ADR
+                              </span>
+                            )}
+                            {actief && <CheckIcon className="h-4 w-4 flex-shrink-0" />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>,
+        document.body
+      )
+    : null
+
   return (
-    <div className="relative">
-      <select
-        autoFocus
-        defaultValue={value || ''}
-        onChange={(e) => onChange(e.target.value || null)}
-        onBlur={onCancel}
-        className="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500"
+    <>
+      <button
+        ref={knopRef}
+        type="button"
+        onClick={onCancel}
+        className={clsx(
+          'flex w-full items-center gap-1 rounded-md border border-primary-400 bg-white text-left shadow-sm ring-2 ring-primary-100',
+          compact ? 'px-1.5 py-1 text-[10px]' : 'px-2 py-1.5 text-sm'
+        )}
       >
-        <option value="">-- {t('planning.noPlanning')} --</option>
-        {drivers.map((driver) => (
-          <option key={driver.id} value={driver.id}>
-            {driver.naam} {driver.adr ? '(ADR)' : ''}
-          </option>
-        ))}
-      </select>
-    </div>
+        <span
+          className={clsx(
+            'flex-1 truncate',
+            gekozen ? 'font-medium text-gray-900' : 'text-gray-400'
+          )}
+        >
+          {gekozen
+            ? compact
+              ? gekozen.naam.split(' ')[0]
+              : gekozen.naam
+            : t('planning.selectDriverShort')}
+        </span>
+        <ChevronDownIcon className={clsx('flex-shrink-0 text-gray-400', compact ? 'h-3 w-3' : 'h-4 w-4')} />
+      </button>
+      {paneel}
+    </>
   )
 }
 
