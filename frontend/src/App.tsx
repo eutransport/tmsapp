@@ -131,6 +131,7 @@ const APKPage = React.lazy(() => import('@/pages/maintenance/APKPage'))
 const ADRPage = React.lazy(() => import('@/pages/maintenance/ADRPage'))
 const MaintenanceTasksPage = React.lazy(() => import('@/pages/maintenance/MaintenanceTasksPage'))
 const TiresPage = React.lazy(() => import('@/pages/maintenance/TiresPage'))
+const BrandblussersPage = React.lazy(() => import('@/pages/maintenance/BrandblussersPage'))
 const MaintenanceSettingsPage = React.lazy(() => import('@/pages/maintenance/MaintenanceSettingsPage'))
 
 // Tachograph (tabbladen per aanbieder: Linqo / Radius)
@@ -328,6 +329,7 @@ function App() {
         <Route path="/maintenance/adr" element={<ADRPage />} />
         <Route path="/maintenance/tasks" element={<MaintenanceTasksPage />} />
         <Route path="/maintenance/tires" element={<TiresPage />} />
+        <Route path="/maintenance/brandblussers" element={<BrandblussersPage />} />
         <Route path="/maintenance/settings" element={<AdminRoute><MaintenanceSettingsPage /></AdminRoute>} />
         
         {/* Track & Trace */}
