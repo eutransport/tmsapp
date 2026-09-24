@@ -189,9 +189,12 @@ function DriverForm({
     
     const saveData: DriverCreate | DriverUpdate = {
       naam: formData.naam,
-      telefoon: formData.telefoon || undefined,
-      bedrijf: formData.bedrijf || undefined,
-      gekoppelde_gebruiker: formData.gekoppelde_gebruiker || undefined,
+      // Let op: bewust geen `|| undefined`. Een veld met de waarde undefined
+      // verdwijnt uit de JSON, en een ontbrekend veld betekent voor de API
+      // "niet wijzigen". Leegmaken zou dan nooit worden opgeslagen.
+      telefoon: formData.telefoon,
+      bedrijf: formData.bedrijf || null,
+      gekoppelde_gebruiker: formData.gekoppelde_gebruiker || null,
       voertuig: formData.voertuig || null,
       adr: formData.adr,
       minimum_uren_per_week: formData.minimum_uren_per_week ? parseFloat(formData.minimum_uren_per_week) : null,
