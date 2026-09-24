@@ -1337,6 +1337,22 @@ interface DriverGroup {
   drivers: Driver[]
 }
 
+/**
+ * Plaats en hoogte van het uitklappaneel. Het paneel staat vast op het scherm
+ * (`position: fixed`), dus de hoogte moet binnen het venster passen; anders is
+ * het onderste deel van de lijst niet te bereiken.
+ * Ofwel `top` ofwel `bottom` is gevuld: naar beneden of naar boven openklappen.
+ */
+interface PaneelPositie {
+  /** Weergave als blad onderaan het scherm, voor telefoons. */
+  blad: boolean
+  left: number
+  width: number
+  maxHoogte: number
+  top?: number
+  bottom?: number
+}
+
 const GEEN_BEDRIJF = '__geen_bedrijf__'
 
 function DriverSelector({
@@ -1353,7 +1369,7 @@ function DriverSelector({
   const paneelRef = useRef<HTMLDivElement>(null)
   const zoekRef = useRef<HTMLInputElement>(null)
   const [zoekterm, setZoekterm] = useState('')
-  const [positie, setPositie] = useState<{ top: number; left: number; width: number } | null>(null)
+  const [positie, setPositie] = useState<PaneelPositie | null>(null)
 
   const gekozen = drivers.find((d) => d.id === value) || null
 
@@ -1440,11 +1456,39 @@ function DriverSelector({
       setPositie(null)
       return
     }
+    const marge = 8
+
+    // Op een telefoon is er onder een regel vaak te weinig ruimte voor een
+    // uitklaplijst. Stond de regel laag in beeld, dan viel de onderkant van de
+    // lijst buiten het scherm en waren de laatste bedrijven onbereikbaar: het
+    // paneel staat vast op het scherm, dus de pagina scrolt er niet naartoe.
+    // Daarom tonen we het op smalle schermen als blad onderaan, over de volle
+    // breedte en met ruime hoogte, zodat de lijst altijd doorscrolt.
+    if (window.innerWidth < 640) {
+      setPositie({
+        blad: true,
+        left: marge,
+        width: window.innerWidth - marge * 2,
+        maxHoogte: Math.round(window.innerHeight * 0.7),
+        bottom: marge,
+      })
+      return
+    }
+
     const vak = knop.getBoundingClientRect()
-    const breedte = Math.max(vak.width, 280)
-    const ruimteRechts = window.innerWidth - vak.left
-    const links = ruimteRechts < breedte + 8 ? Math.max(8, vak.right - breedte) : vak.left
-    setPositie({ top: vak.bottom + 4, left: links, width: breedte })
+    const breedte = Math.min(Math.max(vak.width, 280), window.innerWidth - marge * 2)
+    const links = Math.max(marge, Math.min(vak.left, window.innerWidth - breedte - marge))
+    const ruimteOnder = window.innerHeight - vak.bottom - marge
+    const ruimteBoven = vak.top - marge
+    // Naar boven openklappen zodra het onder krap wordt en er boven meer ruimte is.
+    const naarBoven = ruimteOnder < 240 && ruimteBoven > ruimteOnder
+    const maxHoogte = Math.max(160, Math.min(384, naarBoven ? ruimteBoven : ruimteOnder))
+
+    setPositie(
+      naarBoven
+        ? { blad: false, left: links, width: breedte, maxHoogte, bottom: window.innerHeight - vak.top + 4 }
+        : { blad: false, left: links, width: breedte, maxHoogte, top: vak.bottom + 4 }
+    )
   }, [])
 
   useEffect(() => {
@@ -1461,10 +1505,11 @@ function DriverSelector({
 
   // Het zoekveld bestaat pas zodra de positie bekend is, dus de focus kan niet
   // in de effecthook hierboven. Eenmalig, anders springt de cursor terug bij
-  // elke herberekening tijdens het scrollen.
+  // elke herberekening tijdens het scrollen. Op een telefoon juist NIET, want
+  // dan schuift het toetsenbord over de lijst heen.
   const heeftFocusGehad = useRef(false)
   useEffect(() => {
-    if (positie && !heeftFocusGehad.current) {
+    if (positie && !positie.blad && !heeftFocusGehad.current) {
       heeftFocusGehad.current = true
       zoekRef.current?.focus()
     }
@@ -1499,32 +1544,44 @@ function DriverSelector({
 
   const paneel = positie
     ? createPortal(
-        <div
-          ref={paneelRef}
-          style={{ top: positie.top, left: positie.left, width: positie.width }}
-          className="fixed z-50 rounded-lg border border-gray-200 bg-white shadow-xl"
-        >
-          <div className="border-b border-gray-100 p-2">
-            <div className="relative">
-              <MagnifyingGlassIcon className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input
-                ref={zoekRef}
-                type="text"
-                value={zoekterm}
-                onChange={(e) => setZoekterm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && eersteTreffer) {
-                    e.preventDefault()
-                    onChange(eersteTreffer.id)
-                  }
-                }}
-                placeholder={t('planning.searchDriver')}
-                className="w-full rounded-md border-gray-300 py-1.5 pl-8 pr-2 text-sm focus:border-primary-500 focus:ring-primary-500"
-              />
+        <>
+          {/* Op een telefoon een waas eronder, zodat het blad zich losmaakt van
+              de planning erachter. Klikken erop sluit de keuze. */}
+          {positie.blad && <div className="fixed inset-0 z-40 bg-black/25" aria-hidden="true" />}
+          <div
+            ref={paneelRef}
+            style={{
+              top: positie.top,
+              bottom: positie.bottom,
+              left: positie.left,
+              width: positie.width,
+              maxHeight: positie.maxHoogte,
+            }}
+            className="fixed z-50 flex flex-col rounded-lg border border-gray-200 bg-white shadow-xl"
+          >
+            <div className="shrink-0 border-b border-gray-100 p-2">
+              <div className="relative">
+                <MagnifyingGlassIcon className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  ref={zoekRef}
+                  type="text"
+                  value={zoekterm}
+                  onChange={(e) => setZoekterm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && eersteTreffer) {
+                      e.preventDefault()
+                      onChange(eersteTreffer.id)
+                    }
+                  }}
+                  placeholder={t('planning.searchDriver')}
+                  className="w-full rounded-md border-gray-300 py-1.5 pl-8 pr-2 text-sm focus:border-primary-500 focus:ring-primary-500"
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="max-h-72 overflow-y-auto overscroll-contain py-1">
+            {/* `min-h-0` is nodig: zonder dat weigert een flex-kind te krimpen
+                en loopt de lijst alsnog buiten het paneel door. */}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1">
             <button
               type="button"
               onClick={() => onChange(null)}
@@ -1604,8 +1661,9 @@ function DriverSelector({
                 </div>
               )
             })}
+            </div>
           </div>
-        </div>,
+        </>,
         document.body
       )
     : null
