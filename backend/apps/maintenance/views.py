@@ -14,6 +14,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 
 from apps.core.permissions import IsAdminOrManager, IsAdminOnly, HasModulePermission
@@ -199,6 +200,17 @@ class VehicleMaintenanceProfileViewSet(viewsets.ModelViewSet):
 # APK
 # =============================================================================
 
+class RDWAanvulThrottle(SimpleRateThrottle):
+    """Begrens het aanvullen vanuit de RDW: per opdracht gaan er meerdere
+    aanvragen per wagen naar de RDW. Tellen per gebruiker, niet per IP."""
+    scope = 'rdw_sync'
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            return self.cache_format % {'scope': self.scope, 'ident': request.user.pk}
+        return self.get_ident(request)
+
+
 class APKRecordViewSet(viewsets.ModelViewSet):
     """CRUD voor APK records met countdown functionaliteit."""
     queryset = APKRecord.objects.select_related(
@@ -218,6 +230,37 @@ class APKRecordViewSet(viewsets.ModelViewSet):
             f"APK record created: {apk.vehicle.kenteken} expiry {apk.expiry_date} "
             f"by {self.request.user.email}"
         )
+
+    @action(detail=False, methods=['post'], url_path='aanvullen-vanuit-rdw',
+            throttle_classes=[RDWAanvulThrottle])
+    def aanvullen_vanuit_rdw(self, request):
+        """Vul de APK-lijst aan met de keuringsdata die de RDW kent.
+
+        Mag zo vaak gedraaid worden als u wilt: wagens die er al in staan
+        worden overgeslagen, alleen wat ontbreekt komt erbij. Zet
+        ``ververs_rdw`` op true om ook voor bekende wagens opnieuw bij de
+        RDW te kijken, zodat vernieuwde keuringen worden opgepikt.
+        """
+        from apps.fleet.models import Vehicle
+        from apps.fleet import rdw_sync
+
+        alleen_actief = request.data.get('alleen_actief', True)
+        ververs_rdw = bool(request.data.get('ververs_rdw', False))
+
+        wagens = Vehicle.objects.all()
+        if alleen_actief:
+            wagens = wagens.filter(actief=True)
+        wagens = wagens.order_by('kenteken')
+        aantal = wagens.count()
+
+        uitkomst = rdw_sync.vul_apk_aan(
+            wagens, ververs_rdw=ververs_rdw, gebruiker=request.user)
+
+        logger.info(
+            "APK aangevuld vanuit RDW door %s: %s toegevoegd van %s wagens",
+            request.user.email, uitkomst['toegevoegd'], aantal,
+        )
+        return Response(uitkomst)
 
     @action(detail=False, methods=['get'])
     def countdown(self, request):

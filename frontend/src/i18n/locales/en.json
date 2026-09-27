@@ -2152,6 +2152,8 @@
       "countdown": "Countdown",
       "records": "Inspection History",
       "newRecord": "New inspection",
+      "settings": "Settings",
+      "settingsTitle": "MOT reminder settings",
       "renewApk": "Renew APK",
       "renew": "Renew",
       "selectVehicle": "Select vehicle",

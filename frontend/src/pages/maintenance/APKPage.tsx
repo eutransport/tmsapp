@@ -14,6 +14,7 @@ import {
   ChevronUpIcon,
   ChevronDownIcon,
   Cog6ToothIcon,
+  CloudArrowDownIcon,
 } from '@heroicons/react/24/outline'
 import { APKRecord, APKCountdown, APKSettings, User, Vehicle } from '@/types'
 import {
@@ -24,8 +25,10 @@ import {
   renewAPK,
   getAPKSettings,
   updateAPKSettings,
+  vulApkAanVanuitRdw,
   APKFilters,
   APKSettingsPayload,
+  ApkAanvulResultaat,
 } from '@/api/maintenance'
 import { getAllVehicles } from '@/api/fleet'
 import { getUsers } from '@/api/users'
@@ -89,6 +92,10 @@ export default function APKPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<APKRecord | null>(null)
   const [isActionLoading, setIsActionLoading] = useState(false)
+
+  // Aanvullen vanuit het kentekenregister van de RDW
+  const [rdwBezig, setRdwBezig] = useState(false)
+  const [rdwResultaat, setRdwResultaat] = useState<ApkAanvulResultaat | null>(null)
 
   const fetchCountdowns = useCallback(async () => {
     try {
@@ -214,6 +221,26 @@ export default function APKPage() {
     finally { setIsActionLoading(false) }
   }
 
+  /**
+   * Vul de lijst aan met de keuringsdata die de RDW kent. Dit mag zo vaak
+   * als u wilt: wagens die er al in staan worden overgeslagen.
+   */
+  const vulAanVanuitRdw = async (verversRdw: boolean) => {
+    setRdwBezig(true)
+    setRdwResultaat(null)
+    setError(null)
+    try {
+      const uitkomst = await vulApkAanVanuitRdw(verversRdw)
+      setRdwResultaat(uitkomst)
+      fetchRecords()
+      fetchCountdowns()
+    } catch {
+      setError('Het aanvullen vanuit de RDW is niet gelukt. Probeer het later opnieuw.')
+    } finally {
+      setRdwBezig(false)
+    }
+  }
+
   const getCountdownBg = (status: string) => {
     switch (status) {
       case 'expired': return 'bg-red-500 text-white'
@@ -252,7 +279,7 @@ export default function APKPage() {
       </div>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <ShieldCheckIcon className="w-7 h-7 text-primary-600" />
@@ -260,7 +287,16 @@ export default function APKPage() {
           </h1>
           <p className="text-gray-500 mt-1">{t('maintenance.apk.subtitle')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => vulAanVanuitRdw(false)}
+            disabled={rdwBezig}
+            className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center gap-2 disabled:opacity-50"
+            title="Haalt de APK-datums op bij de RDW en zet de wagens erbij die hier nog niet in staan"
+          >
+            <CloudArrowDownIcon className={`w-5 h-5 ${rdwBezig ? 'animate-pulse' : ''}`} />
+            {rdwBezig ? 'Bezig met aanvullen...' : 'Aanvullen vanuit de RDW'}
+          </button>
           {isAdmin && (
             <button
               onClick={() => setShowSettingsModal(true)}
@@ -279,6 +315,48 @@ export default function APKPage() {
           </button>
         </div>
       </div>
+
+      {/* Uitkomst van het aanvullen vanuit de RDW */}
+      {rdwResultaat && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg">
+          <div className="flex items-start gap-2">
+            <CloudArrowDownIcon className="w-5 h-5 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium">
+                {rdwResultaat.toegevoegd === 0
+                  ? 'Alle wagens stonden er al in. Er is niets toegevoegd.'
+                  : `${rdwResultaat.toegevoegd} ${rdwResultaat.toegevoegd === 1 ? 'wagen' : 'wagens'} toegevoegd aan de lijst.`}
+              </p>
+              <p className="text-sm mt-0.5">
+                {rdwResultaat.al_aanwezig} stonden er al in
+                {rdwResultaat.opgehaald > 0 && `, ${rdwResultaat.opgehaald} opgehaald bij de RDW`}
+                {rdwResultaat.geen_datum > 0 &&
+                  `, ${rdwResultaat.geen_datum} zonder APK-datum bij de RDW`}
+                {rdwResultaat.mislukt > 0 && `, ${rdwResultaat.mislukt} mislukt`}.
+              </p>
+              {rdwResultaat.afgebroken && (
+                <p className="text-sm mt-1 text-red-700">
+                  De opdracht is afgebroken: {rdwResultaat.melding}
+                </p>
+              )}
+              <p className="text-sm mt-1">
+                Is een keuring vernieuwd?{' '}
+                <button
+                  onClick={() => vulAanVanuitRdw(true)}
+                  disabled={rdwBezig}
+                  className="underline hover:no-underline disabled:opacity-50"
+                >
+                  Alle wagens opnieuw bij de RDW nakijken
+                </button>
+                .
+              </p>
+            </div>
+            <button onClick={() => setRdwResultaat(null)} className="shrink-0">
+              <XMarkIcon className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Success/Error messages */}
       {successMessage && (

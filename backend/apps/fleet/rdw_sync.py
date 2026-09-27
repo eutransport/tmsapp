@@ -195,3 +195,75 @@ def werk_vloot_bij(vehicles, maak_apk_record: bool = True, gebruiker=None) -> di
             })
 
     return uitkomst
+
+
+def vul_apk_aan(vehicles, ververs_rdw: bool = False, gebruiker=None) -> dict:
+    """Vul de APK-module aan met de keuringsdata die de RDW kent.
+
+    Bedoeld voor de knop op de APK-pagina. De opdracht mag zo vaak gedraaid
+    worden als u wilt: er wordt alleen een APK-regel aangemaakt voor een
+    wagen die er nog geen heeft met die vervaldatum. Wagens die er al in
+    staan blijven onaangeroerd, inclusief wat u er zelf bij hebt gezet
+    (keuringsstation, kosten, opmerkingen).
+
+    Wagens waarvan nog geen RDW-gegevens bekend zijn, worden onderweg
+    opgehaald. Met ``ververs_rdw`` wordt ook voor de rest opnieuw bij de RDW
+    gekeken; dat vangt keuringen op die sinds de vorige keer zijn vernieuwd.
+    """
+    uitkomst = {
+        'toegevoegd': 0,
+        'al_aanwezig': 0,
+        'opgehaald': 0,
+        'geen_datum': 0,
+        'mislukt': 0,
+        'regels': [],
+        'afgebroken': False,
+    }
+
+    for vehicle in vehicles:
+        # 1. Gegevens ophalen wanneer die ontbreken (of als erom gevraagd is).
+        if ververs_rdw or vehicle.rdw_opgehaald_op is None:
+            resultaat = werk_voertuig_bij(vehicle, maak_apk_record=False,
+                                          gebruiker=gebruiker)
+            if not resultaat['gelukt']:
+                uitkomst['mislukt'] += 1
+                uitkomst['regels'].append({
+                    'kenteken': vehicle.kenteken, 'uitkomst': 'mislukt',
+                    'melding': resultaat['melding'],
+                })
+                if resultaat.get('stoppen'):
+                    uitkomst['afgebroken'] = True
+                    uitkomst['melding'] = resultaat['melding']
+                    break
+                continue
+            if resultaat['gevonden']:
+                uitkomst['opgehaald'] += 1
+
+        # 2. Pas daarna kijken of er een APK-regel bij moet.
+        if not vehicle.rdw_apk_vervaldatum:
+            uitkomst['geen_datum'] += 1
+            uitkomst['regels'].append({
+                'kenteken': vehicle.kenteken, 'uitkomst': 'geen datum',
+                'melding': 'De RDW kent voor dit kenteken geen APK-datum.',
+            })
+            continue
+
+        datum = vehicle.rdw_apk_vervaldatum.strftime('%d-%m-%Y')
+        if _leg_apk_vast(vehicle, vehicle.rdw_apk_vervaldatum, gebruiker):
+            uitkomst['toegevoegd'] += 1
+            uitkomst['regels'].append({
+                'kenteken': vehicle.kenteken, 'uitkomst': 'toegevoegd',
+                'melding': f'APK tot {datum} toegevoegd.',
+            })
+        else:
+            uitkomst['al_aanwezig'] += 1
+            uitkomst['regels'].append({
+                'kenteken': vehicle.kenteken, 'uitkomst': 'al aanwezig',
+                'melding': f'Stond er al in met vervaldatum {datum}.',
+            })
+
+    logger.info(
+        'APK aangevuld vanuit de RDW: %s toegevoegd, %s stonden er al in, %s mislukt',
+        uitkomst['toegevoegd'], uitkomst['al_aanwezig'], uitkomst['mislukt'],
+    )
+    return uitkomst

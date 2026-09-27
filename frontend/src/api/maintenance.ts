@@ -189,6 +189,30 @@ export async function getAPKHistory(vehicleId: string): Promise<APKRecord[]> {
   return response.data
 }
 
+/** Uitkomst van het aanvullen van de APK-lijst met gegevens van de RDW. */
+export interface ApkAanvulResultaat {
+  toegevoegd: number
+  al_aanwezig: number
+  opgehaald: number
+  geen_datum: number
+  mislukt: number
+  afgebroken: boolean
+  melding?: string
+  regels: { kenteken: string; uitkomst: string; melding: string }[]
+}
+
+/**
+ * Vul de APK-lijst aan met de keuringsdata die de RDW kent. Wagens die er al
+ * in staan worden overgeslagen. Met `verversRdw` wordt ook voor bekende
+ * wagens opnieuw bij de RDW gekeken, zodat vernieuwde keuringen meekomen.
+ */
+export async function vulApkAanVanuitRdw(verversRdw = false): Promise<ApkAanvulResultaat> {
+  const response = await api.post(`${BASE}/apk/aanvullen-vanuit-rdw/`, {
+    ververs_rdw: verversRdw,
+  })
+  return response.data
+}
+
 export type APKSettingsPayload = {
   email_profile: string | null
   send_hour: number
