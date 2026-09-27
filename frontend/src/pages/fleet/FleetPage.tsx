@@ -246,7 +246,8 @@ function ApkCel({ vehicle }: { vehicle: Vehicle }) {
 function Regel({ label, waarde }: { label: string; waarde: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-0.5">
-      <dt className="text-gray-500">{label}</dt>
+      {/* Het label mag op een smal scherm niet middenin een woord afbreken. */}
+      <dt className="shrink-0 whitespace-nowrap text-gray-500">{label}</dt>
       <dd className="text-right font-medium text-gray-900">{waarde}</dd>
     </div>
   )
@@ -1457,7 +1458,14 @@ export default function FleetPage() {
             vehicles.map(vehicle => (
               <div key={vehicle.id} className={`px-3 py-2 hover:bg-gray-50 ${!vehicle.actief ? 'opacity-50' : ''}`}>
                 <div className="flex items-center justify-between gap-1.5">
-                  <div className="flex-1 min-w-0">
+                  {/* De hele linkerkant is aantikbaar: op een telefoon is dat
+                      makkelijker raken dan alleen het pijltje. */}
+                  <button
+                    type="button"
+                    onClick={() => setRdwOpenId(rdwOpenId === vehicle.id ? null : vehicle.id)}
+                    className="flex-1 min-w-0 text-left"
+                    aria-expanded={rdwOpenId === vehicle.id}
+                  >
                     <div className="flex items-center gap-2">
                       <LicensePlate kenteken={vehicle.kenteken} size="sm" />
                       {vehicle.type_wagen && (
@@ -1486,8 +1494,19 @@ export default function FleetPage() {
                         </span>
                       </div>
                     )}
-                  </div>
+                  </button>
                   <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      onClick={() => setRdwOpenId(rdwOpenId === vehicle.id ? null : vehicle.id)}
+                      className="p-1 min-w-[36px] min-h-[36px] flex items-center justify-center text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
+                      title="Details tonen"
+                    >
+                      {rdwOpenId === vehicle.id ? (
+                        <ChevronUpIcon className="w-4 h-4" />
+                      ) : (
+                        <ChevronDownIcon className="w-4 h-4" />
+                      )}
+                    </button>
                     {canManage && (<>
                     <button
                       onClick={() => haalRdwOp(vehicle)}
@@ -1516,6 +1535,34 @@ export default function FleetPage() {
                     </>)}
                   </div>
                 </div>
+
+                {rdwOpenId === vehicle.id && (
+                  <div className="mt-2 border-t pt-2">
+                    {vehicle.rdw_opgehaald_op ? (
+                      <>
+                        <RdwGegevensPaneel g={vehicle} />
+                        <p className="mt-2 text-xs text-gray-500">
+                          Opgehaald bij de RDW op{' '}
+                          {new Date(vehicle.rdw_opgehaald_op).toLocaleString('nl-NL')}.
+                        </p>
+                      </>
+                    ) : (
+                      <div className="space-y-2 text-sm text-gray-600">
+                        <p>Voor deze wagen zijn nog geen RDW-gegevens opgehaald.</p>
+                        {canManage && (
+                          <button
+                            onClick={() => haalRdwOp(vehicle)}
+                            className="inline-flex items-center rounded border border-primary-300 bg-white px-2 py-1 text-xs text-primary-700 hover:bg-primary-50"
+                            disabled={rdwBezigId === vehicle.id}
+                          >
+                            <CloudArrowDownIcon className="mr-1 h-4 w-4" />
+                            Nu ophalen
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))
           )}
