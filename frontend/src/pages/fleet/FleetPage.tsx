@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { 
   MagnifyingGlassIcon, 
@@ -11,6 +11,8 @@ import {
   ChevronDownIcon,
   ArrowPathIcon,
   TruckIcon,
+  CloudArrowDownIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { Vehicle, Company } from '@/types'
 import { useAuthStore } from '@/stores/authStore'
@@ -23,6 +25,11 @@ import {
   VehicleCreate,
   VehicleUpdate,
   KentekenConflict,
+  RdwGegevens,
+  RdwBulkResultaat,
+  zoekKentekenOp,
+  verversRdw,
+  verversRdwAlles,
 } from '@/api/fleet'
 import { getAllCompanies } from '@/api/companies'
 import Pagination, { PageSize } from '@/components/common/Pagination'
@@ -150,6 +157,222 @@ function isMaandag(isoDatum: string): boolean {
   return !Number.isNaN(d.getTime()) && d.getDay() === 1
 }
 
+// ---------------------------------------------------------------------------
+// Weergave van de gegevens uit het kentekenregister van de RDW
+// ---------------------------------------------------------------------------
+
+/** Datum als 04-11-2026; niets ingevuld geeft een streepje. */
+function datumNL(iso?: string | null): string {
+  if (!iso) return '-'
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+/** Aantal dagen tot een datum; negatief als die al voorbij is. */
+function dagenTot(iso?: string | null): number | null {
+  if (!iso) return null
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return null
+  const vandaag = new Date()
+  vandaag.setHours(0, 0, 0, 0)
+  return Math.round((d.getTime() - vandaag.getTime()) / 86400000)
+}
+
+/** 19500 wordt '19.500 kg'. */
+function metEenheid(n?: number | null, eenheid = ''): string {
+  if (n === null || n === undefined) return '-'
+  return eenheid ? `${n.toLocaleString('nl-NL')} ${eenheid}` : n.toLocaleString('nl-NL')
+}
+
+/** De RDW rekent in centimeters; mensen denken in meters. */
+function inMeters(cm?: number | null): string {
+  if (!cm) return '-'
+  return `${(cm / 100).toLocaleString('nl-NL', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  })} m`
+}
+
+function jaNee(b?: boolean | null): string {
+  if (b === null || b === undefined) return '-'
+  return b ? 'Ja' : 'Nee'
+}
+
+/** Groen, oranje of rood, afhankelijk van hoe dichtbij de keuring is. */
+function keuringKleuren(dagen: number | null): string {
+  if (dagen === null) return 'border-gray-200 bg-gray-50 text-gray-600'
+  if (dagen < 0) return 'border-red-200 bg-red-50 text-red-800'
+  if (dagen <= 30) return 'border-amber-200 bg-amber-50 text-amber-800'
+  if (dagen <= 60) return 'border-yellow-200 bg-yellow-50 text-yellow-800'
+  return 'border-green-200 bg-green-50 text-green-800'
+}
+
+function dagenTekst(dagen: number | null): string {
+  if (dagen === null) return 'niet bekend'
+  if (dagen < 0) return `${Math.abs(dagen)} dagen verlopen`
+  if (dagen === 0) return 'verloopt vandaag'
+  if (dagen === 1) return 'nog 1 dag'
+  return `nog ${dagen} dagen`
+}
+
+function KeuringKaart({ titel, datum }: { titel: string; datum?: string | null }) {
+  const dagen = dagenTot(datum)
+  return (
+    <div className={`rounded-lg border p-2.5 ${keuringKleuren(dagen)}`}>
+      <p className="text-xs opacity-80">{titel}</p>
+      <p className="text-base font-semibold">{datumNL(datum)}</p>
+      <p className="text-xs">{dagenTekst(dagen)}</p>
+    </div>
+  )
+}
+
+/** De APK-datum in de vlootlijst, met kleur naar hoe dringend die is. */
+function ApkCel({ vehicle }: { vehicle: Vehicle }) {
+  if (!vehicle.rdw_apk_vervaldatum) {
+    return <span className="text-gray-400">nog niet opgehaald</span>
+  }
+  const dagen = dagenTot(vehicle.rdw_apk_vervaldatum)
+  return (
+    <span
+      className={`inline-flex flex-col rounded px-2 py-0.5 text-xs ${keuringKleuren(dagen)}`}
+      title={dagenTekst(dagen)}
+    >
+      <span className="font-medium">{datumNL(vehicle.rdw_apk_vervaldatum)}</span>
+      <span className="opacity-80">{dagenTekst(dagen)}</span>
+    </span>
+  )
+}
+
+function Regel({ label, waarde }: { label: string; waarde: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-0.5">
+      <dt className="text-gray-500">{label}</dt>
+      <dd className="text-right font-medium text-gray-900">{waarde}</dd>
+    </div>
+  )
+}
+
+function Groep({ titel, children }: { titel: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-gray-200 p-3">
+      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+        {titel}
+      </p>
+      <dl className="divide-y divide-gray-100 text-sm">{children}</dl>
+    </div>
+  )
+}
+
+/**
+ * Toont alles wat er over een kenteken bekend is bij de RDW.
+ * Werkt zowel met een verse opzoeking als met een opgeslagen wagen, omdat
+ * de veldnamen in beide gevallen hetzelfde zijn.
+ */
+function RdwGegevensPaneel({ g }: { g: RdwGegevens | Vehicle }) {
+  const assen = g.rdw_assen || []
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <KeuringKaart titel="APK geldig tot" datum={g.rdw_apk_vervaldatum} />
+        <KeuringKaart titel="Tachograaf geldig tot" datum={g.rdw_tachograaf_vervaldatum} />
+      </div>
+
+      {g.rdw_terugroepactie_open && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-sm text-red-800">
+          Let op: voor dit voertuig staat een <strong>terugroepactie</strong> open bij de RDW.
+        </div>
+      )}
+      {g.rdw_wam_verzekerd === false && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-800">
+          De RDW ziet dit voertuig als <strong>niet WAM-verzekerd</strong>.
+        </div>
+      )}
+
+      <Groep titel="Voertuig">
+        <Regel label="Merk" waarde={g.rdw_merk || '-'} />
+        <Regel label="Handelsbenaming" waarde={g.rdw_handelsbenaming || '-'} />
+        <Regel label="Soort opbouw" waarde={g.rdw_carrosserie || g.rdw_inrichting || '-'} />
+        <Regel
+          label="Categorie"
+          waarde={
+            g.rdw_voertuigcategorie_omschrijving
+              ? `${g.rdw_voertuigcategorie_omschrijving} (${g.rdw_voertuigcategorie})`
+              : g.rdw_voertuigcategorie || '-'
+          }
+        />
+        <Regel label="Bouwjaar" waarde={g.rdw_bouwjaar ?? '-'} />
+        <Regel label="Eerste toelating" waarde={datumNL(g.rdw_datum_eerste_toelating)} />
+      </Groep>
+
+      <Groep titel="Gewicht">
+        <Regel label="Massa leeg" waarde={metEenheid(g.rdw_massa_ledig, 'kg')} />
+        <Regel label="Massa rijklaar" waarde={metEenheid(g.rdw_massa_rijklaar, 'kg')} />
+        <Regel label="Toegestane maximummassa" waarde={metEenheid(g.rdw_max_massa, 'kg')} />
+        <Regel label="Laadvermogen" waarde={metEenheid(g.rdw_laadvermogen, 'kg')} />
+        <Regel
+          label="Maximum met oplegger"
+          waarde={metEenheid(g.rdw_max_massa_samenstelling, 'kg')}
+        />
+        <Regel label="Zwaarste toegestane aslast" waarde={metEenheid(g.rdw_max_aslast, 'kg')} />
+      </Groep>
+
+      <Groep titel="Milieu en tolheffing">
+        <Regel label="Brandstof" waarde={g.rdw_brandstof || '-'} />
+        <Regel label="Euronorm" waarde={g.rdw_euronorm || '-'} />
+        <Regel label="Uitlaatemissieniveau" waarde={g.rdw_emissieklasse || '-'} />
+        <Regel label="CO2-klasse" waarde={g.rdw_co2_klasse_omschrijving || g.rdw_co2_klasse || '-'} />
+        <Regel
+          label="Vermogen"
+          waarde={g.rdw_vermogen_kw ? `${Math.round(Number(g.rdw_vermogen_kw))} kW` : '-'}
+        />
+        <Regel label="Geluid rijdend" waarde={metEenheid(g.rdw_geluidsniveau, 'dB')} />
+      </Groep>
+
+      <Groep titel="Afmetingen">
+        <Regel label="Lengte" waarde={inMeters(g.rdw_lengte_cm)} />
+        <Regel label="Breedte" waarde={inMeters(g.rdw_breedte_cm)} />
+        <Regel label="Wielbasis" waarde={inMeters(g.rdw_wielbasis_cm)} />
+        <Regel label="Maximumsnelheid" waarde={metEenheid(g.rdw_max_snelheid, 'km/u')} />
+      </Groep>
+
+      <Groep titel="Assen en wielen">
+        <Regel label="Aantal assen" waarde={g.rdw_aantal_assen ?? '-'} />
+        <Regel label="Aantal wielen" waarde={g.rdw_aantal_wielen ?? '-'} />
+      </Groep>
+
+      {assen.length > 0 && (
+        <div className="rounded-lg border border-gray-200 p-3">
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Per as
+          </p>
+          <ul className="space-y-1 text-sm text-gray-700">
+            {assen.map((as, i) => (
+              <li key={as.nummer ?? i} className="flex flex-wrap items-center gap-x-2">
+                <span className="font-medium text-gray-900">As {as.nummer ?? i + 1}</span>
+                {as.plaats && <span className="text-gray-500">({as.plaats.toLowerCase()})</span>}
+                <span>{as.aangedreven ? 'aangedreven' : 'niet aangedreven'}</span>
+                {as.hefas && <span className="text-gray-500">hefas</span>}
+                {as.max_aslast_kg != null && (
+                  <span className="text-gray-500">
+                    maximaal {as.max_aslast_kg.toLocaleString('nl-NL')} kg
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <Groep titel="Overig">
+        <Regel label="WAM-verzekerd" waarde={jaNee(g.rdw_wam_verzekerd)} />
+        <Regel label="Openstaande terugroepactie" waarde={jaNee(g.rdw_terugroepactie_open)} />
+        <Regel label="Geregistreerd voor export" waarde={jaNee(g.rdw_export)} />
+      </Groep>
+    </div>
+  )
+}
+
 function VehicleForm({
   vehicle,
   companies,
@@ -178,6 +401,65 @@ function VehicleForm({
     bedrijf_vanaf: '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // --- Opzoeken bij de RDW ------------------------------------------------
+  // Er gaat niet bij elke toetsaanslag een aanvraag uit; pas als het
+  // kenteken even ongemoeid blijft, wordt er opgezocht.
+  const [rdwBezig, setRdwBezig] = useState(false)
+  const [rdwGegevens, setRdwGegevens] = useState<RdwGegevens | null>(null)
+  const [rdwMelding, setRdwMelding] = useState('')
+  const [rdwUitgeklapt, setRdwUitgeklapt] = useState(false)
+
+  const kentekenSchoon = formData.kenteken.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  const rdwNaam = rdwGegevens
+    ? [rdwGegevens.rdw_merk, rdwGegevens.rdw_handelsbenaming].filter(Boolean).join(' ')
+    : ''
+
+  useEffect(() => {
+    // Een Nederlands kenteken heeft zes tekens. Korter heeft geen zin.
+    if (kentekenSchoon.length < 6) {
+      setRdwGegevens(null)
+      setRdwMelding('')
+      setRdwBezig(false)
+      return
+    }
+
+    let afgebroken = false
+    setRdwBezig(true)
+    setRdwMelding('')
+
+    const wachten = setTimeout(async () => {
+      try {
+        const gevonden = await zoekKentekenOp(kentekenSchoon)
+        if (afgebroken) return
+        if (gevonden.gevonden) {
+          setRdwGegevens(gevonden)
+          setRdwMelding('')
+        } else {
+          setRdwGegevens(null)
+          setRdwMelding('Dit kenteken staat niet in het register van de RDW.')
+        }
+      } catch (err: any) {
+        if (afgebroken) return
+        setRdwGegevens(null)
+        setRdwMelding(
+          err?.response?.data?.detail || 'Het opzoeken bij de RDW is niet gelukt.',
+        )
+      } finally {
+        if (!afgebroken) setRdwBezig(false)
+      }
+    }, 600)
+
+    return () => {
+      afgebroken = true
+      clearTimeout(wachten)
+    }
+  }, [kentekenSchoon])
+
+  /** Zet merk en handelsbenaming van de RDW in het veld Type wagen. */
+  const neemTypeOver = () => {
+    if (rdwNaam) setFormData(prev => ({ ...prev, type_wagen: rdwNaam }))
+  }
 
   // Het ritnummer is aangepast ten opzichte van wat er nu in de vloot staat.
   const ritnummerGewijzigd = Boolean(
@@ -251,6 +533,87 @@ function VehicleForm({
         />
         {errors.kenteken && <p className="text-red-500 text-xs mt-1">{errors.kenteken}</p>}
       </div>
+
+      {/* Wat de RDW over dit kenteken weet. Alleen tonen; opslaan gebeurt pas
+          als de wagen bewaard wordt. */}
+      {kentekenSchoon.length >= 6 && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+          {rdwBezig ? (
+            <p className="flex items-center gap-2 text-sm text-gray-600">
+              <ArrowPathIcon className="h-4 w-4 animate-spin" />
+              Gegevens opzoeken bij de RDW...
+            </p>
+          ) : rdwMelding ? (
+            <p className="flex items-start gap-2 text-sm text-amber-800">
+              <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 shrink-0" />
+              {rdwMelding}
+            </p>
+          ) : rdwGegevens ? (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm">
+                  <span className="font-semibold text-gray-900">{rdwNaam || 'Gevonden'}</span>
+                  {rdwGegevens.rdw_bouwjaar ? (
+                    <span className="text-gray-600"> uit {rdwGegevens.rdw_bouwjaar}</span>
+                  ) : null}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setRdwUitgeklapt(v => !v)}
+                  className="text-sm text-primary-600 hover:text-primary-700"
+                >
+                  {rdwUitgeklapt ? 'Minder tonen' : 'Alle gegevens tonen'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                <div>
+                  <p className="text-gray-500">APK tot</p>
+                  <p className="font-medium text-gray-900">
+                    {datumNL(rdwGegevens.rdw_apk_vervaldatum)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Tachograaf tot</p>
+                  <p className="font-medium text-gray-900">
+                    {datumNL(rdwGegevens.rdw_tachograaf_vervaldatum)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Euronorm</p>
+                  <p className="font-medium text-gray-900">{rdwGegevens.rdw_euronorm || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Maximummassa</p>
+                  <p className="font-medium text-gray-900">
+                    {metEenheid(rdwGegevens.rdw_max_massa, 'kg')}
+                  </p>
+                </div>
+              </div>
+
+              {!formData.type_wagen.trim() && rdwNaam && (
+                <button
+                  type="button"
+                  onClick={neemTypeOver}
+                  className="rounded border border-primary-300 bg-white px-2 py-1 text-xs text-primary-700 hover:bg-primary-50"
+                >
+                  Neem "{rdwNaam}" over als type wagen
+                </button>
+              )}
+
+              {rdwUitgeklapt && (
+                <div className="pt-1">
+                  <RdwGegevensPaneel g={rdwGegevens} />
+                </div>
+              )}
+
+              <p className="text-xs text-gray-500">
+                Deze gegevens worden opgeslagen zodra u de wagen bewaart.
+              </p>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -536,6 +899,14 @@ export default function FleetPage() {
     id?: string
   } | null>(null)
 
+  // Ophalen van gegevens bij de RDW: welke wagen is er bezig, en wat kwam
+  // er uit een bulkopdracht?
+  const [rdwBezigId, setRdwBezigId] = useState<string | null>(null)
+  const [rdwBulkBezig, setRdwBulkBezig] = useState(false)
+  const [rdwBulkResultaat, setRdwBulkResultaat] = useState<RdwBulkResultaat | null>(null)
+  // Welke wagen heeft zijn RDW-gegevens uitgeklapt in de tabel?
+  const [rdwOpenId, setRdwOpenId] = useState<string | null>(null)
+
   // Helper to extract error message
   const getErrorMessage = (err: any, defaultMsg: string): string => {
     if (err.response?.data) {
@@ -624,7 +995,17 @@ export default function FleetPage() {
     setIsActionLoading(true)
     try {
       if (mode === 'create') {
-        await createVehicle(data as VehicleCreate)
+        const nieuw = await createVehicle(data as VehicleCreate)
+        // Meteen de gegevens van de RDW erbij halen. Lukt dat niet, dan is de
+        // wagen gewoon aangemaakt en kunnen de gegevens later alsnog met de
+        // ververs-knop opgehaald worden.
+        if (nieuw?.id) {
+          try {
+            await verversRdw(nieuw.id)
+          } catch {
+            // Het RDW is niet bereikbaar; dat mag het aanmaken niet blokkeren.
+          }
+        }
       } else if (id) {
         await updateVehicle(id, data as VehicleUpdate)
       }
@@ -676,9 +1057,47 @@ export default function FleetPage() {
     }
   }
 
+  // Eén wagen bijwerken met de gegevens van de RDW.
+  const haalRdwOp = async (vehicle: Vehicle) => {
+    setRdwBezigId(vehicle.id)
+    setError(null)
+    try {
+      const uitkomst = await verversRdw(vehicle.id)
+      if (uitkomst.gevonden) {
+        showSuccess(
+          `${vehicle.kenteken}: ${uitkomst.melding}` +
+            (uitkomst.apk_vastgelegd ? ' De APK is ook in Keuringen gezet.' : ''),
+        )
+      } else {
+        setError(`${vehicle.kenteken} staat niet in het register van de RDW.`)
+      }
+      fetchVehicles()
+    } catch (err: any) {
+      setError(getErrorMessage(err, 'Het ophalen bij de RDW is niet gelukt.'))
+    } finally {
+      setRdwBezigId(null)
+    }
+  }
+
+  // De hele vloot bijwerken. Zonder `alles` alleen de wagens die nog geen
+  // gegevens hebben, zodat een herhaalde opdracht het RDW niet onnodig belast.
+  const haalRdwOpVoorVloot = async (alles: boolean) => {
+    setRdwBulkBezig(true)
+    setRdwBulkResultaat(null)
+    setError(null)
+    try {
+      const uitkomst = await verversRdwAlles(alles)
+      setRdwBulkResultaat(uitkomst)
+      fetchVehicles()
+    } catch (err: any) {
+      setError(getErrorMessage(err, 'Het bijwerken bij de RDW is niet gelukt.'))
+    } finally {
+      setRdwBulkBezig(false)
+    }
+  }
+
   // Get company name by ID
-  const getCompanyName = (vehicle: Vehicle) => {
-    if (vehicle.bedrijf_naam) return vehicle.bedrijf_naam
+  const getCompanyName = (vehicle: Vehicle) => {    if (vehicle.bedrijf_naam) return vehicle.bedrijf_naam
     if (vehicle.bedrijf) {
       const company = companies.find(c => c.id === vehicle.bedrijf)
       return company?.naam || '-'
@@ -703,15 +1122,70 @@ export default function FleetPage() {
       <div className="page-header">
         <h1 className="page-title">{t('fleet.title')}</h1>
         {canManage && (
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="btn-primary"
-        >
-          <PlusIcon className="w-5 h-5 mr-2" />
-          {t('fleet.newVehicle')}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => haalRdwOpVoorVloot(false)}
+            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            disabled={rdwBulkBezig}
+            title="Haalt bij de RDW de gegevens op van wagens die die nog niet hebben"
+          >
+            <CloudArrowDownIcon className={`mr-2 h-5 w-5 ${rdwBulkBezig ? 'animate-pulse' : ''}`} />
+            {rdwBulkBezig ? 'Bezig bij de RDW...' : 'Ontbrekende gegevens ophalen'}
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary"
+          >
+            <PlusIcon className="w-5 h-5 mr-2" />
+            {t('fleet.newVehicle')}
+          </button>
+        </div>
         )}
       </div>
+
+      {/* Uitkomst van een bulkopdracht bij de RDW */}
+      {rdwBulkResultaat && (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              {rdwBulkResultaat.melding ? (
+                <p>{rdwBulkResultaat.melding}</p>
+              ) : (
+                <p>
+                  <strong>{rdwBulkResultaat.bijgewerkt}</strong> wagens bijgewerkt bij de RDW,
+                  waarvan <strong>{rdwBulkResultaat.apk_records}</strong> met een nieuwe
+                  APK-datum in Keuringen.
+                  {rdwBulkResultaat.niet_gevonden > 0 && (
+                    <> {rdwBulkResultaat.niet_gevonden} kenteken(s) staan niet in het register.</>
+                  )}
+                  {rdwBulkResultaat.mislukt > 0 && (
+                    <> {rdwBulkResultaat.mislukt} wagen(s) zijn niet gelukt.</>
+                  )}
+                </p>
+              )}
+              {rdwBulkResultaat.afgebroken && (
+                <p className="mt-1 text-amber-800">
+                  De opdracht is afgebroken omdat de RDW niet bereikbaar was. Probeer het later
+                  nog eens.
+                </p>
+              )}
+              <button
+                onClick={() => haalRdwOpVoorVloot(true)}
+                className="mt-2 text-primary-700 underline hover:text-primary-800 disabled:opacity-60"
+                disabled={rdwBulkBezig}
+              >
+                Alle wagens opnieuw ophalen
+              </button>
+            </div>
+            <button
+              onClick={() => setRdwBulkResultaat(null)}
+              className="text-blue-500 hover:text-blue-700"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Success message */}
       {successMessage && (
@@ -823,6 +1297,9 @@ export default function FleetPage() {
                 <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
                   {t('companies.title')}
                 </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">
+                  APK
+                </th>
                 <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 uppercase">
                   {t('common.status')}
                 </th>
@@ -834,7 +1311,7 @@ export default function FleetPage() {
             <tbody className="divide-y">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                       <span className="ml-3">{t('common.loading')}</span>
@@ -843,7 +1320,7 @@ export default function FleetPage() {
                 </tr>
               ) : vehicles.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
                     <TruckIcon className="w-12 h-12 mx-auto text-gray-300 mb-3" />
                     <p>{t('fleet.noVehicles')}</p>
                     <button
@@ -856,13 +1333,17 @@ export default function FleetPage() {
                 </tr>
               ) : (
                 vehicles.map(vehicle => (
-                  <tr key={vehicle.id} className={`hover:bg-gray-50 ${!vehicle.actief ? 'opacity-50' : ''}`}>
+                  <Fragment key={vehicle.id}>
+                  <tr className={`hover:bg-gray-50 ${!vehicle.actief ? 'opacity-50' : ''}`}>
                     <td className="px-3 py-2">
                       <LicensePlate kenteken={vehicle.kenteken} size="sm" />
                     </td>
                     <td className="px-3 py-2 text-sm text-gray-600">{vehicle.type_wagen || '-'}</td>
                     <td className="px-3 py-2 text-sm text-gray-600">{vehicle.ritnummer || '-'}</td>
                     <td className="px-3 py-2 text-sm text-gray-600">{getCompanyName(vehicle)}</td>
+                    <td className="px-3 py-2 text-sm">
+                      <ApkCel vehicle={vehicle} />
+                    </td>
                     <td className="px-3 py-2 text-center">
                       {vehicle.actief ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -876,7 +1357,28 @@ export default function FleetPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-0.5">
+                        <button
+                          onClick={() => setRdwOpenId(rdwOpenId === vehicle.id ? null : vehicle.id)}
+                          className="p-1.5 min-w-[36px] min-h-[36px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
+                          title="RDW-gegevens tonen"
+                        >
+                          {rdwOpenId === vehicle.id ? (
+                            <ChevronUpIcon className="w-4 h-4" />
+                          ) : (
+                            <ChevronDownIcon className="w-4 h-4" />
+                          )}
+                        </button>
                         {canManage && (<>
+                        <button
+                          onClick={() => haalRdwOp(vehicle)}
+                          className="p-1.5 min-w-[36px] min-h-[36px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded disabled:opacity-50"
+                          title="Gegevens ophalen bij de RDW"
+                          disabled={rdwBezigId === vehicle.id}
+                        >
+                          <CloudArrowDownIcon
+                            className={`w-4 h-4 ${rdwBezigId === vehicle.id ? 'animate-pulse' : ''}`}
+                          />
+                        </button>
                         <button
                           onClick={() => { setSelectedVehicle(vehicle); setShowEditModal(true) }}
                           className="p-1.5 min-w-[36px] min-h-[36px] text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
@@ -895,6 +1397,36 @@ export default function FleetPage() {
                       </div>
                     </td>
                   </tr>
+                  {rdwOpenId === vehicle.id && (
+                    <tr className="bg-gray-50">
+                      <td colSpan={7} className="px-4 py-3">
+                        {vehicle.rdw_opgehaald_op ? (
+                          <>
+                            <RdwGegevensPaneel g={vehicle} />
+                            <p className="mt-2 text-xs text-gray-500">
+                              Opgehaald bij de RDW op{' '}
+                              {new Date(vehicle.rdw_opgehaald_op).toLocaleString('nl-NL')}.
+                            </p>
+                          </>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                            <span>Voor deze wagen zijn nog geen RDW-gegevens opgehaald.</span>
+                            {canManage && (
+                              <button
+                                onClick={() => haalRdwOp(vehicle)}
+                                className="inline-flex items-center rounded border border-primary-300 bg-white px-2 py-1 text-xs text-primary-700 hover:bg-primary-50"
+                                disabled={rdwBezigId === vehicle.id}
+                              >
+                                <CloudArrowDownIcon className="mr-1 h-4 w-4" />
+                                Nu ophalen
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))
               )}
             </tbody>
@@ -942,9 +1474,31 @@ export default function FleetPage() {
                       {vehicle.ritnummer && <span className="text-gray-300">&middot;</span>}
                       <span className="truncate">{getCompanyName(vehicle)}</span>
                     </div>
+                    {vehicle.rdw_apk_vervaldatum && (
+                      <div className="mt-1">
+                        <span
+                          className={`inline-block rounded px-1.5 py-0.5 text-xs ${keuringKleuren(
+                            dagenTot(vehicle.rdw_apk_vervaldatum),
+                          )}`}
+                        >
+                          APK {datumNL(vehicle.rdw_apk_vervaldatum)} &middot;{' '}
+                          {dagenTekst(dagenTot(vehicle.rdw_apk_vervaldatum))}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
                     {canManage && (<>
+                    <button
+                      onClick={() => haalRdwOp(vehicle)}
+                      className="p-1 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded disabled:opacity-50"
+                      title="Gegevens ophalen bij de RDW"
+                      disabled={rdwBezigId === vehicle.id}
+                    >
+                      <CloudArrowDownIcon
+                        className={`w-4 h-4 ${rdwBezigId === vehicle.id ? 'animate-pulse' : ''}`}
+                      />
+                    </button>
                     <button
                       onClick={() => { setSelectedVehicle(vehicle); setShowEditModal(true) }}
                       className="p-1 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"

@@ -51,6 +51,8 @@ REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
     'tracking_read': None,
     'radius_sync': None,
     'radius_export': None,
+    'rdw_lookup': None,
+    'rdw_sync': None,
 }
 
 # Static files

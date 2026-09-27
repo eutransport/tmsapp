@@ -5,8 +5,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
+from rest_framework.throttling import SimpleRateThrottle
 from django.db.models import Count, F, Q
 from apps.core.permissions import FleetPermission
+from . import rdw as rdw_dienst
+from . import rdw_sync
 from .models import Vehicle, VehicleBedrijf, VehicleRitnummer
 from .serializers import (
     VehicleBedrijfSerializer,
@@ -15,6 +18,29 @@ from .serializers import (
 )
 
 logger = logging.getLogger('accounts.security')
+
+
+class _PerGebruikerThrottle(SimpleRateThrottle):
+    """Tel per ingelogde gebruiker in plaats van per IP-adres."""
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            return self.cache_format % {'scope': self.scope, 'ident': request.user.pk}
+        return self.get_ident(request)
+
+
+class RDWOpzoekThrottle(_PerGebruikerThrottle):
+    """Begrens het opzoeken van kentekens tijdens het typen.
+
+    Zonder deze grens zou iemand met een geldig account onze server kunnen
+    gebruiken om het hele kentekenregister af te struinen.
+    """
+    scope = 'rdw_lookup'
+
+
+class RDWSyncThrottle(_PerGebruikerThrottle):
+    """Begrens het bijwerken; een vlootbrede sync is vier aanvragen per wagen."""
+    scope = 'rdw_sync'
 
 
 class VehicleRitnummerViewSet(viewsets.ModelViewSet):
@@ -133,6 +159,91 @@ class VehicleViewSet(viewsets.ModelViewSet):
         vehicles = Vehicle.objects.filter(actief=True).select_related('bedrijf').order_by('kenteken')
         serializer = self.get_serializer(vehicles, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='rdw-opzoeken',
+            throttle_classes=[RDWOpzoekThrottle])
+    def rdw_opzoeken(self, request):
+        """Zoek een kenteken op bij de RDW zonder iets op te slaan.
+
+        Bedoeld voor het invoerscherm: zodra er een volledig kenteken staat,
+        laat de app zien welke wagen daarbij hoort. Pas bij opslaan komen de
+        gegevens in de vloot terecht.
+        """
+        kenteken = request.query_params.get('kenteken', '')
+        try:
+            gegevens = rdw_dienst.haal_voertuig(kenteken)
+        except rdw_dienst.RDWFout as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        if not gegevens.get('gevonden'):
+            return Response({
+                'gevonden': False,
+                'kenteken': gegevens.get('kenteken', ''),
+                'detail': 'Dit kenteken staat niet in het register van de RDW.',
+            })
+
+        # De datums moeten als tekst naar de browser; DRF serialiseert hier
+        # geen model, dus dat doen we zelf.
+        for sleutel, waarde in list(gegevens.items()):
+            if isinstance(waarde, date):
+                gegevens[sleutel] = waarde.isoformat()
+        gegevens['rdw_vermogen_kw'] = (
+            str(gegevens['rdw_vermogen_kw']) if gegevens.get('rdw_vermogen_kw') else None
+        )
+        return Response(gegevens)
+
+    @action(detail=True, methods=['post'], url_path='rdw-verversen',
+            throttle_classes=[RDWSyncThrottle])
+    def rdw_verversen(self, request, pk=None):
+        """Werk deze ene wagen bij met de gegevens van de RDW."""
+        vehicle = self.get_object()
+        resultaat = rdw_sync.werk_voertuig_bij(vehicle, gebruiker=request.user)
+
+        if not resultaat['gelukt']:
+            return Response({'detail': resultaat['melding']},
+                            status=status.HTTP_502_BAD_GATEWAY)
+
+        vehicle.refresh_from_db()
+        return Response({
+            'gevonden': resultaat['gevonden'],
+            'melding': resultaat['melding'],
+            'apk_vastgelegd': resultaat['apk_vastgelegd'],
+            'voertuig': self.get_serializer(vehicle).data,
+        })
+
+    @action(detail=False, methods=['post'], url_path='rdw-verversen-alles',
+            throttle_classes=[RDWSyncThrottle])
+    def rdw_verversen_alles(self, request):
+        """Werk meerdere wagens in een keer bij.
+
+        Standaard alleen de wagens die nog geen gegevens hebben, zodat een
+        vergissing niet meteen de hele vloot opnieuw ophaalt. Stuur
+        ``alles: true`` mee om ook de al gevulde wagens te verversen.
+        """
+        alles = bool(request.data.get('alles'))
+        alleen_actief = request.data.get('alleen_actief', True)
+
+        wagens = Vehicle.objects.all()
+        if alleen_actief:
+            wagens = wagens.filter(actief=True)
+        if not alles:
+            wagens = wagens.filter(rdw_opgehaald_op__isnull=True)
+
+        wagens = list(wagens.order_by('kenteken'))
+        if not wagens:
+            return Response({
+                'bijgewerkt': 0, 'niet_gevonden': 0, 'mislukt': 0,
+                'apk_records': 0, 'regels': [], 'afgebroken': False,
+                'melding': 'Alle wagens hebben al gegevens van de RDW.',
+            })
+
+        uitkomst = rdw_sync.werk_vloot_bij(wagens, gebruiker=request.user)
+        logger.info(
+            'RDW-sync door %s: %s bijgewerkt, %s niet gevonden, %s mislukt',
+            request.user.email, uitkomst['bijgewerkt'],
+            uitkomst['niet_gevonden'], uitkomst['mislukt'],
+        )
+        return Response(uitkomst)
 
     @action(detail=False, methods=['get'], url_path='vehicle_weeks_overview')
     def vehicle_weeks_overview(self, request):

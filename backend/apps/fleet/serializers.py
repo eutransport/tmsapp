@@ -1,7 +1,13 @@
 from django.db import transaction
 from rest_framework import serializers
 from .models import Vehicle, VehicleBedrijf, VehicleRitnummer
+from .rdw import dagen_tot
+from .rdw_sync import RDW_VELDEN
 from .ritnummers import _vandaag
+
+# De gegevens die uit het kentekenregister komen. Altijd alleen-lezen: ze
+# worden bijgewerkt via de ververs-knop, niet met de hand.
+RDW_LEESVELDEN = RDW_VELDEN + ['rdw_opgehaald_op', 'rdw_status']
 
 
 def iso_week_label(datum):
@@ -124,6 +130,9 @@ class VehicleSerializer(serializers.ModelSerializer):
     bedrijf_periodes = VehicleBedrijfSerializer(many=True, read_only=True)
     # Optioneel: laat het opgegeven bedrijf pas vanaf deze datum gelden.
     bedrijf_vanaf = serializers.DateField(write_only=True, required=False, allow_null=True)
+    # Aantal dagen tot de keuring verloopt; negatief als die al voorbij is.
+    rdw_apk_dagen = serializers.SerializerMethodField()
+    rdw_tachograaf_dagen = serializers.SerializerMethodField()
 
     class Meta:
         model = Vehicle
@@ -133,13 +142,23 @@ class VehicleSerializer(serializers.ModelSerializer):
             'actief', 'created_at', 'updated_at', 'vervang_actief',
             'ritnummer_periodes', 'ritnummer_vanaf',
             'bedrijf_periodes', 'bedrijf_vanaf',
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+            'rdw_apk_dagen', 'rdw_tachograaf_dagen',
+        ] + RDW_LEESVELDEN
+        read_only_fields = [
+            'id', 'created_at', 'updated_at',
+            'rdw_apk_dagen', 'rdw_tachograaf_dagen',
+        ] + RDW_LEESVELDEN
         extra_kwargs = {
             'kenteken': {
                 'validators': [],  # Remove DRF's auto UniqueValidator; we handle uniqueness in validate()
             }
         }
+
+    def get_rdw_apk_dagen(self, obj):
+        return dagen_tot(obj.rdw_apk_vervaldatum)
+
+    def get_rdw_tachograaf_dagen(self, obj):
+        return dagen_tot(obj.rdw_tachograaf_vervaldatum)
 
     def validate_kenteken(self, value):
         """Normalize kenteken to uppercase."""

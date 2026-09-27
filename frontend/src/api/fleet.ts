@@ -3,7 +3,94 @@
  * CRUD operations for vehicle management
  */
 import api from './client'
-import { Vehicle } from '@/types'
+import { Vehicle, RdwAs } from '@/types'
+
+/** Wat het RDW over een kenteken weet. Alle velden kunnen ontbreken. */
+export interface RdwGegevens {
+  gevonden: boolean
+  kenteken: string
+  detail?: string
+  rdw_merk?: string
+  rdw_handelsbenaming?: string
+  rdw_voertuigsoort?: string
+  rdw_inrichting?: string
+  rdw_voertuigcategorie?: string
+  rdw_voertuigcategorie_omschrijving?: string
+  rdw_carrosserie?: string
+  rdw_datum_eerste_toelating?: string | null
+  rdw_bouwjaar?: number | null
+  rdw_apk_vervaldatum?: string | null
+  rdw_tachograaf_vervaldatum?: string | null
+  rdw_massa_ledig?: number | null
+  rdw_massa_rijklaar?: number | null
+  rdw_max_massa?: number | null
+  rdw_technisch_max_massa?: number | null
+  rdw_max_massa_samenstelling?: number | null
+  rdw_laadvermogen?: number | null
+  rdw_lengte_cm?: number | null
+  rdw_breedte_cm?: number | null
+  rdw_wielbasis_cm?: number | null
+  rdw_brandstof?: string
+  rdw_emissieklasse?: string
+  rdw_euronorm?: string
+  rdw_co2_klasse?: string
+  rdw_co2_klasse_omschrijving?: string
+  rdw_vermogen_kw?: string | null
+  rdw_geluidsniveau?: number | null
+  rdw_cilinderinhoud?: number | null
+  rdw_aantal_assen?: number | null
+  rdw_aantal_wielen?: number | null
+  rdw_max_aslast?: number | null
+  rdw_assen?: RdwAs[]
+  rdw_aantal_zitplaatsen?: number | null
+  rdw_max_snelheid?: number | null
+  rdw_wam_verzekerd?: boolean | null
+  rdw_terugroepactie_open?: boolean | null
+  rdw_export?: boolean | null
+}
+
+/** Uitkomst van het bijwerken van een enkele wagen. */
+export interface RdwVerversResultaat {
+  gevonden: boolean
+  melding: string
+  apk_vastgelegd: boolean
+  voertuig: Vehicle
+}
+
+/** Uitkomst van het bijwerken van meerdere wagens. */
+export interface RdwBulkResultaat {
+  bijgewerkt: number
+  niet_gevonden: number
+  mislukt: number
+  apk_records: number
+  afgebroken: boolean
+  melding?: string
+  regels: { kenteken: string; uitkomst: string; melding: string }[]
+}
+
+/**
+ * Zoek een kenteken op bij de RDW zonder het op te slaan.
+ * Gebruikt bij het invoeren van een nieuwe wagen.
+ */
+export async function zoekKentekenOp(kenteken: string): Promise<RdwGegevens> {
+  const response = await api.get('/fleet/rdw-opzoeken/', { params: { kenteken } })
+  return response.data
+}
+
+/** Werk een wagen bij met de gegevens van de RDW. */
+export async function verversRdw(vehicleId: string): Promise<RdwVerversResultaat> {
+  const response = await api.post(`/fleet/${vehicleId}/rdw-verversen/`)
+  return response.data
+}
+
+/**
+ * Werk meerdere wagens bij.
+ * Zonder `alles` alleen de wagens die nog geen RDW-gegevens hebben.
+ */
+export async function verversRdwAlles(alles = false): Promise<RdwBulkResultaat> {
+  const response = await api.post('/fleet/rdw-verversen-alles/', { alles })
+  return response.data
+}
 
 export interface VehicleCreate {
   kenteken: string

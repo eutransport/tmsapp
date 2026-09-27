@@ -26,7 +26,118 @@ class Vehicle(models.Model):
         verbose_name='Actief',
         help_text='Inactieve voertuigen worden niet getoond in selectielijsten maar hun historische data blijft beschikbaar.'
     )
-    
+
+    # ------------------------------------------------------------------
+    # Gegevens uit het kentekenregister van de RDW
+    #
+    # Allemaal optioneel: een wagen zonder opgehaalde gegevens blijft
+    # gewoon werken. De velden worden gevuld door apps.fleet.rdw en zijn
+    # bedoeld om te lezen, niet om met de hand in te vullen.
+    # ------------------------------------------------------------------
+
+    # Identiteit
+    rdw_merk = models.CharField(max_length=100, blank=True, verbose_name='Merk')
+    rdw_handelsbenaming = models.CharField(
+        max_length=200, blank=True, verbose_name='Handelsbenaming')
+    rdw_voertuigsoort = models.CharField(
+        max_length=100, blank=True, verbose_name='Voertuigsoort')
+    rdw_inrichting = models.CharField(
+        max_length=100, blank=True, verbose_name='Inrichting')
+    rdw_voertuigcategorie = models.CharField(
+        max_length=20, blank=True, verbose_name='Voertuigcategorie',
+        help_text='Europese categorie, bijvoorbeeld N3.')
+    rdw_voertuigcategorie_omschrijving = models.CharField(
+        max_length=200, blank=True, verbose_name='Voertuigcategorie in woorden')
+    rdw_carrosserie = models.CharField(
+        max_length=200, blank=True, verbose_name='Soort opbouw')
+    rdw_datum_eerste_toelating = models.DateField(
+        null=True, blank=True, verbose_name='Datum eerste toelating')
+    rdw_bouwjaar = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Bouwjaar')
+
+    # Keuringen
+    rdw_apk_vervaldatum = models.DateField(
+        null=True, blank=True, verbose_name='APK geldig tot')
+    rdw_tachograaf_vervaldatum = models.DateField(
+        null=True, blank=True, verbose_name='Tachograaf geldig tot')
+
+    # Gewichten in kilogram
+    rdw_massa_ledig = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Massa leeg (kg)')
+    rdw_massa_rijklaar = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Massa rijklaar (kg)')
+    rdw_max_massa = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Toegestane maximummassa (kg)')
+    rdw_technisch_max_massa = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Technisch toegestane massa (kg)')
+    rdw_max_massa_samenstelling = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Maximum massa samenstelling (kg)',
+        help_text='Het totaalgewicht van trekker en oplegger samen.')
+    rdw_laadvermogen = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Laadvermogen (kg)',
+        help_text='Toegestane maximummassa min de massa rijklaar.')
+
+    # Afmetingen in centimeters
+    rdw_lengte_cm = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Lengte (cm)')
+    rdw_breedte_cm = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Breedte (cm)')
+    rdw_wielbasis_cm = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Wielbasis (cm)')
+
+    # Milieu en tolheffing
+    rdw_brandstof = models.CharField(
+        max_length=100, blank=True, verbose_name='Brandstof')
+    rdw_emissieklasse = models.CharField(
+        max_length=50, blank=True, verbose_name='Uitlaatemissieniveau',
+        help_text='Bijvoorbeeld EURO VI E.')
+    rdw_euronorm = models.CharField(
+        max_length=50, blank=True, verbose_name='Euronorm')
+    rdw_co2_klasse = models.CharField(
+        max_length=10, blank=True, verbose_name='CO2-klasse',
+        help_text='Bepaalt mede het Duitse Maut-tarief.')
+    rdw_co2_klasse_omschrijving = models.CharField(
+        max_length=200, blank=True, verbose_name='CO2-klasse in woorden')
+    rdw_vermogen_kw = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        verbose_name='Vermogen (kW)')
+    rdw_geluidsniveau = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Geluidsniveau rijdend (dB)')
+    rdw_cilinderinhoud = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Cilinderinhoud (cm3)')
+
+    # Assen en wielen
+    rdw_aantal_assen = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Aantal assen')
+    rdw_aantal_wielen = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Aantal wielen')
+    rdw_max_aslast = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Zwaarste toegestane aslast (kg)')
+    rdw_assen = models.JSONField(
+        default=list, blank=True, verbose_name='Assen',
+        help_text='Per as de plaats, aandrijving en toegestane aslast.')
+
+    # Overig
+    rdw_aantal_zitplaatsen = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Aantal zitplaatsen')
+    rdw_max_snelheid = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Maximumconstructiesnelheid (km/u)')
+
+    # Signalen
+    rdw_wam_verzekerd = models.BooleanField(
+        null=True, blank=True, verbose_name='WAM-verzekerd')
+    rdw_terugroepactie_open = models.BooleanField(
+        null=True, blank=True, verbose_name='Openstaande terugroepactie')
+    rdw_export = models.BooleanField(
+        null=True, blank=True, verbose_name='Geregistreerd voor export')
+
+    # Administratie van de koppeling zelf
+    rdw_opgehaald_op = models.DateTimeField(
+        null=True, blank=True, verbose_name='Laatst opgehaald bij de RDW')
+    rdw_status = models.CharField(
+        max_length=250, blank=True, verbose_name='Uitkomst laatste ophaling',
+        help_text='Leeg betekent: nog nooit opgehaald.')
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

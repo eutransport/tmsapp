@@ -168,6 +168,8 @@ REST_FRAMEWORK = {
         'tracking_read': '60/minute',    # Map polling / telematics reads
         'radius_sync': '10/hour',        # Handmatige Radius-sync (zware externe call)
         'radius_export': '30/hour',      # Archief-export naar CSV/Excel/PDF
+        'rdw_lookup': '300/hour',        # Kenteken opzoeken tijdens het typen
+        'rdw_sync': '60/hour',           # Vloot bijwerken bij de RDW
     },
 }
 

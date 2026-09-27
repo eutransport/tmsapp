@@ -215,6 +215,60 @@ export interface Vehicle {
   }[]
   created_at: string
   updated_at: string
+  /** Gegevens uit het kentekenregister van de RDW. Alleen-lezen. */
+  rdw_merk?: string
+  rdw_handelsbenaming?: string
+  rdw_voertuigsoort?: string
+  rdw_inrichting?: string
+  rdw_voertuigcategorie?: string
+  rdw_voertuigcategorie_omschrijving?: string
+  rdw_carrosserie?: string
+  rdw_datum_eerste_toelating?: string | null
+  rdw_bouwjaar?: number | null
+  rdw_apk_vervaldatum?: string | null
+  rdw_tachograaf_vervaldatum?: string | null
+  /** Dagen tot de keuring verloopt; negatief als die al voorbij is. */
+  rdw_apk_dagen?: number | null
+  rdw_tachograaf_dagen?: number | null
+  rdw_massa_ledig?: number | null
+  rdw_massa_rijklaar?: number | null
+  rdw_max_massa?: number | null
+  rdw_technisch_max_massa?: number | null
+  rdw_max_massa_samenstelling?: number | null
+  rdw_laadvermogen?: number | null
+  rdw_lengte_cm?: number | null
+  rdw_breedte_cm?: number | null
+  rdw_wielbasis_cm?: number | null
+  rdw_brandstof?: string
+  rdw_emissieklasse?: string
+  rdw_euronorm?: string
+  rdw_co2_klasse?: string
+  rdw_co2_klasse_omschrijving?: string
+  rdw_vermogen_kw?: string | null
+  rdw_geluidsniveau?: number | null
+  rdw_cilinderinhoud?: number | null
+  rdw_aantal_assen?: number | null
+  rdw_aantal_wielen?: number | null
+  rdw_max_aslast?: number | null
+  rdw_assen?: RdwAs[]
+  rdw_aantal_zitplaatsen?: number | null
+  rdw_max_snelheid?: number | null
+  rdw_wam_verzekerd?: boolean | null
+  rdw_terugroepactie_open?: boolean | null
+  rdw_export?: boolean | null
+  rdw_opgehaald_op?: string | null
+  rdw_status?: string
+}
+
+/** Een as zoals de RDW die beschrijft, al vertaald naar leesbare tekst. */
+export interface RdwAs {
+  nummer: number | null
+  /** 'Voor', 'Achter' of 'Midden'. */
+  plaats: string
+  aangedreven: boolean | null
+  hefas: boolean | null
+  max_aslast_kg: number | null
+  afstand_tot_volgende_as_cm: number | null
 }
 
 // Time Entry types
