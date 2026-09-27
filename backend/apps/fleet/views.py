@@ -172,6 +172,9 @@ class VehicleViewSet(viewsets.ModelViewSet):
         kenteken = request.query_params.get('kenteken', '')
         try:
             gegevens = rdw_dienst.haal_voertuig(kenteken)
+        except rdw_dienst.KentekenFout as exc:
+            # De invoer deugt niet; dat is geen storing bij de RDW.
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except rdw_dienst.RDWFout as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 

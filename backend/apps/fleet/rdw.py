@@ -45,6 +45,10 @@ class RDWFout(Exception):
     """Het ophalen bij de RDW is niet gelukt."""
 
 
+class KentekenFout(RDWFout):
+    """De invoer is geen kenteken. Dat ligt aan de aanvraag, niet aan de RDW."""
+
+
 # ---------------------------------------------------------------------------
 # Vertaaltabellen: van RDW-code naar leesbaar Nederlands
 # ---------------------------------------------------------------------------
@@ -200,7 +204,7 @@ def haal_voertuig(kenteken: str) -> dict:
     """
     plat = normaliseer_kenteken(kenteken)
     if not INVOER_PATROON.match((kenteken or '').strip()) or not KENTEKEN_PATROON.match(plat):
-        raise RDWFout('Dat is geen geldig kenteken.')
+        raise KentekenFout('Dat is geen geldig kenteken.')
 
     basis_rijen = _haal(SET_BASIS, plat)
     if not basis_rijen:

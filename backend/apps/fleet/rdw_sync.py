@@ -67,9 +67,15 @@ def werk_voertuig_bij(vehicle: Vehicle, maak_apk_record: bool = True,
     # databaseslot vasthouden zolang het RDW erover doet.
     try:
         gegevens = rdw.haal_voertuig(vehicle.kenteken)
+    except rdw.KentekenFout as exc:
+        # Ligt aan dit ene kenteken. De rest van de vloot kan gewoon door,
+        # dus `stoppen` blijft False.
+        return {'gelukt': False, 'gevonden': False, 'stoppen': False,
+                'melding': str(exc), 'apk_vastgelegd': False}
     except rdw.RDWFout as exc:
         # Niets opslaan: de wagen is niet veranderd, alleen de poging mislukte.
-        return {'gelukt': False, 'gevonden': False,
+        # De RDW is onbereikbaar, dus verder gaan heeft geen zin.
+        return {'gelukt': False, 'gevonden': False, 'stoppen': True,
                 'melding': str(exc), 'apk_vastgelegd': False}
 
     nu = timezone.now()
@@ -78,7 +84,7 @@ def werk_voertuig_bij(vehicle: Vehicle, maak_apk_record: bool = True,
         vehicle.rdw_opgehaald_op = nu
         vehicle.rdw_status = 'Niet gevonden in het kentekenregister'
         vehicle.save(update_fields=['rdw_opgehaald_op', 'rdw_status', 'updated_at'])
-        return {'gelukt': True, 'gevonden': False,
+        return {'gelukt': True, 'gevonden': False, 'stoppen': False,
                 'melding': 'Dit kenteken staat niet in het register van de RDW.',
                 'apk_vastgelegd': False}
 
@@ -96,7 +102,7 @@ def werk_voertuig_bij(vehicle: Vehicle, maak_apk_record: bool = True,
             apk_vastgelegd = _leg_apk_vast(vehicle, vehicle.rdw_apk_vervaldatum, gebruiker)
 
     logger.info('RDW bijgewerkt: %s - %s', vehicle.kenteken, rdw.samenvatting(gegevens))
-    return {'gelukt': True, 'gevonden': True,
+    return {'gelukt': True, 'gevonden': True, 'stoppen': False,
             'melding': rdw.samenvatting(gegevens),
             'apk_vastgelegd': apk_vastgelegd}
 
@@ -144,7 +150,8 @@ def werk_vloot_bij(vehicles, maak_apk_record: bool = True, gebruiker=None) -> di
     """Werk meerdere wagens bij en geef een samenvatting terug.
 
     Stopt zodra het RDW onbereikbaar blijkt: doorgaan heeft dan geen zin en
-    levert alleen een rij mislukte pogingen op.
+    levert alleen een rij mislukte pogingen op. Een wagen met een kenteken
+    dat geen kenteken is, wordt overgeslagen en gemeld.
     """
     uitkomst = {
         'bijgewerkt': 0,
@@ -164,9 +171,13 @@ def werk_vloot_bij(vehicles, maak_apk_record: bool = True, gebruiker=None) -> di
                 'kenteken': vehicle.kenteken, 'uitkomst': 'mislukt',
                 'melding': resultaat['melding'],
             })
-            uitkomst['afgebroken'] = True
-            uitkomst['melding'] = resultaat['melding']
-            break
+            # Alleen stoppen als de RDW onbereikbaar is. Een enkel kenteken
+            # dat niet deugt mag de rest van de vloot niet ophouden.
+            if resultaat.get('stoppen'):
+                uitkomst['afgebroken'] = True
+                uitkomst['melding'] = resultaat['melding']
+                break
+            continue
 
         if resultaat['gevonden']:
             uitkomst['bijgewerkt'] += 1
