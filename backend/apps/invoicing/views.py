@@ -196,13 +196,25 @@ Met vriendelijke groet,
 class InvoiceTemplateViewSet(viewsets.ModelViewSet):
     """
     ViewSet voor factuur templates.
-    Alleen admins mogen templates beheren.
+
+    Sjablonen aanmaken, aanpassen, kopieren en verwijderen blijft voorbehouden
+    aan beheerders. Bekijken mag iedereen die facturen mag zien: het scherm
+    'Nieuwe factuur' haalt de sjablonen op en kan zonder die lijst niet werken.
     """
     queryset = InvoiceTemplate.objects.all()
     serializer_class = InvoiceTemplateSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
+    module_permission = 'view_invoices'
     filterset_fields = ['is_active']
     search_fields = ['naam', 'beschrijving']
+
+    # Acties die alleen gegevens teruggeven en niets wijzigen.
+    ALLEEN_LEZEN_ACTIES = {'list', 'retrieve', 'bedrijf_suggesties'}
+
+    def get_permissions(self):
+        if self.action in self.ALLEEN_LEZEN_ACTIES:
+            return [IsAuthenticated(), IsAdminOrManager(), HasModulePermission()]
+        return super().get_permissions()
     
     def perform_create(self, serializer):
         template = serializer.save()
