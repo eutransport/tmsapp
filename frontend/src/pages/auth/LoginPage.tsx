@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -13,6 +13,9 @@ interface LoginForm {
 interface TwoFactorForm {
   code: string
 }
+
+// Volgorde-index voor de intro-animatie (zie .auth-reveal in index.css)
+const stagger = (i: number) => ({ '--i': i }) as CSSProperties
 
 export default function LoginPage() {
   const { t } = useTranslation()
@@ -130,20 +133,24 @@ export default function LoginPage() {
   
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">
-        {t('auth.login')}
-      </h2>
+      <div className="auth-reveal mb-6" style={stagger(0)}>
+        <h2 className="auth-title">{t('auth.welcomeBack')}</h2>
+        <p className="auth-subtitle">{t('auth.loginSubtitle')}</p>
+      </div>
       
-      <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-6">
-        <div>
+      <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-5">
+        <div className="auth-reveal" style={stagger(1)}>
           <label htmlFor="email" className="label">
             {t('auth.email')}
           </label>
+          <div className="auth-field">
+            <svg className="auth-field-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="m4 7 8 6 8-6" /></svg>
           <input
             id="email"
             type="email"
             autoComplete="email"
-            className="input"
+            spellCheck={false}
+            className="input auth-input"
             {...loginForm.register('email', { 
               required: t('errors.required'),
               pattern: {
@@ -152,6 +159,7 @@ export default function LoginPage() {
               }
             })}
           />
+          </div>
           {loginForm.formState.errors.email && (
             <p className="mt-1 text-sm text-red-600">
               {loginForm.formState.errors.email.message}
@@ -159,19 +167,22 @@ export default function LoginPage() {
           )}
         </div>
         
-        <div>
+        <div className="auth-reveal" style={stagger(2)}>
           <label htmlFor="password" className="label">
             {t('auth.password')}
           </label>
+          <div className="auth-field">
+            <svg className="auth-field-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2.5" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
           <input
             id="password"
             type="password"
             autoComplete="current-password"
-            className="input"
+            className="input auth-input"
             {...loginForm.register('password', { 
               required: t('errors.required')
             })}
           />
+          </div>
           {loginForm.formState.errors.password && (
             <p className="mt-1 text-sm text-red-600">
               {loginForm.formState.errors.password.message}
@@ -182,10 +193,15 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={isLoading}
-          className="btn-primary w-full"
+          className="btn-primary w-full auth-reveal"
+          style={stagger(3)}
         >
           {isLoading ? t('auth.loggingIn') : t('auth.loginButton')}
         </button>
+        <div className="auth-foot auth-reveal" style={stagger(4)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6z" /><path d="m9 12 2 2 4-4" /></svg>
+          {t('auth.secureConnection')}
+        </div>
       </form>
     </div>
   )

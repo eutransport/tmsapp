@@ -139,6 +139,9 @@
     "loginTitle": "Hesabınıza giriş yapın",
     "loginButton": "Giriş yap",
     "loggingIn": "Giriş yapılıyor...",
+    "welcomeBack": "Tekrar hoş geldiniz",
+    "loginSubtitle": "Devam etmek için giriş yapın",
+    "secureConnection": "Güvenli bağlantı",
     "invalidCredentials": "Geçersiz giriş bilgileri",
     "passwordChanged": "Şifre başarıyla değiştirildi",
     "passwordMismatch": "Şifreler eşleşmiyor",
@@ -276,10 +279,14 @@
       "error": "Bir şeyler ters gitti"
     },
     "popup": {
-      "body": "İçerik",
-      "dismiss": "Kapat",
-      "title": "Başlık",
-      "view": "Görüntüle"
+      "title_one": "Açık bir göreviniz var",
+      "title_other": "{{count}} açık göreviniz var",
+      "body_one": "Sizi bekleyen bir görev var.",
+      "body_other": "Sizi bekleyen {{count}} görev var.",
+      "nieuw_one": "Bunlardan 1 tanesi yeni.",
+      "nieuw_other": "Bunlardan {{count}} tanesi yeni.",
+      "dismiss": "Daha sonra",
+      "view": "Görevleri görüntüle"
     }
   },
   "dashboard": {

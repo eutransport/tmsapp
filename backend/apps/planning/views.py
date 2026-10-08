@@ -17,6 +17,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from apps.core.permissions import IsAdminOrManager, PlanningPermission
 from apps.core.models import AppSettings
 from apps.fleet.models import Vehicle
+from apps.fleet.ritnummers import ritnummer_op
 from apps.drivers.models import Driver
 from .models import WeekPlanning, PlanningEntry, Weekday
 from .serializers import (
@@ -94,14 +95,19 @@ class WeekPlanningViewSet(viewsets.ModelViewSet):
                 # (2) onstabiele sortering (Meta.ordering = ['vehicle_ritnummer','dag'])
                 # waardoor rijen na een PATCH op chauffeur naar onderen kunnen
                 # verspringen.
-                entries.append(PlanningEntry(
+                entry = PlanningEntry(
                     planning=planning,
                     vehicle=vehicle,
                     dag=day,
                     vehicle_kenteken=vehicle.kenteken or '',
                     vehicle_type_wagen=vehicle.type_wagen or '',
-                    vehicle_ritnummer=vehicle.ritnummer or '',
-                ))
+                )
+                # Het ritnummer dat op de geplande dag geldt, net als in
+                # PlanningEntry.save(); het huidige nummer van de wagen kan al
+                # een wissel verderop in de tijd bevatten.
+                entry.vehicle_ritnummer = ritnummer_op(
+                    vehicle, entry.planningsdatum()) or ''
+                entries.append(entry)
         
         PlanningEntry.objects.bulk_create(entries)
         

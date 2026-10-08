@@ -310,6 +310,10 @@ export interface RitnummerWijzigingResultaat {
   van: string
   tot: string
   naar_ritnummer: string
+  ritnummer_gewijzigd: boolean
+  bedrijf_gewijzigd: boolean
+  naar_bedrijf: string
+  naar_bedrijf_naam: string
   /** Aantal regels dat aangepast wordt (preview) of is. */
   aantal: number
   totaal_km: number
@@ -330,6 +334,10 @@ export interface RitnummerCorrectie {
   tot: string
   van_ritnummer: string | null
   naar_ritnummer: string
+  ritnummer_gewijzigd: boolean
+  bedrijf_gewijzigd: boolean
+  naar_bedrijf: string
+  naar_bedrijf_naam: string
   aantal: number
   inclusief_gefactureerd: boolean
   uitgevoerd_op: string
@@ -466,7 +474,7 @@ export const tollingApi = {
   },
 
   /**
-   * Zet met terugwerkende kracht een ander ritnummer op tolregels.
+   * Zet met terugwerkende kracht een ander ritnummer en/of bedrijf op tolregels.
    * Met `preview: true` wordt alleen geteld en niets gewijzigd.
    */
   wijzigRitnummer: async (
@@ -476,7 +484,10 @@ export const tollingApi = {
       tot: string
       /** Weglaten = alle ritnummers; lege tekst = regels zonder ritnummer. */
       van_ritnummer?: string
-      naar_ritnummer: string
+      /** Weglaten = ritnummer ongemoeid laten. */
+      naar_ritnummer?: string
+      /** Weglaten = bedrijf ongemoeid laten; lege tekst = bedrijf wissen. */
+      naar_bedrijf?: string
       inclusief_gefactureerd?: boolean
       preview?: boolean
     },

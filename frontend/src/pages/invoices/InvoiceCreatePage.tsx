@@ -616,15 +616,17 @@ function TimeEntryImportModal({
 
       setChauffeurEntriesForMatch(chauffeurEntriesAll)
 
-      // Group imported entries by week + chauffeur
+      // Group imported entries by year + week + chauffeur.
+      // Zonder jaar vallen week 40 van 2025 en 2026 in dezelfde groep.
       const groups: Record<string, ImportedChauffeurWeekGroup> = {}
       importedData.forEach((entry) => {
-        const key = `imp-${entry.weeknummer}-${entry.user}`
+        const jaar = new Date(entry.datum).getFullYear()
+        const key = `imp-${jaar}-${entry.weeknummer}-${entry.user}`
         if (!groups[key]) {
           groups[key] = {
             key,
             weeknummer: entry.weeknummer,
-            jaar: new Date(entry.datum).getFullYear(),
+            jaar,
             userId: entry.user || '',
             chauffeurNaam: entry.user_naam || 'Onbekend',
             entries: [],

@@ -81,7 +81,11 @@ export default function DossierDetailPage() {
     setPdfLoading(true)
     try {
       const response = await api.get(getDossierBijlageDownloadUrl(id, bijlage.id), { responseType: 'blob' })
-      const contentType = response.headers['Content-Type'] || response.headers['content-type'] || bijlage.mimetype || 'application/octet-stream'
+      const rawContentType = response.headers?.['content-type']
+      const contentType =
+        (typeof rawContentType === 'string' ? rawContentType : undefined)
+        || bijlage.mimetype
+        || 'application/octet-stream'
       const blob = new Blob([response.data], { type: contentType })
       setPdfBlobUrl(URL.createObjectURL(blob))
     } catch {

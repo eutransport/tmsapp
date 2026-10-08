@@ -1,4 +1,4 @@
-import { useEffect, useState, Fragment } from 'react'
+import { useEffect, useRef, useState, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Dialog, Transition } from '@headlessui/react'
 import { ClipboardDocumentCheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
@@ -16,6 +16,9 @@ export default function ActiveTasksPopup() {
   const [open, setOpen] = useState(false)
   const [count, setCount] = useState(0)
   const [nieuw, setNieuw] = useState(0)
+  // Op mobiel gaat een navigatie tijdens het sluiten van de dialog verloren,
+  // dus we onthouden de wens en springen pas na de sluitanimatie.
+  const naarTaken = useRef(false)
 
   useEffect(() => {
     if (sessionStorage.getItem(SESSION_KEY)) return
@@ -41,12 +44,18 @@ export default function ActiveTasksPopup() {
   }, [])
 
   const goToTasks = () => {
+    naarTaken.current = true
     setOpen(false)
+  }
+
+  const naSluiten = () => {
+    if (!naarTaken.current) return
+    naarTaken.current = false
     navigate('/tasks')
   }
 
   return (
-    <Transition.Root show={open} as={Fragment}>
+    <Transition.Root show={open} as={Fragment} afterLeave={naSluiten}>
       <Dialog as="div" className="relative z-[60]" onClose={setOpen}>
         <Transition.Child as={Fragment} enter="ease-out duration-200" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-150" leaveFrom="opacity-100" leaveTo="opacity-0">
           <div className="fixed inset-0 bg-gray-900/50" />
@@ -59,21 +68,22 @@ export default function ActiveTasksPopup() {
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-100">
                     <ClipboardDocumentCheckIcon className="h-6 w-6 text-primary-600" />
                   </div>
-                  <button onClick={() => setOpen(false)} className="rounded p-1 text-gray-400 hover:bg-gray-100">
+                  <button type="button" onClick={() => setOpen(false)} className="rounded p-2 text-gray-400 hover:bg-gray-100 touch-manipulation" aria-label={t('common.close', 'Sluiten')}>
                     <XMarkIcon className="h-5 w-5" />
                   </button>
                 </div>
                 <Dialog.Title className="mt-4 text-lg font-semibold text-gray-900">
-                  {t('tasks.popup.title')}
+                  {t('tasks.popup.title', { count })}
                 </Dialog.Title>
                 <p className="mt-2 text-sm text-gray-600">
-                  {t('tasks.popup.body', { count, nieuw })}
+                  {t('tasks.popup.body', { count })}
+                  {nieuw > 0 && ` ${t('tasks.popup.nieuw', { count: nieuw })}`}
                 </p>
                 <div className="mt-6 flex justify-end gap-3">
-                  <button onClick={() => setOpen(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 touch-manipulation">
                     {t('tasks.popup.dismiss')}
                   </button>
-                  <button onClick={goToTasks} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                  <button type="button" onClick={goToTasks} className="rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 touch-manipulation">
                     {t('tasks.popup.view')}
                   </button>
                 </div>

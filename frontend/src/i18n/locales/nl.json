@@ -139,6 +139,9 @@
     "loginTitle": "Inloggen bij uw account",
     "loginButton": "Inloggen",
     "loggingIn": "Bezig met inloggen...",
+    "welcomeBack": "Welkom terug",
+    "loginSubtitle": "Log in om verder te gaan",
+    "secureConnection": "Beveiligde verbinding",
     "invalidCredentials": "Ongeldige inloggegevens",
     "passwordChanged": "Wachtwoord succesvol gewijzigd",
     "passwordMismatch": "Wachtwoorden komen niet overeen",
@@ -276,10 +279,14 @@
       "error": "Er ging iets mis"
     },
     "popup": {
-      "body": "Body",
-      "dismiss": "Sluiten",
-      "title": "Titel",
-      "view": "View"
+      "title_one": "Je hebt een openstaande taak",
+      "title_other": "Je hebt {{count}} openstaande taken",
+      "body_one": "Er staat een taak voor je klaar.",
+      "body_other": "Er staan {{count}} taken voor je klaar.",
+      "nieuw_one": "Daarvan is er 1 nieuw.",
+      "nieuw_other": "Daarvan zijn er {{count}} nieuw.",
+      "dismiss": "Later",
+      "view": "Taken bekijken"
     }
   },
   "dashboard": {

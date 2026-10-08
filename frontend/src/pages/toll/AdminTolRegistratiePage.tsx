@@ -80,7 +80,11 @@ export default function AdminTolRegistratiePage() {
     setPdfLoading(true)
     try {
       const response = await api.get(getTolDownloadUrl(reg.id), { responseType: 'blob' })
-      const blob = new Blob([response.data], { type: response.headers['Content-Type'] || response.headers['content-type'] || 'application/pdf' })
+      const rawContentType = response.headers?.['content-type']
+      const contentType =
+        (typeof rawContentType === 'string' ? rawContentType : undefined)
+        || 'application/pdf'
+      const blob = new Blob([response.data], { type: contentType })
       const url = URL.createObjectURL(blob)
       setPdfBlobUrl(url)
     } catch {

@@ -20,6 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import HasReadWriteModulePermission
+from apps.companies.models import Company
 from apps.fleet.models import Vehicle
 from apps.invoicing.models import Invoice, InvoiceLine
 
@@ -62,6 +63,10 @@ def _correctie_naar_dict(c) -> dict:
         'tot': c.tot.isoformat(),
         'van_ritnummer': c.van_ritnummer,
         'naar_ritnummer': c.naar_ritnummer,
+        'ritnummer_gewijzigd': c.ritnummer_gewijzigd,
+        'bedrijf_gewijzigd': c.bedrijf_gewijzigd,
+        'naar_bedrijf': str(c.naar_bedrijf_id) if c.naar_bedrijf_id else '',
+        'naar_bedrijf_naam': c.naar_bedrijf.naam if c.naar_bedrijf_id else '',
         'aantal': c.aantal,
         'inclusief_gefactureerd': c.inclusief_gefactureerd,
         'uitgevoerd_op': c.uitgevoerd_op.isoformat(),
@@ -893,20 +898,24 @@ class TollingVehicleViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'], url_path=r'(?P<plate>[^/]+)/ritnummer-wijzigen')
     def ritnummer_wijzigen(self, request, plate: str = ''):
-        """Zet met terugwerkende kracht een ander ritnummer op tolregels.
+        """Zet met terugwerkende kracht een ander ritnummer/bedrijf op tolregels.
 
         Bedoeld voor het geval dat er te laat is doorgegeven dat een wagen
-        onder een ander ritnummer reed. Alleen het veld ``ritnummer`` wordt
-        aangepast; bedragen, kilometers, wagen, bedrijf en de factuurstatus
-        blijven ongemoeid.
+        onder een ander ritnummer of voor een andere opdrachtgever reed.
+        Alleen de velden ``ritnummer`` en ``bedrijf`` worden aangepast;
+        bedragen, kilometers, wagen en de factuurstatus blijven ongemoeid.
 
         Body:
           van, tot                 datums (jjjj-mm-dd), tot is inclusief
           van_ritnummer            optioneel filter; weglaten = alle,
                                    lege tekst = regels zonder ritnummer
-          naar_ritnummer           het nieuwe ritnummer
+          naar_ritnummer           het nieuwe ritnummer (optioneel)
+          naar_bedrijf             UUID van het nieuwe bedrijf; lege tekst =
+                                   bedrijf wissen. Weglaten = ongemoeid laten.
           inclusief_gefactureerd   ook al gefactureerde regels meenemen
           preview                  true = alleen tellen, niets wijzigen
+
+        Minimaal een van ``naar_ritnummer`` / ``naar_bedrijf`` is verplicht.
         """
         norm = normalize_plate(plate)
         data = request.data
@@ -929,10 +938,26 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             return Response({'detail': 'De einddatum ligt voor de begindatum.'}, status=400)
 
         naar = str(data.get('naar_ritnummer') or '').strip()
-        if not naar:
-            return Response({'detail': 'Vul het nieuwe ritnummer in.'}, status=400)
         if len(naar) > 50:
             return Response({'detail': 'Het ritnummer mag maximaal 50 tekens zijn.'}, status=400)
+
+        # `naar_bedrijf` weglaten = bedrijf ongemoeid laten; lege tekst meesturen
+        # betekent uitdrukkelijk "zet het bedrijf leeg".
+        bedrijf_gewijzigd = 'naar_bedrijf' in data
+        naar_bedrijf = None
+        if bedrijf_gewijzigd:
+            bedrijf_id = str(data.get('naar_bedrijf') or '').strip()
+            if bedrijf_id:
+                try:
+                    naar_bedrijf = Company.objects.get(id=bedrijf_id)
+                except (Company.DoesNotExist, DjangoValidationError, ValueError):
+                    return Response({'detail': 'Dit bedrijf bestaat niet.'}, status=400)
+
+        if not naar and not bedrijf_gewijzigd:
+            return Response(
+                {'detail': 'Vul een nieuw ritnummer in of kies een ander bedrijf.'},
+                status=400,
+            )
 
         tz = timezone.get_current_timezone()
         start = timezone.make_aware(datetime.combine(van, datetime.min.time()), tz)
@@ -952,8 +977,14 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         if not inclusief_gefactureerd:
             qs = qs.filter(invoiced_at__isnull=True)
 
-        # Regels die het nieuwe ritnummer al hebben, hoeven niet aangeraakt.
-        qs = qs.exclude(ritnummer=naar)
+        # Regels overslaan die *alle* nieuwe waarden al hebben; een regel met
+        # het juiste ritnummer maar het verkeerde bedrijf moet wel mee.
+        al_goed = Q()
+        if naar:
+            al_goed &= Q(ritnummer=naar)
+        if bedrijf_gewijzigd:
+            al_goed &= Q(bedrijf=naar_bedrijf)
+        qs = qs.exclude(al_goed)
 
         totalen = qs.aggregate(
             aantal=Count('id'),
@@ -967,6 +998,10 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             'van': van.isoformat(),
             'tot': tot.isoformat(),
             'naar_ritnummer': naar,
+            'ritnummer_gewijzigd': bool(naar),
+            'bedrijf_gewijzigd': bedrijf_gewijzigd,
+            'naar_bedrijf': str(naar_bedrijf.id) if naar_bedrijf else '',
+            'naar_bedrijf_naam': naar_bedrijf.naam if naar_bedrijf else '',
             'aantal': totalen['aantal'],
             'totaal_km': float(totalen['km'] or 0),
             'totaal_bedrag': float(totalen['bedrag'] or 0),
@@ -979,11 +1014,19 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             return Response(antwoord)
 
         with transaction.atomic():
-            # Eerst de oude ritnummers bewaren, anders zijn ze na de update weg
+            # Eerst de oude waarden bewaren, anders zijn ze na de update weg
             # en kan de correctie niet meer teruggedraaid worden.
-            oude_waarden = {str(pk): (rit or '')
-                            for pk, rit in qs.values_list('id', 'ritnummer')}
-            aangepast = qs.update(ritnummer=naar)
+            oude_waarden: dict[str, str] = {}
+            oude_bedrijven: dict[str, str] = {}
+            for pk, rit, bedrijf in qs.values_list('id', 'ritnummer', 'bedrijf_id'):
+                oude_waarden[str(pk)] = rit or ''
+                oude_bedrijven[str(pk)] = str(bedrijf) if bedrijf else ''
+            velden = {}
+            if naar:
+                velden['ritnummer'] = naar
+            if bedrijf_gewijzigd:
+                velden['bedrijf'] = naar_bedrijf
+            aangepast = qs.update(**velden)
             correctie = RitnummerCorrectie.objects.create(
                 license_plate_normalized=norm,
                 license_plate_raw=str(plate)[:32],
@@ -991,16 +1034,23 @@ class TollingVehicleViewSet(viewsets.ViewSet):
                 van_ritnummer=(None if van_ritnummer is None
                                else str(van_ritnummer).strip()[:50]),
                 naar_ritnummer=naar,
+                ritnummer_gewijzigd=bool(naar),
+                naar_bedrijf=naar_bedrijf,
+                bedrijf_gewijzigd=bedrijf_gewijzigd,
                 inclusief_gefactureerd=inclusief_gefactureerd,
                 aantal=aangepast,
                 oude_waarden=oude_waarden,
+                oude_bedrijven=oude_bedrijven,
                 uitgevoerd_door=request.user if request.user.is_authenticated else None,
             )
         antwoord['aangepast'] = aangepast
         antwoord['correctie_id'] = str(correctie.id)
         logger.info(
-            'Ritnummer tolregels gewijzigd: %s %s t/m %s -> %s (%d regels) door %s',
-            norm, van, tot, naar, aangepast, request.user.email,
+            'Tolregels gewijzigd: %s %s t/m %s -> rit %r bedrijf %r (%d regels) door %s',
+            norm, van, tot, naar or '(ongemoeid)',
+            (naar_bedrijf.naam if naar_bedrijf else ('(leeg)' if bedrijf_gewijzigd
+                                                     else '(ongemoeid)')),
+            aangepast, request.user.email,
         )
         return Response(antwoord)
 
@@ -1012,15 +1062,15 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         grens = timezone.now() - timedelta(days=RITNUMMER_CORRECTIE_BEWAARDAGEN)
         rijen = (RitnummerCorrectie.objects
                  .filter(license_plate_normalized=norm, uitgevoerd_op__gte=grens)
-                 .select_related('uitgevoerd_door', 'teruggedraaid_door'))
+                 .select_related('uitgevoerd_door', 'teruggedraaid_door', 'naar_bedrijf'))
         return Response([_correctie_naar_dict(c) for c in rijen])
 
     @action(detail=False, methods=['post'],
             url_path=r'(?P<plate>[^/]+)/ritnummer-correcties/(?P<correctie_id>[^/]+)/ongedaan-maken')
     def ritnummer_correctie_ongedaan(self, request, plate: str = '', correctie_id: str = ''):
-        """Zet de ritnummers van een eerdere correctie weer terug.
+        """Zet de ritnummers en bedrijven van een eerdere correctie weer terug.
 
-        Alleen regels die nog steeds het ritnummer hebben dat deze correctie
+        Alleen regels die nog steeds de waarde hebben die deze correctie
         erop gezet heeft worden teruggezet; is er daarna nog een correctie
         overheen gegaan, dan blijft die staan.
         """
@@ -1033,25 +1083,38 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         if correctie.teruggedraaid_op:
             return Response({'detail': 'Deze wijziging is al teruggedraaid.'}, status=400)
 
-        # Per oud ritnummer bundelen, dan is het een handvol updates in plaats
+        # Per oude waarde bundelen, dan is het een handvol updates in plaats
         # van er een per regel.
         per_oud: dict[str, list[str]] = {}
         for regel_id, oud in (correctie.oude_waarden or {}).items():
             per_oud.setdefault(oud or '', []).append(regel_id)
+        per_oud_bedrijf: dict[str, list[str]] = {}
+        for regel_id, oud in (correctie.oude_bedrijven or {}).items():
+            per_oud_bedrijf.setdefault(oud or '', []).append(regel_id)
 
         teruggezet = 0
+        geraakt: set[str] = set()
         with transaction.atomic():
-            for oud, ids in per_oud.items():
-                teruggezet += (TollingEvent.objects
-                               .filter(id__in=ids, ritnummer=correctie.naar_ritnummer)
-                               .update(ritnummer=oud))
+            if correctie.ritnummer_gewijzigd:
+                for oud, ids in per_oud.items():
+                    rijen = (TollingEvent.objects
+                             .filter(id__in=ids, ritnummer=correctie.naar_ritnummer))
+                    geraakt.update(str(pk) for pk in rijen.values_list('id', flat=True))
+                    rijen.update(ritnummer=oud)
+            if correctie.bedrijf_gewijzigd:
+                for oud, ids in per_oud_bedrijf.items():
+                    rijen = (TollingEvent.objects
+                             .filter(id__in=ids, bedrijf=correctie.naar_bedrijf))
+                    geraakt.update(str(pk) for pk in rijen.values_list('id', flat=True))
+                    rijen.update(bedrijf_id=(oud or None))
+            teruggezet = len(geraakt)
             correctie.teruggedraaid_op = timezone.now()
             correctie.teruggedraaid_door = (request.user if request.user.is_authenticated
                                             else None)
             correctie.teruggedraaid_aantal = teruggezet
             correctie.save(update_fields=['teruggedraaid_op', 'teruggedraaid_door',
                                           'teruggedraaid_aantal'])
-        logger.info('Ritnummercorrectie teruggedraaid: %s (%d van %d regels) door %s',
+        logger.info('Tolcorrectie teruggedraaid: %s (%d van %d regels) door %s',
                     correctie.id, teruggezet, correctie.aantal, request.user.email)
         return Response({
             'teruggezet': teruggezet,

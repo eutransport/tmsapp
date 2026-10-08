@@ -396,10 +396,13 @@ function VehicleForm({
     bedrijf: vehicle?.bedrijf?.toString() || '',
     minimum_weken_per_jaar: vehicle?.minimum_weken_per_jaar?.toString() || '',
     actief: vehicle?.actief ?? true,
-    // Laat het nieuwe ritnummer pas vanaf deze datum gelden. Leeg = meteen.
+    // Laat het nieuwe ritnummer pas vanaf deze datum gelden.
     ritnummer_vanaf: '',
+    // Overschrijf in plaats daarvan de lopende periode; alleen voor typefouten.
+    ritnummer_corrigeren: false,
     // Idem voor het bedrijf waarvoor de wagen rijdt.
     bedrijf_vanaf: '',
+    bedrijf_corrigeren: false,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -490,6 +493,14 @@ function VehicleForm({
     const newErrors: Record<string, string> = {}
     if (!formData.kenteken.trim()) newErrors.kenteken = t('validation.licensePlateRequired')
     if (!formData.bedrijf) newErrors.bedrijf = t('validation.companyRequired')
+    // Een wissel zonder ingangsdatum overschrijft de lopende periode en laat
+    // de historie met terugwerkende kracht verspringen.
+    if (ritnummerGewijzigd && !formData.ritnummer_vanaf && !formData.ritnummer_corrigeren) {
+      newErrors.ritnummer_vanaf = 'Kies een ingangsdatum of geef aan dat het een correctie is.'
+    }
+    if (bedrijfGewijzigd && !formData.bedrijf_vanaf && !formData.bedrijf_corrigeren) {
+      newErrors.bedrijf_vanaf = 'Kies een ingangsdatum of geef aan dat het een correctie is.'
+    }
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -508,12 +519,20 @@ function VehicleForm({
     }
     // Alleen meesturen als het ritnummer echt wijzigt; anders zou er een
     // periode ontstaan die niets verandert.
-    if (ritnummerGewijzigd && formData.ritnummer_vanaf) {
-      (saveData as VehicleUpdate).ritnummer_vanaf = formData.ritnummer_vanaf
+    if (ritnummerGewijzigd) {
+      if (formData.ritnummer_corrigeren) {
+        (saveData as VehicleUpdate).ritnummer_corrigeren = true
+      } else if (formData.ritnummer_vanaf) {
+        (saveData as VehicleUpdate).ritnummer_vanaf = formData.ritnummer_vanaf
+      }
     }
     // Idem voor het bedrijf: alleen een periode aanmaken als het echt wijzigt.
-    if (bedrijfGewijzigd && formData.bedrijf_vanaf) {
-      (saveData as VehicleUpdate).bedrijf_vanaf = formData.bedrijf_vanaf
+    if (bedrijfGewijzigd) {
+      if (formData.bedrijf_corrigeren) {
+        (saveData as VehicleUpdate).bedrijf_corrigeren = true
+      } else if (formData.bedrijf_vanaf) {
+        (saveData as VehicleUpdate).bedrijf_vanaf = formData.bedrijf_vanaf
+      }
     }
     onSave(saveData)
   }
@@ -648,47 +667,84 @@ function VehicleForm({
           op het oude ritnummer staan. Alleen zinvol bij een bestaande wagen. */}
       {vehicle && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
-          <label className="block text-sm font-medium text-gray-700">
-            Nieuw ritnummer geldig vanaf
-          </label>
-          <input
-            type="date"
-            name="ritnummer_vanaf"
-            value={formData.ritnummer_vanaf}
-            onChange={handleChange}
-            className="input"
-          />
-          <p className="text-xs text-gray-600">
-            {!ritnummerGewijzigd ? (
-              <>
-                Pas hierboven eerst het ritnummer aan. Vul hier daarna een datum in als
-                de wissel pas vanaf een bepaalde dag geldt; laat leeg om meteen te
-                wijzigen.
-              </>
-            ) : formData.ritnummer_vanaf ? (
-              <>
-                Vanaf {formatDatumMetWeek(formData.ritnummer_vanaf)} rijdt deze wagen op
-                ritnummer <strong>{formData.ritnummer || '(leeg)'}</strong>. Alles daarvoor
-                blijft op <strong>{vehicle?.ritnummer || '(leeg)'}</strong> staan.
-              </>
-            ) : (
-              <>
-                Laat leeg om het ritnummer meteen te wijzigen. Vul een datum in als de
-                wissel op een bepaalde dag ingaat, dan blijft de historie van voor die
-                dag op <strong>{vehicle?.ritnummer || '(leeg)'}</strong> staan.
-              </>
-            )}
-          </p>
-          {formData.ritnummer_vanaf && !isMaandag(formData.ritnummer_vanaf) && (
-            <p className="text-xs text-amber-700">
-              Let op: deze datum valt midden in de week. De planning van die week krijgt
-              dan deels het oude en deels het nieuwe ritnummer.
-            </p>
-          )}
-          {formData.ritnummer_vanaf && !ritnummerGewijzigd && (
-            <p className="text-xs text-amber-700">
-              Er is nog geen ander ritnummer ingevuld, dus deze datum wordt niet gebruikt.
-            </p>
+          {!ritnummerGewijzigd ? (
+            <>
+              <label className="block text-sm font-medium text-gray-700">
+                Ritnummer wijzigen
+              </label>
+              <p className="text-xs text-gray-600">
+                Pas hierboven het ritnummer aan. Daarna wordt gevraagd vanaf welke datum
+                het nieuwe nummer geldt.
+              </p>
+            </>
+          ) : (
+            <>
+              <label className="block text-sm font-medium text-gray-700">
+                Vanaf wanneer geldt ritnummer {formData.ritnummer || '(leeg)'}? *
+              </label>
+              <label className="flex items-start gap-2 text-sm text-gray-700">
+                <input
+                  type="radio"
+                  name="ritnummer_corrigeren"
+                  checked={!formData.ritnummer_corrigeren}
+                  onChange={() => {
+                    setFormData(prev => ({ ...prev, ritnummer_corrigeren: false }))
+                    setErrors(prev => ({ ...prev, ritnummer_vanaf: '' }))
+                  }}
+                  className="mt-1"
+                />
+                <span>Het nummer wisselt per een bepaalde datum</span>
+              </label>
+              {!formData.ritnummer_corrigeren && (
+                <div className="pl-6 space-y-1">
+                  <input
+                    type="date"
+                    name="ritnummer_vanaf"
+                    value={formData.ritnummer_vanaf}
+                    onChange={handleChange}
+                    className={`input ${errors.ritnummer_vanaf ? 'border-red-500' : ''}`}
+                  />
+                  {formData.ritnummer_vanaf && (
+                    <p className="text-xs text-gray-600">
+                      Vanaf {formatDatumMetWeek(formData.ritnummer_vanaf)} rijdt deze wagen
+                      op <strong>{formData.ritnummer || '(leeg)'}</strong>. Alles daarvoor
+                      blijft op <strong>{vehicle?.ritnummer || '(leeg)'}</strong> staan.
+                    </p>
+                  )}
+                  {formData.ritnummer_vanaf && !isMaandag(formData.ritnummer_vanaf) && (
+                    <p className="text-xs text-amber-700">
+                      Let op: deze datum valt midden in de week. De planning van die week
+                      krijgt dan deels het oude en deels het nieuwe ritnummer.
+                    </p>
+                  )}
+                </div>
+              )}
+              <label className="flex items-start gap-2 text-sm text-gray-700">
+                <input
+                  type="radio"
+                  name="ritnummer_corrigeren"
+                  checked={formData.ritnummer_corrigeren}
+                  onChange={() => {
+                    setFormData(prev => ({ ...prev, ritnummer_corrigeren: true }))
+                    setErrors(prev => ({ ...prev, ritnummer_vanaf: '' }))
+                  }}
+                  className="mt-1"
+                />
+                <span>
+                  Het oude nummer was een fout — corrigeer met terugwerkende kracht
+                </span>
+              </label>
+              {formData.ritnummer_corrigeren && (
+                <p className="pl-6 text-xs text-amber-700">
+                  De lopende periode wordt overschreven. Planning, tolheffing en
+                  facturatie van eerdere maanden komen dan ook op{' '}
+                  <strong>{formData.ritnummer || '(leeg)'}</strong> te staan.
+                </p>
+              )}
+              {errors.ritnummer_vanaf && (
+                <p className="text-xs text-red-600">{errors.ritnummer_vanaf}</p>
+              )}
+            </>
           )}
         </div>
       )}
@@ -738,50 +794,85 @@ function VehicleForm({
           bij het oude bedrijf horen. Alleen zinvol bij een bestaande wagen. */}
       {vehicle && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
-          <label className="block text-sm font-medium text-gray-700">
-            Nieuw bedrijf geldig vanaf
-          </label>
-          <input
-            type="date"
-            name="bedrijf_vanaf"
-            value={formData.bedrijf_vanaf}
-            onChange={handleChange}
-            className="input"
-          />
-          <p className="text-xs text-gray-600">
-            {!bedrijfGewijzigd ? (
-              <>
-                Kies hierboven eerst een ander bedrijf. Vul hier daarna een datum in als
-                de overgang pas vanaf een bepaalde dag geldt; laat leeg om meteen te
-                wijzigen.
-              </>
-            ) : formData.bedrijf_vanaf ? (
-              <>
-                Vanaf {formatDatumMetWeek(formData.bedrijf_vanaf)} rijdt deze wagen voor{' '}
-                <strong>{bedrijfNaam(formData.bedrijf)}</strong>. De tolheffing van
-                daarvoor blijft bij <strong>{vehicle.bedrijf_naam || '(geen bedrijf)'}</strong>{' '}
-                horen.
-              </>
-            ) : (
-              <>
-                Laat leeg om het bedrijf meteen te wijzigen. Vul een datum in als de
-                overgang op een bepaalde dag ingaat, dan blijft de tolheffing van voor
-                die dag bij <strong>{vehicle.bedrijf_naam || '(geen bedrijf)'}</strong>{' '}
-                staan.
-              </>
-            )}
-          </p>
-          {formData.bedrijf_vanaf && !isMaandag(formData.bedrijf_vanaf) && (
-            <p className="text-xs text-amber-700">
-              Let op: deze datum valt midden in de week. Die week krijgt dan deels het
-              oude en deels het nieuwe bedrijf, en dus twee regels in het
-              tolheffing-overzicht.
-            </p>
-          )}
-          {formData.bedrijf_vanaf && !bedrijfGewijzigd && (
-            <p className="text-xs text-amber-700">
-              Er is nog geen ander bedrijf gekozen, dus deze datum wordt niet gebruikt.
-            </p>
+          {!bedrijfGewijzigd ? (
+            <>
+              <label className="block text-sm font-medium text-gray-700">
+                Bedrijf wijzigen
+              </label>
+              <p className="text-xs text-gray-600">
+                Kies hierboven een ander bedrijf. Daarna wordt gevraagd vanaf welke datum
+                de overgang geldt.
+              </p>
+            </>
+          ) : (
+            <>
+              <label className="block text-sm font-medium text-gray-700">
+                Vanaf wanneer rijdt deze wagen voor {bedrijfNaam(formData.bedrijf)}? *
+              </label>
+              <label className="flex items-start gap-2 text-sm text-gray-700">
+                <input
+                  type="radio"
+                  name="bedrijf_corrigeren"
+                  checked={!formData.bedrijf_corrigeren}
+                  onChange={() => {
+                    setFormData(prev => ({ ...prev, bedrijf_corrigeren: false }))
+                    setErrors(prev => ({ ...prev, bedrijf_vanaf: '' }))
+                  }}
+                  className="mt-1"
+                />
+                <span>De wagen gaat per een bepaalde datum over</span>
+              </label>
+              {!formData.bedrijf_corrigeren && (
+                <div className="pl-6 space-y-1">
+                  <input
+                    type="date"
+                    name="bedrijf_vanaf"
+                    value={formData.bedrijf_vanaf}
+                    onChange={handleChange}
+                    className={`input ${errors.bedrijf_vanaf ? 'border-red-500' : ''}`}
+                  />
+                  {formData.bedrijf_vanaf && (
+                    <p className="text-xs text-gray-600">
+                      De tolheffing van voor {formatDatumMetWeek(formData.bedrijf_vanaf)}{' '}
+                      blijft bij{' '}
+                      <strong>{vehicle.bedrijf_naam || '(geen bedrijf)'}</strong> horen.
+                    </p>
+                  )}
+                  {formData.bedrijf_vanaf && !isMaandag(formData.bedrijf_vanaf) && (
+                    <p className="text-xs text-amber-700">
+                      Let op: deze datum valt midden in de week. Die week krijgt dan deels
+                      het oude en deels het nieuwe bedrijf, en dus twee regels in het
+                      tolheffing-overzicht.
+                    </p>
+                  )}
+                </div>
+              )}
+              <label className="flex items-start gap-2 text-sm text-gray-700">
+                <input
+                  type="radio"
+                  name="bedrijf_corrigeren"
+                  checked={formData.bedrijf_corrigeren}
+                  onChange={() => {
+                    setFormData(prev => ({ ...prev, bedrijf_corrigeren: true }))
+                    setErrors(prev => ({ ...prev, bedrijf_vanaf: '' }))
+                  }}
+                  className="mt-1"
+                />
+                <span>
+                  Het oude bedrijf was een fout — corrigeer met terugwerkende kracht
+                </span>
+              </label>
+              {formData.bedrijf_corrigeren && (
+                <p className="pl-6 text-xs text-amber-700">
+                  De lopende periode wordt overschreven. Ook de tolheffing van eerdere
+                  maanden verhuist dan naar{' '}
+                  <strong>{bedrijfNaam(formData.bedrijf)}</strong>.
+                </p>
+              )}
+              {errors.bedrijf_vanaf && (
+                <p className="text-xs text-red-600">{errors.bedrijf_vanaf}</p>
+              )}
+            </>
           )}
         </div>
       )}

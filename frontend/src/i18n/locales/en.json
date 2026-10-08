@@ -139,6 +139,9 @@
     "loginTitle": "Sign in to your account",
     "loginButton": "Sign in",
     "loggingIn": "Signing in...",
+    "welcomeBack": "Welcome back",
+    "loginSubtitle": "Sign in to continue",
+    "secureConnection": "Secure connection",
     "invalidCredentials": "Invalid credentials",
     "passwordChanged": "Password successfully changed",
     "passwordMismatch": "Passwords do not match",
@@ -276,10 +279,14 @@
       "error": "Something went wrong"
     },
     "popup": {
-      "body": "Body",
-      "dismiss": "Dismiss",
-      "title": "Title",
-      "view": "View"
+      "title_one": "You have an open task",
+      "title_other": "You have {{count}} open tasks",
+      "body_one": "There is one task waiting for you.",
+      "body_other": "There are {{count}} tasks waiting for you.",
+      "nieuw_one": "One of them is new.",
+      "nieuw_other": "{{count}} of them are new.",
+      "dismiss": "Later",
+      "view": "View tasks"
     }
   },
   "dashboard": {

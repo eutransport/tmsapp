@@ -188,13 +188,14 @@ class PrivateTollRegistration(models.Model):
 
 
 class RitnummerCorrectie(models.Model):
-    """Vastlegging van een terugwerkende ritnummerwijziging op tolregels.
+    """Vastlegging van een terugwerkende ritnummer- of bedrijfswijziging.
 
     Per correctie bewaren we van elke aangeraakte regel het oude ritnummer, in
-    ``oude_waarden`` als ``{tolregel-id: oud ritnummer}``. Alleen zo kan een
-    correctie ook teruggedraaid worden wanneer er in de periode verschillende
-    ritnummers door elkaar stonden. Correcties worden na een maand automatisch
-    opgeruimd.
+    ``oude_waarden`` als ``{tolregel-id: oud ritnummer}``, en het oude bedrijf
+    in ``oude_bedrijven`` als ``{tolregel-id: bedrijf-uuid of ''}``. Alleen zo
+    kan een correctie ook teruggedraaid worden wanneer er in de periode
+    verschillende waarden door elkaar stonden. Correcties worden na een maand
+    automatisch opgeruimd.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     license_plate_normalized = models.CharField(
@@ -206,11 +207,21 @@ class RitnummerCorrectie(models.Model):
         max_length=50, null=True, blank=True,
         verbose_name='Alleen dit oude ritnummer',
         help_text='Leeg betekent: alle ritnummers in de periode.')
-    naar_ritnummer = models.CharField(max_length=50, verbose_name='Nieuw ritnummer')
+    naar_ritnummer = models.CharField(max_length=50, blank=True,
+                                      verbose_name='Nieuw ritnummer')
+    ritnummer_gewijzigd = models.BooleanField(
+        default=True, verbose_name='Ritnummer aangepast')
+    naar_bedrijf = models.ForeignKey(
+        'companies.Company', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='+', verbose_name='Nieuw bedrijf')
+    bedrijf_gewijzigd = models.BooleanField(
+        default=False, verbose_name='Bedrijf aangepast',
+        help_text='Onderscheidt "bedrijf leeggemaakt" van "bedrijf ongemoeid gelaten".')
     inclusief_gefactureerd = models.BooleanField(
         default=False, verbose_name='Ook gefactureerde regels')
     aantal = models.PositiveIntegerField(default=0, verbose_name='Aantal regels')
     oude_waarden = models.JSONField(default=dict, verbose_name='Oude ritnummers per regel')
+    oude_bedrijven = models.JSONField(default=dict, verbose_name='Oude bedrijven per regel')
     uitgevoerd_door = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='ritnummer_correcties', verbose_name='Uitgevoerd door')
@@ -231,8 +242,11 @@ class RitnummerCorrectie(models.Model):
         indexes = [models.Index(fields=['license_plate_normalized', '-uitgevoerd_op'])]
 
     def __str__(self) -> str:
+        doel = self.naar_ritnummer or '(ritnummer ongemoeid)'
+        if self.bedrijf_gewijzigd:
+            doel += f' / {self.naar_bedrijf or "geen bedrijf"}'
         return (f'{self.license_plate_normalized} {self.van}..{self.tot} '
-                f'-> {self.naar_ritnummer} ({self.aantal} regels)')
+                f'-> {doel} ({self.aantal} regels)')
 
 
 class TolAfrekening(models.Model):

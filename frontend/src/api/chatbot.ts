@@ -84,7 +84,9 @@ export async function exportChatData(
     { responseType: 'blob' },
   )
   const ext = format === 'excel' ? 'xlsx' : 'pdf'
-  const blob = new Blob([res.data], { type: res.headers['content-type'] })
+  const rawContentType = res.headers?.['content-type']
+  const contentType = typeof rawContentType === 'string' ? rawContentType : undefined
+  const blob = new Blob([res.data], { type: contentType })
   const url = window.URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

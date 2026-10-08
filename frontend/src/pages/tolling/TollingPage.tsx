@@ -1353,7 +1353,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
               onClick={() => setCorrectieOpen(true)}
               className="text-xs font-medium text-primary-700 underline hover:text-primary-900"
             >
-              Ritnummer terugwerkend corrigeren…
+              Ritnummer of bedrijf terugwerkend corrigeren…
             </button>
             {correcties.length > 0 && (
               <button
@@ -1381,7 +1381,13 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                 <li key={cor.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                   <div className="text-xs text-gray-700">
                     <span className="font-medium">
-                      {cor.aantal} regel(s) → ritnummer {cor.naar_ritnummer}
+                      {cor.aantal} regel(s) →{' '}
+                      {[
+                        cor.ritnummer_gewijzigd ? `ritnummer ${cor.naar_ritnummer}` : '',
+                        cor.bedrijf_gewijzigd
+                          ? (cor.naar_bedrijf_naam || 'geen bedrijf')
+                          : '',
+                      ].filter(Boolean).join(' / ')}
                     </span>
                     <span className="text-gray-500">
                       {' '}· {korteDatum(cor.van)} t/m {korteDatum(cor.tot)}
@@ -1585,15 +1591,23 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
         huidigRitnummer={ritFilter}
         voorstelRitnummer={ritFilter || ''}
         bekendeRitnummers={(data?.ritnummers || []).map(r => r.ritnummer).filter(Boolean)}
+        huidigBedrijfId={bedrijfFilter}
         onGewijzigd={(resultaat) => {
           laadCorrecties()
-          // Stond er een filter op het oude ritnummer, dan zou het scherm nu
-          // leeg lijken. Schuif het filter mee naar het nieuwe ritnummer.
-          if (ritFilter !== null && ritFilter !== resultaat.naar_ritnummer) {
+          // Stond er een filter op de oude waarde, dan zou het scherm nu leeg
+          // lijken. Schuif het filter mee naar de nieuwe waarde.
+          let verschoven = false
+          if (resultaat.ritnummer_gewijzigd && ritFilter !== null
+              && ritFilter !== resultaat.naar_ritnummer) {
             setRitFilter(resultaat.naar_ritnummer)
-          } else {
-            load()
+            verschoven = true
           }
+          if (resultaat.bedrijf_gewijzigd && bedrijfFilter !== null
+              && bedrijfFilter !== resultaat.naar_bedrijf) {
+            setBedrijfFilter(resultaat.naar_bedrijf || null)
+            verschoven = true
+          }
+          if (!verschoven) load()
         }}
       />
       {emailModal && (
