@@ -7,6 +7,8 @@ from .models import (
     APKRecord,
     ADRRecord,
     ADRSettings,
+    FireExtinguisherRecord,
+    FireExtinguisherSettings,
     MaintenanceTask,
     MaintenancePart,
     TireRecord,
@@ -53,6 +55,21 @@ class ADRRecordAdmin(admin.ModelAdmin):
 
 @admin.register(ADRSettings)
 class ADRSettingsAdmin(admin.ModelAdmin):
+    list_display = ['__str__', 'email_profile', 'last_run_on', 'updated_at']
+    filter_horizontal = ['default_notify_users']
+
+
+@admin.register(FireExtinguisherRecord)
+class FireExtinguisherRecordAdmin(admin.ModelAdmin):
+    list_display = ['vehicle', 'volgnummer', 'positie', 'serienummer', 'inspection_date', 'next_inspection_date']
+    list_filter = ['volgnummer']
+    search_fields = ['vehicle__kenteken', 'route', 'positie', 'serienummer']
+    raw_id_fields = ['vehicle']
+    filter_horizontal = ['notify_users']
+
+
+@admin.register(FireExtinguisherSettings)
+class FireExtinguisherSettingsAdmin(admin.ModelAdmin):
     list_display = ['__str__', 'email_profile', 'last_run_on', 'updated_at']
     filter_horizontal = ['default_notify_users']
 
