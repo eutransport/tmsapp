@@ -936,6 +936,9 @@
     "smtpNote": "Let op: SMTP moet geconfigureerd zijn voor het versturen van e-mails",
     "attachment": "Bijlage",
     "attachmentIncluded": "Bijlage toegevoegd",
+    "attachmentHint": "Gaat mee als bijlage bij de factuurmail. PDF, JPG, PNG, Word of Excel, maximaal 20 MB.",
+    "attachmentTooLarge": "Bestand is te groot. Maximaal 20 MB.",
+    "attachmentUploadFailed": "Factuur opgeslagen, maar de bijlage kon niet worden toegevoegd",
     "noAttachment": "Geen bijlage",
     "deleteLineConfirm": "Weet u zeker dat u deze regel wilt verwijderen?",
     "lineDeleted": "Regel verwijderd",
@@ -991,6 +994,8 @@
   },
   "templates": {
     "title": "Factuur Templates",
+    "houseStyle": "EU Transport-huisstijl",
+    "houseStyleInfo": "Alle factuur-PDF's gebruiken deze blauwe EU Transport-huisstijl. De bestaande templatenamen en instellingen blijven behouden; er wordt geen apart sjabloon toegevoegd.",
     "newTemplate": "Nieuwe template",
     "createTemplate": "Template aanmaken",
     "editTemplate": "Template bewerken",

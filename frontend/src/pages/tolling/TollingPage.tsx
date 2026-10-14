@@ -45,9 +45,18 @@ import ConfirmDialog, { ConfirmState } from '@/components/common/ConfirmDialog'
 import CreateTollingInvoiceModal from '@/components/tolling/CreateTollingInvoiceModal'
 import DachserExportModal from '@/components/tolling/DachserExportModal'
 import RitnummerCorrectieDialog from '@/components/tolling/RitnummerCorrectieDialog'
+import RadiusSyncPaneel from '@/components/tolling/RadiusSyncPaneel'
+import TolBackupPaneel from '@/components/tolling/TolBackupPaneel'
 import EmailProfileSelector from '@/components/EmailProfileSelector'
 
 const PAGE_SIZE = 15
+
+/** Kleur per land, zodat Duitse en Nederlandse tol in een oogopslag te scheiden zijn. */
+const LAND_KLEUR: Record<string, string> = {
+  NL: 'bg-orange-100 text-orange-800',
+  DE: 'bg-slate-200 text-slate-800',
+  BE: 'bg-yellow-100 text-yellow-800',
+}
 
 function currency(n: number): string {
   return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(n || 0)
@@ -368,6 +377,10 @@ export default function TollingPage() {
           )}
         </div>
       </header>
+
+      <TolBackupPaneel opKlaar={() => reload()} />
+
+      <RadiusSyncPaneel opKlaar={() => reload()} />
 
       {/* Periode-selectie: week / maand / kwartaal / jaar / alles + navigatie */}
       <section className="rounded-lg border bg-white px-4 py-3 space-y-3">
@@ -1435,6 +1448,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                     <th className="text-left px-3 py-2">Einddatum</th>
                     <th className="text-left px-3 py-2">Ritnummer</th>
                     <th className="text-left px-3 py-2">Bedrijf</th>
+                    <th className="text-center px-3 py-2">Land</th>
                     <th className="text-right px-3 py-2">Afstand</th>
                     <th className="text-right px-3 py-2">Bedrag</th>
                     <th className="text-center px-3 py-2">Status</th>
@@ -1490,6 +1504,18 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                           <span className="text-xs text-gray-400">—</span>
                         )}
                       </td>
+                      <td className="px-3 py-1.5 text-center">
+                        {ev.land ? (
+                          <span
+                            className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold ${LAND_KLEUR[ev.land] ?? 'bg-gray-100 text-gray-700'}`}
+                            title={ev.land_bron ? `Bepaald via ${ev.land_bron}` : undefined}
+                          >
+                            {ev.land}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400" title="Nog geen landcode bekend">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-1.5 text-right tabular-nums">
                         {Number(ev.distance_km).toLocaleString('nl-NL', { maximumFractionDigits: 3 })}
                       </td>
@@ -1517,7 +1543,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                 </tbody>
                 <tfoot className="bg-gray-50 text-sm font-medium">
                   <tr>
-                    <td className="px-3 py-2 text-right" colSpan={4}>Totaal (periode)</td>
+                    <td className="px-3 py-2 text-right" colSpan={5}>Totaal (periode)</td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {Number(data.total_km).toLocaleString('nl-NL', { maximumFractionDigits: 3 })} km
                     </td>

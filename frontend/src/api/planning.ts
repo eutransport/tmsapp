@@ -13,7 +13,8 @@ export interface WeekPlanningCreate {
 }
 
 export interface PlanningEntryUpdate {
-  chauffeur: string | null
+  chauffeur?: string | null
+  vervangend_voertuig?: string | null
 }
 
 export interface WeekPlanningsResponse {

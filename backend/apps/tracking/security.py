@@ -113,6 +113,29 @@ class RadiusExportThrottle(SimpleRateThrottle):
         return self.get_ident(request)
 
 
+class RadiusConnectionThrottle(SimpleRateThrottle):
+    """Limiet op het aanmaken, wijzigen en verwijderen van koppelingen."""
+    scope = 'radius_connection'
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            return self.cache_format % {
+                'scope': self.scope,
+                'ident': request.user.pk,
+            }
+        return self.get_ident(request)
+
+
+class RadiusConnectionTestThrottle(RadiusConnectionThrottle):
+    """
+    Strengere limiet op het testen van een koppeling.
+
+    Elke test doet een live aanroep naar Radius met het opgegeven token; zonder
+    aparte limiet zou dit endpoint gebruikt kunnen worden om tokens te raden.
+    """
+    scope = 'radius_connection_test'
+
+
 # ============ Anomaly Detection ============
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

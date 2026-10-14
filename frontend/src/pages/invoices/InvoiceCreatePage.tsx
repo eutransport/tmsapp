@@ -21,8 +21,9 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   ReceiptPercentIcon,
+  PaperClipIcon,
 } from '@heroicons/react/24/outline'
-import { getTemplates, getTemplateBedrijfSuggesties, createInvoice, createInvoiceLine, getNextInvoiceNumber, getInvoice, getInvoiceLines, updateInvoice, deleteInvoiceLine } from '@/api/invoices'
+import { getTemplates, getTemplateBedrijfSuggesties, createInvoice, createInvoiceLine, getNextInvoiceNumber, getInvoice, getInvoiceLines, updateInvoice, deleteInvoiceLine, uploadInvoiceBijlage } from '@/api/invoices'
 import { getCompanies } from '@/api/companies'
 import { getMijnAdministraties, Administratie } from '@/api/administraties'
 import { getTimeEntries, markKilometerheffingGefactureerd } from '@/api/timetracking'
@@ -50,6 +51,10 @@ import {
 // ============================================
 
 const SINGLE_INVOICE_TARGET = '__single__'
+
+// Moet gelijk blijven aan de controle in de backend (invoicing/serializers.py).
+const MAX_BIJLAGE_BYTES = 20 * 1024 * 1024
+const BIJLAGE_ACCEPT = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx'
 
 interface InvoiceLineData {
   id: string // Local temp id
@@ -229,6 +234,8 @@ function TemplateCard({
   selected: boolean
   onSelect: () => void 
 }) {
+  const { t } = useTranslation()
+
   return (
     <div
       onClick={onSelect}
@@ -242,6 +249,9 @@ function TemplateCard({
       <div className="flex items-start justify-between gap-1.5">
         <div className="min-w-0">
           <h3 className="font-semibold text-gray-900 text-sm leading-tight break-words">{template.naam}</h3>
+          <span className="mt-1 inline-flex rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+            {t('templates.houseStyle')}
+          </span>
           {template.beschrijving && (
             <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{template.beschrijving}</p>
           )}
@@ -1777,6 +1787,7 @@ export default function InvoiceCreatePage() {
     return d.toISOString().split('T')[0]
   })
   const [opmerkingen, setOpmerkingen] = useState('')
+  const [bijlage, setBijlage] = useState<File | null>(null)
   const [lines, setLines] = useState<InvoiceLineData[]>([])
   // Override DOT percentage from template (empty string = use template default)
   const [dotPercentageOverride, setDotPercentageOverride] = useState<string>('')
@@ -3584,6 +3595,19 @@ export default function InvoiceCreatePage() {
 
       await persistInvoiceLines(invoiceId, lines)
 
+      // De bijlage kan pas na het aanmaken mee: de factuur moet bestaan.
+      // Mislukt dit, dan blijft de factuur zelf wel staan.
+      if (bijlage) {
+        try {
+          await uploadInvoiceBijlage(invoiceId, bijlage)
+        } catch (uploadErr: any) {
+          toast.error(
+            uploadErr?.response?.data?.bijlage?.[0] ||
+            t('invoices.attachmentUploadFailed', 'Factuur opgeslagen, maar de bijlage kon niet worden toegevoegd')
+          )
+        }
+      }
+
       // Blijf op de pagina i.p.v. terug te navigeren, zodat je meerdere
       // facturen achter elkaar kan aanmaken. Alleen bij re-import navigeren
       // we door omdat de originele factuur bewerkt is.
@@ -3596,6 +3620,7 @@ export default function InvoiceCreatePage() {
         // invoiceType — die wil je meestal hergebruiken voor de volgende factuur.
         setLines([])
         setOpmerkingen('')
+        setBijlage(null)
         setDotPercentageOverride('')
         setWeekNumber(null)
         setWeekYear(null)
@@ -3817,6 +3842,45 @@ export default function InvoiceCreatePage() {
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
               placeholder={t('invoices.optionalNotes')}
             />
+          </div>
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('invoices.attachment')}
+            </label>
+            {bijlage ? (
+              <div className="flex items-center gap-2 text-sm">
+                <PaperClipIcon className="h-4 w-4 text-gray-400 shrink-0" />
+                <span className="truncate">{bijlage.name}</span>
+                <span className="text-gray-400 shrink-0">
+                  ({(bijlage.size / 1024 / 1024).toFixed(1)} MB)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setBijlage(null)}
+                  className="text-red-600 hover:text-red-700 shrink-0"
+                >
+                  {t('common.remove', 'Verwijderen')}
+                </button>
+              </div>
+            ) : (
+              <input
+                type="file"
+                accept={BIJLAGE_ACCEPT}
+                onChange={(e) => {
+                  const bestand = e.target.files?.[0] || null
+                  if (bestand && bestand.size > MAX_BIJLAGE_BYTES) {
+                    toast.error(t('invoices.attachmentTooLarge', 'Bestand is te groot. Maximaal 20 MB.'))
+                    e.target.value = ''
+                    return
+                  }
+                  setBijlage(bestand)
+                }}
+                className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-primary-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
+              />
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              {t('invoices.attachmentHint', 'Gaat mee als bijlage bij de factuurmail. PDF, JPG, PNG, Word of Excel, maximaal 20 MB.')}
+            </p>
           </div>
         </div>
       )}

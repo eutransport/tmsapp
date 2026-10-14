@@ -14,6 +14,8 @@ from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 
+from apps.core.models import EncryptedCharField
+
 
 class TrackingSession(models.Model):
     """
@@ -279,6 +281,61 @@ class RadiusJourney(models.Model):
 
     def __str__(self):
         return f"{self.plate_number or self.service_id} - {self.start_time:%d-%m-%Y %H:%M}"
+
+
+class RadiusConnection(models.Model):
+    """Een losse Radius-koppeling met een eigen API-token.
+
+    Radius geeft per product een apart token uit: Telematics voor GPS en ritten,
+    Fuel voor de tank- en laadkaarten waar de tolfacturen onder vallen. Een klant
+    kan er meerdere hebben, bijvoorbeeld per vestiging of per bedrijf.
+
+    Het bestaande `AppSettings.radius_api_token` blijft werken als er geen
+    koppeling van dit type actief is, zodat bestaande installaties niets merken.
+    """
+
+    class Soort(models.TextChoices):
+        TELEMATICS = 'telematics', 'Telematica (GPS en ritten)'
+        FUEL = 'fuel', 'Tank- en laadkaarten (facturen)'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    naam = models.CharField(max_length=120, verbose_name='Naam')
+    soort = models.CharField(
+        max_length=20, choices=Soort.choices, default=Soort.TELEMATICS,
+        db_index=True, verbose_name='Soort koppeling',
+    )
+    api_token = EncryptedCharField(
+        max_length=512, verbose_name='Radius API token',
+        help_text='Refresh token uit het Radius Portal (Account > API integratie).',
+    )
+    customer_id = models.CharField(
+        max_length=32, blank=True, verbose_name='Radius klant-id',
+        help_text='Leeg laten om de klant automatisch te bepalen.',
+    )
+    start_datum = models.DateField(
+        null=True, blank=True, verbose_name='Startdatum',
+        help_text='Vanaf welke datum gegevens opgehaald worden.',
+    )
+    actief = models.BooleanField(default=True, db_index=True, verbose_name='Actief')
+    laatste_controle = models.DateTimeField(null=True, blank=True, verbose_name='Laatst gecontroleerd')
+    laatste_resultaat = models.CharField(max_length=255, blank=True, verbose_name='Laatste resultaat')
+    aangemaakt_door = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='radius_connections',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Radius koppeling'
+        verbose_name_plural = 'Radius koppelingen'
+        ordering = ['soort', 'naam']
+        constraints = [
+            models.UniqueConstraint(fields=['naam', 'soort'], name='radius_connection_unieke_naam'),
+        ]
+
+    def __str__(self):
+        return f'{self.naam} ({self.get_soort_display()})'
 
 
 class RadiusSyncLog(models.Model):

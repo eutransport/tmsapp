@@ -59,8 +59,18 @@ class RadiusError(Exception):
     pass
 
 
-def _get_refresh_token():
-    """Haal het Radius refresh token uit de app-instellingen."""
+def _get_refresh_token(connection=None):
+    """Haal het Radius refresh token op.
+
+    Zonder koppeling valt dit terug op het token uit de app-instellingen, zodat
+    bestaande installaties zonder losse koppelingen blijven werken.
+    """
+    if connection is not None:
+        token = (getattr(connection, 'api_token', '') or '').strip()
+        if not token:
+            raise RadiusError(f"De koppeling '{connection.naam}' heeft geen API token.")
+        return token
+
     from apps.core.models import AppSettings
     app_settings = AppSettings.get_settings()
     token = getattr(app_settings, 'radius_api_token', '') or ''
@@ -71,6 +81,13 @@ def _get_refresh_token():
             'Ga naar Instellingen > Koppelingen om het token in te stellen.'
         )
     return token
+
+
+def _cache_key(connection=None):
+    """Elke koppeling heeft een eigen access token, dus ook een eigen sleutel."""
+    if connection is None:
+        return _ACCESS_TOKEN_CACHE_KEY
+    return f'{_ACCESS_TOKEN_CACHE_KEY}:{connection.pk}'
 
 
 def _post(endpoint, payload):
@@ -115,19 +132,20 @@ def _jwt_expiry(token):
         return None
 
 
-def get_access_token(force_refresh=False):
+def get_access_token(force_refresh=False, connection=None):
     """
     Wissel het refresh token in voor een access token.
 
     Het access token wordt gecachet tot kort voor het verloopt, zodat niet elke
     aanroep een extra netwerkrondje kost.
     """
+    sleutel = _cache_key(connection)
     if not force_refresh:
-        cached = cache.get(_ACCESS_TOKEN_CACHE_KEY)
+        cached = cache.get(sleutel)
         if cached:
             return cached
 
-    refresh_token = _get_refresh_token()
+    refresh_token = _get_refresh_token(connection)
     data = _post(REFRESH_ENDPOINT, {'token': refresh_token})
     access_token = data.get('token')
     if not access_token:
@@ -136,22 +154,28 @@ def get_access_token(force_refresh=False):
     expiry = _jwt_expiry(access_token)
     ttl = int(expiry - time.time() - _EXPIRY_MARGIN) if expiry else 3600
     if ttl > 0:
-        cache.set(_ACCESS_TOKEN_CACHE_KEY, access_token, ttl)
+        cache.set(sleutel, access_token, ttl)
     return access_token
 
 
-def api_get(endpoint, params=None, timeout=REQUEST_TIMEOUT):
+def api_get(endpoint, params=None, timeout=REQUEST_TIMEOUT, connection=None):
     """
     Doe een geauthenticeerde GET naar de Radius API (``/vapi/v1``).
 
     Let op: de Radius API eist een afsluitende slash; zonder slash volgt een 401.
     """
-    return _api_request('GET', f'{RADIUS_BASE_URL}{_veilig_pad(endpoint)}', params=params, timeout=timeout)
+    return _api_request(
+        'GET', f'{RADIUS_BASE_URL}{_veilig_pad(endpoint)}',
+        params=params, timeout=timeout, connection=connection,
+    )
 
 
-def api_post(url_pad, params=None, timeout=REQUEST_TIMEOUT):
+def api_post(url_pad, params=None, timeout=REQUEST_TIMEOUT, connection=None):
     """Doe een geauthenticeerde POST naar een pad op de Radius host."""
-    return _api_request('POST', f'{RADIUS_HOST}{_veilig_pad(url_pad)}', params=params, timeout=timeout)
+    return _api_request(
+        'POST', f'{RADIUS_HOST}{_veilig_pad(url_pad)}',
+        params=params, timeout=timeout, connection=connection,
+    )
 
 
 def _veilig_pad(pad):
@@ -161,14 +185,14 @@ def _veilig_pad(pad):
     return pad
 
 
-def _api_request(methode, url, params=None, timeout=REQUEST_TIMEOUT):
+def _api_request(methode, url, params=None, timeout=REQUEST_TIMEOUT, connection=None):
     """
     Voer een geauthenticeerde aanroep uit.
 
     Bij een 401 wordt het access token eenmalig vernieuwd en de aanroep herhaald.
     """
     for poging in range(2):
-        token = get_access_token(force_refresh=(poging == 1))
+        token = get_access_token(force_refresh=(poging == 1), connection=connection)
         try:
             response = requests.request(
                 methode,
@@ -185,7 +209,7 @@ def _api_request(methode, url, params=None, timeout=REQUEST_TIMEOUT):
             raise RadiusError('Kan geen verbinding maken met de Radius API.')
 
         if response.status_code == 401 and poging == 0:
-            cache.delete(_ACCESS_TOKEN_CACHE_KEY)
+            cache.delete(_cache_key(connection))
             continue
 
         if response.status_code in (401, 403):
@@ -206,17 +230,32 @@ def _api_request(methode, url, params=None, timeout=REQUEST_TIMEOUT):
     raise RadiusError('Authenticatie bij de Radius API is mislukt.')
 
 
-def test_connection():
+def actieve_koppeling(soort='telematics'):
+    """De actieve koppeling van een soort, of None voor de oude instelling.
+
+    Zonder koppelingen van dit soort geven we None terug; de aanroepende code
+    valt dan terug op het token uit de app-instellingen.
+    """
+    from apps.tracking.models import RadiusConnection
+    return (
+        RadiusConnection.objects
+        .filter(soort=soort, actief=True)
+        .order_by('created_at')
+        .first()
+    )
+
+
+def test_connection(connection=None):
     """
     Controleer of het ingestelde token geldig is.
 
     Geeft een dict terug met het tokentype zoals Radius dat rapporteert.
     """
-    refresh_token = _get_refresh_token()
+    refresh_token = _get_refresh_token(connection)
     data = _post(VERIFY_ENDPOINT, {'token': refresh_token})
 
     # Het access token meteen ophalen zodat we ook die stap controleren.
-    get_access_token(force_refresh=True)
+    get_access_token(force_refresh=True, connection=connection)
 
     return {
         'ok': True,
@@ -225,14 +264,14 @@ def test_connection():
     }
 
 
-def get_customers():
+def get_customers(connection=None):
     """
     Haal de klanten op die aan het token gekoppeld zijn.
 
     De API geeft een dict terug met het klant-id als sleutel. We maken er een
     platte lijst van en voegen een ``products``-lijst toe.
     """
-    data = api_get(CUSTOMERS_ENDPOINT)
+    data = api_get(CUSTOMERS_ENDPOINT, connection=connection)
     if not isinstance(data, dict):
         raise RadiusError('Onverwacht antwoord bij het ophalen van Radius klanten.')
 
@@ -254,9 +293,9 @@ def get_customers():
     return klanten
 
 
-def get_telematics_customers():
+def get_telematics_customers(connection=None):
     """Alleen de klanten waar het Telematics-product actief is."""
-    return [k for k in get_customers() if 'Telematics' in k['products']]
+    return [k for k in get_customers(connection=connection) if 'Telematics' in k['products']]
 
 
 def _valideer_klant_id(customer_id):
@@ -499,7 +538,7 @@ def _normaliseer_rit(rit):
     }
 
 
-def get_journeys(customer_id, van, tot):
+def get_journeys(customer_id, van, tot, connection=None):
     """
     Haal alle ritten van een klant op tussen twee datums (beide inclusief).
 
@@ -521,7 +560,7 @@ def get_journeys(customer_id, van, tot):
             'to': tot.isoformat(),
             'page': pagina,
             'pageSize': JOURNEYS_PAGE_SIZE,
-        }, timeout=JOURNEYS_TIMEOUT)
+        }, timeout=JOURNEYS_TIMEOUT, connection=connection)
 
         if not isinstance(data, dict):
             raise RadiusError('Onverwacht antwoord van Radius bij het ophalen van ritten.')
@@ -537,13 +576,20 @@ def get_journeys(customer_id, van, tot):
             if genormaliseerd['start_time'] and genormaliseerd['service_id']:
                 ritten.append(genormaliseerd)
 
-        totaal_paginas = data.get('totalPages') or 1
+        totaal_paginas = data.get('totalPages')
         try:
-            totaal_paginas = int(totaal_paginas)
+            totaal_paginas = int(totaal_paginas) if totaal_paginas is not None else None
         except (TypeError, ValueError):
-            totaal_paginas = 1
+            totaal_paginas = None
         pagina += 1
-        if pagina >= totaal_paginas or not pagina_ritten:
+        if not pagina_ritten:
+            break
+        if totaal_paginas is not None:
+            if pagina >= totaal_paginas:
+                break
+        # Radius laat ``totalPages`` meestal weg. Een volle pagina betekent dan
+        # dat er nog meer is; een halfvolle pagina is de laatste.
+        elif len(pagina_ritten) < JOURNEYS_PAGE_SIZE:
             break
     else:
         logger.warning(

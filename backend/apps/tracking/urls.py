@@ -1,7 +1,13 @@
 """Track & Trace URL configuration."""
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
+
 from . import views
 from . import radius_views
+from .radius_connection_views import RadiusConnectionViewSet
+
+router = DefaultRouter()
+router.register(r'radius/koppelingen', RadiusConnectionViewSet, basename='radius-koppeling')
 
 urlpatterns = [
     # Session management
@@ -47,4 +53,6 @@ urlpatterns = [
 
     # FM-Track vehicle detail with trip history
     path('fm-positions/<str:object_id>/detail/', views.VehicleDetailView.as_view(), name='fm-vehicle-detail'),
+
+    path('', include(router.urls)),
 ]

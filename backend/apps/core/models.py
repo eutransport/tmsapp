@@ -580,20 +580,6 @@ class AppSettings(models.Model):
         verbose_name='Tachograaf startdatum',
         help_text='Vanaf welke datum tachograaf gegevens automatisch verwerkt moeten worden.'
     )
-
-    # Radius / VelocityFleet telematics integratie
-    radius_api_token = EncryptedCharField(
-        max_length=512,
-        blank=True,
-        verbose_name='Radius API Token',
-        help_text='Refresh token uit het Radius Velocity Portal (Account > API integratie).'
-    )
-    radius_start_datum = models.DateField(
-        null=True,
-        blank=True,
-        verbose_name='Radius startdatum',
-        help_text='Vanaf welke datum Radius rit- en GPS-gegevens opgehaald moeten worden.'
-    )
     secondary_font = models.ForeignKey(
         'CustomFont',
         on_delete=models.SET_NULL,
@@ -821,32 +807,6 @@ class Administratie(models.Model):
         verbose_name='Startnummer Creditfacturen',
     )
 
-    # -----------------------------------------------------------------
-    # Bedrijfsgegevens per administratie
-    # -----------------------------------------------------------------
-    # Deze velden worden gebruikt op facturen als "afzender" (jouw eigen
-    # bedrijfsgegevens). Bij een lege waarde valt de PDF-generator terug op
-    # de algemene AppSettings.company_* velden, zodat bestaande installaties
-    # zonder ingevulde admin-velden blijven werken.
-    logo = models.ImageField(
-        upload_to='administraties/logos/',
-        null=True,
-        blank=True,
-        verbose_name='Logo',
-        help_text='Logo dat op facturen van deze administratie wordt getoond '
-                  '(gebruikt bij het moderne factuur-template).',
-    )
-    straat = models.CharField(max_length=255, blank=True, default='', verbose_name='Straat')
-    huisnummer = models.CharField(max_length=20, blank=True, default='', verbose_name='Huisnummer')
-    postcode = models.CharField(max_length=10, blank=True, default='', verbose_name='Postcode')
-    plaats = models.CharField(max_length=100, blank=True, default='', verbose_name='Plaats')
-    land = models.CharField(max_length=100, blank=True, default='', verbose_name='Land')
-    kvk = models.CharField(max_length=20, blank=True, default='', verbose_name='KVK Nummer')
-    btw = models.CharField(max_length=20, blank=True, default='', verbose_name='BTW Nummer')
-    iban = models.CharField(max_length=34, blank=True, default='', verbose_name='IBAN')
-    telefoon = models.CharField(max_length=30, blank=True, default='', verbose_name='Telefoon')
-    email = models.EmailField(blank=True, default='', verbose_name='E-mail')
-
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -865,21 +825,6 @@ class Administratie(models.Model):
 
     def __str__(self):
         return self.naam
-
-    # -----------------------------------------------------------------
-    # Convenience getters voor PDF-generatie
-    # -----------------------------------------------------------------
-    @property
-    def adres_regel(self) -> str:
-        """Straat + huisnummer als één regel (bijv. 'Kerkstraat 12a')."""
-        parts = [p for p in [(self.straat or '').strip(), (self.huisnummer or '').strip()] if p]
-        return ' '.join(parts)
-
-    @property
-    def postcode_plaats(self) -> str:
-        """Postcode + plaats als één regel."""
-        parts = [p for p in [(self.postcode or '').strip(), (self.plaats or '').strip()] if p]
-        return ' '.join(parts)
 
     def user_has_access(self, user) -> bool:
         """Return True if user has access to this administration."""

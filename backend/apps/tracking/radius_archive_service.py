@@ -11,7 +11,7 @@ from django.db import transaction
 from django.db.models import Count, Max, Min, Sum
 from django.utils import timezone
 
-from .models import RadiusJourney, RadiusSyncLog
+from .models import RadiusConnection, RadiusJourney, RadiusSyncLog
 from .radius_service import (
     RadiusError,
     get_journeys,
@@ -25,11 +25,11 @@ logger = logging.getLogger('tracking')
 STANDAARD_TERUGBLIK_DAGEN = 3
 
 
-def bepaal_klant_id(customer_id=None):
+def bepaal_klant_id(customer_id=None, connection=None):
     """Gebruik de opgegeven klant of de eerste klant met Telematics."""
     if customer_id:
         return str(customer_id)
-    klanten = get_telematics_customers()
+    klanten = get_telematics_customers(connection=connection)
     if not klanten:
         raise RadiusError('Er is geen Radius klant met een Telematics-abonnement gevonden.')
     return klanten[0]['id']
@@ -40,15 +40,15 @@ def _naar_lokale_datum(tijdstip):
 
 
 @transaction.atomic
-def sync_radius_journeys(van, tot, customer_id=None):
+def sync_radius_journeys(van, tot, customer_id=None, connection=None):
     """
     Haal de ritten voor een periode op en sla ze op in het archief.
 
     Bestaande ritten worden bijgewerkt in plaats van gedupliceerd, zodat
     opnieuw synchroniseren van dezelfde periode veilig is.
     """
-    klant_id = bepaal_klant_id(customer_id)
-    resultaat = get_journeys(klant_id, van, tot)
+    klant_id = bepaal_klant_id(customer_id, connection=connection)
+    resultaat = get_journeys(klant_id, van, tot, connection=connection)
 
     # Eén dag speling aan beide kanten. Radius levert de starttijd in UTC en
     # wij zoeken op de lokale datum; een rit die om 22:30 UTC begint valt
@@ -95,7 +95,6 @@ def sync_radius_journeys(van, tot, customer_id=None):
             'end_country': rit['end_country'][:100],
             'distance_km': rit['distance_km'],
             'duration_seconds': rit['duration_seconds'],
-            'customer_id': klant_id,
         }
 
         huidig = bestaande.get(sleutel)
@@ -103,6 +102,7 @@ def sync_radius_journeys(van, tot, customer_id=None):
             nieuw.append(RadiusJourney(
                 service_id=rit['service_id'],
                 start_time=rit['start_time'],
+                customer_id=klant_id,
                 **velden,
             ))
         else:
@@ -124,7 +124,7 @@ def sync_radius_journeys(van, tot, customer_id=None):
                 'start_latitude', 'start_longitude', 'end_latitude', 'end_longitude',
                 'start_address', 'start_city', 'start_country',
                 'end_address', 'end_city', 'end_country',
-                'distance_km', 'duration_seconds', 'customer_id',
+                'distance_km', 'duration_seconds',
             ],
             batch_size=500,
         )
@@ -160,7 +160,62 @@ def sync_recente_dagen(dagen=STANDAARD_TERUGBLIK_DAGEN, customer_id=None):
     """Synchroniseer vandaag en de voorgaande dagen (voor de dagelijkse taak)."""
     tot = timezone.localdate()
     van = tot - timedelta(days=max(0, dagen - 1))
-    return sync_radius_journeys(van, tot, customer_id=customer_id)
+    return sync_alle_koppelingen(van, tot, customer_id=customer_id)
+
+
+def sync_alle_koppelingen(van, tot, customer_id=None):
+    """
+    Synchroniseer de ritten van elke actieve telematica-koppeling.
+
+    Zonder koppelingen valt dit terug op het losse token uit de instellingen,
+    zodat bestaande installaties blijven werken. Per koppeling lopen we alle
+    Telematics-klanten af; Radius hangt soms hetzelfde wagenpark onder twee
+    klantnummers, maar dubbele ritten kunnen niet ontstaan doordat de database
+    de combinatie service_id + start_time bewaakt.
+    """
+    koppelingen = list(RadiusConnection.objects.filter(soort='telematics', actief=True)
+                       .order_by('naam'))
+    if not koppelingen:
+        return sync_radius_journeys(van, tot, customer_id=customer_id)
+
+    per_koppeling = []
+    for koppeling in koppelingen:
+        if customer_id:
+            klanten = [{'id': str(customer_id), 'name': ''}]
+        else:
+            try:
+                klanten = get_telematics_customers(connection=koppeling)
+            except RadiusError as exc:
+                per_koppeling.append({'connection': koppeling.naam, 'error': str(exc)})
+                continue
+
+        for klant in klanten:
+            try:
+                uitkomst = sync_radius_journeys(
+                    van, tot, customer_id=klant['id'], connection=koppeling)
+            except RadiusError as exc:
+                per_koppeling.append({
+                    'connection': koppeling.naam, 'customer': klant['id'],
+                    'customer_name': klant.get('name', ''), 'error': str(exc),
+                })
+                continue
+            uitkomst['connection'] = koppeling.naam
+            uitkomst['customer_name'] = klant.get('name', '')
+            per_koppeling.append(uitkomst)
+
+    geslaagd = [r for r in per_koppeling if 'error' not in r]
+    if not geslaagd and per_koppeling:
+        raise RadiusError(per_koppeling[0]['error'])
+
+    return {
+        'date_from': van.isoformat(),
+        'date_to': tot.isoformat(),
+        'journeys_fetched': sum(r['journeys_fetched'] for r in geslaagd),
+        'journeys_created': sum(r['journeys_created'] for r in geslaagd),
+        'journeys_updated': sum(r['journeys_updated'] for r in geslaagd),
+        'vehicles': sum(r['vehicles'] for r in geslaagd),
+        'connections': per_koppeling,
+    }
 
 
 def get_radius_archive(van, tot, plate_number=None):

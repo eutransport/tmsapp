@@ -42,6 +42,7 @@ import LeaveSettingsPage from '@/pages/settings/LeaveSettingsPage'
 import ServerMonitoringPanel from '@/components/ServerMonitoringPanel'
 import EmailProfilesManager from '@/components/settings/EmailProfilesManager'
 import AdministratiesManager from '@/components/settings/AdministratiesManager'
+import RadiusConnections from '@/components/settings/RadiusConnections'
 
 export default function SettingsPage() {
   const { t } = useTranslation()
@@ -1339,6 +1340,8 @@ export default function SettingsPage() {
                   </p>
                 )}
               </div>
+
+              <RadiusConnections />
             </div>
           )}
 

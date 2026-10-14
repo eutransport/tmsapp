@@ -936,6 +936,9 @@
     "smtpNote": "Note: SMTP must be configured to send emails",
     "attachment": "Attachment",
     "attachmentIncluded": "Attachment included",
+    "attachmentHint": "Sent along with the invoice email. PDF, JPG, PNG, Word or Excel, up to 20 MB.",
+    "attachmentTooLarge": "File is too large. Maximum is 20 MB.",
+    "attachmentUploadFailed": "Invoice saved, but the attachment could not be added",
     "noAttachment": "No attachment",
     "deleteLineConfirm": "Are you sure you want to delete this line?",
     "lineDeleted": "Line deleted",
@@ -991,6 +994,8 @@
   },
   "templates": {
     "title": "Invoice Templates",
+    "houseStyle": "EU Transport style",
+    "houseStyleInfo": "All invoice PDFs use the blue EU Transport style. Existing template names and settings are preserved; no separate template is added.",
     "newTemplate": "New template",
     "createTemplate": "Create template",
     "editTemplate": "Edit template",

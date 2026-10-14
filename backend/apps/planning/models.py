@@ -96,6 +96,19 @@ class PlanningEntry(models.Model):
     # Per-dag ritnummer override (bestaand veld, los van vehicle snapshot)
     ritnummer = models.CharField(max_length=50, blank=True, verbose_name='Ritnummer (override)')
 
+    # Reed er die dag een andere wagen op deze rit, dan blijft de regel op zijn
+    # eigen plek in de week staan en wijst dit veld de werkelijke wagen aan.
+    vervangend_voertuig = models.ForeignKey(
+        'fleet.Vehicle',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='vervangen_planning_entries',
+        verbose_name='Vervangend voertuig'
+    )
+    vervangend_kenteken = models.CharField(
+        max_length=20, blank=True, verbose_name='Vervangend kenteken (snapshot)')
+
     # === SNAPSHOTS - eenmalig vastgelegd, niet meer beinvloed door latere wijzigingen ===
     vehicle_kenteken = models.CharField(max_length=20, blank=True, verbose_name='Kenteken (snapshot)')
     vehicle_type_wagen = models.CharField(max_length=100, blank=True, verbose_name='Type wagen (snapshot)')
@@ -138,8 +151,23 @@ class PlanningEntry(models.Model):
         except (ValueError, AttributeError):
             return None
 
+    def werkelijk_kenteken(self):
+        """Het kenteken dat die dag daadwerkelijk op deze rit reed."""
+        return (self.vervangend_kenteken
+                or (self.vervangend_voertuig.kenteken if self.vervangend_voertuig_id else '')
+                or self.vehicle_kenteken
+                or (self.vehicle.kenteken if self.vehicle_id else ''))
+
     def save(self, *args, **kwargs):
         is_new = self._state.adding
+
+        if self.vervangend_voertuig_id:
+            try:
+                self.vervangend_kenteken = self.vervangend_voertuig.kenteken or ''
+            except Exception:
+                pass
+        else:
+            self.vervangend_kenteken = ''
 
         # Vehicle-snapshot vastleggen bij aanmaken, en bij updates lege
         # snapshotvelden alsnog vullen voor entries die historisch via

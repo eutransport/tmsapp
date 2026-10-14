@@ -147,6 +147,10 @@ export default function TemplatesPage() {
         </div>
       </div>
 
+      <div className="rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        {t('templates.houseStyleInfo')}
+      </div>
+
       {/* Messages */}
       {error && (
         <div className="rounded-md bg-red-50 p-4">
@@ -222,6 +226,9 @@ export default function TemplatesPage() {
                         <div className="text-sm font-medium text-gray-900">
                           {template.naam}
                         </div>
+                        <span className="mt-1 inline-flex rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                          {t('templates.houseStyle')}
+                        </span>
                         {template.beschrijving && (
                           <div className="text-xs text-gray-500 truncate max-w-xs">
                             {template.beschrijving}
@@ -296,6 +303,9 @@ export default function TemplatesPage() {
                     <div className="flex items-center gap-1.5">
                       <DocumentDuplicateIcon className="h-4 w-4 text-gray-400 shrink-0" />
                       <span className="text-sm font-medium text-gray-900 truncate">{template.naam}</span>
+                      <span className="inline-flex rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 shrink-0">
+                        {t('templates.houseStyle')}
+                      </span>
                       {template.is_active ? (
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-800 shrink-0">
                           {t('common.active')}

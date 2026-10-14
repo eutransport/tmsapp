@@ -1550,7 +1550,7 @@ export default function InvoicesPage() {
                             className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
                           >
                             <PaperClipIcon className="h-4 w-4" />
-                            {selectedInvoice.bijlage.split('/').pop()}
+                            {selectedInvoice.bijlage_naam || selectedInvoice.bijlage.split('/').pop()?.split('?')[0]}
                             <ArrowDownTrayIcon className="h-3 w-3" />
                           </a>
                         ) : (

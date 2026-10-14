@@ -11,6 +11,7 @@ class PlanningEntrySerializer(serializers.ModelSerializer):
     dag_display = serializers.CharField(source='get_dag_display', read_only=True)
     # Stabiele key voor grouping in de frontend: vehicle FK id of fallback op kenteken-snapshot
     vehicle_key = serializers.SerializerMethodField()
+    werkelijk_kenteken = serializers.CharField(read_only=True)
 
     class Meta:
         model = PlanningEntry
@@ -19,12 +20,14 @@ class PlanningEntrySerializer(serializers.ModelSerializer):
             'vehicle_kenteken', 'vehicle_type', 'vehicle_type_wagen', 'vehicle_ritnummer',
             'chauffeur_naam', 'dag_display', 'telefoon', 'adr',
             'ritnummer',
+            'vervangend_voertuig', 'vervangend_kenteken', 'werkelijk_kenteken',
             'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'planning', 'vehicle', 'dag',
             'vehicle_kenteken', 'vehicle_type_wagen', 'vehicle_ritnummer',
             'chauffeur_naam', 'telefoon', 'adr',
+            'vervangend_kenteken',
             'created_at', 'updated_at'
         ]
 

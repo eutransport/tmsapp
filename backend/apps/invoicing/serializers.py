@@ -1,6 +1,47 @@
+import os
+
 from rest_framework import serializers
 from .models import InvoiceTemplate, Invoice, InvoiceLine, InvoiceStatus, Expense, ExpenseCategory
 from apps.core.models import Administratie
+
+
+MAX_BIJLAGE_BYTES = 20 * 1024 * 1024
+
+# Alleen formaten die een klant bij een factuur nodig heeft. Bewust geen
+# HTML/SVG: bijlagen worden inline geserveerd, dus die zouden als script op
+# ons eigen domein kunnen draaien.
+TOEGESTANE_BIJLAGE_TYPES = {
+    '.pdf': {'application/pdf'},
+    '.jpg': {'image/jpeg'},
+    '.jpeg': {'image/jpeg'},
+    '.png': {'image/png'},
+    '.doc': {'application/msword'},
+    '.docx': {'application/vnd.openxmlformats-officedocument.wordprocessingml.document'},
+    '.xls': {'application/vnd.ms-excel'},
+    '.xlsx': {'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'},
+}
+
+
+def valideer_bijlage(bestand):
+    """Controleer grootte, extensie en mimetype van een factuurbijlage."""
+    if bestand.size > MAX_BIJLAGE_BYTES:
+        raise serializers.ValidationError('Bestand is te groot. Maximaal 20 MB.')
+
+    ext = os.path.splitext(bestand.name or '')[1].lower()
+    toegestaan = TOEGESTANE_BIJLAGE_TYPES.get(ext)
+    if not toegestaan:
+        raise serializers.ValidationError(
+            'Ongeldig bestandstype. Toegestaan: PDF, JPG, PNG, Word en Excel.'
+        )
+
+    # Een kloppende extensie met een afwijkend mimetype duidt op een bestand
+    # dat zich anders voordoet dan het is.
+    content_type = (getattr(bestand, 'content_type', '') or '').split(';')[0].strip().lower()
+    if content_type and content_type not in toegestaan:
+        raise serializers.ValidationError(
+            'Het bestandstype komt niet overeen met de extensie.'
+        )
+    return bestand
 
 
 class InvoiceTemplateSerializer(serializers.ModelSerializer):
@@ -82,7 +123,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'administratie', 'administratie_naam',
             'factuurdatum', 'vervaldatum',
             'subtotaal', 'btw_percentage', 'btw_bedrag', 'totaal',
-            'opmerkingen', 'pdf_file', 'bijlage',
+            'opmerkingen', 'pdf_file', 'bijlage', 'bijlage_naam',
             'created_by', 'created_by_naam', 'sent_at',
             'week_number', 'week_year', 'chauffeur', 'chauffeur_naam',
             'dot_percentage',
@@ -90,7 +131,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id', 'factuurnummer', 'subtotaal', 'btw_bedrag', 'totaal',
-            'pdf_file', 'created_by', 'sent_at', 'created_at', 'updated_at'
+            'pdf_file', 'bijlage_naam', 'created_by', 'sent_at', 'created_at', 'updated_at'
         ]
 
     def to_representation(self, instance):
@@ -165,6 +206,19 @@ class InvoiceUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invoice
         fields = ['status', 'btw_percentage', 'opmerkingen', 'vervaldatum', 'bijlage', 'administratie']
+
+    def validate_bijlage(self, value):
+        if value in (None, ''):
+            return value
+        return valideer_bijlage(value)
+
+    def update(self, instance, validated_data):
+        # De originele bestandsnaam bewaren; op schijf krijgt het bestand een
+        # willekeurige naam, dus zonder dit is de naam niet meer te tonen.
+        if 'bijlage' in validated_data:
+            bestand = validated_data['bijlage']
+            instance.bijlage_naam = getattr(bestand, 'name', '')[:255] if bestand else ''
+        return super().update(instance, validated_data)
     
     def validate_status(self, value):
         if self.instance:

@@ -40,6 +40,7 @@ import {
 } from '@/api/planning'
 import { getDriverReport, DriverReport, downloadDriverReportPdf, getDriverReportYears } from '@/api/timetracking'
 import { getAllDrivers } from '@/api/drivers'
+import { getVehiclesForDropdown } from '@/api/fleet'
 import clsx from '@/utils/clsx'
 import EmailProfileSelector from '@/components/EmailProfileSelector'
 
@@ -60,6 +61,20 @@ const ALL_DAYS = [
   { key: 'za', labelKey: 'planning.sat', fullKey: 'planning.saturday' },
   { key: 'zo', labelKey: 'planning.sun', fullKey: 'planning.sunday' },
 ] as const
+
+const DAG_NUMMERS: Record<string, number> = { ma: 1, di: 2, wo: 3, do: 4, vr: 5, za: 6, zo: 7 }
+
+// Datum van een planningsdag, via het ISO-weeknummer zoals de backend die ook rekent
+function dagDatum(jaar: number, week: number, dagKey: string): string {
+  const dagNummer = DAG_NUMMERS[dagKey]
+  if (!jaar || !week || !dagNummer) return ''
+  const vierdeJanuari = new Date(Date.UTC(jaar, 0, 4))
+  const maandagWeek1 = new Date(vierdeJanuari)
+  maandagWeek1.setUTCDate(vierdeJanuari.getUTCDate() - ((vierdeJanuari.getUTCDay() || 7) - 1))
+  const datum = new Date(maandagWeek1)
+  datum.setUTCDate(maandagWeek1.getUTCDate() + (week - 1) * 7 + (dagNummer - 1))
+  return `${String(datum.getUTCDate()).padStart(2, '0')}-${String(datum.getUTCMonth() + 1).padStart(2, '0')}`
+}
 
 // Get current ISO 8601 week number (matches backend Python isocalendar)
 function getCurrentWeekNumber(): number {
@@ -312,6 +327,9 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
   
   // Entry editing
   const [editingEntry, setEditingEntry] = useState<string | null>(null)
+  // Regel waarvan de gebruiker het kenteken voor die ene dag wil wisselen.
+  const [wisselEntry, setWisselEntry] = useState<string | null>(null)
+  const [wagens, setWagens] = useState<{ id: string; kenteken: string }[]>([])
 
   // Load initial data
   useEffect(() => {
@@ -337,6 +355,10 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
       setDrivers(planningData.drivers)
       setCurrentWeek(weekInfo.weeknummer)
       setCurrentYear(weekInfo.jaar)
+
+      getVehiclesForDropdown()
+        .then((lijst) => setWagens(lijst.map((v) => ({ id: v.id, kenteken: v.kenteken }))))
+        .catch(() => setWagens([]))
       
       // Auto-select first company
       if (planningData.companies.length > 0) {
@@ -469,6 +491,16 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
       await updatePlanningEntry(entryId, { chauffeur: chauffeurId })
       loadPlanning()
       setEditingEntry(null)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || t('common.error'))
+    }
+  }
+
+  const handleWisselVoertuig = async (entryId: string, vehicleId: string | null) => {
+    try {
+      await updatePlanningEntry(entryId, { vervangend_voertuig: vehicleId })
+      loadPlanning()
+      setWisselEntry(null)
     } catch (err: any) {
       setError(err.response?.data?.detail || t('common.error'))
     }
@@ -781,6 +813,9 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
                       className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]"
                     >
                       {t(day.fullKey)}
+                      <span className="ml-1 font-normal normal-case text-gray-400">
+                        {dagDatum(currentYear, currentWeek, day.key)}
+                      </span>
                     </th>
                   ))}
                 </tr>
@@ -824,10 +859,20 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
                       if (!entry) return <td key={day.key} className="px-4 py-3" />
                       
                       const isEditing = editingEntry === entry.id
+                      const isWisselen = wisselEntry === entry.id
+                      const gewisseld = Boolean(entry.vervangend_kenteken)
                       
                       return (
                         <td key={day.key} className="px-2 py-2">
-                          {isEditing && !isReadOnly ? (
+                          {isWisselen && !isReadOnly ? (
+                            <VoertuigWisselaar
+                              wagens={wagens}
+                              eigenKenteken={entry.vehicle_kenteken}
+                              waarde={entry.vervangend_voertuig ?? null}
+                              onChange={(id) => handleWisselVoertuig(entry.id, id)}
+                              onCancel={() => setWisselEntry(null)}
+                            />
+                          ) : isEditing && !isReadOnly ? (
                             <DriverSelector
                               drivers={drivers}
                               companies={companies}
@@ -866,6 +911,24 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
                                   {isReadOnly ? t('planning.noPlanning') : t('planning.assignDriver')}
                                 </div>
                               )}
+                              <button
+                                type="button"
+                                disabled={isReadOnly}
+                                onClick={(e) => { e.stopPropagation(); setWisselEntry(entry.id) }}
+                                title={gewisseld
+                                  ? `Rijdt deze dag met ${entry.vervangend_kenteken} in plaats van ${entry.vehicle_kenteken}`
+                                  : 'Ander kenteken voor deze dag'}
+                                className={clsx(
+                                  'mt-1 flex w-full items-center gap-1 rounded px-1 py-0.5 font-mono text-[11px]',
+                                  gewisseld
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'text-gray-500 hover:bg-gray-100',
+                                  isReadOnly && 'cursor-default'
+                                )}
+                              >
+                                <TruckIcon className="h-3 w-3 flex-shrink-0" />
+                                {entry.vervangend_kenteken || entry.vehicle_kenteken}
+                              </button>
                             </div>
                           )}
                         </td>
@@ -912,7 +975,10 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
                     
                     return (
                       <div key={day.key} className="text-center">
-                        <div className="text-xs font-medium text-gray-500 mb-1">{t(day.labelKey)}</div>
+                        <div className="text-xs font-medium text-gray-500">{t(day.labelKey)}</div>
+                        <div className="mb-1 text-[10px] text-gray-400">
+                          {dagDatum(currentYear, currentWeek, day.key)}
+                        </div>
                         {entry ? (
                           <div
                             onClick={() => !isReadOnly && setEditingEntry(entry.id)}
@@ -1354,6 +1420,48 @@ interface PaneelPositie {
 }
 
 const GEEN_BEDRIJF = '__geen_bedrijf__'
+
+function VoertuigWisselaar({
+  wagens,
+  eigenKenteken,
+  waarde,
+  onChange,
+  onCancel,
+}: {
+  wagens: { id: string; kenteken: string }[]
+  eigenKenteken: string
+  waarde: string | null
+  onChange: (vehicleId: string | null) => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50 p-2">
+      <div className="mb-1 text-[11px] text-amber-900">
+        Kenteken alleen voor deze dag
+      </div>
+      <select
+        autoFocus
+        className="w-full rounded border border-amber-300 bg-white px-1 py-1 font-mono text-xs"
+        value={waarde ?? ''}
+        onChange={(e) => onChange(e.target.value || null)}
+      >
+        <option value="">{eigenKenteken || '—'} (geen wissel)</option>
+        {wagens
+          .filter((w) => w.kenteken && w.kenteken !== eigenKenteken)
+          .map((w) => (
+            <option key={w.id} value={w.id}>{w.kenteken}</option>
+          ))}
+      </select>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="mt-1 w-full rounded px-1 py-0.5 text-[11px] text-gray-600 hover:bg-amber-100"
+      >
+        {'Annuleren'}
+      </button>
+    </div>
+  )
+}
 
 function DriverSelector({
   drivers,

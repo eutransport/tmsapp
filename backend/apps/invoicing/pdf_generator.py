@@ -5,6 +5,7 @@ import re
 import requests
 from datetime import date
 from decimal import Decimal
+from xml.sax.saxutils import escape as xml_escape
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -504,7 +505,465 @@ class InvoicePDFGenerator:
         elements.append(Paragraph(payment_text, self.styles['SmallText']))
         
         return elements
+
+
+class HouseStyleInvoicePDFGenerator(InvoicePDFGenerator):
+    """Render every template with the same blue, structured invoice layout.
+
+    Template-specific content (columns, footer text, logo, totals settings and
+    variables) is retained; template-specific visual styling is intentionally
+    ignored so old templates render consistently in the house style.
+    """
+
+    BLUE = colors.HexColor('#1157d9')
+    NAVY = colors.HexColor('#102a43')
+    PALE = colors.HexColor('#f1f5f9')
+    LIGHT = colors.HexColor('#dce4ed')
+    MUTED = colors.HexColor('#526477')
+
+    def _create_custom_styles(self):
+        super()._create_custom_styles()
+        self.styles.add(ParagraphStyle(
+            name='HouseTitle',
+            parent=self.styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=21,
+            leading=24,
+            textColor=self.BLUE,
+            alignment=TA_RIGHT,
+        ))
+        self.styles.add(ParagraphStyle(
+            name='HouseSection',
+            parent=self.styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=8,
+            leading=10,
+            textColor=self.BLUE,
+        ))
+        self.styles.add(ParagraphStyle(
+            name='HouseBody',
+            parent=self.styles['Normal'],
+            fontName='Helvetica',
+            fontSize=9,
+            leading=12,
+            textColor=self.NAVY,
+        ))
+        self.styles.add(ParagraphStyle(
+            name='HouseMeta',
+            parent=self.styles['Normal'],
+            fontName='Helvetica',
+            fontSize=8,
+            leading=10,
+            textColor=self.MUTED,
+        ))
+        self.styles.add(ParagraphStyle(
+            name='HouseRight',
+            parent=self.styles['HouseBody'],
+            alignment=TA_RIGHT,
+        ))
+        self.styles.add(ParagraphStyle(
+            name='HouseTableHead',
+            parent=self.styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=8,
+            leading=10,
+            textColor=colors.white,
+        ))
+        self.styles.add(ParagraphStyle(
+            name='HouseTableHeadRight',
+            parent=self.styles['HouseTableHead'],
+            alignment=TA_RIGHT,
+        ))
+        self.styles.add(ParagraphStyle(
+            name='HouseTotalLabel',
+            parent=self.styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=11,
+            leading=14,
+            textColor=self.BLUE,
+            alignment=TA_LEFT,
+        ))
+        self.styles.add(ParagraphStyle(
+            name='HouseTotalValue',
+            parent=self.styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=13,
+            leading=16,
+            textColor=self.BLUE,
+            alignment=TA_RIGHT,
+        ))
+
+    @staticmethod
+    def _money(value):
+        amount = Decimal(str(value or 0)).quantize(Decimal('0.01'))
+        formatted = f'{amount:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+        return f'€ {formatted}'
+
+    def _configured_field(self, field, style_name='HouseBody'):
+        content = self._get_field_content(field)
+        if not content:
+            return []
+        if isinstance(content, Image):
+            return [content]
+        return [Paragraph(str(content), self.styles[style_name])]
+
+    def _subheader_lines(self, field):
+        """Zet een subheaderveld om in regels; <br/> blijft als regeleinde behouden."""
+        content = self._get_field_content(field)
+        if not content or isinstance(content, Image):
+            return []
+        text = str(content).strip()
+        return [(text, 'HouseMeta')] if text else []
+
+    def _build_template_header(self):
+        left = self._configured_field(self.header.get('left'))
+        if not left:
+            logo = None
+            modern_config = self.template_layout.get('modern') or {}
+            show_logo = modern_config.get('logoMode') != 'text-only'
+            if show_logo:
+                try:
+                    admin = getattr(self.invoice, 'administratie', None)
+                    logo_field = (
+                        getattr(admin, 'logo', None)
+                        if admin is not None
+                        else getattr(self.app_settings, 'logo', None)
+                    )
+                    if logo_field and logo_field.path:
+                        logo = self._load_image(logo_field.path, width_px=150)
+                except (AttributeError, OSError, ValueError):
+                    logo = None
+            left = [logo] if logo else [
+                Paragraph(
+                    xml_escape(
+                        modern_config.get('companyNameOverride')
+                        or self._bedrijf('naam')
+                    ),
+                    self.styles['CompanyName'],
+                )
+            ]
+
+        title_field = self.header.get('center') or self.header.get('right')
+        title_content = self._get_field_content(title_field)
+        if title_content and not isinstance(title_content, Image):
+            title = Paragraph(str(title_content), self.styles['HouseTitle'])
+        elif isinstance(title_content, Image):
+            title = title_content
+        else:
+            labels = {
+                'verkoop': 'FACTUUR',
+                'credit': 'CREDITFACTUUR',
+                'inkoop': 'INKOOPFACTUUR',
+            }
+            title = Paragraph(labels.get(self.invoice.type, 'FACTUUR'), self.styles['HouseTitle'])
+
+        header = Table([[left, [title]]], colWidths=[9 * cm, 8.4 * cm])
+        header.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+            ('LINEBELOW', (0, 0), (-1, -1), 1, self.BLUE),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        return [header, Spacer(1, 8 * mm)]
+
+    def _build_template_subheader(self):
+        return []
+
+    def _build_customer_info(self):
+        customer = self.invoice.bedrijf
+        address_lines = [
+            ('FACTUUR AAN', 'HouseSection'),
+            (f'<b>{xml_escape(customer.naam or "")}</b>', 'HouseBody'),
+        ]
+        address = (getattr(customer, 'adres', '') or '').strip()
+        if address:
+            address_lines.append((xml_escape(address), 'HouseBody'))
+        postcode_plaats = ' '.join(
+            value for value in (
+                (getattr(customer, 'postcode', '') or '').strip(),
+                (getattr(customer, 'stad', '') or '').strip(),
+            ) if value
+        )
+        if postcode_plaats:
+            address_lines.append((xml_escape(postcode_plaats), 'HouseBody'))
+        land = (getattr(customer, 'land', '') or '').strip()
+        if land:
+            address_lines.append((xml_escape(land), 'HouseBody'))
+        for label, attr in (
+            ('KVK', 'kvk'),
+            ('Tel.', 'telefoon'),
+            ('E-mail', 'email'),
+        ):
+            value = (getattr(customer, attr, '') or '').strip()
+            if value:
+                address_lines.append((f'{label}: {xml_escape(value)}', 'HouseMeta'))
+
+        invoice_lines = [
+            ('FACTUURGEGEVENS', 'HouseSection'),
+            (f'Factuurnummer: <b>{xml_escape(self.invoice.factuurnummer)}</b>', 'HouseBody'),
+            (f'Factuurdatum: {self.invoice.factuurdatum.strftime("%d-%m-%Y")}', 'HouseBody'),
+            (f'Vervaldatum: {self.invoice.vervaldatum.strftime("%d-%m-%Y")}', 'HouseBody'),
+        ]
+
+        def build_flow(lines):
+            return [Paragraph(text, self.styles[style]) for text, style in lines]
+
+        for position in ('left', 'center'):
+            address_lines.extend(self._subheader_lines(self.subheader.get(position)))
+        invoice_lines.extend(self._subheader_lines(self.subheader.get('right')))
+
+        card = Table(
+            [[build_flow(address_lines), build_flow(invoice_lines)]],
+            colWidths=[8.7 * cm, 8.7 * cm],
+        )
+        card.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), self.PALE),
+            ('BOX', (0, 0), (-1, -1), 0.5, self.LIGHT),
+            ('INNERGRID', (0, 0), (-1, -1), 0.4, self.LIGHT),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5 * mm),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5 * mm),
+            ('TOPPADDING', (0, 0), (-1, -1), 3 * mm),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3 * mm),
+        ]))
+        return [card, Spacer(1, 9 * mm)]
+
+    def _build_lines_table(self):
+        columns = self.columns or [
+            {'id': 'omschrijving', 'naam': 'Omschrijving', 'type': 'text', 'breedte': 50},
+            {'id': 'aantal', 'naam': 'Aantal', 'type': 'aantal', 'breedte': 15},
+            {'id': 'prijs', 'naam': 'Prijs', 'type': 'prijs', 'breedte': 17.5},
+            {'id': 'totaal', 'naam': 'Totaal', 'type': 'berekend', 'breedte': 17.5},
+        ]
+        headers = [xml_escape(str(col.get('naam', col.get('id', '')))) for col in columns]
+        widths = []
+        for col in columns:
+            try:
+                width = float(col.get('breedte', 1))
+            except (TypeError, ValueError):
+                width = 1
+            widths.append(max(width, 0.1))
+        total_width = sum(widths) or 1
+        table_width = 17.4 * cm
+        col_widths = [width / total_width * table_width for width in widths]
+        rows = [[
+            Paragraph(
+                value,
+                self.styles['HouseTableHead'] if index == 0 else self.styles['HouseTableHeadRight'],
+            )
+            for index, value in enumerate(headers)
+        ]]
+
+        for line in self.invoice.lines.order_by('volgorde', 'created_at'):
+            is_info = bool(line.extra_data and line.extra_data.get('info_line'))
+            row = []
+            for column in columns:
+                col_id = column.get('id', '')
+                col_type = column.get('type', 'text')
+                if col_id == 'omschrijving' or col_type == 'text':
+                    row.append(Paragraph(
+                        xml_escape(line.omschrijving or '').replace('\n', '<br/>'),
+                        self.styles['HouseBody'],
+                    ))
+                elif is_info:
+                    row.append('')
+                elif col_id == 'aantal' or col_type == 'aantal':
+                    quantity = Decimal(str(line.aantal or 0))
+                    row.append(f'{quantity:.2f}'.rstrip('0').rstrip('.'))
+                elif col_id == 'prijs' or col_type == 'prijs':
+                    row.append(self._money(line.prijs_per_eenheid))
+                elif col_type == 'berekend' or col_id == 'totaal':
+                    row.append(self._money(line.totaal))
+                else:
+                    row.append('')
+            rows.append(row)
+
+        if len(rows) == 1:
+            rows.append([Paragraph('Geen factuurregels', self.styles['HouseBody'])] + [''] * (len(columns) - 1))
+
+        table = Table(rows, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), self.BLUE),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+            ('LINEBELOW', (0, 0), (-1, 0), 0.7, self.BLUE),
+            ('LINEBELOW', (0, 1), (-1, -1), 0.5, self.LIGHT),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f8fc')]),
+            ('LEFTPADDING', (0, 0), (-1, -1), 2 * mm),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2 * mm),
+            ('TOPPADDING', (0, 0), (-1, -1), 3 * mm),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3 * mm),
+        ]))
+        return [table, Spacer(1, 4 * mm)]
+
+    def _build_km_summary(self):
+        from .km_overzicht import bouw_km_tabel
+
+        rows = bouw_km_tabel(self.invoice)
+        if not rows:
+            return []
+        table = Table(rows, colWidths=[5.4 * cm, 4 * cm, 4 * cm, 3.6 * cm], hAlign='RIGHT')
+        table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('TEXTCOLOR', (0, 0), (-1, -1), self.MUTED),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+            ('LINEBELOW', (0, 0), (-1, 0), 0.5, self.LIGHT),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ]))
+        return [table, Spacer(1, 2 * mm)]
+
+    def _build_totals(self):
+        btw_enabled = self.totals_config.get('btwEnabled') is not False
+        cfg_pct = self.totals_config.get('btwPercentage')
+        btw_pct = cfg_pct if cfg_pct is not None else self.invoice.btw_percentage or 21
+        rows = []
+        if btw_enabled and self.totals_config.get('showSubtotaal', True):
+            rows.append([
+                Paragraph('Subtotaal (excl. BTW)', self.styles['HouseBody']),
+                Paragraph(self._money(self.invoice.subtotaal), self.styles['HouseRight']),
+            ])
+        if btw_enabled and self.totals_config.get('showBtw', True):
+            rows.append([
+                Paragraph(f'BTW ({btw_pct}%)', self.styles['HouseBody']),
+                Paragraph(self._money(self.invoice.btw_bedrag), self.styles['HouseRight']),
+            ])
+        if self.totals_config.get('showTotaal', True):
+            total_label = 'Totaal (incl. BTW)' if btw_enabled else 'Totaal'
+            rows.append([
+                Paragraph(total_label, self.styles['HouseTotalLabel']),
+                Paragraph(self._money(self.invoice.totaal), self.styles['HouseTotalValue']),
+            ])
+        if not rows:
+            return []
+
+        table = Table(rows, colWidths=[6.2 * cm, 4.3 * cm], hAlign='RIGHT')
+        total_row = len(rows) - 1
+        table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2 * mm),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2 * mm),
+            ('LINEABOVE', (0, total_row), (-1, total_row), 1.1, self.BLUE),
+            ('BACKGROUND', (0, total_row), (-1, total_row), self.PALE),
+        ]))
+        return [table, Spacer(1, 6 * mm)]
+
+    def _build_payment_info(self):
+        elements = []
+        if self.invoice.opmerkingen:
+            elements.append(Paragraph('<b>Opmerkingen</b>', self.styles['HouseBody']))
+            elements.append(Paragraph(
+                xml_escape(self.invoice.opmerkingen).replace('\n', '<br/>'),
+                self.styles['HouseMeta'],
+            ))
+            elements.append(Spacer(1, 3 * mm))
+        payment_text = self.app_settings.invoice_payment_text or (
+            'Wij verzoeken u vriendelijk het totaalbedrag vóór de vervaldatum over te '
+            'maken op onderstaand IBAN onder vermelding van het factuurnummer.'
+        )
+        payment_text = (
+            payment_text
+            .replace('{bedrag}', self._money(self.invoice.totaal))
+            .replace('{vervaldatum}', self.invoice.vervaldatum.strftime('%d-%m-%Y'))
+            .replace('{factuurnummer}', self.invoice.factuurnummer)
+        )
+        elements.append(Paragraph(
+            xml_escape(payment_text).replace('\n', '<br/>'),
+            self.styles['HouseMeta'],
+        ))
+        return elements
+
+    def _draw_page_footer(self, canvas, doc):
+        canvas.saveState()
+        page_width = A4[0]
+        left_margin = 2 * cm
+        right_margin = 2 * cm
+        fields = [
+            self.footer_section.get('left'),
+            self.footer_section.get('center'),
+            self.footer_section.get('right'),
+        ]
+        lines = []
+        for field in fields:
+            if not field or field.get('type') == 'image':
+                lines.append([])
+                continue
+            content = field.get('content', '')
+            if field.get('type') == 'variable':
+                content = self._replace_variable(content)
+            else:
+                content = self._substitute_placeholders(content)
+            lines.append([pdf_veilig(line.strip()) for line in str(content).splitlines() if line.strip()])
+
+        if not any(lines):
+            lines = [
+                [self._bedrijf('naam'), self._bedrijf('adres')],
+                [self._bedrijf('telefoon'), self._bedrijf('email')],
+                [self._bedrijf('btw'), self._bedrijf('kvk'), self._bedrijf('iban')],
+            ]
+            lines = [[value for value in column if value] for column in lines]
+
+        line_height = 9
+        footer_top_y = 1.8 * cm + max(max((len(column) for column in lines), default=1), 1) * line_height + 6
+        canvas.setStrokeColor(self.LIGHT)
+        canvas.setLineWidth(0.7)
+        canvas.line(left_margin, footer_top_y, page_width - right_margin, footer_top_y)
+        canvas.setFillColor(self.BLUE)
+        canvas.setFont('Helvetica', 7)
+        col_width = (page_width - left_margin - right_margin) / 3
+        for index, column in enumerate(lines):
+            x = left_margin + index * col_width
+            align = ('left', 'center', 'right')[index]
+            for line_index, line in enumerate(column):
+                y = footer_top_y - 12 - line_index * line_height
+                if align == 'center':
+                    canvas.drawCentredString(x + col_width / 2, y, line)
+                elif align == 'right':
+                    canvas.drawRightString(x + col_width, y, line)
+                else:
+                    canvas.drawString(x, y, line)
+        canvas.restoreState()
+
+    def generate(self):
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=2 * cm,
+            leftMargin=2 * cm,
+            topMargin=1.5 * cm,
+            bottomMargin=3.5 * cm,
+        )
+        elements = []
+        if self.invoice.status == 'concept':
+            elements.append(Paragraph(
+                '<font color="#f59e0b"><b>CONCEPTFACTUUR</b></font>',
+                self.styles['HouseBody'],
+            ))
+            elements.append(Spacer(1, 4 * mm))
+        elements.extend(self._build_template_header())
+        elements.extend(self._build_customer_info())
+        elements.extend(self._build_lines_table())
+        elements.extend(self._build_km_summary())
+        elements.extend(self._build_totals())
+        elements.extend(self._build_payment_info())
+        doc.build(elements, onFirstPage=self._draw_page_footer, onLaterPages=self._draw_page_footer)
+        buffer.seek(0)
+        return buffer.getvalue()
     
+
+class LegacyTemplateInvoicePDFGenerator(InvoicePDFGenerator):
     def _build_template_header(self):
         """Bouw de header op basis van template layout."""
         elements = []
@@ -827,15 +1286,6 @@ class InvoicePDFGenerator:
 
 
 def generate_invoice_pdf(invoice):
-    """Helper functie om PDF te genereren voor een factuur.
-
-    Dispatch: bij `template.layout['layoutStyle'] == 'modern'` gebruiken we de
-    nieuwe strakke layout. Anders valt hij terug op de bestaande, volledig
-    configureerbare template-layout (backwards compatible).
-    """
-    layout = (invoice.template.layout if invoice.template else None) or {}
-    if layout.get('layoutStyle') == 'modern':
-        from .pdf_generator_modern import ModernInvoicePDFGenerator
-        return ModernInvoicePDFGenerator(invoice).generate()
-    generator = InvoicePDFGenerator(invoice)
+    """Genereer elke factuur in de vaste EU Transport-huisstijl."""
+    generator = HouseStyleInvoicePDFGenerator(invoice)
     return generator.generate()

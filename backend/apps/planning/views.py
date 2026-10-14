@@ -533,15 +533,18 @@ class PlanningEntryViewSet(viewsets.ModelViewSet):
     Permissies via PlanningPermission.
     """
     queryset = PlanningEntry.objects.select_related(
-        'planning__bedrijf', 'vehicle', 'chauffeur'
+        'planning__bedrijf', 'vehicle', 'chauffeur', 'vervangend_voertuig'
     ).all()
     serializer_class = PlanningEntrySerializer
     permission_classes = [IsAuthenticated, PlanningPermission]
     filterset_fields = ['planning', 'dag', 'chauffeur', 'vehicle']
     
     def perform_update(self, serializer):
+        vorig_kenteken = serializer.instance.werkelijk_kenteken()
         # Het Entry-model handelt zelf de chauffeur-snapshot af in save()
         entry = serializer.save()
+
+        self._herkoppel_tol(entry, vorig_kenteken)
 
         kenteken_display = entry.vehicle_kenteken or (entry.vehicle.kenteken if entry.vehicle else '?')
         chauffeur_display = entry.chauffeur_naam or (entry.chauffeur.naam if entry.chauffeur else 'leeg')
@@ -550,3 +553,13 @@ class PlanningEntryViewSet(viewsets.ModelViewSet):
             f"-> {chauffeur_display} "
             f"by user {self.request.user.email}"
         )
+
+    def _herkoppel_tol(self, entry, vorig_kenteken):
+        """Tol van die dag opnieuw toewijzen; al gefactureerde regels blijven staan."""
+        try:
+            from apps.tolling.planning_koppeling import herkoppel_dag
+
+            herkoppel_dag({vorig_kenteken, entry.werkelijk_kenteken()},
+                          entry.planningsdatum())
+        except Exception as exc:  # pragma: no cover - mag de planning niet blokkeren
+            logger.warning('Herkoppelen tolregels mislukt voor regel %s: %s', entry.id, exc)

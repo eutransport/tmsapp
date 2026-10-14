@@ -17,6 +17,7 @@ from apps.fleet.bedrijven import bouw_bedrijf_index, zoek_bedrijf_in_index
 from apps.fleet.ritnummers import bouw_ritnummer_index, zoek_in_index
 
 from .models import PrivateTollRegistration, TollingEvent, TollingImportBatch, normalize_plate
+from .planning_koppeling import BRON_VOERTUIG, koppel_events
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +229,7 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
             vehicle=vehicle,
             ritnummer=zoek_in_index(ritnummer_index, vehicle, passagedatum),
             bedrijf_id=zoek_bedrijf_in_index(bedrijf_index, vehicle, passagedatum),
+            rit_bron=BRON_VOERTUIG,
         ))
 
     # Bulk insert; on unique conflict fall back to per-row insert to count duplicates.
@@ -260,6 +262,13 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
         match_events_to_private_registrations(events_qs)
     except Exception as exc:  # pragma: no cover
         logger.warning("Private-tolregistratie matching mislukt voor batch %s: %s", batch.id, exc)
+
+    # De weekplanning weet welke wagen die dag op welke rit zat; die kennis
+    # gaat voor op het ritnummer dat aan het voertuig zelf hangt.
+    try:
+        koppel_events(list(TollingEvent.objects.filter(batch=batch)))
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Planningkoppeling mislukt voor batch %s: %s", batch.id, exc)
 
     return ImportResult(batch=batch, imported=imported, duplicates=duplicates,
                         invalid=invalid, total=total, zero_amount=zero_amount)

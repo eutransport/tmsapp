@@ -334,6 +334,9 @@ export interface PlanningEntry {
   chauffeur: string | null
   chauffeur_naam: string | null
   ritnummer?: string
+  vervangend_voertuig?: string | null
+  vervangend_kenteken?: string
+  werkelijk_kenteken?: string
   telefoon: string
   adr: boolean
   created_at: string
@@ -458,9 +461,8 @@ export interface TemplateLayout {
   defaults: TemplateDefaults
   totals: TemplateTotals
   tableStyle?: TemplateTableStyle
-  // Nieuw: kies tussen bestaande volledig-configureerbare 'legacy' layout
-  // (default, backwards compatible) of nieuwe strakke 'modern' layout.
-  layoutStyle?: 'legacy' | 'modern'
+  // All templates use the shared house style; old values remain readable.
+  layoutStyle?: 'house' | 'legacy' | 'modern'
   modern?: ModernLayoutConfig
 }
 
@@ -495,6 +497,7 @@ export interface Invoice {
   opmerkingen: string
   pdf_file: string | null
   bijlage: string | null
+  bijlage_naam?: string
   created_by: string
   created_by_naam: string
   sent_at: string | null

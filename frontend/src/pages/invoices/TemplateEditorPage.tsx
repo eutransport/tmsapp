@@ -43,12 +43,6 @@ import {
   updateTemplate,
 } from '@/api/invoices'
 import { settingsApi } from '@/api/settings'
-import {
-  ModernConfigEditor,
-  ModernPreview,
-  DEFAULT_MODERN_CONFIG,
-} from './ModernTemplateEditor'
-import type { AppSettings } from '@/types'
 
 // Default styling
 const defaultFieldStyle: TemplateFieldStyle = {
@@ -62,6 +56,7 @@ const defaultFieldStyle: TemplateFieldStyle = {
 
 // Default empty layout
 const defaultLayout: TemplateLayout = {
+  layoutStyle: 'house',
   header: { left: null, center: null, right: null },
   subheader: { left: null, center: null, right: null },
   columns: [
@@ -1123,7 +1118,6 @@ function TableStyleEditor({ tableStyle, onChange }: TableStyleEditorProps) {
 // ============================================
 interface PDFPreviewProps {
   layout: TemplateLayout
-  templateName: string
 }
 
 function PDFPreview({ layout }: PDFPreviewProps) {
@@ -1168,33 +1162,42 @@ function PDFPreview({ layout }: PDFPreviewProps) {
   return (
     <div className="bg-white border rounded-lg shadow-sm p-6 text-sm flex flex-col" style={{ minHeight: '700px' }}>
       {/* Header */}
-      <div className="grid grid-cols-3 gap-4 pb-4 border-b">
-        <div>{renderField(layout.header.left)}</div>
-        <div className="text-center">{renderField(layout.header.center)}</div>
-        <div className="text-right">{renderField(layout.header.right)}</div>
+      <div className="grid grid-cols-2 items-center gap-4 pb-3 border-b-2 border-blue-700">
+        <div>{renderField(layout.header.left) || <strong className="text-lg text-blue-700">EU TRANSPORT</strong>}</div>
+        <div className="text-right text-2xl font-bold text-blue-700">
+          {renderField(layout.header.center) || renderField(layout.header.right) || 'FACTUUR'}
+        </div>
       </div>
 
       {/* Subheader */}
-      <div className="grid grid-cols-3 gap-4 py-4 border-b">
-        <div>{renderField(layout.subheader.left)}</div>
-        <div className="text-center">{renderField(layout.subheader.center)}</div>
-        <div className="text-right">{renderField(layout.subheader.right)}</div>
+      <div className="grid grid-cols-2 gap-4 my-5 rounded border border-slate-200 bg-slate-100 p-4">
+        <div>
+          <p className="mb-2 text-xs font-bold text-blue-700">FACTUUR AAN</p>
+          <strong>{'{{klant.naam}}'}</strong>
+          <p className="text-slate-600">{'{{klant.adres}}'}</p>
+          <p className="text-slate-600">{'{{klant.postcode_plaats}}'}</p>
+          <div className="mt-2">{renderField(layout.subheader.left)}</div>
+          <div>{renderField(layout.subheader.center)}</div>
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-bold text-blue-700">FACTUURGEGEVENS</p>
+          <p>Factuurnummer: <strong>{'{{factuurnummer}}'}</strong></p>
+          <p>Factuurdatum: {'{{factuurdatum}}'}</p>
+          <p>Vervaldatum: {'{{vervaldatum}}'}</p>
+          <div className="mt-2">{renderField(layout.subheader.right)}</div>
+        </div>
       </div>
 
       {/* Table */}
       <div className="py-4 flex-1">
         <table className="w-full text-xs">
           <thead>
-            <tr style={{
-              backgroundColor: layout.tableStyle?.headerBackground || '#1f2937',
-              color: layout.tableStyle?.headerTextColor || '#ffffff',
-              fontFamily: layout.tableStyle?.headerFont || 'Arial',
-            }}>
+            <tr className="bg-blue-700 text-white">
               {layout.columns.map((col) => (
                 <th
                   key={col.id}
                   style={{ width: `${col.breedte}%` }}
-                  className="py-2 px-1 text-left font-semibold"
+                  className="px-2 py-2 text-left font-semibold"
                 >
                   {col.naam}
                 </th>
@@ -1203,18 +1206,9 @@ function PDFPreview({ layout }: PDFPreviewProps) {
           </thead>
           <tbody>
             {sampleRows.map((row, i) => (
-              <tr 
-                key={i} 
-                style={{
-                  backgroundColor: i % 2 === 0 
-                    ? (layout.tableStyle?.oddRowBackground || '#f9fafb')
-                    : (layout.tableStyle?.evenRowBackground || '#ffffff'),
-                  color: layout.tableStyle?.rowTextColor || '#1f2937',
-                  fontFamily: layout.tableStyle?.rowFont || 'Arial',
-                }}
-              >
+              <tr key={i} className={i % 2 === 1 ? 'bg-slate-50' : ''}>
                 {layout.columns.map((col) => (
-                  <td key={col.id} className="py-2 px-1">
+                  <td key={col.id} className="border-b border-slate-200 px-2 py-2">
                     {col.type === 'prijs' || col.type === 'berekend'
                       ? `€ ${((row as Record<string, unknown>)[col.id] as number)?.toFixed(2) || '0.00'}`
                       : String((row as Record<string, unknown>)[col.id] || '-')}
@@ -1241,7 +1235,7 @@ function PDFPreview({ layout }: PDFPreviewProps) {
               </div>
             )}
             {layout.totals.showTotaal && (
-              <div className="flex justify-between py-1 border-t border-gray-400 font-bold">
+              <div className="flex justify-between border-t border-blue-700 bg-slate-100 px-2 py-2 font-bold">
                 <span>{btwEnabled ? 'Totaal (incl. BTW):' : 'Totaal:'}</span>
                 <span>€ {totaal.toFixed(2)}</span>
               </div>
@@ -1277,15 +1271,6 @@ export default function TemplateEditorPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [previewZoom, setPreviewZoom] = useState(1)
-  const [appSettings, setAppSettings] = useState<AppSettings | null>(null)
-
-  useEffect(() => {
-    settingsApi.getPublic().then(setAppSettings).catch(() => { /* preview only */ })
-  }, [])
-
-  const layoutStyle: 'legacy' | 'modern' = layout.layoutStyle === 'modern' ? 'modern' : 'legacy'
-  const modernConfig = { ...DEFAULT_MODERN_CONFIG, ...(layout.modern || {}) }
-
   useEffect(() => {
     if (id) {
       setIsLoading(true)
@@ -1295,7 +1280,7 @@ export default function TemplateEditorPage() {
           setDescription(template.beschrijving || '')
           setIsActive(template.is_active)
           if (template.layout) {
-            setLayout({ ...defaultLayout, ...template.layout as TemplateLayout })
+            setLayout({ ...defaultLayout, ...template.layout as TemplateLayout, layoutStyle: 'house' })
           }
         })
         .catch(console.error)
@@ -1315,7 +1300,7 @@ export default function TemplateEditorPage() {
         naam: templateName,
         beschrijving: description,
         actief: isActive,
-        layout: layout as unknown as Record<string, unknown>,
+        layout: { ...layout, layoutStyle: 'house' } as unknown as Record<string, unknown>,
         variables: {}
       }
 
@@ -1412,125 +1397,68 @@ export default function TemplateEditorPage() {
             </div>
           </div>
 
-          {/* Layout style toggle */}
           <div className="bg-white rounded-lg p-4 mb-4">
-            <h3 className="font-medium mb-2">Layout stijl</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {([
-                { v: 'legacy', l: 'Klassiek', d: 'Volledig aanpasbaar (huidige stijl)' },
-                { v: 'modern', l: 'Modern (strak)', d: '10 kleurpresets, minimalistisch' },
-              ] as const).map(opt => (
-                <label
-                  key={opt.v}
-                  className={`flex flex-col gap-0.5 rounded-md border p-3 cursor-pointer ${
-                    layoutStyle === opt.v
-                      ? 'border-primary-500 ring-2 ring-primary-200 bg-primary-50'
-                      : 'border-gray-200 hover:border-gray-300 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="layoutStyle"
-                      checked={layoutStyle === opt.v}
-                      onChange={() =>
-                        setLayout({
-                          ...layout,
-                          layoutStyle: opt.v,
-                          modern: layout.modern || DEFAULT_MODERN_CONFIG,
-                        })
-                      }
-                    />
-                    <span className="font-medium text-sm">{opt.l}</span>
-                  </div>
-                  <span className="text-xs text-gray-500 ml-6">{opt.d}</span>
-                </label>
-              ))}
+            <h3 className="font-medium mb-1">Vaste EU Transport-huisstijl</h3>
+            <p className="text-xs text-gray-500">
+              Alle facturen gebruiken dezelfde blauwe indeling. Logo, factuurregels,
+              tarieven, btw-instellingen en voettekst blijven per template instelbaar.
+            </p>
+          </div>
+
+          {/* Sections */}
+          <div className="bg-white rounded-lg p-4 mb-4">
+            <SectionEditor
+              title={t('templates.editor.headerSection')}
+              section={layout.header}
+              onChange={(header) => setLayout({ ...layout, header })}
+            />
+            <SectionEditor
+              title={t('templates.editor.subheaderSection')}
+              section={layout.subheader}
+              onChange={(subheader) => setLayout({ ...layout, subheader })}
+            />
+          </div>
+
+          {/* Columns */}
+          <div className="bg-white rounded-lg p-4 mb-4">
+            <ColumnEditor
+              columns={layout.columns}
+              onChange={(columns) => setLayout({ ...layout, columns })}
+            />
+          </div>
+
+          {/* Defaults & Totals */}
+          <div className="bg-white rounded-lg p-4 mb-4">
+            <DefaultsEditor
+              defaults={layout.defaults}
+              totals={layout.totals}
+              onDefaultsChange={(defaults) => setLayout({ ...layout, defaults })}
+              onTotalsChange={(totals) => setLayout({ ...layout, totals })}
+            />
+            <div className="hidden">
+              <TableStyleEditor
+                tableStyle={layout.tableStyle || defaultTableStyle}
+                onChange={(tableStyle) => setLayout({ ...layout, tableStyle })}
+              />
             </div>
           </div>
 
-          {layoutStyle === 'modern' ? (
-            <div className="bg-white rounded-lg p-4 mb-4">
-              <ModernConfigEditor
-                config={modernConfig}
-                onChange={(next) => setLayout({ ...layout, layoutStyle: 'modern', modern: next })}
-                logoUrl={appSettings?.logo_url ?? null}
-                onLogoChanged={(newLogoUrl) =>
-                  setAppSettings((prev) => (prev ? { ...prev, logo_url: newLogoUrl } : prev))
-                }
-              />
-            </div>
-          ) : (
-            <>
-              {/* Sections */}
-              <div className="bg-white rounded-lg p-4 mb-4">
-                <SectionEditor
-                  title={t('templates.editor.headerSection')}
-                  section={layout.header}
-                  onChange={(header) => setLayout({ ...layout, header })}
-                />
-                <SectionEditor
-                  title={t('templates.editor.subheaderSection')}
-                  section={layout.subheader}
-                  onChange={(subheader) => setLayout({ ...layout, subheader })}
-                />
-              </div>
-
-              {/* Columns */}
-              <div className="bg-white rounded-lg p-4 mb-4">
-                <ColumnEditor
-                  columns={layout.columns}
-                  onChange={(columns) => setLayout({ ...layout, columns })}
-                />
-              </div>
-
-              {/* Defaults & Totals */}
-              <div className="bg-white rounded-lg p-4 mb-4">
-                <DefaultsEditor
-                  defaults={layout.defaults}
-                  totals={layout.totals}
-                  onDefaultsChange={(defaults) => setLayout({ ...layout, defaults })}
-                  onTotalsChange={(totals) => setLayout({ ...layout, totals })}
-                />
-                <TableStyleEditor
-                  tableStyle={layout.tableStyle || defaultTableStyle}
-                  onChange={(tableStyle) => setLayout({ ...layout, tableStyle })}
-                />
-              </div>
-
-              {/* Footer */}
-              <div className="bg-white rounded-lg p-4">
-                <SectionEditor
-                  title={t('templates.editor.footerSection')}
-                  section={layout.footer}
-                  onChange={(footer) => setLayout({ ...layout, footer })}
-                />
-              </div>
-            </>
-          )}
+          {/* Footer */}
+          <div className="bg-white rounded-lg p-4">
+            <SectionEditor
+              title={t('templates.editor.footerSection')}
+              section={layout.footer}
+              onChange={(footer) => setLayout({ ...layout, footer })}
+            />
+          </div>
         </div>
 
         {/* Preview Panel (desktop only) */}
         <div className="hidden lg:block w-1/2 bg-gray-200 p-6 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 73px)' }}>
           <h2 className="text-lg font-medium mb-4">{t('templates.editor.preview')}</h2>
-          {layoutStyle === 'modern' ? (
-            <ModernPreview
-              config={modernConfig}
-              companyName={appSettings?.company_name}
-              companyAddress={appSettings?.company_address}
-              companyPhone={appSettings?.company_phone}
-              companyEmail={appSettings?.company_email}
-              companyIban={appSettings?.company_iban}
-              companyKvk={appSettings?.company_kvk}
-              companyBtw={appSettings?.company_btw}
-              logoUrl={appSettings?.logo_url ?? null}
-              btwEnabled={layout.totals.btwEnabled !== false}
-            />
-          ) : (
-            <div className="transform scale-75 origin-top">
-              <PDFPreview layout={layout} templateName={templateName} />
-            </div>
-          )}
+          <div className="transform scale-75 origin-top">
+            <PDFPreview layout={layout} />
+          </div>
         </div>
       </div>
 
@@ -1573,7 +1501,7 @@ export default function TemplateEditorPage() {
                 width: 'fit-content',
               }}
             >
-              <PDFPreview layout={layout} templateName={templateName} />
+              <PDFPreview layout={layout} />
             </div>
           </div>
         </div>
@@ -1581,4 +1509,3 @@ export default function TemplateEditorPage() {
     </div>
   )
 }
-

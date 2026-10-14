@@ -86,6 +86,31 @@ class TollingEvent(models.Model):
         verbose_name='Ritnummer',
         help_text='Ritnummer van de wagen op het moment van importeren.',
     )
+    land = models.CharField(
+        max_length=2,
+        blank=True,
+        db_index=True,
+        verbose_name='Land',
+        help_text='Landcode van de passage, bijvoorbeeld NL, DE of BE.',
+    )
+    land_bron = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name='Herkomst land',
+        help_text='gps, grens, handmatig of leeg wanneer het land onbekend is.',
+    )
+    km_bron = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name='Herkomst kilometers',
+        help_text='bestand, tarief, gps of leeg wanneer de afstand onbekend is.',
+    )
+    rit_bron = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name='Herkomst ritnummer',
+        help_text='planning wanneer de rit uit de weekplanning komt, anders voertuig.',
+    )
     bedrijf = models.ForeignKey(
         'companies.Company',
         on_delete=models.SET_NULL,
@@ -134,6 +159,57 @@ class TollingEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.license_plate_raw} {self.start_at:%d-%m-%Y %H:%M} €{self.amount}"
+
+
+class OpenstaandeTolDag(models.Model):
+    """Een dag waarop een wagen heeft gereden, maar waarvoor nog geen tol is gefactureerd.
+
+    Radius factureert tol met vertraging. Door die dagen vast te leggen kan een
+    volgende ronde ze alsnog aanvullen zodra de tolregels wél binnen zijn.
+    """
+
+    class Status(models.TextChoices):
+        OPEN = 'open', 'Nog niet gefactureerd'
+        AANGEVULD = 'aangevuld', 'Alsnog gefactureerd'
+        GENEGEERD = 'genegeerd', 'Handmatig afgesloten'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    kenteken = models.CharField(max_length=32, db_index=True, verbose_name='Kenteken')
+    datum = models.DateField(db_index=True, verbose_name='Rijdatum')
+    vehicle = models.ForeignKey(
+        'fleet.Vehicle',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='openstaande_tol_dagen',
+        verbose_name='Voertuig',
+    )
+    gps_ritten = models.PositiveIntegerField(default=0, verbose_name='Aantal GPS-ritten')
+    gps_km = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                 verbose_name='GPS-kilometers')
+    status = models.CharField(max_length=20, choices=Status.choices,
+                              default=Status.OPEN, db_index=True)
+    pogingen = models.PositiveIntegerField(default=1, verbose_name='Aantal controles')
+    laatst_gecontroleerd = models.DateTimeField(auto_now=True)
+    aangevuld_op = models.DateTimeField(null=True, blank=True)
+    tolregels = models.PositiveIntegerField(default=0, verbose_name='Gevonden tolregels')
+    tolbedrag = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                    verbose_name='Gevonden tolbedrag')
+    opmerking = models.CharField(max_length=200, blank=True)
+    aangemaakt_op = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Openstaande toldag'
+        verbose_name_plural = 'Openstaande toldagen'
+        ordering = ['-datum', 'kenteken']
+        constraints = [
+            models.UniqueConstraint(fields=['kenteken', 'datum'],
+                                    name='openstaande_tol_dag_uniek'),
+        ]
+        indexes = [models.Index(fields=['status', 'datum'])]
+
+    def __str__(self) -> str:
+        return f"{self.kenteken} {self.datum:%d-%m-%Y} ({self.get_status_display()})"
 
 
 class PrivateTollRegistration(models.Model):
@@ -188,14 +264,13 @@ class PrivateTollRegistration(models.Model):
 
 
 class RitnummerCorrectie(models.Model):
-    """Vastlegging van een terugwerkende ritnummer- of bedrijfswijziging.
+    """Vastlegging van een terugwerkende ritnummerwijziging op tolregels.
 
     Per correctie bewaren we van elke aangeraakte regel het oude ritnummer, in
-    ``oude_waarden`` als ``{tolregel-id: oud ritnummer}``, en het oude bedrijf
-    in ``oude_bedrijven`` als ``{tolregel-id: bedrijf-uuid of ''}``. Alleen zo
-    kan een correctie ook teruggedraaid worden wanneer er in de periode
-    verschillende waarden door elkaar stonden. Correcties worden na een maand
-    automatisch opgeruimd.
+    ``oude_waarden`` als ``{tolregel-id: oud ritnummer}``. Alleen zo kan een
+    correctie ook teruggedraaid worden wanneer er in de periode verschillende
+    ritnummers door elkaar stonden. Correcties worden na een maand automatisch
+    opgeruimd.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     license_plate_normalized = models.CharField(
@@ -207,21 +282,11 @@ class RitnummerCorrectie(models.Model):
         max_length=50, null=True, blank=True,
         verbose_name='Alleen dit oude ritnummer',
         help_text='Leeg betekent: alle ritnummers in de periode.')
-    naar_ritnummer = models.CharField(max_length=50, blank=True,
-                                      verbose_name='Nieuw ritnummer')
-    ritnummer_gewijzigd = models.BooleanField(
-        default=True, verbose_name='Ritnummer aangepast')
-    naar_bedrijf = models.ForeignKey(
-        'companies.Company', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='+', verbose_name='Nieuw bedrijf')
-    bedrijf_gewijzigd = models.BooleanField(
-        default=False, verbose_name='Bedrijf aangepast',
-        help_text='Onderscheidt "bedrijf leeggemaakt" van "bedrijf ongemoeid gelaten".')
+    naar_ritnummer = models.CharField(max_length=50, verbose_name='Nieuw ritnummer')
     inclusief_gefactureerd = models.BooleanField(
         default=False, verbose_name='Ook gefactureerde regels')
     aantal = models.PositiveIntegerField(default=0, verbose_name='Aantal regels')
     oude_waarden = models.JSONField(default=dict, verbose_name='Oude ritnummers per regel')
-    oude_bedrijven = models.JSONField(default=dict, verbose_name='Oude bedrijven per regel')
     uitgevoerd_door = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='ritnummer_correcties', verbose_name='Uitgevoerd door')
@@ -242,11 +307,8 @@ class RitnummerCorrectie(models.Model):
         indexes = [models.Index(fields=['license_plate_normalized', '-uitgevoerd_op'])]
 
     def __str__(self) -> str:
-        doel = self.naar_ritnummer or '(ritnummer ongemoeid)'
-        if self.bedrijf_gewijzigd:
-            doel += f' / {self.naar_bedrijf or "geen bedrijf"}'
         return (f'{self.license_plate_normalized} {self.van}..{self.tot} '
-                f'-> {doel} ({self.aantal} regels)')
+                f'-> {self.naar_ritnummer} ({self.aantal} regels)')
 
 
 class TolAfrekening(models.Model):
@@ -361,3 +423,63 @@ class TolAfrekeningRegel(models.Model):
 
     def __str__(self) -> str:
         return f'{self.voertuig_label} -> {self.kenteken or "?"} (EUR {self.maut_ontvangen})'
+
+
+class TolBackup(models.Model):
+    """Momentopname van de tolregels, gemaakt vlak voor een import.
+
+    De regels zelf staan per week in `TolBackupWeek`, zodat je later één week
+    kunt terugzetten zonder de rest aan te raken.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    omschrijving = models.CharField(max_length=200, blank=True, verbose_name='Omschrijving')
+    van_datum = models.DateField(verbose_name='Periode van')
+    tot_datum = models.DateField(verbose_name='Periode tot en met')
+    aantal_regels = models.PositiveIntegerField(default=0, verbose_name='Aantal tolregels')
+    totaal_bedrag = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, verbose_name='Totaalbedrag')
+    gemaakt_door = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='tol_backups', verbose_name='Gemaakt door')
+    gemaakt_op = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='Gemaakt op')
+
+    class Meta:
+        ordering = ['-gemaakt_op']
+        verbose_name = 'Tol backup'
+        verbose_name_plural = 'Tol backups'
+
+    def __str__(self) -> str:
+        return f'Backup {self.gemaakt_op:%d-%m-%Y %H:%M} ({self.aantal_regels} regels)'
+
+
+class TolBackupWeek(models.Model):
+    """De tolregels van één ISO-week binnen een backup, als momentopname."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    backup = models.ForeignKey(
+        TolBackup, on_delete=models.CASCADE, related_name='weken')
+    jaar = models.PositiveSmallIntegerField(verbose_name='ISO-jaar')
+    weeknummer = models.PositiveSmallIntegerField(verbose_name='Weeknummer')
+    van_datum = models.DateField(verbose_name='Maandag')
+    tot_datum = models.DateField(verbose_name='Zondag')
+    aantal_regels = models.PositiveIntegerField(default=0, verbose_name='Aantal tolregels')
+    totaal_bedrag = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, verbose_name='Totaalbedrag')
+    regels = models.JSONField(default=list, blank=True, verbose_name='Tolregels')
+    teruggezet_op = models.DateTimeField(null=True, blank=True, verbose_name='Teruggezet op')
+    teruggezet_door = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='teruggezette_tol_weken', verbose_name='Teruggezet door')
+
+    class Meta:
+        ordering = ['-jaar', '-weeknummer']
+        verbose_name = 'Tol backup week'
+        verbose_name_plural = 'Tol backup weken'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['backup', 'jaar', 'weeknummer'],
+                name='tol_backup_week_uniek',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'Week {self.weeknummer} {self.jaar} ({self.aantal_regels} regels)'

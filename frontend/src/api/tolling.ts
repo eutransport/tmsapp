@@ -12,6 +12,10 @@ export interface TollingEvent {
   license_plate_raw: string
   license_plate_normalized: string
   obu: string
+  /** Landcode van de passage: NL, DE of BE. Leeg als die nog niet bekend is. */
+  land: string
+  /** Waar de landcode vandaan komt: gps, grens, factuur of handmatig. */
+  land_bron: string
   /** Ritnummer zoals vastgelegd bij de import. */
   ritnummer: string
   vehicle: string | null

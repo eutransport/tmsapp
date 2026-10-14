@@ -123,21 +123,13 @@ class VehicleSerializer(serializers.ModelSerializer):
     vervang_actief = serializers.BooleanField(write_only=True, required=False, default=False)
     # Alle ritnummers van deze wagen door de tijd heen, oudste eerst.
     ritnummer_periodes = VehicleRitnummerSerializer(many=True, read_only=True)
-    # Datum waarop het opgegeven ritnummer ingaat. Verplicht zodra het
-    # ritnummer van een bestaande wagen wijzigt, tenzij `ritnummer_corrigeren`
-    # meekomt: zonder datum zou de lopende periode overschreven worden en
-    # verspringt de historie met terugwerkende kracht.
+    # Optioneel: laat het opgegeven ritnummer pas vanaf deze datum gelden in
+    # plaats van het huidige ritnummer te overschrijven.
     ritnummer_vanaf = serializers.DateField(write_only=True, required=False, allow_null=True)
-    # Expliciete keuze om de lopende periode te overschrijven, voor het
-    # herstellen van een typefout in plaats van een echte wissel.
-    ritnummer_corrigeren = serializers.BooleanField(
-        write_only=True, required=False, default=False)
     # Alle bedrijven waarvoor deze wagen gereden heeft, oudste eerst.
     bedrijf_periodes = VehicleBedrijfSerializer(many=True, read_only=True)
-    # Datum waarop het opgegeven bedrijf ingaat; zelfde regels als hierboven.
+    # Optioneel: laat het opgegeven bedrijf pas vanaf deze datum gelden.
     bedrijf_vanaf = serializers.DateField(write_only=True, required=False, allow_null=True)
-    bedrijf_corrigeren = serializers.BooleanField(
-        write_only=True, required=False, default=False)
     # Aantal dagen tot de keuring verloopt; negatief als die al voorbij is.
     rdw_apk_dagen = serializers.SerializerMethodField()
     rdw_tachograaf_dagen = serializers.SerializerMethodField()
@@ -148,8 +140,8 @@ class VehicleSerializer(serializers.ModelSerializer):
             'id', 'kenteken', 'type_wagen', 'ritnummer',
             'bedrijf', 'bedrijf_naam', 'minimum_weken_per_jaar',
             'actief', 'created_at', 'updated_at', 'vervang_actief',
-            'ritnummer_periodes', 'ritnummer_vanaf', 'ritnummer_corrigeren',
-            'bedrijf_periodes', 'bedrijf_vanaf', 'bedrijf_corrigeren',
+            'ritnummer_periodes', 'ritnummer_vanaf',
+            'bedrijf_periodes', 'bedrijf_vanaf',
             'rdw_apk_dagen', 'rdw_tachograaf_dagen',
         ] + RDW_LEESVELDEN
         read_only_fields = [
@@ -215,48 +207,7 @@ class VehicleSerializer(serializers.ModelSerializer):
                     },
                 })
 
-        self._valideer_ingangsdatum(attrs)
         return attrs
-
-    def _valideer_ingangsdatum(self, attrs):
-        """Een wissel van ritnummer of bedrijf moet een ingangsdatum krijgen.
-
-        Zonder datum overschrijft het signaal de periode die vandaag geldt, en
-        dan verspringt de historie met terugwerkende kracht: planning,
-        tolheffing en facturatie van eerdere maanden gaan dan ineens op het
-        nieuwe nummer staan. Wie juist een typefout herstelt kiest bewust voor
-        `ritnummer_corrigeren` / `bedrijf_corrigeren`.
-        """
-        if self.instance is None:
-            return
-
-        nieuw_ritnummer = attrs.get('ritnummer')
-        if (nieuw_ritnummer is not None
-                and (nieuw_ritnummer or '').strip() != (self.instance.ritnummer or '').strip()
-                and not attrs.get('ritnummer_vanaf')
-                and not attrs.get('ritnummer_corrigeren')):
-            raise serializers.ValidationError({
-                'ritnummer_vanaf': (
-                    'Geef op vanaf welke datum ritnummer '
-                    f"{(nieuw_ritnummer or '').strip() or '(leeg)'} geldt. "
-                    'Gaat het om het herstellen van een typefout, kies dan '
-                    'uitdrukkelijk voor corrigeren met terugwerkende kracht.'
-                ),
-            })
-
-        nieuw_bedrijf = attrs.get('bedrijf')
-        if (nieuw_bedrijf is not None
-                and getattr(nieuw_bedrijf, 'pk', nieuw_bedrijf) != self.instance.bedrijf_id
-                and not attrs.get('bedrijf_vanaf')
-                and not attrs.get('bedrijf_corrigeren')):
-            raise serializers.ValidationError({
-                'bedrijf_vanaf': (
-                    'Geef op vanaf welke datum deze wagen voor het nieuwe '
-                    'bedrijf rijdt. Gaat het om het herstellen van een fout, '
-                    'kies dan uitdrukkelijk voor corrigeren met terugwerkende '
-                    'kracht.'
-                ),
-            })
 
     def _deactiveer_vorige(self, kenteken, exclude_pk=None):
         """Zet eerdere actieve regels met hetzelfde kenteken op inactief."""
@@ -269,8 +220,6 @@ class VehicleSerializer(serializers.ModelSerializer):
         vervang_actief = validated_data.pop('vervang_actief', False)
         validated_data.pop('ritnummer_vanaf', None)
         validated_data.pop('bedrijf_vanaf', None)
-        validated_data.pop('ritnummer_corrigeren', None)
-        validated_data.pop('bedrijf_corrigeren', None)
         with transaction.atomic():
             if vervang_actief and validated_data.get('actief', True):
                 self._deactiveer_vorige(validated_data['kenteken'])
@@ -281,8 +230,6 @@ class VehicleSerializer(serializers.ModelSerializer):
         vervang_actief = validated_data.pop('vervang_actief', False)
         vanaf = validated_data.pop('ritnummer_vanaf', None)
         bedrijf_vanaf = validated_data.pop('bedrijf_vanaf', None)
-        validated_data.pop('ritnummer_corrigeren', None)
-        validated_data.pop('bedrijf_corrigeren', None)
         nieuw_ritnummer = validated_data.get('ritnummer')
         nieuw_bedrijf = validated_data.get('bedrijf')
         with transaction.atomic():

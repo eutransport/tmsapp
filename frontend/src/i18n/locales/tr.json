@@ -936,6 +936,9 @@
     "smtpNote": "Not: E-posta gönderimi için SMTP yapılandırılmış olmalıdır",
     "attachment": "Ek",
     "attachmentIncluded": "Ek eklendi",
+    "attachmentHint": "Fatura e-postasına ek olarak gönderilir. PDF, JPG, PNG, Word veya Excel, en fazla 20 MB.",
+    "attachmentTooLarge": "Dosya çok büyük. En fazla 20 MB.",
+    "attachmentUploadFailed": "Fatura kaydedildi, ancak ek eklenemedi",
     "noAttachment": "Ek yok",
     "deleteLineConfirm": "Bu satırı silmek istediğinizden emin misiniz?",
     "lineDeleted": "Satır silindi",
@@ -991,6 +994,8 @@
   },
   "templates": {
     "title": "Fatura şablonları",
+    "houseStyle": "EU Transport stili",
+    "houseStyleInfo": "Tüm fatura PDF'leri mavi EU Transport stilini kullanır. Mevcut şablon adları ve ayarları korunur; ayrı bir şablon eklenmez.",
     "newTemplate": "Yeni şablon",
     "createTemplate": "Şablon oluştur",
     "editTemplate": "Şablonu düzenle",

@@ -1,7 +1,18 @@
 """Invoicing models - To be fully implemented in Fase 5 & 6."""
+import os
 import uuid
 from django.db import models
 from django.conf import settings
+
+
+def invoice_bijlage_upload_path(instance, filename):
+    """Sla bijlagen op onder een willekeurige naam met alleen de extensie erin.
+
+    De aangeleverde bestandsnaam komt zo nooit op schijf terecht; die blijft
+    in `bijlage_naam` staan voor weergave en voor de mail.
+    """
+    ext = os.path.splitext(filename)[1].lower()[:10]
+    return f"invoices/bijlagen/{uuid.uuid4().hex}{ext}"
 
 
 class InvoiceType(models.TextChoices):
@@ -122,7 +133,13 @@ class Invoice(models.Model):
     pdf_file = models.FileField(upload_to='invoices/', null=True, blank=True, verbose_name='PDF')
     
     # Attachment
-    bijlage = models.FileField(upload_to='invoices/bijlagen/', null=True, blank=True, verbose_name='Bijlage')
+    bijlage = models.FileField(
+        upload_to=invoice_bijlage_upload_path, null=True, blank=True, verbose_name='Bijlage'
+    )
+    bijlage_naam = models.CharField(
+        max_length=255, blank=True, verbose_name='Bestandsnaam bijlage',
+        help_text='Naam zoals de gebruiker het bestand aanleverde; op schijf staat het onder een willekeurige naam.',
+    )
     
     # Tracking
     created_by = models.ForeignKey(
