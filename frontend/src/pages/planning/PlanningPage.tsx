@@ -329,6 +329,9 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
   const [editingEntry, setEditingEntry] = useState<string | null>(null)
   // Regel waarvan de gebruiker het kenteken voor die ene dag wil wisselen.
   const [wisselEntry, setWisselEntry] = useState<string | null>(null)
+  // Op mobiel is de dagkolom te smal voor een keuzelijst; daar opent een venster.
+  const [wisselEntryMobiel, setWisselEntryMobiel] = useState<string | null>(null)
+  const [actieEntryMobiel, setActieEntryMobiel] = useState<string | null>(null)
   const [wagens, setWagens] = useState<{ id: string; kenteken: string }[]>([])
 
   // Load initial data
@@ -501,6 +504,7 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
       await updatePlanningEntry(entryId, { vervangend_voertuig: vehicleId })
       loadPlanning()
       setWisselEntry(null)
+      setWisselEntryMobiel(null)
     } catch (err: any) {
       setError(err.response?.data?.detail || t('common.error'))
     }
@@ -981,7 +985,12 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
                         </div>
                         {entry ? (
                           <div
-                            onClick={() => !isReadOnly && setEditingEntry(entry.id)}
+                            onClick={() => {
+                              if (isReadOnly) return
+                              // Zonder chauffeur is er niets te kiezen: meteen de chauffeurslijst.
+                              if (entry.chauffeur) setActieEntryMobiel(entry.id)
+                              else setEditingEntry(entry.id)
+                            }}
                             className={clsx(
                               'rounded p-1 min-h-[40px] text-xs transition-colors',
                               entry.chauffeur
@@ -1016,6 +1025,12 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
                         ) : (
                           <div className="rounded p-1 min-h-[40px] bg-gray-100 text-gray-400 text-[10px]">-</div>
                         )}
+                        {entry && entry.vervangend_kenteken && (
+                          <div className="mt-1 flex items-center justify-center gap-0.5 rounded bg-amber-100 px-0.5 py-1 font-mono text-[9px] text-amber-800">
+                            <TruckIcon className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">{entry.vervangend_kenteken}</span>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -1023,7 +1038,74 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
               </div>
             ))}
           </div>
-          
+
+          {actieEntryMobiel && !isReadOnly && (() => {
+            const regel = getEntriesByVehicle()
+              .flatMap((v) => Array.from(v.entries.values()))
+              .find((e) => e.id === actieEntryMobiel)
+            if (!regel) return null
+            const kenteken = regel.vervangend_kenteken || regel.vehicle_kenteken
+            return (
+              <div
+                className="fixed inset-0 z-50 flex items-end bg-black/40 lg:hidden"
+                onClick={() => setActieEntryMobiel(null)}
+              >
+                <div className="w-full rounded-t-2xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="mb-3 text-center">
+                    <div className="font-medium text-gray-900">{regel.chauffeur_naam}</div>
+                    <div className="font-mono text-xs text-gray-500">{kenteken}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setEditingEntry(regel.id); setActieEntryMobiel(null) }}
+                    className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-3 text-left active:bg-gray-50"
+                  >
+                    <UserIcon className="h-5 w-5 flex-shrink-0 text-primary-600" />
+                    <span className="text-sm font-medium text-gray-900">Chauffeur wijzigen</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setWisselEntryMobiel(regel.id); setActieEntryMobiel(null) }}
+                    className="mt-2 flex w-full items-center gap-3 rounded-lg border border-gray-200 p-3 text-left active:bg-gray-50"
+                  >
+                    <TruckIcon className="h-5 w-5 flex-shrink-0 text-amber-600" />
+                    <span className="text-sm font-medium text-gray-900">Kenteken wijzigen voor deze dag</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActieEntryMobiel(null)}
+                    className="mt-3 w-full rounded-lg p-2 text-sm text-gray-600 active:bg-gray-100"
+                  >
+                    Annuleren
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
+
+          {wisselEntryMobiel && !isReadOnly && (() => {
+            const regel = getEntriesByVehicle()
+              .flatMap((v) => Array.from(v.entries.values()))
+              .find((e) => e.id === wisselEntryMobiel)
+            if (!regel) return null
+            return (
+              <div
+                className="fixed inset-0 z-50 flex items-end bg-black/40 lg:hidden"
+                onClick={() => setWisselEntryMobiel(null)}
+              >
+                <div className="w-full rounded-t-2xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
+                  <VoertuigWisselaar
+                    wagens={wagens}
+                    eigenKenteken={regel.vehicle_kenteken}
+                    waarde={regel.vervangend_voertuig ?? null}
+                    onChange={(id) => handleWisselVoertuig(regel.id, id)}
+                    onCancel={() => setWisselEntryMobiel(null)}
+                  />
+                </div>
+              </div>
+            )
+          })()}
+
           {getEntriesByVehicle().length === 0 && (
             <div className="p-8 text-center text-gray-500">
               {t('fleet.noVehicles')}
