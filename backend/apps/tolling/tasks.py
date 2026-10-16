@@ -20,3 +20,15 @@ def opruimen_ritnummer_correcties() -> int:
     if aantal:
         logger.info('%d oude ritnummercorrecties opgeruimd', aantal)
     return aantal
+
+
+@shared_task(name='apps.tolling.tasks.controleer_tariefbronnen')
+def controleer_tariefbronnen() -> dict:
+    """Kijk wekelijks of de officiele toltarieven zijn gewijzigd."""
+    from .tarief_bronnen import controleer_bronnen
+
+    uitkomst = controleer_bronnen()
+    if uitkomst['gewijzigd']:
+        logger.warning('Toltarieven gewijzigd op: %s',
+                       ', '.join(uitkomst['gewijzigd']))
+    return uitkomst

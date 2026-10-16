@@ -21,7 +21,14 @@ from apps.fleet.ritnummers import bouw_ritnummer_index, zoek_in_index
 
 from .km_bepaling import BRON_TARIEF, bouw_tarieftabel, maand_van
 from .planning_koppeling import BRON_VOERTUIG, koppel_events
-from .land_bepaling import BRON_FACTUUR, bepaal_land, land_van_rit, zoek_rit
+from .land_bepaling import (
+    BRON_FACTUUR,
+    BRON_STATION,
+    bepaal_land,
+    land_van_rit,
+    zoek_rit,
+)
+from .stations import landen_per_station, onthoud_stations
 from .models import TollingEvent, TollingImportBatch, normalize_plate
 from .services import build_vehicle_lookup, filter_reeds_aanwezig
 
@@ -61,6 +68,7 @@ class ImportAnalyse:
     factuurnummer: str = ''
     factuurdatum: str = ''
     regels: list = field(default_factory=list)
+    stations_openstaand: int = 0
 
     @property
     def totaal_bedrag(self) -> Decimal:
@@ -91,11 +99,15 @@ def _bedrijfsnamen(bedrijf_index) -> dict:
     return dict(Company.objects.values_list('pk', 'naam'))
 
 
-def _land_van_regel(regel, rit, start):
-    """Het land van de bron wint; de GPS-rit is de terugval."""
+def _land_van_regel(regel, rit, start, stationlanden=None):
+    """Het land van de bron wint, dan het bevestigde station, dan pas de GPS."""
     land = (getattr(regel, 'land', '') or '').strip().upper()
     if len(land) == 2:
         return land, BRON_FACTUUR
+    station = (getattr(regel, 'station', '') or '').strip()
+    uit_station = (stationlanden or {}).get(station)
+    if uit_station:
+        return uit_station, BRON_STATION
     if rit is not None:
         return land_van_rit(rit, start)
     return '', ''
@@ -114,6 +126,8 @@ def analyseer(factuur, speling_minuten: int = STANDAARD_SPELING_MINUTEN) -> Impo
     bedrijfsnamen = _bedrijfsnamen(bedrijf_index)
     tijdzone = timezone.get_current_timezone()
     tarieven = bouw_tarieftabel()
+    analyse.stations_openstaand = onthoud_stations([r.station for r in factuur.tolregels])
+    stationlanden = landen_per_station(r.station for r in factuur.tolregels)
 
     for regel in factuur.tolregels:
         kenteken_norm = normalize_plate(regel.kenteken)
@@ -121,7 +135,7 @@ def analyseer(factuur, speling_minuten: int = STANDAARD_SPELING_MINUTEN) -> Impo
         voertuig = vlootopzoeking.get(kenteken_norm)
 
         rit = zoek_rit(kenteken_norm, start, speling_minuten)
-        land, land_bron = _land_van_regel(regel, rit, start)
+        land, land_bron = _land_van_regel(regel, rit, start, stationlanden)
         gps_km = None
         venster = ''
         if rit is not None:
@@ -205,6 +219,8 @@ def importeer(factuur, user, filename: str = '',
     bedrijf_index = bouw_bedrijf_index(wagen_ids)
     tijdzone = timezone.get_current_timezone()
     tarieven = bouw_tarieftabel()
+    onthoud_stations([r.station for r in factuur.tolregels])
+    stationlanden = landen_per_station(r.station for r in factuur.tolregels)
 
     uitkomst = ImportUitkomst(batch=batch)
     nieuwe: list[TollingEvent] = []
@@ -223,7 +239,7 @@ def importeer(factuur, user, filename: str = '',
 
         start = _aware(regel.tijdstempel)
         rit = zoek_rit(kenteken_norm, start, speling_minuten)
-        land, land_bron = _land_van_regel(regel, rit, start)
+        land, land_bron = _land_van_regel(regel, rit, start, stationlanden)
         if rit is None:
             uitkomst.zonder_gps += 1
 

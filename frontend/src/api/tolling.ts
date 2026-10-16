@@ -351,7 +351,156 @@ export interface RitnummerCorrectie {
   teruggedraaid_aantal: number
 }
 
+export interface TolImportVoorbeeldRegel {
+  kenteken: string
+  aantal: number
+  bedrag: string
+  km: string
+  bekend: boolean
+  ritnummer: string
+  km_bron: string
+}
+
+export interface TolImportVoorbeeld {
+  fout?: string
+  bestandsnaam: string
+  soort?: 'verbruiken' | 'standaard'
+  regels_totaal?: number
+  nieuw?: number
+  duplicaten?: number
+  ongeldig?: number
+  zonder_kosten?: number
+  bedrag?: string
+  km?: string
+  eerste?: string
+  laatste?: string
+  per_kenteken?: TolImportVoorbeeldRegel[]
+}
+
+export interface TolStation {
+  id: string
+  naam: string
+  land: string
+  voorstel: string
+  landnaam: string
+  openstaand: boolean
+  aantal_regels: number
+  laatst_gezien: string | null
+}
+
+export interface TolStationLijst {
+  stations: TolStation[]
+  openstaand: number
+  landen: { code: string; naam: string }[]
+}
+
+export interface KoppelingWijziging {
+  kenteken: string
+  datum: string
+  van_ritnummer: string
+  naar_ritnummer: string
+  van_bedrijf: string
+  naar_bedrijf: string
+  regels: number
+  bedrag: number
+}
+
+export interface KoppelingVerweesd {
+  kenteken: string
+  datum: string
+  ritnummer: string
+  regels: number
+  bedrag: number
+}
+
+export interface KoppelingUitkomst {
+  vanaf: string
+  tot: string | null
+  toepassen: boolean
+  bekeken: number
+  klopt: number
+  te_wijzigen: number
+  alleen_bron: number
+  ongepland: number
+  dubbel: number
+  gefactureerd_overgeslagen: number
+  toegepast: number
+  wijzigingen: KoppelingWijziging[]
+  verweesd: KoppelingVerweesd[]
+}
+
+export interface TariefBron {
+  id: string
+  land: string
+  naam: string
+  url: string
+  aantal_regels: number
+  laatst_gecontroleerd: string | null
+  laatst_gewijzigd: string | null
+  openstaand: boolean
+  fout: string
+}
+
 export const tollingApi = {
+  tolStations: async (alleenOpenstaand = false): Promise<TolStationLijst> => {
+    const { data } = await api.get('/tolling/stations/', {
+      params: alleenOpenstaand ? { openstaand: 1 } : undefined,
+    })
+    return data
+  },
+
+  bevestigStation: async (id: string, land: string): Promise<TolStation> => {
+    const { data } = await api.post(`/tolling/stations/${id}/bevestig/`, { land })
+    return data
+  },
+
+  neemStationVoorstellenOver: async (): Promise<{ bevestigd: number; openstaand: number }> => {
+    const { data } = await api.post('/tolling/stations/voorstellen-overnemen/')
+    return data
+  },
+
+  koppelingStandaard: async (): Promise<{ standaard_vanaf: string; vandaag: string }> => {
+    const { data } = await api.get('/tolling/koppeling/')
+    return data
+  },
+
+  controleerKoppeling: async (
+    vanaf: string,
+    tot?: string | null,
+    toepassen = false,
+  ): Promise<KoppelingUitkomst> => {
+    const { data } = await api.post(
+      '/tolling/koppeling/controleer/',
+      { vanaf, tot: tot || null, toepassen },
+      { timeout: 120000 },
+    )
+    return data
+  },
+
+  tariefBronnen: async (): Promise<{ bronnen: TariefBron[]; openstaand: number }> => {    const { data } = await api.get('/tolling/tariefbronnen/')
+    return data
+  },
+
+  controleerTarieven: async (): Promise<{ bronnen: TariefBron[]; gewijzigd: string[]; mislukt: string[] }> => {
+    const { data } = await api.post('/tolling/tariefbronnen/controleren/', {}, { timeout: 120000 })
+    return data
+  },
+
+  tariefBronAfgehandeld: async (id: string): Promise<TariefBron> => {
+    const { data } = await api.post(`/tolling/tariefbronnen/${id}/afgehandeld/`)
+    return data
+  },
+
+  bekijkImport: async (file: File): Promise<TolImportVoorbeeld> => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const { data } = await api.post('/tolling/import-voorbeeld/bekijk/', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    })
+    return data
+  },
+
   uploadCsv: async (file: File): Promise<TollingImportBatch> => {
     const fd = new FormData()
     fd.append('file', file)

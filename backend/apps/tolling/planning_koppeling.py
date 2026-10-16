@@ -173,3 +173,116 @@ def herkoppel_dag(kentekens, datum) -> dict:
         start_at__gte=begin, start_at__lt=einde,
         invoiced_at__isnull=True))
     return koppel_events(events)
+
+
+def _dagvenster(vanaf, tot):
+    """Het tijdvenster van een periode, met de nachtgrens verdisconteerd."""
+    from django.utils import timezone
+
+    tz = timezone.get_current_timezone()
+    begin = timezone.make_aware(
+        datetime.datetime.combine(vanaf, datetime.time(DAGOVERGANG_UUR)), tz)
+    einde = None
+    if tot is not None:
+        einde = timezone.make_aware(
+            datetime.datetime.combine(tot + datetime.timedelta(days=1),
+                                      datetime.time(DAGOVERGANG_UUR)), tz)
+    return begin, einde
+
+
+def controleer_periode(vanaf, tot=None, toepassen=False) -> dict:
+    """Leg de tolregels van een periode naast de huidige planning.
+
+    Zonder ``toepassen`` verandert er niets; de uitkomst vertelt dan wat er
+    zou gebeuren. Gefactureerde regels blijven in beide gevallen ongemoeid.
+    """
+    from .models import TollingEvent
+
+    begin, einde = _dagvenster(vanaf, tot)
+    alles = TollingEvent.objects.filter(start_at__gte=begin)
+    if einde is not None:
+        alles = alles.filter(start_at__lt=einde)
+
+    gefactureerd = alles.filter(invoiced_at__isnull=False).count()
+    events = list(alles.filter(invoiced_at__isnull=True)
+                  .select_related('bedrijf').order_by('start_at'))
+
+    index = bouw_dagindex({planning_datum(e.start_at) for e in events})
+
+    te_wijzigen = []
+    wijzigingen: dict = {}
+    verweesd: dict = {}
+    klopt = dubbel = ongepland = alleen_bron = 0
+
+    for event in events:
+        datum = planning_datum(event.start_at)
+        sleutel = (event.license_plate_normalized, datum)
+        if sleutel not in index:
+            if event.rit_bron == BRON_PLANNING and event.ritnummer:
+                rij = verweesd.setdefault(
+                    (event.license_plate_normalized, datum, event.ritnummer),
+                    {'kenteken': event.license_plate_normalized,
+                     'datum': datum, 'ritnummer': event.ritnummer,
+                     'regels': 0, 'bedrag': 0})
+                rij['regels'] += 1
+                rij['bedrag'] += event.amount or 0
+            else:
+                ongepland += 1
+            continue
+
+        regel = index[sleutel]
+        if regel is None:
+            dubbel += 1
+            continue
+
+        ritnummer = rit_van_regel(regel)
+        bedrijf_id = regel.planning.bedrijf_id if regel.planning_id else None
+        if (event.ritnummer == ritnummer and event.bedrijf_id == bedrijf_id
+                and event.rit_bron == BRON_PLANNING):
+            klopt += 1
+            continue
+
+        te_wijzigen.append(event)
+        if event.ritnummer == ritnummer and event.bedrijf_id == bedrijf_id:
+            # Rit en bedrijf stonden al goed; alleen de herkomst wordt bijgewerkt.
+            alleen_bron += 1
+            continue
+
+        sleutel = (event.license_plate_normalized, datum, event.ritnummer,
+                   ritnummer)
+        rij = wijzigingen.setdefault(sleutel, {
+            'kenteken': event.license_plate_normalized,
+            'datum': datum,
+            'van_ritnummer': event.ritnummer or '',
+            'naar_ritnummer': ritnummer,
+            'van_bedrijf': str(event.bedrijf) if event.bedrijf_id else '',
+            'naar_bedrijf': (str(regel.planning.bedrijf)
+                             if regel.planning_id and regel.planning.bedrijf_id
+                             else ''),
+            'regels': 0,
+            'bedrag': 0,
+        })
+        rij['regels'] += 1
+        rij['bedrag'] += event.amount or 0
+
+    toegepast = 0
+    if toepassen and te_wijzigen:
+        toegepast = koppel_events(te_wijzigen, index)['gekoppeld']
+
+    def _sorteer(rijen):
+        return sorted(rijen, key=lambda r: (r['datum'], r['kenteken']))
+
+    return {
+        'vanaf': vanaf,
+        'tot': tot,
+        'bekeken': len(events),
+        'klopt': klopt,
+        'te_wijzigen': len(te_wijzigen) - alleen_bron,
+        'alleen_bron': alleen_bron,
+        'ongepland': ongepland,
+        'dubbel': dubbel,
+        'gefactureerd_overgeslagen': gefactureerd,
+        'toegepast': toegepast,
+        'wijzigingen': _sorteer(wijzigingen.values()),
+        'verweesd': _sorteer(verweesd.values()),
+    }

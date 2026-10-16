@@ -26,6 +26,7 @@ from apps.invoicing.models import Invoice, InvoiceLine
 
 from .dagritnummers import (als_label, ritnummers_per_dag,
                             ritvensters as ritvensters_uit_uren)
+from .land_bepaling import LANDNAMEN
 from .models import (PrivateTollRegistration, RitnummerCorrectie, TollingEvent,
                      TollingImportBatch, normalize_plate)
 from .serializers import (
@@ -1631,9 +1632,11 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 e for e in events
                 if (e.start_at.astimezone(tz) if timezone.is_aware(e.start_at) else e.start_at).isoweekday() < 6
             ]
-        by_plate: dict[str, list[TollingEvent]] = {}
+        # Per kenteken én per land een regel: buitenlandse tol staat op een
+        # eigen factuurregel, zodat zichtbaar blijft waar hij vandaan komt.
+        by_plate: dict[tuple[str, str], list[TollingEvent]] = {}
         for e in events:
-            by_plate.setdefault(e.license_plate_normalized, []).append(e)
+            by_plate.setdefault((e.license_plate_normalized, e.land or ''), []).append(e)
 
         vehicle_map = build_vehicle_lookup()
         max_order = (
@@ -1642,8 +1645,13 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         )
         created_lines = []
         now = timezone.now()
-        for norm in norm_plates:
-            evs = by_plate.get(norm) or []
+        sleutels = sorted(
+            by_plate,
+            key=lambda s: (norm_plates.index(s[0]) if s[0] in norm_plates else 0,
+                           s[1] not in ('', 'NL'), s[1]),
+        )
+        for norm, land in sleutels:
+            evs = by_plate.get((norm, land)) or []
             if not evs:
                 continue
             v = vehicle_map.get(norm)
@@ -1655,11 +1663,13 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             total_km = sum((e.distance_km for e in evs), Decimal('0'))
             total_amount = sum((e.amount for e in evs), Decimal('0'))
             max_order += 1
-            omschrijving = (
-                f"{plate_display} - {ritnummer} (Totaal {int(round(total_km))} KM)"
-                if ritnummer else
-                f"{plate_display} (Totaal {int(round(total_km))} KM)"
-            )
+            omschrijving = plate_display
+            if ritnummer:
+                omschrijving += f" - {ritnummer}"
+            if land and land != 'NL':
+                omschrijving += f" - tol {LANDNAMEN.get(land, land)}"
+            if total_km:
+                omschrijving += f" (Totaal {int(round(total_km))} KM)"
             line = InvoiceLine.objects.create(
                 invoice=invoice,
                 omschrijving=omschrijving[:500],
@@ -1672,6 +1682,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                     'plate': plate_display,
                     'plate_normalized': norm,
                     'ritnummer': ritnummer,
+                    'land': land,
                     'total_km': float(total_km),
                     'period': period,
                     'year': year,
@@ -1690,6 +1701,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 'id': str(line.id),
                 'plate': plate_display,
                 'ritnummer': ritnummer,
+                'land': land,
                 'total_km': float(total_km),
                 'total_amount': float(total_amount),
                 'events_count': len(evs),

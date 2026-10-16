@@ -37,6 +37,17 @@ class ImportResult:
     zero_amount: int = 0
 
 
+@dataclass
+class Voorbereiding:
+    """Een ingelezen bestand, nog zonder iets te hebben opgeslagen."""
+    events: list
+    total: int
+    invalid: int
+    zero_amount: int
+    missing: set
+    verbruiken: bool = False
+
+
 def _parse_decimal(value: str) -> Decimal | None:
     """Parse een bedrag of afstand uit de CSV.
 
@@ -193,12 +204,12 @@ def filter_reeds_aanwezig(events: list) -> tuple[list, int]:
     return overblijvend, len(events) - len(overblijvend)
 
 
-def import_csv(file_obj, user, filename: str = '') -> ImportResult:
-    """Import a tolling CSV file. Idempotent — duplicates are skipped."""
-    raw = file_obj.read()
-    if isinstance(raw, str):
-        raw = raw.encode('utf-8')
+def lees_bestand(raw: bytes) -> Voorbereiding:
+    """Lees een tolbestand in tot losse, nog niet opgeslagen events.
 
+    Zowel de echte import als het voorbeeldscherm gebruiken deze functie, zodat
+    wat de gebruiker vooraf te zien krijgt precies is wat er wordt opgeslagen.
+    """
     # Het verbruikenbestand heeft een eigen opzet en geen afstandskolom; het
     # wordt eerst omgezet naar dezelfde rijen als de gewone import.
     if is_verbruiken_xlsx(raw):
@@ -216,14 +227,9 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
         header_map = _header_map(reader.fieldnames or [])
 
     missing = REQUIRED_HEADERS - set(header_map.keys())
-    batch = TollingImportBatch.objects.create(
-        uploaded_by=user if getattr(user, 'is_authenticated', False) else None,
-        filename=filename or getattr(file_obj, 'name', '') or '',
-    )
     if missing:
-        batch.error_message = f"Ontbrekende kolommen: {', '.join(sorted(missing))}"
-        batch.save(update_fields=['error_message'])
-        return ImportResult(batch=batch, imported=0, duplicates=0, invalid=0, total=0)
+        return Voorbereiding(events=[], total=0, invalid=0, zero_amount=0,
+                             missing=missing, verbruiken=verbruiken)
 
     def col(row, key):
         return row.get(header_map[key], '') if key in header_map else ''
@@ -283,7 +289,7 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
         )
 
         new_events.append(TollingEvent(
-            batch=batch,
+            batch=None,
             start_at=start,
             end_at=end,
             distance_km=distance,
@@ -297,6 +303,34 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
             rit_bron=BRON_VOERTUIG,
             km_bron=km_bron,
         ))
+
+    return Voorbereiding(events=new_events, total=total, invalid=invalid,
+                         zero_amount=zero_amount, missing=set(),
+                         verbruiken=verbruiken)
+
+
+def import_csv(file_obj, user, filename: str = '') -> ImportResult:
+    """Import a tolling CSV file. Idempotent — duplicates are skipped."""
+    raw = file_obj.read()
+    if isinstance(raw, str):
+        raw = raw.encode('utf-8')
+
+    voor = lees_bestand(raw)
+    batch = TollingImportBatch.objects.create(
+        uploaded_by=user if getattr(user, 'is_authenticated', False) else None,
+        filename=filename or getattr(file_obj, 'name', '') or '',
+    )
+    if voor.missing:
+        batch.error_message = (
+            f"Ontbrekende kolommen: {', '.join(sorted(voor.missing))}")
+        batch.save(update_fields=['error_message'])
+        return ImportResult(batch=batch, imported=0, duplicates=0, invalid=0, total=0)
+
+    imported = 0
+    total, invalid, zero_amount = voor.total, voor.invalid, voor.zero_amount
+    new_events = voor.events
+    for event in new_events:
+        event.batch = batch
 
     # Bulk insert; on unique conflict fall back to per-row insert to count duplicates.
     new_events, duplicates = filter_reeds_aanwezig(new_events)
@@ -340,6 +374,69 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
 
     return ImportResult(batch=batch, imported=imported, duplicates=duplicates,
                         invalid=invalid, total=total, zero_amount=zero_amount)
+
+
+def voorbeeld_import(file_obj, filename: str = '') -> dict:
+    """Lees een tolbestand en vertel wat er zou worden geïmporteerd.
+
+    Er wordt niets opgeslagen. De regels gaan door exact dezelfde molen als de
+    echte import, inclusief de dubbelcontrole, zodat de getallen kloppen.
+    """
+    raw = file_obj.read()
+    if isinstance(raw, str):
+        raw = raw.encode('utf-8')
+
+    voor = lees_bestand(raw)
+    if voor.missing:
+        return {
+            'fout': f"Ontbrekende kolommen: {', '.join(sorted(voor.missing))}",
+            'bestandsnaam': filename,
+        }
+
+    nieuw, duplicaten = filter_reeds_aanwezig(voor.events)
+
+    per_kenteken: dict = {}
+    for event in nieuw:
+        regel = per_kenteken.setdefault(event.license_plate_normalized, {
+            'kenteken': event.license_plate_raw,
+            'aantal': 0,
+            'bedrag': Decimal('0'),
+            'km': Decimal('0'),
+            'bekend': event.vehicle_id is not None,
+            'ritnummer': event.ritnummer,
+            'km_bronnen': set(),
+        })
+        regel['aantal'] += 1
+        regel['bedrag'] += event.amount
+        regel['km'] += event.distance_km or Decimal('0')
+        regel['km_bronnen'].add(event.km_bron)
+
+    starts = [e.start_at for e in nieuw]
+    tijdzone = timezone.get_current_timezone()
+    return {
+        'bestandsnaam': filename,
+        'soort': 'verbruiken' if voor.verbruiken else 'standaard',
+        'regels_totaal': voor.total,
+        'nieuw': len(nieuw),
+        'duplicaten': duplicaten,
+        'ongeldig': voor.invalid,
+        'zonder_kosten': voor.zero_amount,
+        'bedrag': str(sum((e.amount for e in nieuw), Decimal('0'))),
+        'km': str(sum((e.distance_km or Decimal('0') for e in nieuw), Decimal('0'))),
+        'eerste': timezone.localtime(min(starts), tijdzone).date().isoformat() if starts else '',
+        'laatste': timezone.localtime(max(starts), tijdzone).date().isoformat() if starts else '',
+        'per_kenteken': sorted(
+            ({'kenteken': r['kenteken'],
+              'aantal': r['aantal'],
+              'bedrag': str(r['bedrag']),
+              'km': str(r['km']),
+              'bekend': r['bekend'],
+              'ritnummer': r['ritnummer'],
+              'km_bron': ', '.join(sorted(b for b in r['km_bronnen'] if b))}
+             for r in per_kenteken.values()),
+            key=lambda r: r['kenteken'],
+        ),
+    }
 
 
 # ---------- Private toll matching ----------

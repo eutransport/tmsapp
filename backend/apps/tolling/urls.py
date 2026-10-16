@@ -5,8 +5,12 @@ from .afrekening_views import TolAfrekeningViewSet
 from .backup_views import TolBackupViewSet
 from .buiten_uren_views import TollingBuitenUrenViewSet
 from .factuur_detail_views import TollingFactuurDetailViewSet
+from .import_voorbeeld_views import TolImportVoorbeeldViewSet
+from .koppel_views import TolKoppelingViewSet
 from .radius_factuur_views import RadiusFactuurViewSet
 from .sync_views import TollingSyncViewSet
+from .station_views import TolStationViewSet
+from .tarief_views import TariefBronViewSet
 from .views import (
     PrivateTollRegistrationViewSet,
     TollingEventViewSet,
@@ -29,6 +33,11 @@ router.register(r'private', PrivateTollRegistrationViewSet, basename='tolling-pr
 router.register(r'afrekeningen', TolAfrekeningViewSet, basename='tolling-afrekeningen')
 router.register(r'radius-factuur', RadiusFactuurViewSet, basename='tolling-radius-factuur')
 router.register(r'backups', TolBackupViewSet, basename='tolling-backups')
+router.register(r'import-voorbeeld', TolImportVoorbeeldViewSet,
+                basename='tolling-import-voorbeeld')
+router.register(r'tariefbronnen', TariefBronViewSet, basename='tolling-tariefbronnen')
+router.register(r'stations', TolStationViewSet, basename='tolling-stations')
+router.register(r'koppeling', TolKoppelingViewSet, basename='tolling-koppeling')
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -32,6 +32,7 @@ import {
 
 import {
   RitnummerCorrectie,
+  TolImportVoorbeeld,
   tollingApi,
   TollingInvoiceRow,
   TollingListPeriod,
@@ -45,8 +46,12 @@ import ConfirmDialog, { ConfirmState } from '@/components/common/ConfirmDialog'
 import CreateTollingInvoiceModal from '@/components/tolling/CreateTollingInvoiceModal'
 import DachserExportModal from '@/components/tolling/DachserExportModal'
 import RitnummerCorrectieDialog from '@/components/tolling/RitnummerCorrectieDialog'
+import TolImportVoorbeeldModal from '@/components/tolling/TolImportVoorbeeldModal'
+import TolKoppelingModal from '@/components/tolling/TolKoppelingModal'
 import RadiusSyncPaneel from '@/components/tolling/RadiusSyncPaneel'
 import TolBackupPaneel from '@/components/tolling/TolBackupPaneel'
+import TariefBronnenPaneel from '@/components/tolling/TariefBronnenPaneel'
+import TolStationsPaneel from '@/components/tolling/TolStationsPaneel'
 import EmailProfileSelector from '@/components/EmailProfileSelector'
 
 const PAGE_SIZE = 15
@@ -148,6 +153,11 @@ export default function TollingPage() {
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
   const [deletingPlate, setDeletingPlate] = useState<string | null>(null)
   const [deletingAll, setDeletingAll] = useState(false)
+  const [voorbeeld, setVoorbeeld] = useState<TolImportVoorbeeld | null>(null)
+  const [voorbeeldOpen, setVoorbeeldOpen] = useState(false)
+  const [voorbeeldBezig, setVoorbeeldBezig] = useState(false)
+  const [teImporteren, setTeImporteren] = useState<File | null>(null)
+  const [koppelingOpen, setKoppelingOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const askDeletePlate = (row: TollingVehicleRow) => {
@@ -248,11 +258,36 @@ export default function TollingPage() {
     setOffset(0)
   }
 
+  /** Eerst laten zien wat erin zit; opslaan gebeurt pas na bevestiging. */
   const onFile = async (f: File | null) => {
+    if (fileRef.current) fileRef.current.value = ''
     if (!f) return
+    setTeImporteren(f)
+    setVoorbeeld(null)
+    setVoorbeeldOpen(true)
+    setVoorbeeldBezig(true)
+    try {
+      setVoorbeeld(await tollingApi.bekijkImport(f))
+    } catch (e: any) {
+      setVoorbeeldOpen(false)
+      setTeImporteren(null)
+      toast.error(e?.response?.data?.detail || 'Bestand kon niet gelezen worden')
+    } finally {
+      setVoorbeeldBezig(false)
+    }
+  }
+
+  const sluitVoorbeeld = () => {
+    setVoorbeeldOpen(false)
+    setTeImporteren(null)
+    setVoorbeeld(null)
+  }
+
+  const bevestigImport = async () => {
+    if (!teImporteren) return
     setUploading(true)
     try {
-      const batch = await tollingApi.uploadCsv(f)
+      const batch = await tollingApi.uploadCsv(teImporteren)
       const r = batch.result
       if (batch.error_message) {
         toast.error(batch.error_message)
@@ -267,12 +302,12 @@ export default function TollingPage() {
       } else {
         toast.success('Import voltooid')
       }
+      sluitVoorbeeld()
       await reload()
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || 'Import mislukt')
     } finally {
       setUploading(false)
-      if (fileRef.current) fileRef.current.value = ''
     }
   }
 
@@ -363,6 +398,15 @@ export default function TollingPage() {
             <TableCellsIcon className="h-4 w-4 mr-1.5" />
             Exporteer per bedrijf
           </button>
+          <button
+            type="button"
+            className="inline-flex items-center px-3 py-2 rounded-md text-sm font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            onClick={() => setKoppelingOpen(true)}
+            title="Controleer of de tolregels op het juiste ritnummer en bedrijf staan"
+          >
+            <ArrowPathIcon className="h-4 w-4 mr-1.5" />
+            Koppeling controleren
+          </button>
           {rows.length > 0 && (
             <button
               type="button"
@@ -379,6 +423,16 @@ export default function TollingPage() {
       </header>
 
       <TolBackupPaneel opKlaar={() => reload()} />
+
+      <TolKoppelingModal
+        open={koppelingOpen}
+        onClose={() => setKoppelingOpen(false)}
+        onKlaar={() => reload()}
+      />
+
+      <TolStationsPaneel />
+
+      <TariefBronnenPaneel />
 
       <RadiusSyncPaneel opKlaar={() => reload()} />
 
@@ -556,6 +610,15 @@ export default function TollingPage() {
       )}
 
       <DachserExportModal isOpen={dachserOpen} onClose={() => setDachserOpen(false)} />
+
+      <TolImportVoorbeeldModal
+        isOpen={voorbeeldOpen}
+        voorbeeld={voorbeeld}
+        bezig={voorbeeldBezig}
+        importeren={uploading}
+        onClose={sluitVoorbeeld}
+        onBevestig={bevestigImport}
+      />
 
       <ConfirmDialog
         state={confirmState}
@@ -982,6 +1045,8 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
   const [ritFilter, setRitFilter] = useState<string | null>(ritnummer)
   // Standaard het bedrijf van de aangeklikte regel; null = alle bedrijven.
   const [bedrijfFilter, setBedrijfFilter] = useState<string | null>(bedrijfId)
+  // Landcode waarop gefilterd wordt; null = alle landen, '' = zonder land.
+  const [landFilter, setLandFilter] = useState<string | null>(null)
   const [data, setData] = useState<TollingSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -1060,8 +1125,16 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
 
   useEffect(() => { laadCorrecties() /* eslint-disable-next-line */ }, [plate])
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.events.length / PAGE_SIZE)) : 1
-  const pageEvents = data ? data.events.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : []
+  const zichtbareEvents = data
+    ? (landFilter === null
+        ? data.events
+        : data.events.filter(ev => (ev.land || '') === landFilter))
+    : []
+  const landenInPeriode = data
+    ? Array.from(new Set(data.events.map(ev => ev.land || ''))).sort()
+    : []
+  const totalPages = Math.max(1, Math.ceil(zichtbareEvents.length / PAGE_SIZE))
+  const pageEvents = zichtbareEvents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const download = async (fmt: 'xlsx' | 'pdf') => {
     setExporting(fmt)
@@ -1323,8 +1396,41 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
           </div>
         )}
 
+        {/* Landfilter: alleen tonen als de periode meer dan een land bevat. */}
+        {landenInPeriode.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs uppercase tracking-wide text-gray-500">Land</span>
+            <button
+              type="button"
+              onClick={() => { setLandFilter(null); setPage(1) }}
+              className={`px-2 py-1 rounded text-xs font-medium border ${
+                landFilter === null
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Alle ({data?.events.length ?? 0})
+            </button>
+            {landenInPeriode.map(code => (
+              <button
+                key={code || '(leeg)'}
+                type="button"
+                onClick={() => { setLandFilter(code); setPage(1) }}
+                className={`px-2 py-1 rounded text-xs font-medium border ${
+                  landFilter === code
+                    ? 'bg-primary-600 text-white border-primary-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {code || 'Zonder land'} ({data?.events.filter(e => (e.land || '') === code).length ?? 0})
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Bedrijfsfilter: voor welk bedrijf reed deze wagen in de periode? */}
         {data && data.bedrijven && data.bedrijven.length > 0
+
           && (data.bedrijven.length > 1 || bedrijfFilter !== null) && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs uppercase tracking-wide text-gray-500">Bedrijf</span>
@@ -1506,12 +1612,14 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                       </td>
                       <td className="px-3 py-1.5 text-center">
                         {ev.land ? (
-                          <span
+                          <button
+                            type="button"
+                            onClick={() => { setLandFilter(ev.land); setPage(1) }}
                             className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold ${LAND_KLEUR[ev.land] ?? 'bg-gray-100 text-gray-700'}`}
-                            title={ev.land_bron ? `Bepaald via ${ev.land_bron}` : undefined}
+                            title={ev.land_bron ? `Bepaald via ${ev.land_bron} · klik om te filteren` : 'Klik om te filteren'}
                           >
                             {ev.land}
-                          </span>
+                          </button>
                         ) : (
                           <span className="text-xs text-gray-400" title="Nog geen landcode bekend">—</span>
                         )}

@@ -483,3 +483,79 @@ class TolBackupWeek(models.Model):
 
     def __str__(self) -> str:
         return f'Week {self.weeknummer} {self.jaar} ({self.aantal_regels} regels)'
+
+
+class TariefBron(models.Model):
+    """Een officiële tariefpagina die wekelijks op wijzigingen wordt bekeken.
+
+    De pagina wordt niet uitgelezen om er tarieven uit over te nemen -- de
+    opmaak van zo'n site verandert te vaak om daar een factuur op te baseren.
+    We bewaren een vingerafdruk van de tariefregels en melden het wanneer die
+    verandert, zodat iemand kan nakijken wat er precies anders is.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    land = models.CharField(max_length=2, verbose_name='Land')
+    naam = models.CharField(max_length=100, verbose_name='Naam')
+    url = models.URLField(max_length=500, verbose_name='Adres')
+    vingerafdruk = models.CharField(max_length=64, blank=True, verbose_name='Vingerafdruk')
+    tariefregels = models.JSONField(
+        default=list, blank=True, verbose_name='Gevonden tariefregels')
+    laatst_gecontroleerd = models.DateTimeField(
+        null=True, blank=True, verbose_name='Laatst gecontroleerd')
+    laatst_gewijzigd = models.DateTimeField(
+        null=True, blank=True, verbose_name='Laatst gewijzigd')
+    bevestigd_op = models.DateTimeField(
+        null=True, blank=True, verbose_name='Wijziging afgehandeld op')
+    bevestigd_door = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='bevestigde_tariefbronnen', verbose_name='Afgehandeld door')
+    fout = models.CharField(max_length=255, blank=True, verbose_name='Laatste fout')
+
+    class Meta:
+        ordering = ['land', 'naam']
+        verbose_name = 'Tariefbron'
+        verbose_name_plural = 'Tariefbronnen'
+
+    def __str__(self) -> str:
+        return f'{self.land} · {self.naam}'
+
+    @property
+    def openstaand(self) -> bool:
+        """Is er een wijziging die nog door niemand is nagekeken?"""
+        if not self.laatst_gewijzigd:
+            return False
+        return self.bevestigd_op is None or self.bevestigd_op < self.laatst_gewijzigd
+
+
+class TolStation(models.Model):
+    """Het land dat bij een stationsnaam op een tolfactuur hoort.
+
+    De stationsnaam is de enige bron die voor de hele vloot werkt: ook wagens
+    zonder tracker hebben hem. Nieuwe namen komen hier vanzelf in te staan met
+    een voorstel; pas als iemand dat bevestigt wordt het land gebruikt. Zo kan
+    een onbekend buitenlands wegvak nooit stilzwijgend het verkeerde land op
+    een factuur zetten.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    naam = models.CharField(max_length=255, unique=True, verbose_name='Stationsnaam')
+    land = models.CharField(max_length=2, blank=True, verbose_name='Land')
+    voorstel = models.CharField(max_length=2, blank=True, verbose_name='Voorgesteld land')
+    bevestigd_op = models.DateTimeField(
+        null=True, blank=True, verbose_name='Bevestigd op')
+    bevestigd_door = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='bevestigde_tolstations', verbose_name='Bevestigd door')
+    aantal_regels = models.PositiveIntegerField(default=0, verbose_name='Aantal regels gezien')
+    laatst_gezien = models.DateTimeField(null=True, blank=True, verbose_name='Laatst gezien')
+
+    class Meta:
+        ordering = ['-laatst_gezien', 'naam']
+        verbose_name = 'Tolstation'
+        verbose_name_plural = 'Tolstations'
+
+    def __str__(self) -> str:
+        return f'{self.naam} ({self.land or self.voorstel or "?"})'
+
+    @property
+    def openstaand(self) -> bool:
+        return self.bevestigd_op is None

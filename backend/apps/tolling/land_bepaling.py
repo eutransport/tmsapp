@@ -33,7 +33,46 @@ _LANDCODES = {
 BRON_GPS = 'gps'
 BRON_GRENS = 'grens'
 BRON_FACTUUR = 'factuur'
+BRON_STATION = 'station'
 BRON_HANDMATIG = 'handmatig'
+
+LANDNAMEN = {
+    'NL': 'Nederland',
+    'DE': 'Duitsland',
+    'BE': 'Belgie',
+    'LU': 'Luxemburg',
+    'FR': 'Frankrijk',
+}
+
+# De stationsnaam op een Radius-factuur noemt het land vaak zelf. Nederlandse
+# passages heten 'Vrachtwagenheffing - NL'; Duitse noemen het wegvak, met
+# herkenbare markeringen als 'Bundesgrenze' of een Bundesstrasse-nummer.
+_STATION_LANDSUFFIX = re.compile(r'[-\u2013]\s*([A-Z]{2})\s*$')
+_STATION_DUITS = re.compile(
+    r'bundesgrenze|bundesstra|\bautobahn\b|\b[AB]\d{1,3}\b\s*,', re.IGNORECASE)
+
+
+def expliciete_landcode(station: str) -> str:
+    """De landcode die letterlijk in de stationsnaam staat, zoals '... - NL'."""
+    treffer = _STATION_LANDSUFFIX.search((station or '').strip())
+    return treffer.group(1) if treffer else ''
+
+
+def land_uit_station(station: str) -> str:
+    """Leid het land af uit de stationsnaam op de factuur; leeg als het onzeker is."""
+    tekst = (station or '').strip()
+    if not tekst:
+        return ''
+
+    expliciet = expliciete_landcode(tekst)
+    if expliciet:
+        return expliciet
+
+    if 'vrachtwagenheffing' in tekst.lower():
+        return 'NL'
+    if _STATION_DUITS.search(tekst):
+        return 'DE'
+    return ''
 
 
 def normaliseer_kenteken(waarde: str) -> str:

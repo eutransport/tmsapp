@@ -12,6 +12,7 @@ from django.db.models import Count, Max, Min, Sum
 from django.utils import timezone
 
 from .models import RadiusConnection, RadiusJourney, RadiusSyncLog
+from .kenteken_correcties import corrigeer_kenteken
 from .radius_service import (
     RadiusError,
     get_journeys,
@@ -75,11 +76,12 @@ def sync_radius_journeys(van, tot, customer_id=None, connection=None):
     for rit in resultaat['journeys']:
         sleutel = (rit['service_id'], rit['start_time'])
         rit_datum = _naar_lokale_datum(rit['start_time'])
-        kentekens.add(rit['plate_number'])
+        kenteken = corrigeer_kenteken(rit['plate_number'])
+        kentekens.add(kenteken)
         datums.add(rit_datum)
 
         velden = {
-            'plate_number': rit['plate_number'],
+            'plate_number': kenteken,
             'driver_name': rit['driver_name'],
             'date': rit_datum,
             'end_time': rit['end_time'],

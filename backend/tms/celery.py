@@ -87,4 +87,9 @@ app.conf.beat_schedule = {
         'task': 'apps.tolling.tasks.opruimen_ritnummer_correcties',
         'schedule': crontab(hour=0, minute=20),
     },
+    'controleer-tariefbronnen': {
+        # Maandagochtend de officiele tariefpagina's van NL, DE en BE nakijken.
+        'task': 'apps.tolling.tasks.controleer_tariefbronnen',
+        'schedule': crontab(day_of_week=1, hour=6, minute=0),
+    },
 }
