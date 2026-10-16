@@ -19,11 +19,11 @@ from django.utils import timezone
 from apps.fleet.bedrijven import bouw_bedrijf_index, zoek_bedrijf_in_index
 from apps.fleet.ritnummers import bouw_ritnummer_index, zoek_in_index
 
-from .km_bepaling import BRON_TARIEF, bouw_tarieftabel
+from .km_bepaling import BRON_TARIEF, bouw_tarieftabel, maand_van
 from .planning_koppeling import BRON_VOERTUIG, koppel_events
 from .land_bepaling import BRON_FACTUUR, bepaal_land, land_van_rit, zoek_rit
 from .models import TollingEvent, TollingImportBatch, normalize_plate
-from .services import build_vehicle_lookup
+from .services import build_vehicle_lookup, filter_reeds_aanwezig
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +133,7 @@ def analyseer(factuur, speling_minuten: int = STANDAARD_SPELING_MINUTEN) -> Impo
             )
         # De GPS-rit loopt ook over tolvrije wegen; terugrekenen uit het
         # bedrag geeft de werkelijk getolde afstand.
-        afstand = tarieven.kilometers(kenteken_norm, land, regel.totaal)
+        afstand = tarieven.kilometers(kenteken_norm, maand_van(start), regel.totaal)
         km_bron = BRON_TARIEF if afstand is not None else ''
 
         passagedatum = timezone.localtime(start, tijdzone).date()
@@ -255,6 +255,8 @@ def importeer(factuur, user, filename: str = '',
             rit_bron=BRON_VOERTUIG,
         ))
 
+    if nieuwe:
+        nieuwe, uitkomst.duplicaten = filter_reeds_aanwezig(nieuwe)
     if nieuwe:
         try:
             with transaction.atomic():

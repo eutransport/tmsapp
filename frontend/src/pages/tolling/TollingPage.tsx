@@ -1,7 +1,7 @@
 /**
  * Tolheffing (toll) import & overview page.
  *
- * - Upload CSV (from OBU provider).
+ * - Upload CSV of Excel (from OBU provider).
  * - Group per license plate.
  * - Expandable per-plate view with week/month navigation, event table with
  *   pagination and Excel/PDF export.
@@ -320,7 +320,7 @@ export default function TollingPage() {
             Tolheffing import
           </h1>
           <p className="text-sm text-gray-500">
-            Importeer het CSV-bestand van de tolprovider. De regels worden per kenteken gegroepeerd en kunnen op
+            Importeer het CSV- of Excel-bestand van de tolprovider. De regels worden per kenteken gegroepeerd en kunnen op
             een factuur worden gezet.
           </p>
         </div>
@@ -328,7 +328,7 @@ export default function TollingPage() {
           <input
             ref={fileRef}
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="hidden"
             onChange={e => onFile(e.target.files?.[0] ?? null)}
           />
@@ -352,7 +352,7 @@ export default function TollingPage() {
             disabled={uploading}
           >
             <ArrowUpTrayIcon className="h-4 w-4 mr-1.5" />
-            {uploading ? 'Bezig…' : 'CSV importeren'}
+            {uploading ? 'Bezig…' : 'Bestand importeren'}
           </button>
           <button
             type="button"
@@ -514,7 +514,7 @@ export default function TollingPage() {
         <div className="py-10 text-center text-gray-400">Laden…</div>
       ) : rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 p-10 text-center text-gray-500">
-          Nog geen tolheffing-regels geïmporteerd. Klik op “CSV importeren” om te beginnen.
+          Nog geen tolheffing-regels geïmporteerd. Klik op “Bestand importeren” om te beginnen.
         </div>
       ) : filteredRows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 p-10 text-center text-gray-500">

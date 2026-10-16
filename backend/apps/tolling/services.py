@@ -18,6 +18,9 @@ from apps.fleet.ritnummers import bouw_ritnummer_index, zoek_in_index
 
 from .models import PrivateTollRegistration, TollingEvent, TollingImportBatch, normalize_plate
 from .planning_koppeling import BRON_VOERTUIG, koppel_events
+from .km_bepaling import bouw_tarieftabel, maand_van
+from .verbruiken_csv import (is_verbruiken_bestand, is_verbruiken_xlsx,
+                             lees_verbruiken, lees_verbruiken_xlsx)
 
 logger = logging.getLogger(__name__)
 
@@ -154,13 +157,63 @@ def build_vehicle_lookup() -> dict:
     return lookup
 
 
+def filter_reeds_aanwezig(events: list) -> tuple[list, int]:
+    """Haal passages weg die al in de database staan.
+
+    De unieke sleutel op het model bevat ook het OBU-nummer en de eindtijd, en
+    die verschillen per bron: een Radius-factuur levert het kaartnummer en een
+    vaste passageduur, een OBU-bestand levert het kastnummer en een echte
+    eindtijd. Dezelfde passage uit twee bronnen zou daardoor twee keer worden
+    opgeslagen. Kenteken, starttijd en bedrag zijn wel in elke bron gelijk.
+    """
+    if not events:
+        return events, 0
+
+    def sleutel(kenteken, start, bedrag):
+        return (kenteken, start, Decimal(bedrag).quantize(Decimal('0.01')))
+
+    kentekens = {e.license_plate_normalized for e in events}
+    starts = [e.start_at for e in events]
+    bestaand = set(
+        TollingEvent.objects.filter(
+            license_plate_normalized__in=kentekens,
+            start_at__gte=min(starts),
+            start_at__lte=max(starts),
+        ).values_list('license_plate_normalized', 'start_at', 'amount')
+    )
+    bestaand = {sleutel(*rij) for rij in bestaand}
+
+    overblijvend, gezien = [], set()
+    for event in events:
+        s = sleutel(event.license_plate_normalized, event.start_at, event.amount)
+        if s in bestaand or s in gezien:
+            continue
+        gezien.add(s)
+        overblijvend.append(event)
+    return overblijvend, len(events) - len(overblijvend)
+
+
 def import_csv(file_obj, user, filename: str = '') -> ImportResult:
     """Import a tolling CSV file. Idempotent — duplicates are skipped."""
     raw = file_obj.read()
     if isinstance(raw, str):
         raw = raw.encode('utf-8')
-    reader = _sniff_reader(raw)
-    header_map = _header_map(reader.fieldnames or [])
+
+    # Het verbruikenbestand heeft een eigen opzet en geen afstandskolom; het
+    # wordt eerst omgezet naar dezelfde rijen als de gewone import.
+    if is_verbruiken_xlsx(raw):
+        verbruiken = True
+        reader = lees_verbruiken_xlsx(raw)
+    else:
+        tekst = raw.decode('utf-8-sig', errors='replace')
+        verbruiken = is_verbruiken_bestand(tekst)
+        reader = lees_verbruiken(tekst) if verbruiken else _sniff_reader(raw)
+
+    if verbruiken:
+        header_map = {k: k for k in ('start date', 'end date', 'distance',
+                                     'amount', 'license plate', 'obu')}
+    else:
+        header_map = _header_map(reader.fieldnames or [])
 
     missing = REQUIRED_HEADERS - set(header_map.keys())
     batch = TollingImportBatch.objects.create(
@@ -187,6 +240,10 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
     ritnummer_index = bouw_ritnummer_index(wagen_ids)
     bedrijf_index = bouw_bedrijf_index(wagen_ids)
     tijdzone = timezone.get_current_timezone()
+    # Het verbruikenbestand heeft geen afstandskolom. Het toltarief verschilt
+    # per wagen, dus de afstand volgt uit het tarief dat voor dat kenteken uit
+    # eerdere regels is afgeleid.
+    tarieven = bouw_tarieftabel() if verbruiken else None
 
     for row in reader:
         total += 1
@@ -210,6 +267,14 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
         plate_norm = normalize_plate(plate_raw)
         vehicle = vehicle_lookup.get(plate_norm)
 
+        km_bron = 'bestand'
+        if verbruiken:
+            eigen = tarieven.kilometers(plate_norm, maand_van(start), amount)
+            if eigen is not None:
+                distance, km_bron = eigen, 'tarief'
+            else:
+                km_bron = 'schatting'
+
         # Datum van de passage in de lokale tijdzone; daarop wordt het
         # ritnummer opgezocht.
         passagedatum = (
@@ -230,9 +295,11 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
             ritnummer=zoek_in_index(ritnummer_index, vehicle, passagedatum),
             bedrijf_id=zoek_bedrijf_in_index(bedrijf_index, vehicle, passagedatum),
             rit_bron=BRON_VOERTUIG,
+            km_bron=km_bron,
         ))
 
     # Bulk insert; on unique conflict fall back to per-row insert to count duplicates.
+    new_events, duplicates = filter_reeds_aanwezig(new_events)
     if new_events:
         try:
             with transaction.atomic():
@@ -247,6 +314,7 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
                         imported += 1
                 except IntegrityError:
                     duplicates += 1
+
 
     batch.rows_total = total
     batch.rows_imported = imported
