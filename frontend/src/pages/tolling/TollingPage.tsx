@@ -26,6 +26,7 @@ import {
   EnvelopeIcon,
   PencilSquareIcon,
   TableCellsIcon,
+  GlobeEuropeAfricaIcon,
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
@@ -48,6 +49,7 @@ import DachserExportModal from '@/components/tolling/DachserExportModal'
 import RitnummerCorrectieDialog from '@/components/tolling/RitnummerCorrectieDialog'
 import TolImportVoorbeeldModal from '@/components/tolling/TolImportVoorbeeldModal'
 import TolKoppelingModal from '@/components/tolling/TolKoppelingModal'
+import TolBuitenlandModal from '@/components/tolling/TolBuitenlandModal'
 import RadiusSyncPaneel from '@/components/tolling/RadiusSyncPaneel'
 import TolBackupPaneel from '@/components/tolling/TolBackupPaneel'
 import TariefBronnenPaneel from '@/components/tolling/TariefBronnenPaneel'
@@ -146,10 +148,12 @@ export default function TollingPage() {
   const [uploading, setUploading] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [selectedCompanyKeys, setSelectedCompanyKeys] = useState<string[]>([])
+  const [selectedRitnummers, setSelectedRitnummers] = useState<string[]>([])
   const [showMoreCompanies, setShowMoreCompanies] = useState(false)
   const [invoiceModalRow, setInvoiceModalRow] = useState<TollingVehicleRow | null>(null)
   const [invoicesRefresh, setInvoicesRefresh] = useState(0)
   const [dachserOpen, setDachserOpen] = useState(false)
+  const [buitenlandOpen, setBuitenlandOpen] = useState(false)
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
   const [deletingPlate, setDeletingPlate] = useState<string | null>(null)
   const [deletingAll, setDeletingAll] = useState(false)
@@ -327,28 +331,122 @@ export default function TollingPage() {
     return rows.filter(r => allowed.has(companyKey(r)))
   }, [rows, selectedCompanyKeys])
 
+  /** Ritnummers die horen bij de gekozen bedrijven; zonder keuze alle ritnummers. */
+  const ritOptions = useMemo(() => {
+    const gezien = new Set<string>()
+    for (const row of companyRows) {
+      const rit = (row.ritnummer || '').trim()
+      if (rit) gezien.add(rit)
+    }
+    // Een al gekozen ritnummer blijft zichtbaar, ook als het bedrijfsfilter
+    // het zou wegfilteren. Anders kun je je eigen keuze niet meer uitzetten.
+    for (const rit of selectedRitnummers) gezien.add(rit)
+    return Array.from(gezien).sort((a, b) => a.localeCompare(b, 'nl-NL'))
+  }, [companyRows, selectedRitnummers])
+
+  /** Klik op een ritnummer: aan- of uitzetten, met het bijbehorende bedrijf erbij. */
+  const toggleRitnummer = (rit: string) => {
+    const aanwezig = selectedRitnummers.includes(rit)
+    const volgende = aanwezig
+      ? selectedRitnummers.filter(r => r !== rit)
+      : [...selectedRitnummers, rit]
+    setSelectedRitnummers(volgende)
+
+    const bedrijvenVan = (nummer: string) =>
+      rows.filter(r => (r.ritnummer || '').trim() === nummer).map(companyKey)
+
+    if (aanwezig) {
+      // Uitzetten: laat alleen de bedrijven staan die nog bij een andere keuze horen.
+      const blijft = new Set(volgende.flatMap(bedrijvenVan))
+      const losgelaten = new Set(bedrijvenVan(rit).filter(k => !blijft.has(k)))
+      setSelectedCompanyKeys(prev => prev.filter(k => !losgelaten.has(k)))
+      return
+    }
+    setSelectedCompanyKeys(prev => {
+      const samen = new Set(prev)
+      for (const sleutel of bedrijvenVan(rit)) samen.add(sleutel)
+      return Array.from(samen)
+    })
+  }
+
+  const ritRows = useMemo(() => {
+    if (selectedRitnummers.length === 0) return companyRows
+    const allowed = new Set(selectedRitnummers)
+    return companyRows.filter(r => allowed.has((r.ritnummer || '').trim()))
+  }, [companyRows, selectedRitnummers])
+
+  /** Klik op een bedrijf: aan- of uitzetten, en losgelaten ritnummers opruimen. */
+  const toggleBedrijf = (sleutel: string) => {
+    const volgende = selectedCompanyKeys.includes(sleutel)
+      ? selectedCompanyKeys.filter(k => k !== sleutel)
+      : [...selectedCompanyKeys, sleutel]
+    setSelectedCompanyKeys(volgende)
+    if (volgende.length === 0) return
+    // Ritnummers die bij geen gekozen bedrijf meer horen zouden alles wegfilteren.
+    const toegestaan = new Set(volgende)
+    setSelectedRitnummers(prev => prev.filter(rit =>
+      rows.some(r => (r.ritnummer || '').trim() === rit && toegestaan.has(companyKey(r)))))
+  }
+
+  const wisFilters = () => {
+    setSelectedCompanyKeys([])
+    setSelectedRitnummers([])
+  }
+
   /** Auto's zonder tolheffing in de gekozen periode worden standaard verborgen. */
   const filteredRows = useMemo(
-    () => (hideEmpty ? companyRows.filter(r => r.period_events > 0) : companyRows),
-    [companyRows, hideEmpty],
+    () => (hideEmpty ? ritRows.filter(r => r.period_events > 0) : ritRows),
+    [ritRows, hideEmpty],
   )
 
-  const emptyCount = companyRows.length - companyRows.filter(r => r.period_events > 0).length
+  /** Eén kaart per kenteken; de combinaties van rit en bedrijf staan erbinnen. */
+  const plateGroups = useMemo(() => {
+    const map = new Map<string, PlateGroup>()
+    for (const row of filteredRows) {
+      const bestaand = map.get(row.plate_normalized)
+      if (bestaand) {
+        bestaand.km += row.period_km || 0
+        bestaand.amount += row.period_amount || 0
+        bestaand.events += row.period_events || 0
+        bestaand.combos.push(row)
+      } else {
+        map.set(row.plate_normalized, {
+          plate: row.plate_normalized,
+          plateDisplay: row.plate_display,
+          km: row.period_km || 0,
+          amount: row.period_amount || 0,
+          events: row.period_events || 0,
+          combos: [row],
+        })
+      }
+    }
+    const groepen = Array.from(map.values())
+    for (const groep of groepen) {
+      groep.combos.sort((a, b) =>
+        (a.ritnummer || '').localeCompare(b.ritnummer || '', 'nl-NL')
+        || (a.bedrijf_naam || '').localeCompare(b.bedrijf_naam || '', 'nl-NL'))
+    }
+    groepen.sort((a, b) => a.plateDisplay.localeCompare(b.plateDisplay, 'nl-NL'))
+    return groepen
+  }, [filteredRows])
+
+  const emptyCount = ritRows.length - ritRows.filter(r => r.period_events > 0).length
 
   const totals = useMemo(() => {
-    return companyRows.reduce(
-      (acc, r) => ({
-        vehicles: acc.vehicles + (r.period_events > 0 ? 1 : 0),
-        km: acc.km + (r.period_km || 0),
-        amount: acc.amount + (r.period_amount || 0),
-      }),
-      { vehicles: 0, km: 0, amount: 0 },
-    )
-  }, [companyRows])
+    const kentekens = new Set<string>()
+    let km = 0
+    let amount = 0
+    for (const r of ritRows) {
+      if (r.period_events > 0) kentekens.add(r.plate_normalized)
+      km += r.period_km || 0
+      amount += r.period_amount || 0
+    }
+    return { vehicles: kentekens.size, km, amount }
+  }, [ritRows])
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4">
-      <header className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+      <header className="space-y-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 flex items-center gap-2">
             <CurrencyEuroIcon className="h-6 w-6 text-primary-600" />
@@ -359,7 +457,7 @@ export default function TollingPage() {
             een factuur worden gezet.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             ref={fileRef}
             type="file"
@@ -400,6 +498,15 @@ export default function TollingPage() {
           </button>
           <button
             type="button"
+            className="inline-flex items-center rounded-md bg-[#002060] px-3 py-2 text-sm font-medium text-white hover:bg-[#00184a]"
+            onClick={() => setBuitenlandOpen(true)}
+            title="Exporteer per kenteken de ritten in het buitenland, met periode, kilometers en bedrag"
+          >
+            <GlobeEuropeAfricaIcon className="h-4 w-4 mr-1.5" />
+            Exporteer buitenland
+          </button>
+          <button
+            type="button"
             className="inline-flex items-center px-3 py-2 rounded-md text-sm font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
             onClick={() => setKoppelingOpen(true)}
             title="Controleer of de tolregels op het juiste ritnummer en bedrijf staan"
@@ -431,6 +538,11 @@ export default function TollingPage() {
       />
 
       <TolStationsPaneel />
+
+      <TolBuitenlandModal
+        isOpen={buitenlandOpen}
+        onClose={() => setBuitenlandOpen(false)}
+      />
 
       <TariefBronnenPaneel />
 
@@ -514,14 +626,14 @@ export default function TollingPage() {
       </section>
 
       {companyOptions.length > 0 && (
-        <section className="rounded-lg border bg-white px-4 py-3">
+        <section className="rounded-lg border bg-white px-4 py-3 space-y-2">
           <div className="flex flex-wrap items-center gap-1">
             <span className="text-xs font-medium text-gray-500 uppercase mr-0.5">Bedrijf:</span>
             <button
               type="button"
-              onClick={() => setSelectedCompanyKeys([])}
+              onClick={wisFilters}
               className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${
-                selectedCompanyKeys.length === 0
+                selectedCompanyKeys.length === 0 && selectedRitnummers.length === 0
                   ? 'bg-primary-600 text-white'
                   : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
@@ -534,13 +646,8 @@ export default function TollingPage() {
                 <button
                   key={opt.key}
                   type="button"
-                  onClick={() =>
-                    setSelectedCompanyKeys(prev =>
-                      prev.includes(opt.key)
-                        ? prev.filter(k => k !== opt.key)
-                        : [...prev, opt.key],
-                    )
-                  }
+                  onClick={() => toggleBedrijf(opt.key)}
+                  title={active ? 'Klik nogmaals om dit filter uit te zetten' : 'Toon alleen dit bedrijf'}
                   className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${
                     active
                       ? 'bg-primary-600 text-white'
@@ -561,6 +668,43 @@ export default function TollingPage() {
               </button>
             )}
           </div>
+
+          {ritOptions.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1 border-t border-gray-100 pt-2">
+              <span className="text-xs font-medium text-gray-500 uppercase mr-0.5">Ritnummer:</span>
+              <button
+                type="button"
+                onClick={() => setSelectedRitnummers([])}
+                className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                  selectedRitnummers.length === 0
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Alle ritnummers
+              </button>
+              {ritOptions.map(rit => {
+                const active = selectedRitnummers.includes(rit)
+                return (
+                  <button
+                    key={rit}
+                    type="button"
+                    onClick={() => toggleRitnummer(rit)}
+                    title={active
+                      ? 'Klik nogmaals om dit filter uit te zetten'
+                      : 'Toon alleen dit ritnummer; het bijbehorende bedrijf wordt ook gekozen'}
+                    className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                      active
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {rit}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </section>
       )}
 
@@ -570,25 +714,26 @@ export default function TollingPage() {
         <div className="rounded-lg border border-dashed border-gray-300 p-10 text-center text-gray-500">
           Nog geen tolheffing-regels geïmporteerd. Klik op “Bestand importeren” om te beginnen.
         </div>
-      ) : filteredRows.length === 0 ? (
+      ) : plateGroups.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 p-10 text-center text-gray-500">
           Geen tolheffing gevonden voor <strong>{periodTitle(meta, period)}</strong>
-          {selectedCompanyKeys.length > 0 && ' bij de geselecteerde bedrijven'}.
+          {selectedCompanyKeys.length > 0 && ' bij de geselecteerde bedrijven'}
+          {selectedRitnummers.length > 0 && ' op de geselecteerde ritnummers'}.
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredRows.map(row => (
-            <VehicleRow
-              key={row.row_key}
-              row={row}
+          {plateGroups.map(groep => (
+            <PlateCard
+              key={groep.plate}
+              groep={groep}
               periodLabel={periodTitle(meta, period)}
-              open={!!expanded[row.row_key]}
+              open={!!expanded[groep.plate]}
               onToggle={() =>
-                setExpanded(prev => ({ ...prev, [row.row_key]: !prev[row.row_key] }))
+                setExpanded(prev => ({ ...prev, [groep.plate]: !prev[groep.plate] }))
               }
-              onCreateInvoice={() => setInvoiceModalRow(row)}
-              onDelete={() => askDeletePlate(row)}
-              deleting={deletingPlate === row.row_key}
+              onCreateInvoice={row => setInvoiceModalRow(row)}
+              onDelete={row => askDeletePlate(row)}
+              deletingKey={deletingPlate}
             />
           ))}
         </div>
@@ -906,17 +1051,42 @@ function StatCard({ label, value }: { label: string; value: string }) {
   )
 }
 
-interface VehicleRowProps {
-  row: TollingVehicleRow
+/** Alle regels van één kenteken bij elkaar; de combinaties staan in `combos`. */
+interface PlateGroup {
+  plate: string
+  plateDisplay: string
+  km: number
+  amount: number
+  events: number
+  combos: TollingVehicleRow[]
+}
+
+interface PlateCardProps {
+  groep: PlateGroup
   periodLabel: string
   open: boolean
   onToggle: () => void
-  onCreateInvoice: () => void
-  onDelete: () => void
-  deleting: boolean
+  onCreateInvoice: (row: TollingVehicleRow) => void
+  onDelete: (row: TollingVehicleRow) => void
+  deletingKey: string | null
 }
 
-function VehicleRow({ row, periodLabel, open, onToggle, onCreateInvoice, onDelete, deleting }: VehicleRowProps) {
+function comboLabel(row: TollingVehicleRow): string {
+  const delen: string[] = []
+  delen.push(row.ritnummer ? `Rit ${row.ritnummer}` : 'Geen ritnummer')
+  if (row.bedrijf_naam) delen.push(row.bedrijf_naam)
+  return delen.join(' · ')
+}
+
+function PlateCard({
+  groep, periodLabel, open, onToggle, onCreateInvoice, onDelete, deletingKey,
+}: PlateCardProps) {
+  // null = alle combinaties van dit kenteken samen tonen.
+  const [comboKey, setComboKey] = useState<string | null>(null)
+  const actief = groep.combos.find(c => c.row_key === comboKey) ?? null
+  const factuurRij = actief ?? groep.combos[0]
+  const verouderd = groep.combos.some(c => c.is_actueel === false || c.is_actueel_bedrijf === false)
+
   return (
     <div className="rounded-lg border bg-white overflow-hidden">
       <div className="flex items-stretch">
@@ -927,50 +1097,28 @@ function VehicleRow({ row, periodLabel, open, onToggle, onCreateInvoice, onDelet
         >
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <span className="font-semibold text-gray-900">{row.plate_display}</span>
-              {row.ritnummer ? (
+              <span className="font-semibold text-gray-900">{groep.plateDisplay}</span>
+              {groep.combos.length > 1 && (
                 <span
-                  className={
-                    row.is_actueel
-                      ? 'text-xs font-medium uppercase tracking-wide text-gray-700 bg-gray-100 rounded px-1.5 py-0.5'
-                      : 'text-xs font-medium uppercase tracking-wide text-amber-800 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5'
-                  }
-                  title={
-                    row.is_actueel
-                      ? 'Huidig ritnummer van deze wagen'
-                      : `Eerder ritnummer. Deze wagen rijdt nu op ${row.huidig_ritnummer || 'geen ritnummer'}.`
-                  }
+                  className="text-xs text-gray-600 bg-gray-100 rounded px-1.5 py-0.5"
+                  title="Dit kenteken reed in deze periode op meerdere ritnummers of voor meerdere bedrijven"
                 >
-                  Rit {row.ritnummer}
-                  {!row.is_actueel && ' · eerder'}
-                </span>
-              ) : (
-                <span className="text-xs uppercase tracking-wide text-gray-400">
-                  Geen ritnummer
+                  {groep.combos.length} combinaties
                 </span>
               )}
-              {row.bedrijf_naam && (
+              {verouderd && (
                 <span
-                  className={
-                    row.is_actueel_bedrijf === false
-                      ? 'text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5'
-                      : 'text-xs text-primary-700 bg-primary-50 rounded px-1.5 py-0.5'
-                  }
-                  title={
-                    row.is_actueel_bedrijf === false
-                      ? `Eerder bedrijf. Deze wagen rijdt nu voor ${row.huidig_bedrijf_naam || 'geen bedrijf'}.`
-                      : 'Huidig bedrijf van deze wagen'
-                  }
+                  className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5"
+                  title="Een deel van de regels staat op een eerder ritnummer of bedrijf"
                 >
-                  {row.bedrijf_naam}
-                  {row.is_actueel_bedrijf === false && ' · eerder'}
+                  eerdere gegevens
                 </span>
               )}
             </div>
             <div className="text-xs text-gray-500 mt-0.5">
-              {periodLabel}: {kmFmt(row.period_km)} · {currency(row.period_amount)}
-              {row.period_events > 0 && (
-                <span className="text-gray-400"> · {row.period_events} regels</span>
+              {periodLabel}: {kmFmt(groep.km)} · {currency(groep.amount)}
+              {groep.events > 0 && (
+                <span className="text-gray-400"> · {groep.events} regels</span>
               )}
             </div>
           </div>
@@ -982,7 +1130,7 @@ function VehicleRow({ row, periodLabel, open, onToggle, onCreateInvoice, onDelet
         </button>
         <button
           type="button"
-          onClick={onCreateInvoice}
+          onClick={() => onCreateInvoice(factuurRij)}
           className="hidden sm:inline-flex items-center gap-1.5 px-3 border-l border-gray-200 text-sm text-primary-700 hover:bg-primary-50 hover:text-primary-800 transition-colors"
           title="Factuur maken voor dit voertuig"
         >
@@ -991,10 +1139,10 @@ function VehicleRow({ row, periodLabel, open, onToggle, onCreateInvoice, onDelet
         </button>
         <button
           type="button"
-          onClick={onDelete}
-          disabled={deleting}
+          onClick={() => onDelete(factuurRij)}
+          disabled={deletingKey === factuurRij.row_key}
           className="hidden sm:inline-flex items-center justify-center px-3 border-l border-gray-200 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors disabled:opacity-50"
-          title="Alle tolheffingen van dit voertuig verwijderen"
+          title="Tolheffingen van dit voertuig verwijderen"
         >
           <TrashIcon className="h-4 w-4" />
         </button>
@@ -1002,7 +1150,7 @@ function VehicleRow({ row, periodLabel, open, onToggle, onCreateInvoice, onDelet
       <div className="sm:hidden border-t border-gray-100 grid grid-cols-2 divide-x divide-gray-100">
         <button
           type="button"
-          onClick={onCreateInvoice}
+          onClick={() => onCreateInvoice(factuurRij)}
           className="inline-flex items-center justify-center gap-1.5 py-2 text-sm text-primary-700 hover:bg-primary-50"
         >
           <DocumentTextIcon className="h-4 w-4" />
@@ -1010,21 +1158,60 @@ function VehicleRow({ row, periodLabel, open, onToggle, onCreateInvoice, onDelet
         </button>
         <button
           type="button"
-          onClick={onDelete}
-          disabled={deleting}
+          onClick={() => onDelete(factuurRij)}
+          disabled={deletingKey === factuurRij.row_key}
           className="inline-flex items-center justify-center gap-1.5 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
         >
           <TrashIcon className="h-4 w-4" />
           Verwijderen
         </button>
       </div>
+
       {open && (
-        <VehicleDetail
-          plate={row.plate_normalized}
-          plateDisplay={row.plate_display}
-          bedrijfId={row.bedrijf_id}
-          ritnummer={row.ritnummer}
-        />
+        <>
+          {groep.combos.length > 1 && (
+            <div className="border-t border-gray-100 px-4 py-2 flex flex-wrap items-center gap-1">
+              <span className="text-xs font-medium uppercase text-gray-500 mr-0.5">
+                Binnen dit kenteken:
+              </span>
+              <button
+                type="button"
+                onClick={() => setComboKey(null)}
+                className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  comboKey === null
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Alles samen
+              </button>
+              {groep.combos.map(combo => (
+                <button
+                  key={combo.row_key}
+                  type="button"
+                  onClick={() =>
+                    setComboKey(prev => (prev === combo.row_key ? null : combo.row_key))
+                  }
+                  title="Klik nogmaals om dit filter uit te zetten"
+                  className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    comboKey === combo.row_key
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {comboLabel(combo)}
+                </button>
+              ))}
+            </div>
+          )}
+          <VehicleDetail
+            key={comboKey ?? 'alles'}
+            plate={groep.plate}
+            plateDisplay={groep.plateDisplay}
+            bedrijfId={actief ? actief.bedrijf_id : null}
+            ritnummer={actief ? actief.ritnummer : null}
+          />
+        </>
       )}
     </div>
   )
@@ -1034,8 +1221,8 @@ interface VehicleDetailProps {
   plate: string
   plateDisplay: string
   bedrijfId: string | null
-  /** Beperk het detail tot dit ritnummer (momentopname bij import). */
-  ritnummer: string
+  /** Beperk het detail tot dit ritnummer; null = alle ritnummers. */
+  ritnummer: string | null
 }
 
 function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDetailProps) {
@@ -1135,6 +1322,17 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
     : []
   const totalPages = Math.max(1, Math.ceil(zichtbareEvents.length / PAGE_SIZE))
   const pageEvents = zichtbareEvents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  // Het landfilter werkt in de browser, dus de totalen van de server gelden
+  // alleen zolang er geen land gekozen is.
+  const zichtbaarTotaal = data && landFilter === null
+    ? { km: Number(data.total_km), bedrag: Number(data.total_amount) }
+    : zichtbareEvents.reduce(
+        (som, ev) => ({
+          km: som.km + Number(ev.distance_km || 0),
+          bedrag: som.bedrag + Number(ev.amount || 0),
+        }),
+        { km: 0, bedrag: 0 },
+      )
 
   const download = async (fmt: 'xlsx' | 'pdf') => {
     setExporting(fmt)
@@ -1145,6 +1343,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
         format: fmt,
         ...(ritFilter === null ? {} : { ritnummer: ritFilter }),
         ...(bedrijfFilter === null ? {} : { bedrijf_id: bedrijfFilter }),
+        ...(landFilter === null ? {} : { land: landFilter || 'onbekend' }),
       })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -1651,12 +1850,16 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                 </tbody>
                 <tfoot className="bg-gray-50 text-sm font-medium">
                   <tr>
-                    <td className="px-3 py-2 text-right" colSpan={5}>Totaal (periode)</td>
+                    <td className="px-3 py-2 text-right" colSpan={5}>
+                      {landFilter === null
+                        ? 'Totaal (periode)'
+                        : `Totaal (${landFilter || 'zonder land'})`}
+                    </td>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {Number(data.total_km).toLocaleString('nl-NL', { maximumFractionDigits: 3 })} km
+                      {zichtbaarTotaal.km.toLocaleString('nl-NL', { maximumFractionDigits: 3 })} km
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-primary-700">
-                      {currency(data.total_amount)}
+                      {currency(zichtbaarTotaal.bedrag)}
                     </td>
                     <td />
                   </tr>
@@ -1668,7 +1871,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
             {totalPages > 1 && (
               <div className="flex items-center justify-between text-sm">
                 <div className="text-gray-500">
-                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, data.events.length)} van {data.events.length}
+                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, zichtbareEvents.length)} van {zichtbareEvents.length}
                 </div>
                 <div className="inline-flex items-center gap-1">
                   <button

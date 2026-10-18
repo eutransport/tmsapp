@@ -24,6 +24,7 @@ from apps.companies.models import Company
 from apps.fleet.models import Vehicle
 from apps.invoicing.models import Invoice, InvoiceLine
 
+from .buitenland import filter_op_land
 from .dagritnummers import (als_label, ritnummers_per_dag,
                             ritvensters as ritvensters_uit_uren)
 from .land_bepaling import LANDNAMEN
@@ -624,6 +625,11 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         bedrijf_id = request.query_params.get('bedrijf_id')
         if bedrijf_id:
             events_qs = events_qs.filter(bedrijf_id=bedrijf_id)
+        # Optioneel alleen een bepaald land, of alles buiten Nederland.
+        try:
+            events_qs = filter_op_land(events_qs, request.query_params.get('land'))
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         events = list(events_qs.order_by('start_at'))
         plate_display = events[0].license_plate_raw if events else plate
         vehicle = build_vehicle_lookup().get(norm)
@@ -2326,13 +2332,16 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
 
     @staticmethod
     def _dachser_aggregate(date_from: date, date_to: date,
-                           exclude_weekend: bool = True) -> list[dict]:
+                           exclude_weekend: bool = True,
+                           land: str | None = None) -> list[dict]:
         """Tel tolheffing op per route + kenteken + dag.
 
         Meerdere ritten op dezelfde dag komen als losse regels onder elkaar
         te staan zodra ze een ander routenummer of kenteken hebben.
         Privé-gemarkeerde events tellen niet mee. Met `exclude_weekend`
-        (default aan) worden zaterdag en zondag overgeslagen.
+        (default aan) worden zaterdag en zondag overgeslagen. Met `land`
+        beperk je tot één landcode of tot alles buiten Nederland; leeg
+        laten betekent alle landen, precies zoals voorheen.
         """
         tz = timezone.get_current_timezone()
         start = timezone.make_aware(datetime.combine(date_from, datetime.min.time()), tz)
@@ -2342,7 +2351,9 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
 
         events = TollingEvent.objects.filter(
             start_at__gte=start, start_at__lt=end, is_private=False,
-        ).values_list(
+        )
+        events = filter_op_land(events, land)
+        events = events.values_list(
             'license_plate_normalized', 'license_plate_raw',
             'start_at', 'distance_km', 'amount', 'ritnummer',
             'bedrijf_id', 'bedrijf__naam',
@@ -2408,7 +2419,11 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         exclude_weekend = _parse_bool(params.get('exclude_weekend'), default=True)
         bedrijf_id = (params.get('bedrijf') or '').strip()
 
-        all_rows = self._dachser_aggregate(date_from, date_to, exclude_weekend)
+        try:
+            all_rows = self._dachser_aggregate(
+                date_from, date_to, exclude_weekend, params.get('land'))
+        except ValueError as ex:
+            return Response({'detail': str(ex)}, status=400)
 
         # Bedrijvenfilter vullen op basis van ALLE regels, zodat de keuzelijst
         # blijft staan zodra er een bedrijf geselecteerd is.
@@ -2536,7 +2551,11 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         if not isinstance(carriers, dict):
             return Response({'detail': 'carriers moet een object zijn.'}, status=400)
         default_carrier = (data.get('default_carrier') or '').strip()
-        country = (data.get('country') or 'NL').strip() or 'NL'
+        land_keuze = (data.get('land') or '').strip()
+        # Zonder expliciete country-kolom volgen we de landkeuze; bij "alles"
+        # of "buitenland" blijft NL de waarde zoals voorheen.
+        standaard_country = land_keuze.upper() if len(land_keuze) == 2 else 'NL'
+        country = (data.get('country') or standaard_country).strip() or 'NL'
         exclude_weekend = _parse_bool(data.get('exclude_weekend'), default=True)
         bedrijf_id = (data.get('bedrijf') or '').strip()
 
@@ -2545,7 +2564,11 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         if isinstance(selected, list):
             selected_set = {str(r or '') for r in selected}
 
-        rows = self._dachser_aggregate(date_from, date_to, exclude_weekend)
+        try:
+            rows = self._dachser_aggregate(
+                date_from, date_to, exclude_weekend, data.get('land'))
+        except ValueError as ex:
+            return Response({'detail': str(ex)}, status=400)
         if bedrijf_id:
             rows = [r for r in rows if r['bedrijf_id'] == bedrijf_id]
         if selected_set is not None:

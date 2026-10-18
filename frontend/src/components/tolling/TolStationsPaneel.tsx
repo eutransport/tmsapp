@@ -7,14 +7,25 @@
  */
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { CheckIcon, ExclamationTriangleIcon, MapPinIcon } from '@heroicons/react/24/outline'
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  ExclamationTriangleIcon,
+  MapPinIcon,
+} from '@heroicons/react/24/outline'
 
 import { TolStation, TolStationLijst, tollingApi } from '@/api/tolling'
+
+// Zonder begrenzing klapt het paneel open met honderden stations.
+const EERSTE_AANTAL = 25
 
 export default function TolStationsPaneel() {
   const [data, setData] = useState<TolStationLijst | null>(null)
   const [alleenOpen, setAlleenOpen] = useState(true)
   const [bezig, setBezig] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [toonAlles, setToonAlles] = useState(false)
 
   const laden = async (openstaand: boolean) => {
     try {
@@ -24,7 +35,7 @@ export default function TolStationsPaneel() {
     }
   }
 
-  useEffect(() => { laden(alleenOpen) }, [alleenOpen])
+  useEffect(() => { laden(alleenOpen); setToonAlles(false) }, [alleenOpen])
 
   const bevestig = async (station: TolStation, land: string) => {
     if (!land) return
@@ -54,83 +65,123 @@ export default function TolStationsPaneel() {
 
   const landen = data.landen
   const metVoorstel = data.stations.filter((s) => s.openstaand && s.voorstel).length
+  const zichtbaar = toonAlles ? data.stations : data.stations.slice(0, EERSTE_AANTAL)
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <MapPinIcon className="h-5 w-5 text-gray-400" />
-          <h3 className="text-base font-semibold text-gray-900">Tolstations</h3>
-          {data.openstaand > 0 && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-              {data.openstaand} te bevestigen
-            </span>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setAlleenOpen(!alleenOpen)}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-          >
-            {alleenOpen ? 'Toon alle' : 'Alleen openstaande'}
-          </button>
-          {metVoorstel > 0 && (
-            <button
-              type="button"
-              disabled={bezig}
-              onClick={allesOvernemen}
-              className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {metVoorstel} voorstellen overnemen
-            </button>
-          )}
-        </div>
-      </div>
-
-      {data.openstaand > 0 && (
-        <p className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-          <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            Passages van een onbevestigd station krijgen geen land. Bevestig ze om ze op een
-            eigen factuurregel te laten komen.
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-gray-50 sm:px-6"
+      >
+        <MapPinIcon className={`h-5 w-5 ${data.openstaand > 0 ? 'text-red-500' : 'text-gray-400'}`} />
+        <h3 className="text-base font-semibold text-gray-900">Tolstations</h3>
+        {data.openstaand > 0 ? (
+          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+            {data.openstaand} zonder land
           </span>
-        </p>
-      )}
+        ) : (
+          <span className="text-xs text-gray-500">Alle stations hebben een land</span>
+        )}
+        <span className="ml-auto flex items-center gap-1 text-xs text-gray-400">
+          {open ? 'Verbergen' : 'Tonen'}
+          {open ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
+        </span>
+      </button>
 
-      {data.stations.length === 0 ? (
-        <p className="mt-4 text-sm text-gray-500">Geen stations om te tonen.</p>
-      ) : (
-        <ul className="mt-4 divide-y divide-gray-100">
-          {data.stations.map((station) => (
-            <li key={station.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-gray-900">{station.naam}</p>
-                <p className="text-xs text-gray-500">
-                  {station.aantal_regels} regels
-                  {station.openstaand && station.voorstel ? ` · voorstel ${station.voorstel}` : ''}
-                </p>
-              </div>
-              {station.openstaand ? (
-                <select
-                  defaultValue={station.voorstel}
-                  onChange={(e) => bevestig(station, e.target.value)}
-                  className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm sm:w-40"
+      {open && (
+        <div className="border-t border-gray-100 px-4 py-4 sm:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex overflow-hidden rounded-lg border border-gray-300">
+              <button
+                type="button"
+                onClick={() => setAlleenOpen(true)}
+                className={`px-3 py-1.5 text-sm ${
+                  alleenOpen ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Alleen zonder land ({data.openstaand})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAlleenOpen(false)}
+                className={`border-l border-gray-300 px-3 py-1.5 text-sm ${
+                  alleenOpen ? 'bg-white text-gray-700 hover:bg-gray-50' : 'bg-primary-600 text-white'
+                }`}
+              >
+                Alle stations
+              </button>
+            </div>
+            {metVoorstel > 0 && (
+              <button
+                type="button"
+                disabled={bezig}
+                onClick={allesOvernemen}
+                className="rounded-lg border border-primary-600 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-primary-50 disabled:opacity-50"
+              >
+                {metVoorstel} voorstellen overnemen
+              </button>
+            )}
+          </div>
+
+          {data.openstaand > 0 && (
+            <p className="mt-3 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-800">
+              <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Passages van een station zonder land krijgen geen land. Bevestigen mag later;
+                de import en de facturatie lopen gewoon door.
+              </span>
+            </p>
+          )}
+
+          {data.stations.length === 0 ? (
+            <p className="mt-4 text-sm text-gray-500">Geen stations om te tonen.</p>
+          ) : (
+            <>
+              <ul className="mt-4 divide-y divide-gray-100">
+                {zichtbaar.map((station) => (
+                  <li key={station.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-gray-900">{station.naam}</p>
+                      <p className="text-xs text-gray-500">
+                        {station.aantal_regels} regels
+                        {station.openstaand && station.voorstel ? ` · voorstel ${station.voorstel}` : ''}
+                      </p>
+                    </div>
+                    {station.openstaand ? (
+                      <select
+                        defaultValue={station.voorstel}
+                        onChange={(e) => bevestig(station, e.target.value)}
+                        className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm sm:w-40"
+                      >
+                        <option value="">Kies land…</option>
+                        {landen.map((l) => (
+                          <option key={l.code} value={l.code}>{l.naam}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-sm text-gray-700 sm:w-40">
+                        <CheckIcon className="h-4 w-4 text-green-600" />
+                        {station.landnaam || station.land}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {data.stations.length > EERSTE_AANTAL && (
+                <button
+                  type="button"
+                  onClick={() => setToonAlles((v) => !v)}
+                  className="mt-2 text-sm font-medium text-primary-600 hover:underline"
                 >
-                  <option value="">Kies land…</option>
-                  {landen.map((l) => (
-                    <option key={l.code} value={l.code}>{l.naam}</option>
-                  ))}
-                </select>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-sm text-gray-700 sm:w-40">
-                  <CheckIcon className="h-4 w-4 text-green-600" />
-                  {station.landnaam || station.land}
-                </span>
+                  {toonAlles
+                    ? 'Minder tonen'
+                    : `Toon alle ${data.stations.length} stations`}
+                </button>
               )}
-            </li>
-          ))}
-        </ul>
+            </>
+          )}
+        </div>
       )}
     </div>
   )

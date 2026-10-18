@@ -151,7 +151,6 @@ export default function DachserExportModal({ isOpen, onClose }: Props) {
         default_carrier: bulkCarrier || undefined,
         routes: includedRoutes.map(r => r.route),
         exclude_weekend: excludeWeekend,
-        country: 'NL',
       })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -378,7 +377,7 @@ export default function DachserExportModal({ isOpen, onClose }: Props) {
                 )}
 
                 <p className="text-[11px] text-gray-500">
-                  Country staat voorlopig vast op <strong>NL</strong>. Total tol kilometers is het
+                  Total tol kilometers is het
                   totaal per route, kenteken en dag; meerdere ritten op dezelfde dag komen als
                   losse regels onder elkaar te staan.
                 </p>

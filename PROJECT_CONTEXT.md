@@ -353,7 +353,59 @@ tmsapp/
 
 ---
 
-## ✅ BESLISSINGEN (DEFINITIEF)
+## 🛣️ Tolheffing per land (module `tolling`)
+
+### Waarom
+Tolheffing wordt per land afgerekend en per land doorbelast. De buitenlandse tol
+(Duitsland, België, …) moet apart op een factuur en apart exporteerbaar zijn, mét
+het bedrijf erbij zodat duidelijk is wie het doorbelast krijgt.
+
+### Backend
+| Bestand | Rol |
+|---|---|
+| `backend/apps/tolling/buitenland.py` | Pure logica: `filter_op_land`, `overzicht`, `totalen_per_land`, `naar_xlsx` |
+| `backend/apps/tolling/buitenland_views.py` | `TolBuitenlandViewSet` op `/api/tolling/buitenland/` + `/export/` |
+| `backend/apps/tolling/views.py` | `land`-parameter op de export per kenteken en op de dachser-export/voorbeeld |
+
+Landkeuzes overal gelijk: een ISO-code (`NL`, `DE`, `BE`, `LU`, `FR`),
+`buitenland` (alles behalve leeg en `NL`), `onbekend` (land nog niet bepaald),
+of niets meesturen voor alle landen. Een onbekende waarde geeft **400** met een
+opsomming van de geldige keuzes. Periode: `date_from` + `date_to` (maximaal 400
+dagen) óf `period=week|month` met `offset` (begrensd op ±520).
+
+Rechten: `IsAuthenticated` + `HasReadWriteModulePermission` met
+`view_tolling` / `manage_tolling`. Zonder login 401, zonder module-recht 403.
+
+Facturatie splitste al per `(kenteken, land)` in `create_invoice_simple`; de
+buitenlandregel krijgt het achtervoegsel `- tol <land>`. Dat is niet gewijzigd.
+
+### Frontend
+| Bestand | Rol |
+|---|---|
+| `frontend/src/components/tolling/TolBuitenlandPaneel.tsx` | Overzicht per kenteken per land met bedrijf, ritnummers en openstaand bedrag + xlsx-export |
+| `frontend/src/components/tolling/DachserExportModal.tsx` | Landkeuze bij *Exporteer per bedrijf*; de country-kolom volgt die keuze |
+| `frontend/src/pages/tolling/TollingPage.tsx` | Eén kaart per kenteken (`PlateCard`) met de rit/bedrijf-combinaties erbinnen |
+
+### Afspraken over de filters
+1. Eén regel per kenteken. Reed een wagen op meerdere ritnummers of voor
+   meerdere bedrijven, dan staan die combinaties **binnen** de kaart.
+2. Klik op een bedrijf → alleen dat bedrijf; de ritnummerbalk toont nog
+   uitsluitend de ritnummers van dat bedrijf.
+3. Klik op een ritnummer → het bijbehorende bedrijf wordt automatisch actief.
+4. Nogmaals klikken zet het filter uit. Een bedrijf dat alleen door een
+   ritnummerkeuze actief werd, gaat dan ook weer uit.
+5. Een bedrijf uitzetten verwijdert de ritnummers die nergens meer bij horen,
+   anders zou het overzicht leeg blijven.
+
+### Let op
+- DACHSER-regels tellen niet mee in de doorbelasting; daar doen we niets mee.
+- Radius factureert na. Een maand kan dus nog volledig ontbreken.
+- De dubbelcontrole werkt op `(start_at, end_at, kenteken, bedrag, obu)`.
+  Een CSV met **dagtotalen** en de API met **losse passages** herkent hij
+  daardoor niet als dezelfde tol. Controleer dat vóór een import.
+
+---
+
 
 1. **Frontend taal**: TypeScript
 2. **UI stijl**: Modern/Clean mix (professioneel, niet saai)

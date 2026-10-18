@@ -239,6 +239,8 @@ export interface DachserExportPayload {
   routes?: string[]
   exclude_weekend?: boolean
   country?: string
+  /** Landcode, 'buitenland' of 'onbekend'. Weglaten = alle landen. */
+  land?: string
 }
 
 export interface TollingInvoiceCreditRef {
@@ -429,6 +431,52 @@ export interface KoppelingUitkomst {
   verweesd: KoppelingVerweesd[]
 }
 
+/** Periode voor het landoverzicht: of twee datums, of een week/maand met verschuiving. */
+export interface BuitenlandParams {
+  date_from?: string
+  date_to?: string
+  period?: 'week' | 'month'
+  offset?: number
+  /** Landcode, 'buitenland' (standaard) of 'onbekend'. */
+  land?: string
+  bedrijf_id?: string
+}
+
+export interface BuitenlandRij {
+  plate_normalized: string
+  plate_display: string
+  land: string
+  land_naam: string
+  bedrijf_id: string | null
+  bedrijf_naam: string | null
+  ritnummers: string[]
+  regels: number
+  km: number
+  bedrag: number
+  gefactureerd: number
+  open_bedrag: number
+  eerste_dag: string | null
+  laatste_dag: string | null
+}
+
+export interface BuitenlandLandTotaal {
+  land: string
+  land_naam: string
+  kentekens: number
+  regels: number
+  km: number
+  bedrag: number
+  open_bedrag: number
+}
+
+export interface BuitenlandOverzicht {
+  periode: string
+  land: string
+  landkeuzes: { code: string; naam: string }[]
+  rijen: BuitenlandRij[]
+  per_land: BuitenlandLandTotaal[]
+}
+
 export interface TariefBron {
   id: string
   land: string
@@ -571,6 +619,8 @@ export const tollingApi = {
       format: 'xlsx' | 'pdf'
       ritnummer?: string
       bedrijf_id?: string
+      /** Landcode, 'buitenland' of 'onbekend'. Weglaten = alle landen. */
+      land?: string
     },
   ): Promise<Blob> => {
     const { data } = await api.get(
@@ -582,10 +632,25 @@ export const tollingApi = {
           export_format: params.format,
           ...(params.ritnummer === undefined ? {} : { ritnummer: params.ritnummer }),
           ...(params.bedrijf_id ? { bedrijf_id: params.bedrijf_id } : {}),
+          ...(params.land ? { land: params.land } : {}),
         },
         responseType: 'blob',
       },
     )
+    return data
+  },
+
+  /** Tolheffing per land, opgesomd per kenteken met het bedrijf erbij. */
+  buitenlandOverzicht: async (params: BuitenlandParams): Promise<BuitenlandOverzicht> => {
+    const { data } = await api.get('/tolling/buitenland/', { params })
+    return data
+  },
+
+  downloadBuitenlandExport: async (params: BuitenlandParams): Promise<Blob> => {
+    const { data } = await api.get('/tolling/buitenland/export/', {
+      params,
+      responseType: 'blob',
+    })
     return data
   },
 
@@ -730,12 +795,15 @@ export const tollingApi = {
       date_to?: string
       bedrijf?: string
       exclude_weekend?: boolean
+      /** Landcode, 'buitenland' of 'onbekend'. Weglaten = alle landen. */
+      land?: string
     } = {},
   ): Promise<DachserPreview> => {
     const params: Record<string, string> = {}
     if (opts.date_from) params.date_from = opts.date_from
     if (opts.date_to) params.date_to = opts.date_to
     if (opts.bedrijf) params.bedrijf = opts.bedrijf
+    if (opts.land) params.land = opts.land
     if (opts.exclude_weekend !== undefined) {
       params.exclude_weekend = opts.exclude_weekend ? 'true' : 'false'
     }

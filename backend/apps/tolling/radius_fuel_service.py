@@ -10,7 +10,7 @@ soortgelijke parameters worden genegeerd en leveren altijd alles op. We
 filteren daarom zelf op periode.
 """
 import logging
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from django.utils import timezone
@@ -43,7 +43,12 @@ def _bedrag(waarde) -> Decimal:
 
 
 def _lokaal_tijdstip(waarde):
-    """``tran_date`` komt als ISO-tijd in UTC binnen."""
+    """``tran_date`` draagt een Z-suffix maar is plaatselijke tijd.
+
+    Gecontroleerd tegen de Radius-factuur: passage B220 Emmerich van
+    BB-625-L komt binnen als ``2026-09-21T07:49:00Z`` en staat op de factuur
+    als 07:49. Omrekenen vanuit UTC zette alles twee uur vooruit.
+    """
     tekst = str(waarde or '').strip()
     if not tekst:
         return None
@@ -51,9 +56,8 @@ def _lokaal_tijdstip(waarde):
         moment = datetime.fromisoformat(tekst.replace('Z', '+00:00'))
     except ValueError:
         return None
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=dt_timezone.utc)
-    return timezone.localtime(moment, timezone.get_current_timezone())
+    return timezone.make_aware(moment.replace(tzinfo=None),
+                               timezone.get_current_timezone())
 
 
 def _naar_regel(transactie, kaarten) -> FactuurRegel | None:

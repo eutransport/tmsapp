@@ -19,12 +19,17 @@ from apps.fleet.ritnummers import bouw_ritnummer_index, zoek_in_index
 from .models import PrivateTollRegistration, TollingEvent, TollingImportBatch, normalize_plate
 from .planning_koppeling import BRON_VOERTUIG, koppel_events
 from .km_bepaling import bouw_tarieftabel, maand_van
+from .land_bepaling import BRON_FACTUUR, LANDNAMEN
 from .verbruiken_csv import (is_verbruiken_bestand, is_verbruiken_xlsx,
                              lees_verbruiken, lees_verbruiken_xlsx)
 
 logger = logging.getLogger(__name__)
 
 REQUIRED_HEADERS = {'start date', 'end date', 'distance', 'amount', 'license plate'}
+# Optionele landkolom. Een bestand dat uit één tolland komt (bijvoorbeeld de
+# Toll Collect-afrekening) kan het land per regel meegeven; zonder deze kolom
+# blijft het land leeg en wordt het later bepaald uit gps of tolstations.
+LAND_HEADERS = ('country', 'land')
 
 
 @dataclass
@@ -234,6 +239,14 @@ def lees_bestand(raw: bytes) -> Voorbereiding:
     def col(row, key):
         return row.get(header_map[key], '') if key in header_map else ''
 
+    landkolom = next((k for k in LAND_HEADERS if k in header_map), None)
+
+    def leeslandcode(row) -> str:
+        if not landkolom:
+            return ''
+        code = str(row.get(header_map[landkolom], '') or '').strip().upper()
+        return code if code in LANDNAMEN else ''
+
     imported = duplicates = invalid = total = 0
     zero_amount = 0
     new_events: list[TollingEvent] = []
@@ -272,6 +285,7 @@ def lees_bestand(raw: bytes) -> Voorbereiding:
 
         plate_norm = normalize_plate(plate_raw)
         vehicle = vehicle_lookup.get(plate_norm)
+        land = leeslandcode(row)
 
         km_bron = 'bestand'
         if verbruiken:
@@ -302,6 +316,8 @@ def lees_bestand(raw: bytes) -> Voorbereiding:
             bedrijf_id=zoek_bedrijf_in_index(bedrijf_index, vehicle, passagedatum),
             rit_bron=BRON_VOERTUIG,
             km_bron=km_bron,
+            land=land,
+            land_bron=BRON_FACTUUR if land else '',
         ))
 
     return Voorbereiding(events=new_events, total=total, invalid=invalid,
