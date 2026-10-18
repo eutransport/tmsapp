@@ -5,6 +5,7 @@ from .afrekening_views import TolAfrekeningViewSet
 from .backup_views import TolBackupViewSet
 from .buiten_uren_views import TollingBuitenUrenViewSet
 from .buitenland_views import TolBuitenlandViewSet
+from .doorbelasting_views import TolDoorbelastingViewSet
 from .factuur_detail_views import TollingFactuurDetailViewSet
 from .import_voorbeeld_views import TolImportVoorbeeldViewSet
 from .koppel_views import TolKoppelingViewSet
@@ -40,6 +41,8 @@ router.register(r'tariefbronnen', TariefBronViewSet, basename='tolling-tariefbro
 router.register(r'stations', TolStationViewSet, basename='tolling-stations')
 router.register(r'koppeling', TolKoppelingViewSet, basename='tolling-koppeling')
 router.register(r'buitenland', TolBuitenlandViewSet, basename='tolling-buitenland')
+router.register(r'doorbelasting', TolDoorbelastingViewSet,
+                basename='tolling-doorbelasting')
 
 urlpatterns = [
     path('', include(router.urls)),

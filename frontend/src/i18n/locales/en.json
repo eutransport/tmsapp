@@ -191,6 +191,7 @@
     "tolheffingSync": "Toll synchronisation",
     "tolheffingBuitenUren": "Toll outside working hours",
     "tolheffingAfrekening": "Toll settlement",
+    "tolheffingDoorbelasting": "Toll vs invoicing",
     "tolregistratie": "Toll Registration",
     "tolregistratieAdmin": "Toll Overview (Admin)",
     "privateToll": "My Private Toll",

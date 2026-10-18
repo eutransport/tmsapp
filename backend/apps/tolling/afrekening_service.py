@@ -61,6 +61,20 @@ def _koppelwaarschuwingen(paren) -> list[str]:
     return meldingen
 
 
+def _bedrijf_van(koppelingen):
+    """De opdrachtgever van de bon, als alle gekoppelde wagens er een delen.
+
+    Staat er meer dan een bedrijf tussen, dan geeft dit None terug; dan laten
+    we het veld liever leeg dan dat we gokken.
+    """
+    bedrijven = {
+        koppeling['vehicle'].bedrijf_id
+        for koppeling in koppelingen
+        if koppeling['vehicle'] is not None and koppeling['vehicle'].bedrijf_id
+    }
+    return bedrijven.pop() if len(bedrijven) == 1 else None
+
+
 @transaction.atomic
 def importeer(
     inhoud: bytes,
@@ -94,15 +108,9 @@ def importeer(
 
     gekoppeld = [(r, _koppel(r, index)) for r in gelezen.regels]
 
-    # Het bedrijf volgt uit de gekoppelde wagens; staat er meer dan een bedrijf
-    # tussen, dan laten we het leeg in plaats van te gokken.
-    bedrijven = {
-        koppeling['vehicle'].bedrijf_id
-        for _, koppeling in gekoppeld
-        if koppeling['vehicle'] is not None and koppeling['vehicle'].bedrijf_id
-    }
-    if len(bedrijven) == 1:
-        afrekening.bedrijf_id = bedrijven.pop()
+    bedrijf_id = _bedrijf_van(koppeling for _, koppeling in gekoppeld)
+    if bedrijf_id is not None:
+        afrekening.bedrijf_id = bedrijf_id
 
     waarschuwingen.extend(_koppelwaarschuwingen(
         [(r.ritnummer, k) for r, k in gekoppeld]))
@@ -181,9 +189,11 @@ def herkoppel(afrekeningen) -> dict:
     for afrekening in afrekeningen:
         index = analyse.ritnummer_index(afrekening.periode_tot)
         paren = []
+        koppelingen = []
         for regel in afrekening.regels.all():
             nieuw = _koppel(regel, index)
             paren.append((regel.ritnummer, nieuw))
+            koppelingen.append(nieuw)
             nieuwe_id = nieuw['vehicle'].id if nieuw['vehicle'] else None
             if (regel.vehicle_id == nieuwe_id
                     and regel.kenteken == nieuw['kenteken']
@@ -203,8 +213,15 @@ def herkoppel(afrekeningen) -> dict:
             melding for melding in (afrekening.waarschuwingen or [])
             if not melding.startswith('Ritnummer ')
         ]
+        velden = ['waarschuwingen', 'updated_at']
+        # Bij het inlezen stond het bedrijf er soms nog niet op, omdat de wagen
+        # toen nog niet gekoppeld was. Nu wel, dus vullen we het alsnog.
+        bedrijf_id = _bedrijf_van(koppelingen)
+        if bedrijf_id is not None and afrekening.bedrijf_id != bedrijf_id:
+            afrekening.bedrijf_id = bedrijf_id
+            velden.append('bedrijf')
         afrekening.waarschuwingen = overig + _koppelwaarschuwingen(paren)
-        afrekening.save(update_fields=['waarschuwingen', 'updated_at'])
+        afrekening.save(update_fields=velden)
 
     logger.info('Tolafrekeningen opnieuw gekoppeld: %s regels aangepast', aangepast)
     return {'aangepast': aangepast}
