@@ -1120,6 +1120,10 @@ export interface TollingSyncRow {
   /** Kentekens die in de omschrijving gevonden zijn (>1 = niet te bepalen). */
   kenteken_opties: string[]
   regel_km: number | null
+  /** Landcodes die de omschrijving noemt, bijv. ['DE']. */
+  regel_landen: string[]
+  /** Periode uit de omschrijving als [van, tot], anders null. */
+  regel_periode: [string, string] | null
   gevonden_events: number
   gevonden_bedrag: number
   gevonden_km: number
@@ -1128,6 +1132,8 @@ export interface TollingSyncRow {
   /** Hoe de match gevonden is, bijv. "dagen 06-07 t/m 10-07". */
   methode: string
   vertrouwen: TollingSyncVertrouwen
+  /** Verschil tussen gevonden tolheffing en het factuurbedrag. */
+  verschil_bedrag: number
   event_ids: string[]
   reden: string
 }
@@ -1154,6 +1160,7 @@ export interface TollingSyncSearchResult {
   periode_tot: string | null
   methode: string
   vertrouwen: string
+  verschil_bedrag: number
   event_ids: string[]
 }
 

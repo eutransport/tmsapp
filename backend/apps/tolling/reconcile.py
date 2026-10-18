@@ -12,6 +12,7 @@ facturatie dat doet: `invoice_line` zetten en `invoiced_at` vullen.
 """
 from __future__ import annotations
 
+import calendar
 import logging
 import re
 from collections import defaultdict
@@ -48,6 +49,29 @@ KM_TOLERANTIE = 1.5
 
 _KM_RE = re.compile(r'([\d.]+)\s*km', re.IGNORECASE)
 _NIET_ALNUM = re.compile(r'[^A-Z0-9]')
+
+_LANDWOORDEN = {
+    'DE': ('duitsland', 'duitse', 'maut', 'toll collect'),
+    'NL': ('nederland', 'nederlandse'),
+    'BE': ('belgi', 'viapass'),
+}
+# Losse landcodes tellen alleen als ze als hoofdletters op de regel staan.
+_LANDCODE_RE = re.compile(r'\b(DE|NL|BE)\b')
+
+_MAANDEN = {
+    'januari': 1, 'februari': 2, 'maart': 3, 'april': 4, 'mei': 5, 'juni': 6,
+    'juli': 7, 'augustus': 8, 'september': 9, 'oktober': 10, 'november': 11,
+    'december': 12,
+}
+
+# "17-08 t/m 31-08" of "1-09 tm 15-09"
+_DDMM_BEREIK_RE = re.compile(
+    r'(\d{1,2})-(\d{1,2})\s*(?:t/m|tm|t\.m\.|-|tot en met)\s*(\d{1,2})-(\d{1,2})')
+# "24 - 25 september"
+_DAGEN_MAAND_RE = re.compile(
+    r'(\d{1,2})\s*(?:-|t/m|tm|tot en met)\s*(\d{1,2})\s+('
+    + '|'.join(_MAANDEN) + r')')
+_MAAND_RE = re.compile(r'\b(' + '|'.join(_MAANDEN) + r')\b')
 
 
 @dataclass
@@ -128,6 +152,61 @@ def km_van_regel(line: InvoiceLine) -> float | None:
         return float(gevonden.group(1).replace('.', ''))
     except ValueError:
         return None
+
+
+def landen_van_regel(line: InvoiceLine) -> set[str]:
+    """Landcodes die de omschrijving noemt, bijv. "Duitsland" of "NL + DE"."""
+    omschrijving = line.omschrijving or ''
+    tekst = omschrijving.lower()
+    landen = set(_LANDCODE_RE.findall(omschrijving))
+    for code, woorden in _LANDWOORDEN.items():
+        if any(w in tekst for w in woorden):
+            landen.add(code)
+    return landen
+
+
+def _jaar_bij(maand: int, factuurdatum: date) -> int:
+    """Een factuur loopt altijd achter op de rit, nooit vooruit."""
+    jaar = factuurdatum.year
+    return jaar - 1 if maand > factuurdatum.month else jaar
+
+
+def periode_van_regel(line: InvoiceLine) -> tuple[date, date] | None:
+    """Periode uit de omschrijving, als die er expliciet in staat.
+
+    Verzamelregels als "Tolheffing Duitsland voor augustus" noemen geen
+    kenteken maar wel een tijdvak; dat is dan de enige harde ingang.
+    """
+    tekst = (line.omschrijving or '').lower()
+    factuurdatum = line.invoice.factuurdatum or timezone.localdate()
+
+    bereik = _DDMM_BEREIK_RE.search(tekst)
+    if bereik:
+        d1, m1, d2, m2 = (int(g) for g in bereik.groups())
+        try:
+            return (date(_jaar_bij(m1, factuurdatum), m1, d1),
+                    date(_jaar_bij(m2, factuurdatum), m2, d2))
+        except ValueError:
+            return None
+
+    dagen = _DAGEN_MAAND_RE.search(tekst)
+    if dagen:
+        d1, d2, naam = dagen.groups()
+        maand = _MAANDEN.get(naam)
+        if maand:
+            try:
+                jaar = _jaar_bij(maand, factuurdatum)
+                return date(jaar, maand, int(d1)), date(jaar, maand, int(d2))
+            except ValueError:
+                return None
+
+    maandnaam = _MAAND_RE.search(tekst)
+    if maandnaam:
+        maand = _MAANDEN[maandnaam.group(1)]
+        jaar = _jaar_bij(maand, factuurdatum)
+        laatste = calendar.monthrange(jaar, maand)[1]
+        return date(jaar, maand, 1), date(jaar, maand, laatste)
+    return None
 
 
 def _dagmap(events: list[TollingEvent], excl_weekend: bool,
@@ -267,10 +346,10 @@ def _vertrouwen_span(events: list[TollingEvent], basis: str) -> str:
     return 'onzeker'
 
 
-def _pool(events_per_kenteken: dict[str, list[TollingEvent]], kenteken: str,
-          van: date, tot: date, geclaimd: set) -> list[TollingEvent]:
+def _pool(bron: list[TollingEvent], van: date, tot: date,
+          geclaimd: set) -> list[TollingEvent]:
     pool = []
-    for ev in events_per_kenteken.get(kenteken, ()):
+    for ev in bron:
         if ev.id in geclaimd:
             continue
         dag = _lokaal(ev.start_at).date()
@@ -279,9 +358,15 @@ def _pool(events_per_kenteken: dict[str, list[TollingEvent]], kenteken: str,
     return pool
 
 
-def _vrije_events() -> dict[str, list[TollingEvent]]:
-    """Alle nog niet gefactureerde, niet-privé tolregels per kenteken."""
+def _vrije_events() -> tuple[dict[str, list[TollingEvent]], dict[str, list[TollingEvent]]]:
+    """Alle nog niet gefactureerde, niet-privé tolregels.
+
+    Twee ingangen: per kenteken en per opdrachtgever. Die tweede is nodig voor
+    verzamelregels als "Tolheffing Duitsland voor augustus", waar geen kenteken
+    in de omschrijving staat.
+    """
     per_kenteken: dict[str, list[TollingEvent]] = defaultdict(list)
+    per_bedrijf: dict[str, list[TollingEvent]] = defaultdict(list)
     qs = (
         TollingEvent.objects
         .filter(invoiced_at__isnull=True, invoice_line__isnull=True, is_private=False)
@@ -289,7 +374,9 @@ def _vrije_events() -> dict[str, list[TollingEvent]]:
     )
     for ev in qs:
         per_kenteken[ev.license_plate_normalized].append(ev)
-    return per_kenteken
+        if ev.bedrijf_id:
+            per_bedrijf[str(ev.bedrijf_id)].append(ev)
+    return per_kenteken, per_bedrijf
 
 
 def _regel_dict(line: InvoiceLine) -> dict:
@@ -308,22 +395,26 @@ def _regel_dict(line: InvoiceLine) -> dict:
     }
 
 
-def _match_dict(match: Match | None) -> dict:
+def _match_dict(match: Match | None, regel_bedrag: float = 0.0) -> dict:
     if not match or not match.events:
         return {
             'gevonden_events': 0, 'gevonden_bedrag': 0.0, 'gevonden_km': 0.0,
             'periode_van': None, 'periode_tot': None,
-            'methode': '', 'vertrouwen': 'geen', 'event_ids': [],
+            'methode': '', 'vertrouwen': 'geen', 'grondslag': '',
+            'verschil_bedrag': 0.0, 'event_ids': [],
         }
     dagen = sorted({_lokaal(e.start_at).date() for e in match.events})
+    bedrag = float(sum((e.amount for e in match.events), Decimal('0')))
     return {
         'gevonden_events': len(match.events),
-        'gevonden_bedrag': float(sum((e.amount for e in match.events), Decimal('0'))),
+        'gevonden_bedrag': bedrag,
         'gevonden_km': float(sum((e.distance_km for e in match.events), Decimal('0'))),
         'periode_van': dagen[0].isoformat(),
         'periode_tot': dagen[-1].isoformat(),
         'methode': match.methode,
         'vertrouwen': match.vertrouwen,
+        'grondslag': 'bedrag',
+        'verschil_bedrag': round(bedrag - regel_bedrag, 2),
         'event_ids': [str(e.id) for e in match.events],
     }
 
@@ -361,10 +452,10 @@ def analyseer(datum_vanaf: date | None = None, datum_tot: date | None = None,
     Verandert niets in de database; het resultaat is een voorstel.
     """
     regels = te_synchroniseren_regels(datum_vanaf, datum_tot, bedrijf_id)
-    per_kenteken = _vrije_events()
-    platen = sorted(per_kenteken.keys(), key=len, reverse=True)
-    if not platen:
-        platen = bekende_kentekens()
+    per_kenteken, per_bedrijf = _vrije_events()
+    # Herkennen op alle ooit geziene kentekens: een wagen waarvan toevallig
+    # niets meer openstaat moet nog steeds uit de omschrijving te halen zijn.
+    platen = bekende_kentekens()
 
     geclaimd: set = set()
     resultaten = []
@@ -376,23 +467,59 @@ def analyseer(datum_vanaf: date | None = None, datum_tot: date | None = None,
         rij['regel_km'] = km_van_regel(line)
 
         doel = _centen(line.totaal if line.totaal else line.prijs_per_eenheid)
-        if not kenteken or doel <= 0:
+        if doel <= 0:
             rij.update(_match_dict(None))
-            rij['reden'] = ('Geen kenteken in de omschrijving'
-                            if not kenteken else 'Regel heeft geen bedrag')
+            rij['reden'] = 'Regel heeft geen bedrag'
+            resultaten.append(rij)
+            continue
+
+        # Zonder kenteken valt de regel terug op alle tolheffing van de
+        # opdrachtgever. Dat is een ruimere vijver, dus alleen de strengste
+        # fase meedoen; een toevallige optelling is daar te snel gevonden.
+        bedrijfsbreed = not kenteken
+        if bedrijfsbreed:
+            bron = per_bedrijf.get(rij['bedrijf_id'] or '', [])
+            fases = ZOEKFASES[:1]
+        else:
+            bron = per_kenteken.get(kenteken, [])
+            fases = ZOEKFASES
+
+        landen = landen_van_regel(line)
+        periode = periode_van_regel(line)
+        rij['regel_landen'] = sorted(landen)
+        rij['regel_periode'] = [p.isoformat() for p in periode] if periode else None
+        if landen and bedrijfsbreed:
+            # Lang niet elke tolregel heeft een land. Alleen uitsluiten wat
+            # aantoonbaar een ander land is; onbekend blijft in de vijver.
+            bron = [e for e in bron if not e.land or e.land in landen]
+        if bedrijfsbreed and (landen or periode):
+            # Land of periode snijdt de vijver genoeg bij om ook losse dagen
+            # te mogen combineren.
+            fases = ZOEKFASES
+
+        if not bron:
+            rij.update(_match_dict(None))
+            rij['reden'] = ('Geen kenteken in de omschrijving en geen open '
+                            'tolheffing voor deze opdrachtgever' if bedrijfsbreed
+                            else 'Geen open tolheffing voor dit kenteken')
             resultaten.append(rij)
             continue
 
         factuurdatum = line.invoice.factuurdatum or timezone.localdate()
+        # Staat de periode op de regel, dan is dat het enige toegestane
+        # venster. Daarbuiten zoeken levert een match op die niet klopt.
+        if periode:
+            vensters = [periode]
+        else:
+            vensters = [(factuurdatum - timedelta(days=d),
+                         factuurdatum + timedelta(days=MARGE_VOORUIT_DAGEN))
+                        for d in VENSTERS_DAGEN]
         match = None
         # Eerst de betrouwbaarste strategie over alle vensters, daarna pas de
         # fijnmazigere. Zo wint een nette dagreeks van een toevallige combinatie.
-        for fase in ZOEKFASES:
-            for dagen_terug in VENSTERS_DAGEN:
-                pool = _pool(per_kenteken, kenteken,
-                             factuurdatum - timedelta(days=dagen_terug),
-                             factuurdatum + timedelta(days=MARGE_VOORUIT_DAGEN),
-                             geclaimd)
+        for fase in fases:
+            for van, tot in vensters:
+                pool = _pool(bron, van, tot, geclaimd)
                 if not pool:
                     continue
                 match = fase(pool, doel, rij['regel_km'])
@@ -400,12 +527,15 @@ def analyseer(datum_vanaf: date | None = None, datum_tot: date | None = None,
                     break
             if match:
                 break
+        if match and bedrijfsbreed:
+            match.vertrouwen = 'onzeker'
+            match.methode = f'{match.methode}, over alle wagens van de klant'
         if match:
             geclaimd.update(e.id for e in match.events)
             rij['reden'] = ''
         else:
             rij['reden'] = 'Geen set tolregels gevonden die exact op dit bedrag uitkomt'
-        rij.update(_match_dict(match))
+        rij.update(_match_dict(match, rij['bedrag']))
         resultaten.append(rij)
 
     samenvatting = {
@@ -445,6 +575,8 @@ def zoek_handmatig(kenteken: str, van: date, tot: date,
         ]
     match = Match(events, 'handmatige selectie', 'handmatig') if events else None
     resultaat = _match_dict(match)
+    # Bij handmatig zoeken is er geen factuurregel om tegen af te zetten.
+    resultaat['verschil_bedrag'] = 0.0
     resultaat['kenteken'] = norm
     return resultaat
 

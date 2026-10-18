@@ -325,6 +325,15 @@ export default function TollingSyncPage() {
                         <td className="px-3 py-2 text-gray-700">{row.bedrijf_naam}</td>
                         <td className="px-3 py-2 text-gray-700 max-w-md truncate" title={row.omschrijving}>
                           {row.omschrijving}
+                          {(row.regel_periode || row.regel_landen?.length > 0) && (
+                            <div className="text-xs text-gray-500">
+                              {row.regel_periode
+                                ? `${datum(row.regel_periode[0])} t/m ${datum(row.regel_periode[1])}`
+                                : ''}
+                              {row.regel_periode && row.regel_landen?.length ? ' · ' : ''}
+                              {row.regel_landen?.join(' + ')}
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-2 font-mono text-gray-900">
                           {row.kenteken || (
