@@ -1047,10 +1047,10 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
             const kenteken = regel.vervangend_kenteken || regel.vehicle_kenteken
             return (
               <div
-                className="fixed inset-0 z-50 flex items-end bg-black/40 lg:hidden"
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 lg:hidden"
                 onClick={() => setActieEntryMobiel(null)}
               >
-                <div className="w-full rounded-t-2xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
+                <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
                   <div className="mb-3 text-center">
                     <div className="font-medium text-gray-900">{regel.chauffeur_naam}</div>
                     <div className="font-mono text-xs text-gray-500">{kenteken}</div>
@@ -1090,10 +1090,10 @@ function AdminPlanningView({ isReadOnly = false }: { isReadOnly?: boolean }) {
             if (!regel) return null
             return (
               <div
-                className="fixed inset-0 z-50 flex items-end bg-black/40 lg:hidden"
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 lg:hidden"
                 onClick={() => setWisselEntryMobiel(null)}
               >
-                <div className="w-full rounded-t-2xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
+                <div className="max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
                   <VoertuigWisselaar
                     wagens={wagens}
                     eigenKenteken={regel.vehicle_kenteken}
