@@ -181,6 +181,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Overschrijft de HEALTHCHECK uit de backend-Dockerfile; die test een webserver
+    # op poort 8000 die in deze container niet draait.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A tms inspect ping || exit 1"]
+      interval: 60s
+      timeout: 20s
+      start_period: 90s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -230,6 +238,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Beat kent geen inspect-protocol; we controleren of PID 1 nog de scheduler is.
+    # Zonder deze regel erft de container de webserver-check uit de Dockerfile.
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q beat /proc/1/cmdline || exit 1"]
+      interval: 60s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -256,8 +272,9 @@ services:
       - tms_internal
     expose:
       - "80"
+    # 127.0.0.1 en niet localhost: nginx luistert hier alleen op IPv4.
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
