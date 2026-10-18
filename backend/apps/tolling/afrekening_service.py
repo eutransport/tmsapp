@@ -56,7 +56,8 @@ def _koppelwaarschuwingen(paren) -> list[str]:
         elif koppeling['koppeling'] == TolAfrekeningRegel.Koppeling.MEERDERE:
             meldingen.append(
                 f'Ritnummer {ritnummer} staat op meerdere wagens '
-                f'({koppeling["kenteken"]}); de tolheffing van alle wagens telt mee.')
+                f'({koppeling["kenteken"]}); hun tolheffing telt mee voor zover die '
+                f'voor deze opdrachtgever gereden is.')
     return meldingen
 
 

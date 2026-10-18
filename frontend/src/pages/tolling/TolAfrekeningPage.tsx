@@ -992,7 +992,8 @@ export default function TolAfrekeningPage() {
             <Kaart
               titel="Zelf betaalde tolheffing"
               waarde={currency(t.betaald)}
-              bijschrift={`${t.passages} passages • ${kmFmt(t.km_tol)}`}
+              bijschrift={`${t.passages} passages • ${kmFmt(t.km_tol)}`
+                + (data.bedrijf_naam ? ` • alleen ${data.bedrijf_naam}` : '')}
             />
             <Kaart
               titel="Verschil"
@@ -1010,6 +1011,25 @@ export default function TolAfrekeningPage() {
               klasse={t.buiten_bedrag > 0 ? 'text-purple-700' : 'text-gray-900'}
             />
           </div>
+
+          {(t.vreemd_aantal > 0 || t.niet_toegewezen_aantal > 0) && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+              <span className="font-medium">Buiten deze vergelijking gelaten:</span>
+              {t.vreemd_aantal > 0 && (
+                <span className="ml-2">
+                  {t.vreemd_aantal} passages voor een andere opdrachtgever
+                  {' '}({currency(t.vreemd_bedrag)})
+                </span>
+              )}
+              {t.vreemd_aantal > 0 && t.niet_toegewezen_aantal > 0 && <span> •</span>}
+              {t.niet_toegewezen_aantal > 0 && (
+                <span className="ml-2">
+                  {t.niet_toegewezen_aantal} passages zonder opdrachtgever
+                  {' '}({currency(t.niet_toegewezen_bedrag)})
+                </span>
+              )}
+            </div>
+          )}
 
           {data.waarschuwingen.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">

@@ -73,6 +73,10 @@ export interface AfrekeningRegel {
 
   prive_bedrag: number
   prive_aantal: number
+  vreemd_bedrag: number
+  vreemd_aantal: number
+  niet_toegewezen_bedrag: number
+  niet_toegewezen_aantal: number
   gefactureerd_bedrag: number
   open_binnen_aantal: number
 }
@@ -95,6 +99,10 @@ export interface AfrekeningTotalen {
   tekort_binnen: number
   prive_bedrag: number
   prive_aantal: number
+  vreemd_bedrag: number
+  vreemd_aantal: number
+  niet_toegewezen_bedrag: number
+  niet_toegewezen_aantal: number
   gefactureerd_bedrag: number
   netto_bedrag: number
   dagforfait: number

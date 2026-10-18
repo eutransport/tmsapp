@@ -5,7 +5,9 @@ De opdrachtgever vergoedt tolheffing per voertuig per afrekeningsperiode (de
 Dit bestand koppelt beide aan elkaar:
 
 1. Het ritnummer van de afrekening ("791") wordt via de vloot een kenteken.
-2. Alle tolpassages van dat kenteken in de periode worden opgeteld.
+2. De tolpassages van dat kenteken in de periode worden opgeteld, maar alleen
+   die voor de opdrachtgever van de afrekening. Een wagen die halverwege op een
+   andere rit gezet is, sleept zijn vorige klant anders mee de vergelijking in.
 3. Het verschil tussen betaald en ontvangen wordt zichtbaar gemaakt.
 
 Daarnaast splitsen we de passages naar het moment waarop ze gereden zijn.
@@ -196,15 +198,24 @@ def analyseer_groep(regels, werktijd_van: time, werktijd_tot: time) -> dict:
     afrekening is dat er één, over een heel jaar zijn het er meer. De tol wordt
     opgehaald over de bonperioden van deze wagen, niet over die van de hele
     selectie.
+
+    Een wagen kan in dezelfde periode voor meer dan één opdrachtgever rijden,
+    bijvoorbeeld omdat hij halverwege op een andere rit is gezet. Alleen de
+    passages van de opdrachtgever van de afrekening worden vergeleken; de rest
+    wordt apart geteld zodat het zichtbaar blijft.
     """
     perioden = perioden_van_groep(regels)
     vakken = {BINNEN: _leeg_vak(), WEEKEND: _leeg_vak(), AVOND: _leeg_vak()}
     prive = _leeg_vak()
+    vreemd = _leeg_vak()
+    niet_toegewezen = _leeg_vak()
     gefactureerd_bedrag = Decimal('0')
     open_binnen = 0
+    bedrijven = {r.bon_bedrijf_id for r in regels if getattr(r, 'bon_bedrijf_id', None)}
 
-    velden = ('start_at', 'amount', 'distance_km', 'is_private', 'invoiced_at')
-    for start_at, bedrag, km, is_prive, gefactureerd_op in (
+    velden = ('start_at', 'amount', 'distance_km', 'is_private', 'invoiced_at',
+              'bedrijf_id')
+    for start_at, bedrag, km, is_prive, gefactureerd_op, bedrijf_id in (
         events_van_groep(regels, perioden).values_list(*velden)
     ):
         bedrag = Decimal(bedrag or 0)
@@ -214,6 +225,17 @@ def analyseer_groep(regels, werktijd_van: time, werktijd_tot: time) -> dict:
             prive['bedrag'] += bedrag
             prive['km'] += km
             continue
+        if bedrijven:
+            if bedrijf_id is None:
+                niet_toegewezen['aantal'] += 1
+                niet_toegewezen['bedrag'] += bedrag
+                niet_toegewezen['km'] += km
+                continue
+            if bedrijf_id not in bedrijven:
+                vreemd['aantal'] += 1
+                vreemd['bedrag'] += bedrag
+                vreemd['km'] += km
+                continue
         vak = tijdvak(start_at, werktijd_van, werktijd_tot)
         vakken[vak]['aantal'] += 1
         vakken[vak]['bedrag'] += bedrag
@@ -276,6 +298,12 @@ def analyseer_groep(regels, werktijd_van: time, werktijd_tot: time) -> dict:
 
         'prive_bedrag': float(_rond(prive['bedrag'])),
         'prive_aantal': prive['aantal'],
+        # Tol van deze wagen die in dezelfde periode voor een andere
+        # opdrachtgever is gereden, of die aan niemand gekoppeld is.
+        'vreemd_bedrag': float(_rond(vreemd['bedrag'])),
+        'vreemd_aantal': vreemd['aantal'],
+        'niet_toegewezen_bedrag': float(_rond(niet_toegewezen['bedrag'])),
+        'niet_toegewezen_aantal': niet_toegewezen['aantal'],
         'gefactureerd_bedrag': float(_rond(gefactureerd_bedrag)),
         'open_binnen_aantal': open_binnen,
     }
@@ -285,12 +313,14 @@ def _tel_op(regels: list[dict]) -> dict:
     velden = (
         'ontvangen', 'betaald', 'verschil', 'binnen_bedrag', 'weekend_bedrag',
         'avond_bedrag', 'buiten_bedrag', 'tekort_binnen', 'prive_bedrag',
+        'vreemd_bedrag', 'niet_toegewezen_bedrag',
         'gefactureerd_bedrag', 'netto_bedrag', 'dagforfait', 'brandstoftoeslag',
         'kilometers_afrekening', 'km_tol',
     )
     aantallen = (
         'passages', 'binnen_aantal', 'weekend_aantal', 'avond_aantal',
-        'buiten_aantal', 'prive_aantal', 'inzetdagen', 'ritten',
+        'buiten_aantal', 'prive_aantal', 'vreemd_aantal',
+        'niet_toegewezen_aantal', 'inzetdagen', 'ritten',
         'open_binnen_aantal',
     )
     totalen = {veld: round(sum(r[veld] for r in regels), 2) for veld in velden}
@@ -311,6 +341,7 @@ def groepeer(afrekeningen: list) -> dict[str, list]:
     for afrekening in sorted(afrekeningen, key=lambda a: a.periode_van):
         for regel in afrekening.regels.all():
             regel.bonperiode = (afrekening.periode_van, afrekening.periode_tot)
+            regel.bon_bedrijf_id = afrekening.bedrijf_id
             sleutel = regel.ritnummer or regel.voertuig_label
             groepen.setdefault(sleutel, []).append(regel)
     return groepen
@@ -362,6 +393,16 @@ def analyseer_selectie(afrekeningen: list) -> dict:
             verouderd += 1
 
     meldingen: list[str] = []
+    totalen = _tel_op(regels)
+    if totalen['vreemd_aantal']:
+        meldingen.append(
+            f'{totalen["vreemd_aantal"]} tolpassages (EUR {totalen["vreemd_bedrag"]:.2f}) '
+            f'zijn voor een andere opdrachtgever gereden en tellen niet mee.')
+    if totalen['niet_toegewezen_aantal']:
+        meldingen.append(
+            f'{totalen["niet_toegewezen_aantal"]} tolpassages '
+            f'(EUR {totalen["niet_toegewezen_bedrag"]:.2f}) hebben geen opdrachtgever en '
+            f'tellen niet mee. Koppel ze aan een rit om ze te kunnen vergelijken.')
     meer_dan_een = len(op_datum) > 1
     for afrekening in op_datum:
         for melding in (afrekening.waarschuwingen or []):
@@ -417,7 +458,7 @@ def analyseer_selectie(afrekeningen: list) -> dict:
         'waarschuwingen': meldingen,
         'regels': regels,
         'verouderde_koppelingen': verouderd,
-        'totalen': _tel_op(regels),
+        'totalen': totalen,
     }
 
 
