@@ -56,6 +56,7 @@ def _lege_rij() -> dict:
 
 def _events(van: date, tot: date, bedrijf_id: str | None):
     qs = TollingEvent.objects.filter(
+        afsluiting__isnull=True,
         is_private=False, start_at__date__gte=van, start_at__date__lte=tot,
     )
     if bedrijf_id:
@@ -92,7 +93,8 @@ def _afrekeningregels(van: date, tot: date, bedrijf_id: str | None):
     qs = (
         TolAfrekeningRegel.objects
         .select_related('afrekening', 'vehicle')
-        .filter(afrekening__periode_van__gte=van, afrekening__periode_van__lte=tot)
+        .filter(afrekening__afsluiting__isnull=True,
+                afrekening__periode_van__gte=van, afrekening__periode_van__lte=tot)
     )
     if bedrijf_id:
         qs = qs.filter(afrekening__bedrijf_id=bedrijf_id)
@@ -103,7 +105,8 @@ def _bonnen_zonder_bedrijf(van: date, tot: date) -> int:
     """Bonnen die nergens in meetellen omdat ze geen opdrachtgever hebben."""
     return (
         TolAfrekeningRegel.objects
-        .filter(afrekening__periode_van__gte=van, afrekening__periode_van__lte=tot,
+        .filter(afrekening__afsluiting__isnull=True,
+                afrekening__periode_van__gte=van, afrekening__periode_van__lte=tot,
                 afrekening__bedrijf__isnull=True)
         .values('afrekening_id').distinct().count()
     )
@@ -258,7 +261,7 @@ def _te_vroeg(van: date, bedrijf_id: str | None) -> date | None:
     Voor die datum staan er wel tolregels op facturen maar geen passages
     tegenover; dan lijkt er te veel doorbelast.
     """
-    qs = TollingEvent.objects.filter(is_private=False)
+    qs = TollingEvent.objects.filter(afsluiting__isnull=True, is_private=False)
     if bedrijf_id:
         qs = qs.filter(bedrijf_id=bedrijf_id)
     eerste = qs.order_by('start_at').values_list('start_at', flat=True).first()

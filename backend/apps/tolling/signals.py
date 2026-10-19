@@ -1,11 +1,16 @@
 """Signals voor tolheffing.
 
-Doel: wanneer een InvoiceLine (of de hele factuur) wordt verwijderd, de
-gekoppelde TollingEvents weer als 'niet gefactureerd' markeren
+Twee dingen gebeuren hier automatisch rond de facturatie.
+
+Wordt een InvoiceLine (of de hele factuur) verwijderd, dan worden de
+gekoppelde TollingEvents weer als 'niet gefactureerd' gemarkeerd
 (invoiced_at = NULL) zodat ze opnieuw in de open-weken/facturatie flow
 verschijnen. De FK ``TollingEvent.invoice_line`` staat op ``SET_NULL`` en
 wordt door Django zelf geleegd; wij zorgen alleen dat ``invoiced_at`` mee
 geleegd wordt.
+
+Wordt er juist gefactureerd, dan schuiven passages over een al afgesloten
+periode alsnog het archief in. Zie `afsluiting_service.naleveren`.
 
 Belangrijk (safety):
 - We resetten ALLEEN events die aan exact deze factuurregel gekoppeld zijn
@@ -16,7 +21,7 @@ Belangrijk (safety):
 """
 import logging
 
-from django.db.models.signals import pre_delete
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 
 logger = logging.getLogger(__name__)
@@ -36,3 +41,19 @@ def reopen_tolling_events_on_invoice_line_delete(sender, instance, **kwargs):
             "Tolling: %d event(s) heropend na verwijderen InvoiceLine %s",
             updated, instance.pk,
         )
+
+
+@receiver(post_save, sender='invoicing.Invoice')
+def archiveer_nagekomen_tolregels(sender, instance, **kwargs):
+    """Een passage die achteraf wordt gefactureerd hoort alsnog in het archief.
+
+    Radius factureert met vertraging. Wat ten tijde van het afsluiten nog
+    openstond en nu alsnog op een factuur komt, zou anders het schoongeveegde
+    overzicht opnieuw vervuilen.
+    """
+    from . import afsluiting_service
+
+    try:
+        afsluiting_service.naleveren()
+    except Exception:  # noqa: BLE001 - facturatie mag hier nooit op stuklopen
+        logger.exception('Tolling: nagekomen passages archiveren mislukt')

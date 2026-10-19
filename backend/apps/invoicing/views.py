@@ -392,7 +392,13 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsAdminOrManager, HasModulePermission]
     module_permission = 'view_invoices'
     filterset_fields = ['type', 'status', 'bedrijf', 'administratie', 'week_number', 'week_year', 'chauffeur']
-    search_fields = ['factuurnummer', 'bedrijf__naam']
+    search_fields = [
+        'factuurnummer', 'bedrijf__naam',
+        # Zowel de chauffeur op de factuur zelf als die achter de urenregels,
+        # want niet elke factuur heeft het veld ingevuld.
+        'chauffeur__voornaam', 'chauffeur__achternaam',
+        'lines__time_entry__user__voornaam', 'lines__time_entry__user__achternaam',
+    ]
     ordering_fields = ['factuurdatum', 'factuurnummer', 'totaal', 'bedrijf__naam', 'administratie__naam', 'week_number']
 
     def get_queryset(self):

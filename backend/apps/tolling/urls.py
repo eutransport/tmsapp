@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .afrekening_views import TolAfrekeningViewSet
+from .afsluiting_views import TolAfsluitingViewSet
 from .backup_views import TolBackupViewSet
 from .buiten_uren_views import TollingBuitenUrenViewSet
 from .buitenland_views import TolBuitenlandViewSet
@@ -43,6 +44,8 @@ router.register(r'koppeling', TolKoppelingViewSet, basename='tolling-koppeling')
 router.register(r'buitenland', TolBuitenlandViewSet, basename='tolling-buitenland')
 router.register(r'doorbelasting', TolDoorbelastingViewSet,
                 basename='tolling-doorbelasting')
+router.register(r'afsluitingen', TolAfsluitingViewSet,
+                basename='tolling-afsluitingen')
 
 urlpatterns = [
     path('', include(router.urls)),

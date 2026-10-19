@@ -898,7 +898,7 @@
     "noTemplate": "No template",
     "generateFromHours": "Generate from hours",
     "importInvoice": "Import invoice",
-    "searchInvoices": "Search invoices...",
+    "searchInvoices": "Search by number, customer or driver...",
     "filterByStatus": "Filter by status",
     "filterByCompany": "Filter by company",
     "allStatuses": "All statuses",

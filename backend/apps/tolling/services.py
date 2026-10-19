@@ -506,6 +506,7 @@ def match_private_registration_to_events(reg: PrivateTollRegistration) -> int:
         return 0
 
     qs = TollingEvent.objects.filter(
+        afsluiting__isnull=True,
         license_plate_normalized=reg.license_plate_normalized,
         start_at__lt=end_dt,
         end_at__gt=start_dt,

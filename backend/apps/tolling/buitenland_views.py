@@ -86,7 +86,8 @@ class TolBuitenlandViewSet(viewsets.ViewSet):
     def _selectie(self, params):
         """De tolregels van de gevraagde periode, land en bedrijf."""
         start, einde, label = _periode(params)
-        queryset = TollingEvent.objects.filter(start_at__gte=start, start_at__lt=einde)
+        queryset = TollingEvent.objects.filter(
+            afsluiting__isnull=True, start_at__gte=start, start_at__lt=einde)
 
         bedrijf_id = (params.get('bedrijf_id') or '').strip()
         if bedrijf_id:

@@ -117,7 +117,8 @@ def werk_openstaande_dagen_bij(van, tot, regels):
         bijgewerkt += 1
 
     # Openstaande dagen die nu wel tol hebben, mogen dicht.
-    openstaand = OpenstaandeTolDag.objects.filter(status=OpenstaandeTolDag.Status.OPEN)
+    openstaand = OpenstaandeTolDag.objects.filter(
+        afsluiting__isnull=True, status=OpenstaandeTolDag.Status.OPEN)
     for rij in openstaand.iterator():
         cijfers = gefactureerd.get((rij.kenteken, rij.datum))
         if not cijfers:
@@ -130,7 +131,8 @@ def werk_openstaande_dagen_bij(van, tot, regels):
                                 'laatst_gecontroleerd'])
         aangevuld += 1
 
-    nog_open = OpenstaandeTolDag.objects.filter(status=OpenstaandeTolDag.Status.OPEN)
+    nog_open = OpenstaandeTolDag.objects.filter(
+        afsluiting__isnull=True, status=OpenstaandeTolDag.Status.OPEN)
     return {
         'gereden_dagen': len(gereden),
         'gefactureerde_dagen': len(gefactureerd),

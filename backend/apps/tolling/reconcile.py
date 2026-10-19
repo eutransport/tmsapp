@@ -114,6 +114,7 @@ def bekende_kentekens() -> list[str]:
     """
     platen = (
         TollingEvent.objects
+        .filter(afsluiting__isnull=True)
         .values_list('license_plate_normalized', flat=True)
         .distinct()
     )
@@ -369,7 +370,8 @@ def _vrije_events() -> tuple[dict[str, list[TollingEvent]], dict[str, list[Tolli
     per_bedrijf: dict[str, list[TollingEvent]] = defaultdict(list)
     qs = (
         TollingEvent.objects
-        .filter(invoiced_at__isnull=True, invoice_line__isnull=True, is_private=False)
+        .filter(afsluiting__isnull=True,
+                invoiced_at__isnull=True, invoice_line__isnull=True, is_private=False)
         .order_by('start_at')
     )
     for ev in qs:
@@ -545,8 +547,10 @@ def analyseer(datum_vanaf: date | None = None, datum_tot: date | None = None,
         'onzeker': sum(1 for r in resultaten if r['vertrouwen'] == 'onzeker'),
         'geen': sum(1 for r in resultaten if r['vertrouwen'] == 'geen'),
         'events_open': TollingEvent.objects.filter(
+            afsluiting__isnull=True,
             invoiced_at__isnull=True, is_private=False).count(),
         'events_gefactureerd': TollingEvent.objects.filter(
+            afsluiting__isnull=True,
             invoiced_at__isnull=False).count(),
     }
     return {'samenvatting': samenvatting, 'regels': resultaten}
@@ -562,7 +566,8 @@ def zoek_handmatig(kenteken: str, van: date, tot: date,
     eind = timezone.make_aware(datetime.combine(tot + timedelta(days=1), time.min), tz)
     events = list(
         TollingEvent.objects
-        .filter(license_plate_normalized=norm, is_private=False,
+        .filter(afsluiting__isnull=True,
+                license_plate_normalized=norm, is_private=False,
                 invoiced_at__isnull=True, invoice_line__isnull=True,
                 start_at__gte=start, start_at__lt=eind)
         .order_by('start_at')
@@ -591,7 +596,7 @@ def koppel(line: InvoiceLine, event_ids: list[str], user=None) -> int:
     events = list(
         TollingEvent.objects
         .select_for_update()
-        .filter(id__in=event_ids, is_private=False,
+        .filter(id__in=event_ids, is_private=False, afsluiting__isnull=True,
                 invoiced_at__isnull=True, invoice_line__isnull=True)
     )
     if not events:

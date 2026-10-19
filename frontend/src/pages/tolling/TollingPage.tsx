@@ -16,6 +16,8 @@ import {
   ArrowPathIcon,
   ArrowUpTrayIcon,
   ArrowUturnLeftIcon,
+  ArchiveBoxIcon,
+  CheckCircleIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -50,6 +52,8 @@ import RitnummerCorrectieDialog from '@/components/tolling/RitnummerCorrectieDia
 import TolImportVoorbeeldModal from '@/components/tolling/TolImportVoorbeeldModal'
 import TolKoppelingModal from '@/components/tolling/TolKoppelingModal'
 import TolBuitenlandModal from '@/components/tolling/TolBuitenlandModal'
+import TolAfsluitingModal from '@/components/tolling/TolAfsluitingModal'
+import TolMarkeerModal from '@/components/tolling/TolMarkeerModal'
 import RadiusSyncPaneel from '@/components/tolling/RadiusSyncPaneel'
 import TolBackupPaneel from '@/components/tolling/TolBackupPaneel'
 import TariefBronnenPaneel from '@/components/tolling/TariefBronnenPaneel'
@@ -162,6 +166,8 @@ export default function TollingPage() {
   const [voorbeeldBezig, setVoorbeeldBezig] = useState(false)
   const [teImporteren, setTeImporteren] = useState<File | null>(null)
   const [koppelingOpen, setKoppelingOpen] = useState(false)
+  const [afsluitingOpen, setAfsluitingOpen] = useState(false)
+  const [markeerOpen, setMarkeerOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const askDeletePlate = (row: TollingVehicleRow) => {
@@ -514,6 +520,24 @@ export default function TollingPage() {
             <ArrowPathIcon className="h-4 w-4 mr-1.5" />
             Koppeling controleren
           </button>
+          <button
+            type="button"
+            className="inline-flex items-center px-3 py-2 rounded-md text-sm font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            onClick={() => setMarkeerOpen(true)}
+            title="Zet tolregels handmatig op gefactureerd voor een periode, wagen en land"
+          >
+            <CheckCircleIcon className="h-4 w-4 mr-1.5" />
+            Factuurstatus omzetten
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center px-3 py-2 rounded-md text-sm font-medium border border-amber-300 text-amber-800 bg-white hover:bg-amber-50"
+            onClick={() => setAfsluitingOpen(true)}
+            title="Zet de tolheffing tot een gekozen datum in het archief en begin daarna weer bij nul"
+          >
+            <ArchiveBoxIcon className="h-4 w-4 mr-1.5" />
+            Periode afsluiten
+          </button>
           {rows.length > 0 && (
             <button
               type="button"
@@ -542,6 +566,18 @@ export default function TollingPage() {
       <TolBuitenlandModal
         isOpen={buitenlandOpen}
         onClose={() => setBuitenlandOpen(false)}
+      />
+
+      <TolAfsluitingModal
+        isOpen={afsluitingOpen}
+        onClose={() => setAfsluitingOpen(false)}
+        onKlaar={() => reload()}
+      />
+
+      <TolMarkeerModal
+        isOpen={markeerOpen}
+        onClose={() => setMarkeerOpen(false)}
+        onKlaar={() => reload()}
       />
 
       <TariefBronnenPaneel />
@@ -1516,6 +1552,17 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
           const weekdayAmount = sumAmount(weekdayEvents)
           const weekendKm = sumKm(weekendEvents)
           const weekendAmount = sumAmount(weekendEvents)
+          // Tol per land, zodat je ziet welk deel Nederlands en welk deel Duits is.
+          const perLand = new Map<string, { events: number; km: number; bedrag: number }>()
+          billableEvents.forEach((ev) => {
+            const code = (ev.land || '').toUpperCase() || 'ONBEKEND'
+            const vak = perLand.get(code) || { events: 0, km: 0, bedrag: 0 }
+            vak.events += 1
+            vak.km += Number(ev.distance_km || 0)
+            vak.bedrag += Number(ev.amount || 0)
+            perLand.set(code, vak)
+          })
+          const landen = [...perLand.entries()].sort((a, b) => b[1].bedrag - a[1].bedrag)
           return (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
@@ -1530,14 +1577,14 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                 />
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="rounded-md border bg-blue-50/60 p-3">
+                <div className="rounded-md border border-blue-300 bg-blue-50/60 p-3">
                   <div className="text-xs uppercase text-blue-700 font-semibold mb-1">Doordeweeks (ma-vr)</div>
                   <div className="tabular-nums text-gray-800">
                     {weekdayEvents.length} events &middot; {kmFmt(weekdayKm)} km
                   </div>
                   <div className="tabular-nums font-semibold text-blue-800">{currency(weekdayAmount)}</div>
                 </div>
-                <div className="rounded-md border bg-amber-50/60 p-3">
+                <div className="rounded-md border border-amber-300 bg-amber-50/60 p-3">
                   <div className="text-xs uppercase text-amber-700 font-semibold mb-1">Weekend (za-zo)</div>
                   <div className="tabular-nums text-gray-800">
                     {weekendEvents.length} events &middot; {kmFmt(weekendKm)} km
@@ -1545,15 +1592,33 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
                   <div className="tabular-nums font-semibold text-amber-800">{currency(weekendAmount)}</div>
                 </div>
               </div>
+              {landen.length > 0 && (
+                <div className="rounded-md border border-gray-300 bg-white p-3 text-sm">
+                  <div className="text-xs uppercase text-gray-600 font-semibold mb-2">Tol per land</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {landen.map(([code, vak]) => (
+                      <div key={code} className="rounded-md border border-gray-300 bg-gray-50 px-3 py-2">
+                        <div className="text-[10px] uppercase tracking-wide text-gray-500">
+                          {code === 'ONBEKEND' ? 'Land onbekend' : `Tol ${code}`}
+                        </div>
+                        <div className="tabular-nums font-semibold text-gray-900">{currency(vak.bedrag)}</div>
+                        <div className="tabular-nums text-xs text-gray-500">
+                          {vak.events} events &middot; {kmFmt(vak.km)} km
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {privateEvents.length > 0 ? (
-                <div className="rounded-md border bg-purple-50/60 p-3 text-sm">
+                <div className="rounded-md border border-purple-300 bg-purple-50/60 p-3 text-sm">
                   <div className="text-xs uppercase text-purple-700 font-semibold mb-1">Privé (niet gefactureerd)</div>
                   <div className="tabular-nums text-gray-800">
                     {privateEvents.length} events &middot; {kmFmt(privateKm)} km &middot; <span className="font-semibold text-purple-800">{currency(privateAmount)}</span>
                   </div>
                 </div>
               ) : (
-                <div className="rounded-md border border-dashed bg-purple-50/30 p-3 text-sm">
+                <div className="rounded-md border border-dashed border-purple-300 bg-purple-50/30 p-3 text-sm">
                   <div className="text-xs uppercase text-purple-700 font-semibold mb-1">Privé (niet gefactureerd)</div>
                   <div className="tabular-nums text-gray-500">0 events &middot; 0 km &middot; € 0,00</div>
                 </div>
@@ -2123,7 +2188,7 @@ function VehicleDetail({ plate, plateDisplay, bedrijfId, ritnummer }: VehicleDet
 
 function MiniStat({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="rounded-md border bg-white px-3 py-2">
+    <div className="rounded-md border border-gray-300 bg-white px-3 py-2">
       <div className="text-[10px] uppercase tracking-wide text-gray-500">{label}</div>
       <div className={`font-semibold ${highlight ? 'text-primary-700' : 'text-gray-900'}`}>{value}</div>
     </div>

@@ -310,6 +310,22 @@ export interface TollingImportBatch {
   }
 }
 
+/** Uitkomst van het handmatig omzetten van de factuurstatus. */
+export interface MarkeerLand {
+  land: string
+  aantal: number
+  bedrag: number
+}
+
+export interface MarkeerResultaat {
+  aantal: number
+  bedrag: number
+  per_land: MarkeerLand[]
+  per_wagen: { kenteken: string; aantal: number; bedrag: number; landen: MarkeerLand[] }[]
+  /** 0 bij een preview. */
+  gewijzigd: number
+}
+
 /** Uitkomst van een ritnummercorrectie, zowel bij een preview als bij toepassen. */
 export interface RitnummerWijzigingResultaat {
   plate_normalized: string
@@ -717,9 +733,26 @@ export const tollingApi = {
     return data
   },
 
+  /**
+   * Zet de factuurstatus met de hand om voor een periode, wagen en land.
+   * Met `preview` verandert er niets en krijg je alleen de aantallen terug.
+   */
+  markeerGefactureerd: async (payload: {
+    van: string
+    tot: string
+    /** Leeg = alle wagens. */
+    kenteken?: string
+    /** '' = alle landen, 'onbekend' = regels zonder landcode. */
+    land?: string
+    gefactureerd: boolean
+    preview?: boolean
+  }): Promise<MarkeerResultaat> => {
+    const { data } = await api.post('/tolling/events/markeer-gefactureerd/', payload)
+    return data
+  },
+
   /** De ritnummercorrecties van de afgelopen maand voor dit kenteken. */
-  getRitnummerCorrecties: async (plate: string): Promise<RitnummerCorrectie[]> => {
-    const { data } = await api.get(
+  getRitnummerCorrecties: async (plate: string): Promise<RitnummerCorrectie[]> => {    const { data } = await api.get(
       `/tolling/vehicles/${encodeURIComponent(plate)}/ritnummer-correcties/`,
     )
     return data

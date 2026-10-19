@@ -329,6 +329,7 @@ def selectie_overzicht(plate: str, jaar: int, week_start: int, period_weeks: int
 
     events = list(
         TollingEvent.objects.filter(
+            afsluiting__isnull=True,
             license_plate_normalized=norm,
             invoiced_at__isnull=True,
             is_private=False,
@@ -436,7 +437,7 @@ def voeg_marge_events_toe(invoice, event_ids, user=None,
 
     events = list(
         TollingEvent.objects.select_for_update().filter(
-            id__in=ids, is_private=False,
+            id__in=ids, is_private=False, afsluiting__isnull=True,
             invoiced_at__isnull=True, invoice_line__isnull=True,
         )
     )

@@ -17,10 +17,10 @@ import logging
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 
-from django.db.models import Q
 from django.utils import timezone
 
 from . import factuur_detail
+from .archief import LOPEND
 from .models import TollingEvent, normalize_plate
 from .services import build_vehicle_lookup
 
@@ -62,28 +62,18 @@ def overzicht(
     start = timezone.make_aware(datetime.combine(datum_van, time.min), tz)
     eind = timezone.make_aware(datetime.combine(datum_tot + timedelta(days=1), time.min), tz)
 
-    # Oudere tolregels hebben geen bedrijf-momentopname. Voor een eerlijk beeld
-    # per bedrijf leiden we dat dan af uit de vloot van nu.
+    # Alleen voor de nette schrijfwijze van het kenteken; het bedrijf komt uit
+    # de tolregel zelf, net als op de overige tolpagina's.
     vloot = build_vehicle_lookup()
 
     events = (
         TollingEvent.objects
-        .filter(start_at__gte=start, start_at__lt=eind, is_private=False)
+        .filter(LOPEND, start_at__gte=start, start_at__lt=eind, is_private=False)
         .select_related('bedrijf', 'vehicle')
         .order_by('license_plate_normalized', 'start_at')
     )
     if bedrijf_id:
-        # Filter op het vastgelegde bedrijf en op regels zonder bedrijf waarvan
-        # de wagen nu bij dit bedrijf hoort; anders vallen die regels weg en
-        # telt het gefilterde beeld lager uit dan het totaaloverzicht.
-        platen = {
-            plaat for plaat, wagen in vloot.items()
-            if str(getattr(wagen, 'bedrijf_id', '') or '') == str(bedrijf_id)
-        }
-        keuze = Q(bedrijf_id=bedrijf_id)
-        if platen:
-            keuze |= Q(bedrijf__isnull=True, license_plate_normalized__in=platen)
-        events = events.filter(keuze)
+        events = events.filter(bedrijf_id=bedrijf_id)
     if kenteken:
         genormaliseerd = normalize_plate(kenteken)
         if genormaliseerd:
@@ -110,8 +100,6 @@ def overzicht(
         'bedrijf_id': None,
         'bedrijf_naam': 'Zonder bedrijf',
         'totalen': _lege_totalen(),
-        'afgeleid_events': 0,
-        'afgeleid_bedrag': 0.0,
         '_wagens': defaultdict(lambda: {
             'plate_normalized': '',
             'plate_display': '',
@@ -131,25 +119,15 @@ def overzicht(
         bedrag = _getal(ev.amount)
         gefactureerd = bool(ev.invoiced_at)
 
-        # Bedrijf van de tolregel zelf; ontbreekt dat, dan dat van de wagen in
-        # de huidige vloot. Zo belandt niets onterecht op 'Zonder bedrijf'.
         uit_vloot = vloot.get(ev.license_plate_normalized)
         bedrijf_id = ev.bedrijf_id
         bedrijf_naam = ev.bedrijf.naam if ev.bedrijf else ''
-        afgeleid = False
-        if not bedrijf_id and uit_vloot and uit_vloot.bedrijf_id:
-            bedrijf_id = uit_vloot.bedrijf_id
-            bedrijf_naam = uit_vloot.bedrijf.naam
-            afgeleid = True
 
         sleutel = str(bedrijf_id) if bedrijf_id else '__geen__'
         vak = per_bedrijf[sleutel]
         if vak['bedrijf_id'] is None and bedrijf_id:
             vak['bedrijf_id'] = str(bedrijf_id)
             vak['bedrijf_naam'] = bedrijf_naam or 'Zonder bedrijf'
-        if afgeleid:
-            vak['afgeleid_events'] += 1
-            vak['afgeleid_bedrag'] += bedrag
 
         wagen = vak['_wagens'][ev.license_plate_normalized]
         if not wagen['plate_normalized']:
@@ -205,8 +183,6 @@ def overzicht(
             'bedrijf_id': vak['bedrijf_id'],
             'bedrijf_naam': vak['bedrijf_naam'],
             'totalen': vak['totalen'],
-            'afgeleid_events': vak['afgeleid_events'],
-            'afgeleid_bedrag': vak['afgeleid_bedrag'],
             'wagens': wagens,
         })
     bedrijven.sort(key=lambda b: (-b['totalen']['buiten_bedrag'], b['bedrijf_naam']))

@@ -119,6 +119,7 @@ class TolAfrekeningViewSet(viewsets.ViewSet):
     def _basis(self):
         return (
             TolAfrekening.objects
+            .filter(afsluiting__isnull=True)
             .select_related('bedrijf', 'geuploaded_door')
             .prefetch_related('regels__vehicle')
         )
@@ -172,7 +173,8 @@ class TolAfrekeningViewSet(viewsets.ViewSet):
         if soort in (ALLES, 'afrekening'):
             return []
         geteld: dict[tuple[int, int], int] = {}
-        for van in TolAfrekening.objects.values_list('periode_van', flat=True):
+        for van in TolAfrekening.objects.filter(afsluiting__isnull=True).values_list(
+                'periode_van', flat=True):
             sleutel = periode_sleutel(van, soort)
             geteld[sleutel] = geteld.get(sleutel, 0) + 1
         return [

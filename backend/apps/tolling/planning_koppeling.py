@@ -169,6 +169,7 @@ def herkoppel_dag(kentekens, datum) -> dict:
     einde = begin + datetime.timedelta(days=1)
 
     events = list(TollingEvent.objects.filter(
+        afsluiting__isnull=True,
         license_plate_normalized__in=kentekens,
         start_at__gte=begin, start_at__lt=einde,
         invoiced_at__isnull=True))
@@ -199,7 +200,7 @@ def controleer_periode(vanaf, tot=None, toepassen=False) -> dict:
     from .models import TollingEvent
 
     begin, einde = _dagvenster(vanaf, tot)
-    alles = TollingEvent.objects.filter(start_at__gte=begin)
+    alles = TollingEvent.objects.filter(afsluiting__isnull=True, start_at__gte=begin)
     if einde is not None:
         alles = alles.filter(start_at__lt=einde)
 

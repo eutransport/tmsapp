@@ -143,7 +143,8 @@ def events_voor(kentekens, vehicle_ids, perioden):
         doel |= Q(license_plate_normalized__in=kentekens)
     if vehicle_ids:
         doel |= Q(vehicle_id__in=vehicle_ids)
-    return TollingEvent.objects.filter(doel & _periodefilter(perioden))
+    return TollingEvent.objects.filter(
+        doel & _periodefilter(perioden), afsluiting__isnull=True)
 
 
 def perioden_van_groep(regels) -> list[tuple]:

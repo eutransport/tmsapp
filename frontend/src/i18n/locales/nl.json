@@ -908,7 +908,7 @@
     "importInvoice": "Factuur importeren",
     "importHours": "Uren importeren",
     "importSpreadsheet": "Ritregistratie importeren",
-    "searchInvoices": "Zoek facturen...",
+    "searchInvoices": "Zoek op nummer, klant of chauffeur...",
     "filterByStatus": "Filter op status",
     "filterByCompany": "Filter op bedrijf",
     "allStatuses": "Alle statussen",

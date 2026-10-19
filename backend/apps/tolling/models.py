@@ -21,6 +21,22 @@ def normalize_plate(value: str) -> str:
     return re.sub(r'[^A-Z0-9]', '', value.upper())
 
 
+def afsluiting_veld(related_name: str) -> models.ForeignKey:
+    """Verwijzing naar de periode-afsluiting waarin dit record is opgeborgen.
+
+    Leeg betekent: hoort bij de lopende administratie. Zie `TolAfsluiting`.
+    """
+    return models.ForeignKey(
+        'tolling.TolAfsluiting',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_index=True,
+        related_name=related_name,
+        verbose_name='Afsluiting',
+    )
+
+
 class TollingImportBatch(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     uploaded_by = models.ForeignKey(
@@ -39,6 +55,7 @@ class TollingImportBatch(models.Model):
     rows_zero_amount = models.PositiveIntegerField(default=0)
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    afsluiting = afsluiting_veld('import_batches')
 
     class Meta:
         ordering = ['-created_at']
@@ -139,6 +156,12 @@ class TollingEvent(models.Model):
     )
     is_private = models.BooleanField(default=False, db_index=True, verbose_name='Privé rit')
 
+    afsluiting = afsluiting_veld('events')
+    # Bij het afsluiten meegenomen terwijl er geen facturatie tegenover stond.
+    # Zo blijft in het archief zichtbaar waar nooit iets van bekend is geworden.
+    archief_onafgehandeld = models.BooleanField(
+        default=False, verbose_name='Afgesloten zonder facturatie')
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -197,6 +220,7 @@ class OpenstaandeTolDag(models.Model):
                                     verbose_name='Gevonden tolbedrag')
     opmerking = models.CharField(max_length=200, blank=True)
     aangemaakt_op = models.DateTimeField(auto_now_add=True)
+    afsluiting = afsluiting_veld('tol_dagen')
 
     class Meta:
         verbose_name = 'Openstaande toldag'
@@ -244,6 +268,7 @@ class PrivateTollRegistration(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    afsluiting = afsluiting_veld('prive_registraties')
 
     class Meta:
         ordering = ['-datum', '-begin_tijd']
@@ -348,6 +373,7 @@ class TolAfrekening(models.Model):
         related_name='tol_afrekeningen', verbose_name='Geupload door')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    afsluiting = afsluiting_veld('afrekeningen')
 
     class Meta:
         ordering = ['-periode_van', '-created_at']
@@ -559,3 +585,49 @@ class TolStation(models.Model):
     @property
     def openstaand(self) -> bool:
         return self.bevestigd_op is None
+
+
+class TolAfsluiting(models.Model):
+    """Een periode die voor de tolheffing is dichtgezet.
+
+    Alles wat eraan hangt verdwijnt uit de gewone overzichten, zodat de
+    tellingen per wagen weer bij nul beginnen. Er wordt niets verwijderd: het
+    archief blijft opvraagbaar en corrigeerbaar, en een afsluiting kan in zijn
+    geheel worden teruggedraaid.
+
+    Openstaande passages gaan standaard niet mee. Radius factureert met
+    vertraging, dus wat vandaag nog open staat kan volgende week alsnog op een
+    factuur belanden; die schuift dan vanzelf alsnog in deze afsluiting. Voor
+    oude periodes waar nooit meer iets voor komt kan dat met
+    ``openstaand_meegenomen`` worden overruled.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tot_datum = models.DateField(
+        db_index=True, verbose_name='Afgesloten tot en met',
+        help_text='Alles met een rijdatum op of voor deze dag valt in deze afsluiting.')
+    omschrijving = models.CharField(max_length=200, blank=True)
+    openstaand_meegenomen = models.BooleanField(
+        default=False, verbose_name='Openstaande passages meegenomen')
+    # Momentopname van wat er is afgesloten, zodat het overzicht leesbaar
+    # blijft zonder de hele periode opnieuw te hoeven doorrekenen.
+    samenvatting = models.JSONField(default=dict, blank=True)
+    uitgevoerd_door = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='tol_afsluitingen', verbose_name='Afgesloten door')
+    uitgevoerd_op = models.DateTimeField(auto_now_add=True, db_index=True)
+    teruggedraaid_op = models.DateTimeField(null=True, blank=True)
+    teruggedraaid_door = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='teruggedraaide_tol_afsluitingen')
+
+    class Meta:
+        ordering = ['-tot_datum', '-uitgevoerd_op']
+        verbose_name = 'Tolafsluiting'
+        verbose_name_plural = 'Tolafsluitingen'
+
+    def __str__(self) -> str:
+        return f'Tol afgesloten t/m {self.tot_datum:%d-%m-%Y}'
+
+    @property
+    def actief(self) -> bool:
+        return self.teruggedraaid_op is None

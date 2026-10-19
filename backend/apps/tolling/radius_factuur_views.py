@@ -283,10 +283,11 @@ class RadiusFactuurViewSet(viewsets.ViewSet):
     def openstaand(self, request):
         """Gereden dagen waarvoor nog geen tol is gefactureerd."""
         rijen = (OpenstaandeTolDag.objects
-                 .filter(status=OpenstaandeTolDag.Status.OPEN)
+                 .filter(afsluiting__isnull=True, status=OpenstaandeTolDag.Status.OPEN)
                  .select_related('vehicle')[:500])
         return Response({
             'aantal': OpenstaandeTolDag.objects.filter(
+                afsluiting__isnull=True,
                 status=OpenstaandeTolDag.Status.OPEN).count(),
             'regels': [{
                 'id': str(rij.id),

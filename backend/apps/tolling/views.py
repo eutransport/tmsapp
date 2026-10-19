@@ -24,6 +24,7 @@ from apps.companies.models import Company
 from apps.fleet.models import Vehicle
 from apps.invoicing.models import Invoice, InvoiceLine
 
+from . import archief
 from .buitenland import filter_op_land
 from .dagritnummers import (als_label, ritnummers_per_dag,
                             ritvensters as ritvensters_uit_uren)
@@ -197,7 +198,7 @@ class TollingImportBatchViewSet(viewsets.ReadOnlyModelViewSet):
     module_permission_read = 'view_tolling'
     module_permission_write = 'manage_tolling'
     serializer_class = TollingImportBatchSerializer
-    queryset = TollingImportBatch.objects.all()
+    queryset = TollingImportBatch.objects.filter(archief.LOPEND)
 
     @action(detail=False, methods=['post'], url_path='upload')
     def upload(self, request):
@@ -223,7 +224,7 @@ class TollingEventViewSet(viewsets.ReadOnlyModelViewSet):
     module_permission_read = 'view_tolling'
     module_permission_write = 'manage_tolling'
     serializer_class = TollingEventSerializer
-    queryset = TollingEvent.objects.all()
+    queryset = TollingEvent.objects.filter(archief.LOPEND)
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -242,6 +243,104 @@ class TollingEventViewSet(viewsets.ReadOnlyModelViewSet):
         if end:
             qs = qs.filter(start_at__lt=end)
         return qs
+
+    @action(detail=False, methods=['post'], url_path='markeer-gefactureerd')
+    def markeer_gefactureerd(self, request):
+        """Zet de factuurstatus met de hand om voor een periode, wagen en land.
+
+        Nodig wanneer de tol langs een andere weg is afgerekend dan via een
+        eigen factuurregel, bijvoorbeeld omdat de opdrachtgever hem zelf heeft
+        vergoed. Er wordt geen factuurregel aangemaakt; alleen de markering
+        verschuift, zodat het bedrag uit het openstaande beeld verdwijnt.
+
+        Body:
+          van, tot        datums (jjjj-mm-dd), beide inclusief
+          kenteken        optioneel; leeg = alle wagens
+          land            '' = alle, 'onbekend' = regels zonder landcode,
+                          anders een landcode zoals NL of DE
+          gefactureerd    true = markeren, false = markering weghalen
+          preview         true = alleen tellen, niets wijzigen
+        """
+        data = request.data
+
+        def _datum(veld):
+            waarde = (data.get(veld) or '').strip()
+            if not waarde:
+                raise ValueError(f"Vul '{veld}' in als datum jjjj-mm-dd.")
+            return date.fromisoformat(waarde[:10])
+
+        try:
+            van, tot = _datum('van'), _datum('tot')
+        except ValueError as ex:
+            return Response({'detail': str(ex)}, status=400)
+        if tot < van:
+            return Response({'detail': "'tot' ligt voor 'van'."}, status=400)
+
+        qs = TollingEvent.objects.filter(
+            archief.LOPEND, is_private=False,
+            start_at__date__gte=van, start_at__date__lte=tot)
+
+        kenteken = (data.get('kenteken') or '').strip()
+        if kenteken:
+            qs = qs.filter(license_plate_normalized=normalize_plate(kenteken))
+
+        land = (data.get('land') or '').strip()
+        if land.lower() == 'onbekend':
+            qs = qs.filter(land='')
+        elif land:
+            qs = qs.filter(land__iexact=land)
+
+        gefactureerd = bool(data.get('gefactureerd', True))
+        qs = qs.filter(invoiced_at__isnull=gefactureerd)
+        if not gefactureerd:
+            # Regels die aan een factuurregel hangen laten we staan; die horen
+            # via 'mark-uninvoiced' te lopen zodat de factuur meekomt.
+            qs = qs.filter(invoice_line__isnull=True)
+
+        rijen = list(qs.values('id', 'license_plate_normalized', 'land', 'amount'))
+        per_land: dict[str, dict] = {}
+        per_wagen: dict[str, dict] = {}
+        totaal = 0.0
+        for rij in rijen:
+            bedrag = float(rij['amount'] or 0)
+            landcode = rij['land'] or 'onbekend'
+            totaal += bedrag
+            vak = per_land.setdefault(landcode, {'aantal': 0, 'bedrag': 0.0})
+            vak['aantal'] += 1
+            vak['bedrag'] += bedrag
+            wagen = per_wagen.setdefault(
+                rij['license_plate_normalized'], {'aantal': 0, 'bedrag': 0.0, 'landen': {}})
+            wagen['aantal'] += 1
+            wagen['bedrag'] += bedrag
+            vak = wagen['landen'].setdefault(landcode, {'aantal': 0, 'bedrag': 0.0})
+            vak['aantal'] += 1
+            vak['bedrag'] += bedrag
+
+        uitkomst = {
+            'aantal': len(rijen),
+            'bedrag': round(totaal, 2),
+            'per_land': [{'land': k, 'aantal': v['aantal'], 'bedrag': round(v['bedrag'], 2)}
+                         for k, v in sorted(per_land.items())],
+            'per_wagen': sorted(
+                ({'kenteken': k, 'aantal': v['aantal'], 'bedrag': round(v['bedrag'], 2),
+                  'landen': [{'land': lk, 'aantal': lv['aantal'], 'bedrag': round(lv['bedrag'], 2)}
+                             for lk, lv in sorted(v['landen'].items())]}
+                 for k, v in per_wagen.items()),
+                key=lambda w: -w['bedrag']),
+            'gewijzigd': 0,
+        }
+        if data.get('preview'):
+            return Response(uitkomst)
+
+        ids = [r['id'] for r in rijen]
+        uitkomst['gewijzigd'] = TollingEvent.objects.filter(id__in=ids).update(
+            invoiced_at=timezone.now() if gefactureerd else None)
+        logger.warning(
+            'Tolling: %s regels handmatig op %s gezet (%s t/m %s, kenteken=%s, land=%s) door %s',
+            uitkomst['gewijzigd'], 'gefactureerd' if gefactureerd else 'open',
+            van, tot, kenteken or 'alle', land or 'alle',
+            getattr(request.user, 'email', request.user))
+        return Response(uitkomst)
 
 
 class TollingVehicleViewSet(viewsets.ViewSet):
@@ -312,7 +411,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         """
         period, year, index, start, end = self._resolve_list_period(request.query_params)
 
-        agg_qs = TollingEvent.objects.all()
+        agg_qs = TollingEvent.objects.filter(archief.LOPEND)
         if start is not None and end is not None:
             agg_qs = agg_qs.filter(start_at__gte=start, start_at__lt=end)
         agg_qs = (
@@ -336,7 +435,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
 
         # Alle combinaties kenteken + ritnummer + bedrijf die ooit zijn geïmporteerd.
         combos: dict[tuple, dict] = {}
-        rows_qs = TollingEvent.objects.values_list(
+        rows_qs = TollingEvent.objects.filter(archief.LOPEND).values_list(
             'license_plate_normalized', 'ritnummer', 'license_plate_raw',
             'vehicle_id', 'vehicle__kenteken', 'bedrijf_id', 'bedrijf__naam',
         ).distinct()
@@ -442,6 +541,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             start, end = _month_range(year, idx)
 
         events_qs = TollingEvent.objects.filter(
+            archief.LOPEND,
             license_plate_normalized=norm, start_at__gte=start, start_at__lt=end,
         )
 
@@ -552,6 +652,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         cutoff_time = _parse_cutoff_time(request.query_params.get('cutoff_time'))
 
         events_qs = TollingEvent.objects.filter(
+            archief.LOPEND,
             license_plate_normalized=norm, invoiced_at__isnull=True, is_private=False,
         )
         # Alleen de tolheffing die deze wagen voor het gekozen bedrijf reed.
@@ -615,6 +716,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             year, idx = _shift_month(now.year, now.month, offset)
             start, end = _month_range(year, idx)
         events_qs = TollingEvent.objects.filter(
+            archief.LOPEND,
             license_plate_normalized=norm, start_at__gte=start, start_at__lt=end,
         )
         # Optioneel beperken tot het ritnummer dat bij de import is vastgelegd.
@@ -713,6 +815,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             year, idx = _shift_month(now.year, now.month, offset)
             start, end = _month_range(year, idx)
         events_qs = TollingEvent.objects.filter(
+            archief.LOPEND,
             license_plate_normalized=norm, start_at__gte=start, start_at__lt=end,
         )
         # Optioneel beperken tot het ritnummer dat bij de import is vastgelegd.
@@ -801,7 +904,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         norm = normalize_plate(plate)
         if not norm:
             return Response({'detail': 'Kenteken vereist.'}, status=400)
-        qs = TollingEvent.objects.filter(license_plate_normalized=norm)
+        qs = TollingEvent.objects.filter(archief.LOPEND, license_plate_normalized=norm)
         # Optioneel beperken tot één ritnummer: hetzelfde kenteken kan onder
         # meerdere ritten in het overzicht staan.
         ritnummer = request.data.get('ritnummer') if isinstance(request.data, dict) else None
@@ -848,7 +951,9 @@ class TollingVehicleViewSet(viewsets.ViewSet):
                 {'detail': 'Ontbrekende bevestiging (confirm="DELETE_ALL").'},
                 status=400,
             )
-        qs = TollingEvent.objects.all()
+        # Afgesloten periodes blijven buiten schot; die horen in het archief
+        # thuis en zijn alleen daar te verwijderen.
+        qs = TollingEvent.objects.filter(archief.LOPEND)
         total = qs.count()
         if total == 0:
             return Response({'deleted': 0, 'invoiced_deleted': 0, 'invoice_lines_affected': 0})
@@ -882,7 +987,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
             return Response({'detail': str(ex)}, status=400)
         events = list(
             TollingEvent.objects
-            .filter(license_plate_normalized=norm, start_at__gte=start, start_at__lt=end, invoiced_at__isnull=False)
+            .filter(archief.LOPEND, license_plate_normalized=norm, start_at__gte=start, start_at__lt=end, invoiced_at__isnull=False)
         )
         line_ids = {e.invoice_line_id for e in events if e.invoice_line_id}
         for e in events:
@@ -973,6 +1078,7 @@ class TollingVehicleViewSet(viewsets.ViewSet):
         )
 
         qs = TollingEvent.objects.filter(
+            archief.LOPEND,
             license_plate_normalized=norm, start_at__gte=start, start_at__lt=eind,
         )
         van_ritnummer = data.get('van_ritnummer')
@@ -1159,6 +1265,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         # Per-plate totals + weekday/weekend split (Mon-Fri = weekday, Sat/Sun = weekend).
         # Privé-gemarkeerde events tellen NIET mee — die worden niet doorbelast.
         events_qs = TollingEvent.objects.filter(
+            archief.LOPEND,
             start_at__gte=start, start_at__lt=end, invoiced_at__isnull=True,
             is_private=False,
         ).values_list('license_plate_normalized', 'license_plate_raw', 'start_at',
@@ -1430,6 +1537,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
 
         # Haal alle relevante events op in één query.
         events_qs = TollingEvent.objects.filter(
+            archief.LOPEND,
             license_plate_normalized__in=norm_plates,
             start_at__gte=overall_min - timedelta(days=1),
             start_at__lt=overall_max + timedelta(days=1),
@@ -1627,7 +1735,8 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         exclude_weekend = str(request.data.get('exclude_weekend') or '').lower() in ('1', 'true', 'yes')
         events = list(
             TollingEvent.objects
-            .filter(start_at__gte=start, start_at__lt=end,
+            .filter(archief.LOPEND,
+                    start_at__gte=start, start_at__lt=end,
                     invoiced_at__isnull=True,
                     is_private=False,
                     license_plate_normalized__in=norm_plates)
@@ -1737,6 +1846,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         if isinstance(raw_event_ids, list) and raw_event_ids:
             events = list(
                 TollingEvent.objects.filter(
+                    archief.LOPEND,
                     id__in=raw_event_ids,
                     invoiced_at__isnull=True,
                     is_private=False,
@@ -1761,7 +1871,8 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         exclude_weekend = str(request.data.get('exclude_weekend') or '').lower() in ('1', 'true', 'yes')
         events = list(
             TollingEvent.objects
-            .filter(license_plate_normalized=norm,
+            .filter(archief.LOPEND,
+                    license_plate_normalized=norm,
                     start_at__gte=start, start_at__lt=end,
                     invoiced_at__isnull=True,
                     is_private=False)
@@ -1914,6 +2025,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             start, end = _week_range(yr, wk)
             evs = list(
                 TollingEvent.objects.filter(
+                    archief.LOPEND,
                     license_plate_normalized=plate,
                     invoiced_at__isnull=True,
                     is_private=False,
@@ -2350,6 +2462,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         )
 
         events = TollingEvent.objects.filter(
+            archief.LOPEND,
             start_at__gte=start, start_at__lt=end, is_private=False,
         )
         events = filter_op_land(events, land)
@@ -2646,6 +2759,7 @@ class PrivateTollRegistrationViewSet(viewsets.ModelViewSet):
                 qs = PrivateTollRegistration.objects.filter(user=self.request.user)
         else:
             qs = PrivateTollRegistration.objects.filter(user=self.request.user)
+        qs = archief.lopend(qs)
         params = self.request.query_params
         period = (params.get('period') or '').lower()
         try:
@@ -2743,7 +2857,7 @@ class PrivateTollRegistrationViewSet(viewsets.ModelViewSet):
 
         regs = list(
             PrivateTollRegistration.objects
-            .filter(datum__gte=start.date(), datum__lt=end.date())
+            .filter(archief.LOPEND, datum__gte=start.date(), datum__lt=end.date())
             .select_related('user')
             .prefetch_related('matched_events')
             .order_by('user__achternaam', 'user__voornaam', 'datum', 'begin_tijd')
@@ -2816,7 +2930,7 @@ class PrivateTollRegistrationViewSet(viewsets.ModelViewSet):
             return Response({'detail': str(ex)}, status=400)
         qs = (
             PrivateTollRegistration.objects
-            .filter(user_id=user_id, datum__gte=start.date(), datum__lt=end.date())
+            .filter(archief.LOPEND, user_id=user_id, datum__gte=start.date(), datum__lt=end.date())
             .order_by('datum', 'begin_tijd')
         )
         return Response(self.get_serializer(qs, many=True).data)
@@ -2839,6 +2953,7 @@ class PrivateTollRegistrationViewSet(viewsets.ModelViewSet):
             return Response({'detail': str(ex)}, status=400)
         invoiced = bool(request.data.get('invoiced', True))
         qs = PrivateTollRegistration.objects.filter(
+            archief.LOPEND,
             user_id=user_id, datum__gte=start.date(), datum__lt=end.date(),
         )
         now = timezone.now()

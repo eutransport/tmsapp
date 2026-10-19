@@ -908,7 +908,7 @@
     "importInvoice": "Fatura içe aktar",
     "importHours": "Saat içe aktar",
     "importSpreadsheet": "Sefer kaydı içe aktar",
-    "searchInvoices": "Fatura ara...",
+    "searchInvoices": "Numara, müşteri veya şoför ara...",
     "filterByStatus": "Duruma göre filtrele",
     "filterByCompany": "Şirkete göre filtrele",
     "allStatuses": "Tüm durumlar",
