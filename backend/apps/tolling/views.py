@@ -2131,6 +2131,11 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                     week_desc += f" — {plate_display}"
                 if land:
                     week_desc += f" — tol {LANDNAMEN.get(land, land)}"
+                if total_km:
+                    week_desc += f" (Totaal {int(round(total_km))} KM)"
+                else:
+                    # Radius levert met name bij Duitse passages vaak geen afstand.
+                    week_desc += " (km niet bekend bij Radius)"
                 volgorde += 1
                 line = InvoiceLine.objects.create(
                     invoice=invoice,
