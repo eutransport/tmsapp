@@ -307,11 +307,21 @@ class RitnummerCorrectie(models.Model):
         max_length=50, null=True, blank=True,
         verbose_name='Alleen dit oude ritnummer',
         help_text='Leeg betekent: alle ritnummers in de periode.')
-    naar_ritnummer = models.CharField(max_length=50, verbose_name='Nieuw ritnummer')
+    naar_ritnummer = models.CharField(
+        max_length=50, blank=True, verbose_name='Nieuw ritnummer')
+    ritnummer_gewijzigd = models.BooleanField(
+        default=True, verbose_name='Ritnummer aangepast')
+    naar_bedrijf = models.ForeignKey(
+        'companies.Company', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='+', verbose_name='Nieuw bedrijf')
+    bedrijf_gewijzigd = models.BooleanField(
+        default=False, verbose_name='Bedrijf aangepast',
+        help_text='Onderscheidt "bedrijf leeggemaakt" van "bedrijf ongemoeid gelaten".')
     inclusief_gefactureerd = models.BooleanField(
         default=False, verbose_name='Ook gefactureerde regels')
     aantal = models.PositiveIntegerField(default=0, verbose_name='Aantal regels')
     oude_waarden = models.JSONField(default=dict, verbose_name='Oude ritnummers per regel')
+    oude_bedrijven = models.JSONField(default=dict, verbose_name='Oude bedrijven per regel')
     uitgevoerd_door = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='ritnummer_correcties', verbose_name='Uitgevoerd door')
