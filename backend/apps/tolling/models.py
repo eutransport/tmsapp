@@ -344,7 +344,15 @@ class TolAfrekening(models.Model):
     bestand stond; de vergelijking met onze eigen tolregels wordt steeds
     opnieuw berekend zodat latere tolimports en correcties meetellen.
     """
+
+    class Status(models.TextChoices):
+        WACHTRIJ = 'wachtrij', 'Wacht op tolgegevens'
+        VERWERKT = 'verwerkt', 'Verwerkt'
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.VERWERKT,
+        db_index=True, verbose_name='Status')
     bestandsnaam = models.CharField(max_length=255, blank=True, verbose_name='Bestandsnaam')
     bestand = models.FileField(
         upload_to='tolling/afrekeningen/%Y/%m/', null=True, blank=True,

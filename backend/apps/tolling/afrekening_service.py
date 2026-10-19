@@ -6,6 +6,7 @@ from datetime import time
 
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
+from django.db.models import Max, Min
 from django.utils import timezone
 from django.utils.text import get_valid_filename
 
@@ -174,7 +175,69 @@ def importeer(
         'Tolafrekening %s ingelezen: %s voertuigen, tolvergoeding EUR %s',
         afrekening.bonnummer, len(gekoppeld), gelezen.totaal_maut,
     )
+
+    # De opdrachtgever heeft de tol binnen de werkdag al vergoed; zonder deze
+    # stap blijft die bij ons als openstaand staan.
+    controle = _tol_ontbreekt(afrekening)
+    afrekening.waarschuwingen = waarschuwingen + controle['meldingen']
+    afrekening.status = (TolAfrekening.Status.WACHTRIJ if controle['wachtrij']
+                         else TolAfrekening.Status.VERWERKT)
+    afrekening.save(update_fields=['waarschuwingen', 'status', 'updated_at'])
+
+    afrekening.gemarkeerd = (
+        0 if controle['wachtrij'] else markeer_gefactureerd(afrekening)['gemarkeerd'])
+    afrekening.tol_ontbreekt = controle['meldingen']
+    afrekening.wachtrij_wagens = controle['wachtrij']
     return afrekening
+
+
+def verwerk_wachtrij(afrekening) -> dict:
+    """Een bon uit de wachtrij alsnog verwerken als de tolgegevens er nu zijn."""
+    controle = _tol_ontbreekt(afrekening)
+    overig = [melding for melding in (afrekening.waarschuwingen or [])
+              if not melding.startswith('Voor ')]
+    afrekening.waarschuwingen = overig + controle['meldingen']
+    if controle['wachtrij']:
+        afrekening.save(update_fields=['waarschuwingen', 'updated_at'])
+        return {'status': afrekening.status, 'gemarkeerd': 0,
+                'wachtrij_wagens': controle['wachtrij'],
+                'meldingen': controle['meldingen']}
+
+    afrekening.status = TolAfrekening.Status.VERWERKT
+    afrekening.save(update_fields=['waarschuwingen', 'status', 'updated_at'])
+    return {'status': afrekening.status,
+            'gemarkeerd': markeer_gefactureerd(afrekening)['gemarkeerd'],
+            'wachtrij_wagens': [], 'meldingen': controle['meldingen']}
+
+
+def _tol_ontbreekt(afrekening) -> dict:
+    """Welke bondagen nog geen tolgegevens hebben.
+
+    Een enkele dag zonder tol kan kloppen (niet elke rit raakt een tolweg) en
+    levert alleen een melding op. Een wagen zonder enige tolpassage betekent
+    dat die import nog moet gebeuren; dan gaat de bon in de wachtrij.
+    """
+    meldingen = []
+    wachtrij = []
+    for regel in afrekening.regels.all():
+        dagen = _dagen(afrekening, regel)
+        if not dagen or not regel.kentekens:
+            continue
+        aanwezig = set()
+        for start_at, in analyse.events_van_groep([regel], dagen).values_list('start_at'):
+            aanwezig.add(timezone.localtime(start_at).date())
+        leeg = [van for van, _ in dagen if van not in aanwezig]
+        naam = regel.kenteken or regel.ritnummer
+        if len(leeg) == len(dagen):
+            wachtrij.append(naam)
+            meldingen.append(
+                f'Voor {naam} staan er over deze bon nog geen tolgegevens in het '
+                f'systeem ({len(leeg)} dagen). Lees eerst de tolheffing in.')
+        elif leeg:
+            meldingen.append(
+                f'Voor {naam} ontbreken de tolgegevens van {len(leeg)} van de '
+                f'{len(dagen)} bondagen, eerste op {min(leeg):%d-%m-%Y}.')
+    return {'meldingen': meldingen, 'wachtrij': wachtrij}
 
 
 @transaction.atomic
@@ -227,6 +290,12 @@ def herkoppel(afrekeningen) -> dict:
     return {'aangepast': aangepast}
 
 
+def _dagen(afrekening, regel):
+    """De dagen waarvoor deze wagen op deze bon vergoed is."""
+    regel.bonperiode = (afrekening.periode_van, afrekening.periode_tot)
+    return analyse.dagen_van_regel(regel)
+
+
 def _binnen_werktijd_events(afrekening, regel_ids=None):
     """De nog niet gefactureerde passages binnen de werkdag van de afrekening."""
     regels = afrekening.regels.all()
@@ -236,7 +305,7 @@ def _binnen_werktijd_events(afrekening, regel_ids=None):
     ids = []
     for regel in regels:
         rij = analyse.events_van_groep(
-            [regel], [(afrekening.periode_van, afrekening.periode_tot)],
+            [regel], _dagen(afrekening, regel),
         ).filter(is_private=False, invoiced_at__isnull=True)
         for event_id, start_at in rij.values_list('id', 'start_at'):
             vak = analyse.tijdvak(
@@ -244,6 +313,11 @@ def _binnen_werktijd_events(afrekening, regel_ids=None):
             if vak == analyse.BINNEN:
                 ids.append(event_id)
     return ids
+
+
+def tel_te_markeren(afrekening, regel_ids=None) -> int:
+    """Hoeveel passages `markeer_gefactureerd` zou raken."""
+    return len(_binnen_werktijd_events(afrekening, regel_ids))
 
 
 @transaction.atomic
@@ -264,6 +338,28 @@ def markeer_gefactureerd(afrekening, regel_ids=None) -> dict:
     return {'gemarkeerd': aantal}
 
 
+def markeer_nagekomen(batch) -> int:
+    """Tol die na een afrekening binnenkomt alsnog afboeken tegen die bon.
+
+    Een bon wordt vaak eerder ingelezen dan de tolgegevens van dezelfde dagen.
+    Zonder deze stap blijft die tol openstaan terwijl hij al vergoed is.
+    """
+    grenzen = TollingEvent.objects.filter(batch=batch).aggregate(
+        eerste=Min('start_at'), laatste=Max('start_at'))
+    if not grenzen['eerste']:
+        return 0
+    vanaf = timezone.localtime(grenzen['eerste']).date()
+    tot = timezone.localtime(grenzen['laatste']).date()
+    bonnen = TolAfrekening.objects.filter(periode_van__lte=tot, periode_tot__gte=vanaf)
+    gemarkeerd = 0
+    for bon in bonnen:
+        if bon.status == TolAfrekening.Status.WACHTRIJ:
+            gemarkeerd += verwerk_wachtrij(bon)['gemarkeerd']
+        else:
+            gemarkeerd += markeer_gefactureerd(bon)['gemarkeerd']
+    return gemarkeerd
+
+
 @transaction.atomic
 def maak_markering_ongedaan(afrekening, regel_ids=None) -> dict:
     """Draai het markeren terug voor de passages binnen deze afrekening."""
@@ -274,7 +370,7 @@ def maak_markering_ongedaan(afrekening, regel_ids=None) -> dict:
     totaal = 0
     for regel in regels:
         rij = analyse.events_van_groep(
-            [regel], [(afrekening.periode_van, afrekening.periode_tot)],
+            [regel], _dagen(afrekening, regel),
         ).filter(invoiced_at__isnull=False, invoice_line__isnull=True)
         ids = []
         for event_id, start_at in rij.values_list('id', 'start_at'):

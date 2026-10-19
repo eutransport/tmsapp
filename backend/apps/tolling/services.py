@@ -388,6 +388,13 @@ def import_csv(file_obj, user, filename: str = '') -> ImportResult:
     except Exception as exc:  # pragma: no cover
         logger.warning("Planningkoppeling mislukt voor batch %s: %s", batch.id, exc)
 
+    # Tol die de opdrachtgever al vergoed heeft hoeft niet opnieuw open te staan.
+    try:
+        from .afrekening_service import markeer_nagekomen
+        markeer_nagekomen(batch)
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Afboeken tegen tolafrekening mislukt voor batch %s: %s", batch.id, exc)
+
     return ImportResult(batch=batch, imported=imported, duplicates=duplicates,
                         invalid=invalid, total=total, zero_amount=zero_amount)
 

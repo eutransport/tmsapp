@@ -216,6 +216,35 @@ export interface UploadResultaat {
   periode_van: string
   periode_tot: string
   totalen: AfrekeningTotalen
+  /** Passages die bij het inlezen meteen op gefactureerd zijn gezet. */
+  gemarkeerd?: number
+  /** 'wachtrij' zolang de bijbehorende tolheffing nog niet ingelezen is. */
+  status?: 'wachtrij' | 'verwerkt'
+  /** Meldingen over bondagen zonder tolgegevens. */
+  tol_ontbreekt?: string[]
+  /** Wagens die de bon in de wachtrij houden. */
+  wachtrij_wagens?: string[]
+}
+
+/** Een bon die wacht tot de bijbehorende tolheffing ingelezen is. */
+export interface WachtrijRij {
+  id: string
+  bestandsnaam: string
+  bonnummer: string
+  periode_van: string
+  periode_tot: string
+  bedrijf_naam: string
+  totaal_maut: number
+  voertuigen: number
+  meldingen: string[]
+  created_at: string
+}
+
+export interface VerwerkResultaat {
+  status: 'wachtrij' | 'verwerkt'
+  gemarkeerd: number
+  wachtrij_wagens: string[]
+  meldingen: string[]
 }
 
 export interface MarkeerResultaat {
@@ -278,6 +307,16 @@ export const tolAfrekeningApi = {
 
   async verwijder(id: string): Promise<void> {
     await api.delete(`${BASIS}/${id}/`)
+  },
+
+  async wachtrij(): Promise<WachtrijRij[]> {
+    const { data } = await api.get<WachtrijRij[]>(`${BASIS}/wachtrij/`)
+    return data
+  },
+
+  async verwerk(id: string): Promise<VerwerkResultaat> {
+    const { data } = await api.post<VerwerkResultaat>(`${BASIS}/${id}/verwerk/`, {})
+    return data
   },
 
   async werktijden(

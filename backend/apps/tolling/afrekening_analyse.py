@@ -147,8 +147,27 @@ def events_voor(kentekens, vehicle_ids, perioden):
         doel & _periodefilter(perioden), afsluiting__isnull=True)
 
 
+def dagen_van_regel(regel) -> list[tuple]:
+    """De dagen die op de bon bij deze wagen staan, elk als eigen periode.
+
+    De periode in de kop van een bon is ruimer dan wat er per wagen betaald is:
+    een maandbon bevat voor de meeste wagens alleen de tweede helft, omdat de
+    eerste helft al op een eerdere bon stond. Matchen we op de kopperiode, dan
+    zetten we dagen op gefactureerd die niemand vergoed heeft.
+
+    Ontbreken de dagregels, dan valt dit terug op de bonperiode.
+    """
+    dagen = sorted({
+        rij.get('datum') for rij in (regel.dagen or []) if rij.get('datum')
+    })
+    if dagen:
+        return [(date.fromisoformat(dag), date.fromisoformat(dag)) for dag in dagen]
+    periode = getattr(regel, 'bonperiode', None)
+    return [periode] if periode else []
+
+
 def perioden_van_groep(regels) -> list[tuple]:
-    """De bonperioden waarin deze wagen daadwerkelijk voorkomt.
+    """De dagen waarop deze wagen daadwerkelijk op een bon voorkomt.
 
     Een wagen die wel op de juli-bon staat maar niet op die van september, mag
     ook alleen over juli vergeleken worden. Anders zetten we tol af tegen een
@@ -156,9 +175,9 @@ def perioden_van_groep(regels) -> list[tuple]:
     """
     perioden = []
     for regel in regels:
-        periode = getattr(regel, 'bonperiode', None)
-        if periode and periode not in perioden:
-            perioden.append(periode)
+        for periode in dagen_van_regel(regel):
+            if periode not in perioden:
+                perioden.append(periode)
     return perioden
 
 

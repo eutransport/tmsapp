@@ -16,7 +16,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.core.permissions import HasReadWriteModulePermission
+from apps.core.permissions import IsAdminOnly
 
 from . import afrekening_analyse as analyse
 from . import afrekening_service as service
@@ -112,11 +112,11 @@ def _verschuif(soort: str, jaar: int, index: int, stappen: int) -> tuple[int, in
 class TolAfrekeningViewSet(viewsets.ViewSet):
     """Uploaden en vergelijken van de afrekening van de opdrachtgever."""
 
-    permission_classes = [IsAuthenticated, HasReadWriteModulePermission]
-    module_permission_read = 'view_tolling'
-    module_permission_write = 'manage_tolling'
+    # De afrekening bevat tarieven en bedragen van de opdrachtgever; dat is
+    # niet zichtbaar voor niet-admins, ook niet met view_tolling.
+    permission_classes = [IsAuthenticated, IsAdminOnly]
 
-    def _basis(self):
+    def _alles(self):
         return (
             TolAfrekening.objects
             .filter(afsluiting__isnull=True)
@@ -124,8 +124,12 @@ class TolAfrekeningViewSet(viewsets.ViewSet):
             .prefetch_related('regels__vehicle')
         )
 
+    def _basis(self):
+        # Bonnen in de wachtrij tellen nog niet mee; hun tol is nog niet ingelezen.
+        return self._alles().exclude(status=TolAfrekening.Status.WACHTRIJ)
+
     def _haal_op(self, pk) -> TolAfrekening | None:
-        return self._basis().filter(pk=pk).first()
+        return self._alles().filter(pk=pk).first()
 
     def _selectie(self, gegevens) -> tuple[list, dict]:
         """De afrekeningen die bij het gevraagde filter horen, plus filterinfo.
@@ -269,7 +273,54 @@ class TolAfrekeningViewSet(viewsets.ViewSet):
                            'Controleer of het de juiste afrekening is.'},
                 status=status.HTTP_400_BAD_REQUEST)
 
-        return Response(analyse.analyseer(afrekening), status=status.HTTP_201_CREATED)
+        wachtrij = getattr(afrekening, 'wachtrij_wagens', [])
+        return Response(
+            {**analyse.analyseer(afrekening),
+             'status': afrekening.status,
+             'gemarkeerd': getattr(afrekening, 'gemarkeerd', 0),
+             'tol_ontbreekt': getattr(afrekening, 'tol_ontbreekt', []),
+             'wachtrij_wagens': wachtrij},
+            status=status.HTTP_202_ACCEPTED if wachtrij else status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], url_path='wachtrij')
+    def wachtrij(self, request):
+        """Ingelezen bonnen die nog wachten op de bijbehorende tolgegevens."""
+        return Response([
+            {
+                'id': str(afrekening.id),
+                'bestandsnaam': afrekening.bestandsnaam,
+                'bonnummer': afrekening.bonnummer,
+                'periode_van': afrekening.periode_van,
+                'periode_tot': afrekening.periode_tot,
+                'bedrijf_naam': afrekening.bedrijf.naam if afrekening.bedrijf_id else '',
+                'totaal_maut': float(afrekening.totaal_maut or 0),
+                'voertuigen': afrekening.regels.count(),
+                'meldingen': afrekening.waarschuwingen or [],
+                'created_at': afrekening.created_at,
+            }
+            for afrekening in self._alles().filter(
+                status=TolAfrekening.Status.WACHTRIJ)
+        ])
+
+    @action(detail=True, methods=['post'], url_path='verwerk')
+    def verwerk(self, request, pk=None):
+        """Een bon uit de wachtrij alsnog verwerken."""
+        afrekening = self._haal_op(pk)
+        if afrekening is None:
+            return Response({'detail': 'Afrekening niet gevonden.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        uitkomst = service.verwerk_wachtrij(afrekening)
+        if uitkomst['wachtrij_wagens']:
+            return Response(
+                {'detail': 'De tolgegevens ontbreken nog voor '
+                           + ', '.join(uitkomst['wachtrij_wagens'][:5])
+                           + ('...' if len(uitkomst['wachtrij_wagens']) > 5 else '')
+                           + '. Importeer eerst de tolheffing.',
+                 **uitkomst},
+                status=status.HTTP_409_CONFLICT)
+        logger.info('Tolafrekening %s uit de wachtrij verwerkt door %s',
+                    afrekening.bonnummer, request.user)
+        return Response(uitkomst)
 
     def destroy(self, request, pk=None):
         afrekening = self._haal_op(pk)

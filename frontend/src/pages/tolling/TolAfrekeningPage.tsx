@@ -46,6 +46,7 @@ import {
   PeriodeSoort,
   SelectieParams,
   tolAfrekeningApi,
+  WachtrijRij,
 } from '@/api/tolAfrekening'
 
 const MAX_UPLOAD_MB = 25
@@ -314,6 +315,35 @@ export default function TolAfrekeningPage() {
   const [werktijdTot, setWerktijdTot] = useState('18:00')
   const [pagina, setPagina] = useState(1)
   const bestandRef = useRef<HTMLInputElement>(null)
+  const [wachtrij, setWachtrij] = useState<WachtrijRij[]>([])
+  const [verwerkt, setVerwerkt] = useState<string | null>(null)
+
+  const haalWachtrij = useCallback(async () => {
+    try {
+      setWachtrij(await tolAfrekeningApi.wachtrij())
+    } catch {
+      // De wachtrij is bijvangst; een fout hier mag het overzicht niet blokkeren.
+    }
+  }, [])
+
+  useEffect(() => { void haalWachtrij() }, [haalWachtrij])
+
+  const probeerOpnieuw = async (rij: WachtrijRij) => {
+    setVerwerkt(rij.id)
+    try {
+      const uitkomst = await tolAfrekeningApi.verwerk(rij.id)
+      toast.success(
+        `Bon ${rij.bonnummer || rij.bestandsnaam} verwerkt: `
+        + `${uitkomst.gemarkeerd} passages op gefactureerd gezet.`,
+      )
+      await haalWachtrij()
+      setSelectie({ afrekening: rij.id })
+    } catch (fout) {
+      meldFout(fout, 'De tolheffing ontbreekt nog voor deze bon.')
+    } finally {
+      setVerwerkt(null)
+    }
+  }
 
   /** Het overzicht opnieuw ophalen; dit is ook de terugval na elke bewerking. */
   const haalOp = useCallback(async (keuze: SelectieParams) => {
@@ -384,11 +414,31 @@ export default function TolAfrekeningPage() {
     setUploaden(true)
     try {
       const nieuw = await tolAfrekeningApi.upload(bestand)
+      const naam = nieuw.bonnummer || nieuw.bestandsnaam
+      if (nieuw.status === 'wachtrij') {
+        toast(
+          `Bon ${naam} staat in de wachtrij: de tolheffing van `
+          + `${(nieuw.wachtrij_wagens || []).length} wagen(s) is nog niet ingelezen. `
+          + 'Importeer de tolheffing en druk daarna op Opnieuw proberen.',
+          { icon: '!', duration: 10000 },
+        )
+        await haalWachtrij()
+        return
+      }
       toast.success(
-        `Bon ${nieuw.bonnummer || nieuw.bestandsnaam} ingelezen: `
+        `Bon ${naam} ingelezen: `
         + `${nieuw.totalen.voertuigen} voertuigen, `
-        + `${currency(nieuw.totalen.ontvangen)} vergoeding.`,
+        + `${currency(nieuw.totalen.ontvangen)} vergoeding. `
+        + `${nieuw.gemarkeerd ?? 0} passages binnen de werkdag op gefactureerd gezet.`,
       )
+      const ontbreekt = nieuw.tol_ontbreekt || []
+      if (ontbreekt.length > 0) {
+        toast(
+          `Let op: voor ${ontbreekt.length} wagen(s) ontbreken losse bondagen in de `
+          + 'tolheffing.',
+          { icon: '!', duration: 8000 },
+        )
+      }
       // Meteen naar de zojuist ingelezen bon, ook als die in een andere
       // periode valt dan het huidige filter.
       setSelectie({ afrekening: nieuw.id })
@@ -483,6 +533,7 @@ export default function TolAfrekeningPage() {
     try {
       await tolAfrekeningApi.verwijder(id)
       setBevestigVerwijder(null)
+      await haalWachtrij()
       if (selectie.afrekening === id) {
         // De getoonde bon bestaat niet meer; terug naar het maandoverzicht.
         setSelectie({ periode: 'maand' })
@@ -717,6 +768,60 @@ export default function TolAfrekeningPage() {
           </button>
         </div>
       </div>
+
+      {wachtrij.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+          <h2 className="text-sm font-semibold text-amber-900">
+            Wacht op tolheffing ({wachtrij.length})
+          </h2>
+          <p className="mt-1 text-sm text-amber-800">
+            Deze bonnen zijn ingelezen maar tellen nog niet mee: de tolheffing over
+            die dagen staat nog niet in het systeem. Importeer die eerst en druk
+            daarna op Opnieuw proberen.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {wachtrij.map((rij) => (
+              <li
+                key={rij.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-white px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">
+                    {rij.bonnummer || rij.bestandsnaam}
+                    <span className="ml-2 font-normal text-gray-600">
+                      {rij.periode_van} t/m {rij.periode_tot} &middot; {rij.voertuigen} wagens
+                      &middot; {currency(rij.totaal_maut)}
+                    </span>
+                  </p>
+                  {rij.meldingen.length > 0 && (
+                    <p className="mt-0.5 truncate text-xs text-amber-800">
+                      {rij.meldingen[0]}
+                      {rij.meldingen.length > 1 && ` (+${rij.meldingen.length - 1})`}
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void probeerOpnieuw(rij)}
+                    disabled={verwerkt === rij.id}
+                    className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {verwerkt === rij.id ? 'Bezig…' : 'Opnieuw proberen'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBevestigVerwijder(rij.id)}
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    Verwijderen
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Filterbalk: per week, maand, kwartaal, jaar of alles. */}
       <div className="rounded-lg border border-gray-200 bg-white p-4">
