@@ -52,6 +52,19 @@ logger = logging.getLogger(__name__)
 RITNUMMER_CORRECTIE_BEWAARDAGEN = 31
 
 
+def _vul_land_aan_voor_facturering(events) -> int:
+    """Bepaal het land van events die er nog geen hebben, net voor facturering."""
+    zonder_land = [e for e in events if not e.land]
+    if not zonder_land:
+        return 0
+    try:
+        from .radius_factuur_service import vul_land_van_events
+        return vul_land_van_events(zonder_land)
+    except Exception as exc:  # pragma: no cover - facturering mag niet klappen
+        logger.warning('Land aanvullen voor facturering mislukt: %s', exc)
+        return 0
+
+
 def _correctie_naar_dict(c) -> dict:
     """Zet een ritnummercorrectie om naar het formaat voor de frontend."""
     def naam(gebruiker):
@@ -1747,6 +1760,9 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 e for e in events
                 if (e.start_at.astimezone(tz) if timezone.is_aware(e.start_at) else e.start_at).isoweekday() < 6
             ]
+        # Zonder land zouden Duitse en Nederlandse tol op dezelfde regel komen.
+        _vul_land_aan_voor_facturering(events)
+
         # Per kenteken én per land een regel: buitenlandse tol staat op een
         # eigen factuurregel, zodat zichtbaar blijft waar hij vandaan komt.
         by_plate: dict[tuple[str, str], list[TollingEvent]] = {}
@@ -1781,7 +1797,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             omschrijving = plate_display
             if ritnummer:
                 omschrijving += f" - {ritnummer}"
-            if land and land != 'NL':
+            if land:
                 omschrijving += f" - tol {LANDNAMEN.get(land, land)}"
             if total_km:
                 omschrijving += f" (Totaal {int(round(total_km))} KM)"
@@ -2046,6 +2062,10 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 status=400,
             )
 
+        # Zonder land zouden Duitse en Nederlandse tol op dezelfde regel komen.
+        _vul_land_aan_voor_facturering(
+            [e for evs in events_by_week.values() for e in evs])
+
         # Vehicle info for line description
         vehicle = build_vehicle_lookup().get(plate)
         plate_display = vehicle.kenteken if vehicle else (
@@ -2086,58 +2106,70 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         now = timezone.now()
         volgorde = 0
         for (yr, wk) in weeks:
-            evs = events_by_week.get((yr, wk)) or []
-            if not evs:
+            week_events = events_by_week.get((yr, wk)) or []
+            if not week_events:
                 continue
-            total_km = sum((e.distance_km for e in evs), Decimal('0'))
-            total_amount = sum((e.amount for e in evs), Decimal('0'))
             start, end = _week_range(yr, wk)
             last_day = end - timedelta(days=1)
-            week_desc = (
+            basis_desc = (
                 f"Tolheffing week {wk:02d}-{yr} "
                 f"({start.strftime('%d-%m')} t/m {last_day.strftime('%d-%m-%Y')})"
             )
-            if ritnummer:
-                week_desc += f" — {plate_display} {ritnummer}"
-            else:
-                week_desc += f" — {plate_display}"
-            volgorde += 1
-            line = InvoiceLine.objects.create(
-                invoice=invoice,
-                omschrijving=week_desc[:500],
-                aantal=Decimal('1'),
-                eenheid='stuk',
-                prijs_per_eenheid=total_amount.quantize(Decimal('0.01')),
-                volgorde=volgorde,
-                extra_data={
-                    'source': 'tolling',
-                    'plate': plate_display,
-                    'plate_normalized': plate,
-                    'ritnummer': ritnummer,
-                    'total_km': float(total_km),
-                    'period': 'week',
+            # Per land een eigen regel, zodat Duitse en Nederlandse tol
+            # los van elkaar op de factuur staan.
+            per_land: dict[str, list[TollingEvent]] = {}
+            for e in week_events:
+                per_land.setdefault(e.land or '', []).append(e)
+            for land in sorted(per_land, key=lambda l: (l not in ('', 'NL'), l)):
+                evs = per_land[land]
+                total_km = sum((e.distance_km for e in evs), Decimal('0'))
+                total_amount = sum((e.amount for e in evs), Decimal('0'))
+                week_desc = basis_desc
+                if ritnummer:
+                    week_desc += f" — {plate_display} {ritnummer}"
+                else:
+                    week_desc += f" — {plate_display}"
+                if land:
+                    week_desc += f" — tol {LANDNAMEN.get(land, land)}"
+                volgorde += 1
+                line = InvoiceLine.objects.create(
+                    invoice=invoice,
+                    omschrijving=week_desc[:500],
+                    aantal=Decimal('1'),
+                    eenheid='stuk',
+                    prijs_per_eenheid=total_amount.quantize(Decimal('0.01')),
+                    volgorde=volgorde,
+                    extra_data={
+                        'source': 'tolling',
+                        'plate': plate_display,
+                        'plate_normalized': plate,
+                        'ritnummer': ritnummer,
+                        'land': land,
+                        'total_km': float(total_km),
+                        'period': 'week',
+                        'year': yr,
+                        'index': wk,
+                        'period_label': f"Week {wk:02d} {yr}",
+                        'events_count': len(evs),
+                        'exclude_weekend': exclude_weekend,
+                        'cutoff_time': cutoff_time.strftime('%H:%M') if cutoff_time else None,
+                    },
+                )
+                for e in evs:
+                    e.invoice_line = line
+                    e.invoiced_at = now
+                TollingEvent.objects.bulk_update(evs, ['invoice_line', 'invoiced_at'])
+                events_marked += len(evs)
+                created_lines.append({
+                    'id': str(line.id),
+                    'week': wk,
                     'year': yr,
-                    'index': wk,
-                    'period_label': f"Week {wk:02d} {yr}",
+                    'land': land,
+                    'omschrijving': week_desc,
+                    'total_km': float(total_km),
+                    'total_amount': float(total_amount),
                     'events_count': len(evs),
-                    'exclude_weekend': exclude_weekend,
-                    'cutoff_time': cutoff_time.strftime('%H:%M') if cutoff_time else None,
-                },
-            )
-            for e in evs:
-                e.invoice_line = line
-                e.invoiced_at = now
-            TollingEvent.objects.bulk_update(evs, ['invoice_line', 'invoiced_at'])
-            events_marked += len(evs)
-            created_lines.append({
-                'id': str(line.id),
-                'week': wk,
-                'year': yr,
-                'omschrijving': week_desc,
-                'total_km': float(total_km),
-                'total_amount': float(total_amount),
-                'events_count': len(evs),
-            })
+                })
 
         invoice.calculate_totals()
         invoice.refresh_from_db()

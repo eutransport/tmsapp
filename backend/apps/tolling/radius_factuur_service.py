@@ -323,8 +323,16 @@ def vul_land_aan(events_qs, speling_minuten: int = STANDAARD_SPELING_MINUTEN) ->
     Handig zodra het GPS-archief verder terugloopt dan op het moment van
     importeren. Handmatig gezette landen blijven staan.
     """
+    return vul_land_van_events(
+        events_qs.exclude(land_bron='handmatig').iterator(), speling_minuten)
+
+
+def vul_land_van_events(events, speling_minuten: int = STANDAARD_SPELING_MINUTEN) -> int:
+    """Zelfde als `vul_land_aan`, maar voor een lijst events in het geheugen."""
     bijgewerkt = 0
-    for event in events_qs.exclude(land_bron='handmatig').iterator():
+    for event in events:
+        if event.land_bron == 'handmatig':
+            continue
         land, bron = bepaal_land(event.license_plate_normalized, event.start_at, speling_minuten)
         if land and (land != event.land or bron != event.land_bron):
             event.land = land
@@ -332,3 +340,4 @@ def vul_land_aan(events_qs, speling_minuten: int = STANDAARD_SPELING_MINUTEN) ->
             event.save(update_fields=['land', 'land_bron'])
             bijgewerkt += 1
     return bijgewerkt
+
