@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { PortaalRit, portaalTracking } from '@/api/portaalTracking'
+import { portaalTracking } from '@/api/portaalTracking'
+import PortaalRittenPerDag from '@/components/portaal/PortaalRittenPerDag'
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
@@ -96,11 +97,7 @@ export default function PortaalKaartPage() {
     }
   }, [zichtbaar])
 
-  const tijd = (waarde: string | null) =>
-    waarde ? new Date(waarde).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' }) : '-'
-
-  const plaats = (rit: PortaalRit, kant: 'start' | 'eind') =>
-    (kant === 'start' ? rit.start_plaats || rit.start_adres : rit.eind_plaats || rit.eind_adres) || '-'
+  const totaalKm = useMemo(() => ritten.reduce((som, rit) => som + (rit.afstand_km || 0), 0), [ritten])
 
   return (
     <div className="space-y-4">
@@ -144,39 +141,18 @@ export default function PortaalKaartPage() {
       <div ref={kaartElement} className="h-[50vh] w-full card sm:h-[60vh]" />
 
       <div className="card">
-        <h2 className="section-title border-b border-gray-200 px-4 py-3">
-          {t('portaalMap.history', 'Waar is de wagen geweest')}
-        </h2>
-        {ritten.length === 0 ? (
-          <p className="p-4 text-sm text-muted">{t('portaalMap.noTrips', 'Geen ritten in deze periode.')}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="px-4 py-3">{t('portaalMap.date', 'Datum')}</th>
-                  <th className="px-4 py-3">{t('orders.plate', 'Kenteken')}</th>
-                  <th className="px-4 py-3">{t('portaalMap.from', 'Van')}</th>
-                  <th className="px-4 py-3">{t('portaalMap.to', 'Naar')}</th>
-                  <th className="px-4 py-3">{t('portaalMap.distance', 'Afstand')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {ritten.map(rit => (
-                  <tr key={rit.id} className="hover:bg-gray-50">
-                    <td className="whitespace-nowrap px-4 py-3 text-gray-700">
-                      {new Date(rit.datum).toLocaleDateString(i18n.language)}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-gray-900">{rit.kenteken}</td>
-                      <td className="px-4 py-3 text-gray-700">{tijd(rit.start_tijd)} &middot; {plaats(rit, 'start')}</td>
-                      <td className="px-4 py-3 text-gray-700">{tijd(rit.eind_tijd)} &middot; {plaats(rit, 'eind')}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-gray-700">{rit.afstand_km} km</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-4 py-3">
+          <h2 className="section-title">
+            {t('portaalMap.history', 'Waar is de wagen geweest')}
+          </h2>
+          {ritten.length > 0 && (
+            <span className="text-sm text-muted">
+              {ritten.length} {t('radius.journeyCount', 'Ritten').toLowerCase()} &middot;{' '}
+              {totaalKm.toLocaleString(i18n.language, { maximumFractionDigits: 1 })} km
+            </span>
+          )}
+        </div>
+        <PortaalRittenPerDag ritten={ritten} />
       </div>
     </div>
   )

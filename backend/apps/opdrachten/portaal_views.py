@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 
 MAX_HISTORIE_DAGEN = 31
 
+# Een maand volle vloot past hierbinnen; de lijst wordt in de browser gegroepeerd.
+MAX_RITTEN = 2000
+
 
 def _toegestane_voertuigen(bedrijf_id):
     """Voertuigen die de beheerder voor dit bedrijf heeft vrijgegeven."""
@@ -143,7 +146,9 @@ class PortaalRittenView(PortaalBasisView):
                 return Response([])
             kentekens = {gevraagd_norm}
 
-        ritten = RadiusJourney.objects.filter(date__gte=vanaf, date__lte=vandaag)
+        ritten = (RadiusJourney.objects
+                  .filter(date__gte=vanaf, date__lte=vandaag)
+                  .order_by('-date', 'plate_number', 'start_time'))
         ritten = [r for r in ritten if _normaliseer(r.plate_number) in kentekens]
 
         return Response([{
@@ -161,7 +166,7 @@ class PortaalRittenView(PortaalBasisView):
             'eind_latitude': rit.end_latitude,
             'eind_longitude': rit.end_longitude,
             'afstand_km': round(rit.distance_km or 0, 1),
-        } for rit in ritten[:500]])
+        } for rit in ritten[:MAX_RITTEN]])
 
 
 class PortaalDashboardView(PortaalBasisView):
