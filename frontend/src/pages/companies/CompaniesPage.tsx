@@ -14,7 +14,7 @@ import {
   EnvelopeIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline'
-import { Company, MailingListContact } from '@/types'
+import { Company, MailingListContact, Vehicle } from '@/types'
 import { 
   getCompanies, 
   createCompany, 
@@ -28,6 +28,7 @@ import {
   updateMailingContact,
   deleteMailingContact,
 } from '@/api/companies'
+import { getAllVehicles } from '@/api/fleet'
 import Pagination, { PageSize } from '@/components/common/Pagination'
 
 // Modal component
@@ -133,6 +134,7 @@ function CompanyForm({
   isLoading: boolean
 }) {
   const { t } = useTranslation()
+  const [voertuigen, setVoertuigen] = useState<Vehicle[]>([])
   const [formData, setFormData] = useState({
     naam: company?.naam || '',
     kvk: company?.kvk || '',
@@ -143,8 +145,22 @@ function CompanyForm({
     postcode: company?.postcode || '',
     stad: company?.stad || '',
     land: company?.land || '',
+    volgbare_voertuigen: company?.volgbare_voertuigen || [],
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    getAllVehicles().then(setVoertuigen).catch(console.error)
+  }, [])
+
+  const toggleVoertuig = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      volgbare_voertuigen: prev.volgbare_voertuigen.includes(id)
+        ? prev.volgbare_voertuigen.filter(v => v !== id)
+        : [...prev.volgbare_voertuigen, id],
+    }))
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -290,6 +306,28 @@ function CompanyForm({
           onChange={handleChange}
           className="input min-h-[44px]"
         />
+      </div>
+
+      <div className="pt-4 border-t">
+        <label className="block text-sm font-medium text-gray-700">
+          {t('companies.trackableVehicles', 'Volgbare voertuigen')}
+        </label>
+        <p className="mt-0.5 mb-2 text-xs text-gray-500">
+          {t('companies.trackableVehiclesHelp', 'Deze voertuigen ziet de opdrachtgever op de kaart.')}
+        </p>
+        <div className="grid max-h-56 grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-3">
+          {voertuigen.map(v => (
+            <label key={v.id} className="flex min-h-[36px] cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={formData.volgbare_voertuigen.includes(v.id)}
+                onChange={() => toggleVoertuig(v.id)}
+                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span className="truncate">{v.kenteken}</span>
+            </label>
+          ))}
+        </div>
       </div>
 
       <div className="flex justify-end gap-3 pt-4 border-t">

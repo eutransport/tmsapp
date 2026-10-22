@@ -1,0 +1,55 @@
+{% extends "opdrachten/mail_basis.html" %}
+
+{% block regels %}
+  {% if opdracht.ritnummer %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;width:40%;">{{ T.ritnummer }}</td>
+    <td style="padding:8px 0;font-weight:600;">{{ opdracht.ritnummer }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;width:40%;">{{ T.chauffeur }}</td>
+    <td style="padding:8px 0;font-weight:600;">{{ chauffeur }}</td>
+  </tr>
+  {% if opdracht.kenteken %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;border-top:1px solid #e5e7eb;">{{ T.kenteken }}</td>
+    <td style="padding:8px 0;font-weight:600;border-top:1px solid #e5e7eb;">{{ opdracht.kenteken }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;border-top:1px solid #e5e7eb;">{{ T.klant }}</td>
+    <td style="padding:8px 0;font-weight:600;border-top:1px solid #e5e7eb;">{{ opdracht.klant_naam }}</td>
+  </tr>
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;border-top:1px solid #e5e7eb;">{{ T.adres }}</td>
+    <td style="padding:8px 0;border-top:1px solid #e5e7eb;">{{ opdracht.adres }}<br>{{ opdracht.postcode }} {{ opdracht.plaats }}</td>
+  </tr>
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;border-top:1px solid #e5e7eb;">{{ T.gemeld_op }}</td>
+    <td style="padding:8px 0;font-weight:600;border-top:1px solid #e5e7eb;">{{ opdracht.niet_geleverd_op|date:"d-m-Y H:i" }}</td>
+  </tr>
+{% endblock %}
+
+{% block extra %}
+  <div style="margin-top:20px;padding:12px 14px;background-color:#fef2f2;border-left:3px solid #b91c1c;border-radius:4px;">
+    <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">{{ T.reden }}</div>
+    <div style="font-size:14px;line-height:21px;color:#374151;">{{ opdracht.niet_geleverd_reden|linebreaksbr }}</div>
+  </div>
+
+  {% if opdracht.chauffeur_reactie %}
+    <div style="margin-top:12px;padding:12px 14px;background-color:#f9fafb;border-left:3px solid #0f172a;border-radius:4px;">
+      <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">{{ T.opmerking }}</div>
+      <div style="font-size:14px;line-height:21px;color:#374151;">{{ opdracht.chauffeur_reactie|linebreaksbr }}</div>
+    </div>
+  {% endif %}
+
+  {% if bijlagen %}
+    <div style="margin-top:20px;font-size:13px;color:#6b7280;">
+      {{ T.bijlagen }}
+      <ul style="margin:6px 0 0;padding-left:18px;color:#374151;">
+        {% for bijlage in bijlagen %}<li>{{ bijlage.bestandsnaam }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+{% endblock %}

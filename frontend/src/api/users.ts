@@ -3,7 +3,7 @@
  * CRUD operations for user management
  */
 import api from './client'
-import { User, UserCreate } from '@/types'
+import { User, UserCreate, UserRole } from '@/types'
 
 export interface UserUpdate {
   email?: string
@@ -12,7 +12,8 @@ export interface UserUpdate {
   achternaam?: string
   telefoon?: string
   bedrijf?: string
-  rol?: 'admin' | 'gebruiker' | 'chauffeur'
+  rol?: UserRole
+  opdrachtgever_bedrijf?: string | null
   is_active?: boolean
   module_permissions?: string[]
 }

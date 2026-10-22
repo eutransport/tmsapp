@@ -117,6 +117,16 @@ const DocumentSignPage = lazyNamed(() => import('@/pages/documents'), 'DocumentS
 // Files explorer (bestandsverkenner)
 const FilesExplorerPage = React.lazy(() => import('@/pages/files/FilesExplorerPage'))
 
+// Opdrachtgeversportaal
+const PortaalDashboardPage = React.lazy(() => import('@/pages/portaal/PortaalDashboardPage'))
+const PortaalOpdrachtenPage = React.lazy(() => import('@/pages/portaal/PortaalOpdrachtenPage'))
+const PortaalKaartPage = React.lazy(() => import('@/pages/portaal/PortaalKaartPage'))
+const PortaalKlantenPage = React.lazy(() => import('@/pages/portaal/PortaalKlantenPage'))
+const PortaalUrenPage = React.lazy(() => import('@/pages/portaal/PortaalUrenPage'))
+const PortaalTolPage = React.lazy(() => import('@/pages/portaal/PortaalTolPage'))
+const OpdrachtenBeheerPage = React.lazy(() => import('@/pages/opdrachten/OpdrachtenBeheerPage'))
+const MijnOpdrachtenPage = React.lazy(() => import('@/pages/opdrachten/MijnOpdrachtenPage'))
+
 // Spreadsheets
 const SpreadsheetListPage = React.lazy(() => import('@/pages/spreadsheets/SpreadsheetListPage'))
 const SpreadsheetEditorPage = React.lazy(() => import('@/pages/spreadsheets/SpreadsheetEditorPage'))
@@ -218,6 +228,39 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Alleen externe opdrachtgevers; interne gebruikers gaan terug naar het dashboard.
+function OpdrachtgeverRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuthStore()
+
+  if (user?.rol !== 'opdrachtgever') {
+    return <Navigate to="/" replace />
+  }
+
+  return <>{children}</>
+}
+
+// Modules die een chauffeur niet hoort te zien.
+function GeenChauffeurRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuthStore()
+
+  if (user?.rol === 'chauffeur' || user?.rol === 'opdrachtgever') {
+    return <Navigate to="/" replace />
+  }
+
+  return <>{children}</>
+}
+
+// Het interne dashboard is niets waard voor een opdrachtgever: stuur hem door.
+function HomeRoute() {
+  const { user } = useAuthStore()
+
+  if (user?.rol === 'opdrachtgever') {
+    return <Navigate to="/portaal" replace />
+  }
+
+  return <DashboardPage />
+}
+
 // Route wrapper that allows admin OR users with a specific module permission
 function PermissionRoute({ children, permission }: { children: React.ReactNode; permission: string }) {
   const { user } = useAuthStore()
@@ -311,9 +354,19 @@ function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<DashboardPage />} />
+        <Route path="/" element={<HomeRoute />} />
         <Route path="/activities" element={<ActivityPage />} />
-        
+
+        {/* Opdrachtgeversportaal */}
+        <Route path="/portaal" element={<OpdrachtgeverRoute><PortaalDashboardPage /></OpdrachtgeverRoute>} />
+        <Route path="/portaal/opdrachten" element={<OpdrachtgeverRoute><PortaalOpdrachtenPage /></OpdrachtgeverRoute>} />
+        <Route path="/portaal/kaart" element={<OpdrachtgeverRoute><PortaalKaartPage /></OpdrachtgeverRoute>} />
+        <Route path="/portaal/klanten" element={<OpdrachtgeverRoute><PortaalKlantenPage /></OpdrachtgeverRoute>} />
+        <Route path="/portaal/uren" element={<OpdrachtgeverRoute><PortaalUrenPage /></OpdrachtgeverRoute>} />
+        <Route path="/portaal/tol" element={<OpdrachtgeverRoute><PortaalTolPage /></OpdrachtgeverRoute>} />
+        <Route path="/opdrachten" element={<OpdrachtenBeheerPage />} />
+        <Route path="/mijn-opdrachten" element={<MijnOpdrachtenPage />} />
+            <Route path="/mijn-opdrachten/voltooid" element={<MijnOpdrachtenPage archief />} />
         {/* Admin routes */}
         <Route path="/admin/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
         <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
@@ -400,7 +453,7 @@ function App() {
         <Route path="/pakmiddelen" element={<PermissionRoute permission="view_pakmiddelen"><PakmiddelenPage /></PermissionRoute>} />
 
         {/* Takenlijst */}
-        <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/tasks" element={<GeenChauffeurRoute><TasksPage /></GeenChauffeurRoute>} />
 
         {/* Laadlijsten */}
         <Route path="/laadlijst" element={<PermissionRoute permission="view_loadlist"><LoadListPage /></PermissionRoute>} />
@@ -428,13 +481,13 @@ function App() {
         <Route path="/reports" element={<ReportsPage />} />
 
         {/* Documents (PDF Signing) */}
-        <Route path="/documents" element={<DocumentsPage />} />
-        <Route path="/documents/upload" element={<DocumentUploadPage />} />
-        <Route path="/documents/:id" element={<DocumentDetailPage />} />
-        <Route path="/documents/:id/sign" element={<DocumentSignPage />} />
+        <Route path="/documents" element={<GeenChauffeurRoute><DocumentsPage /></GeenChauffeurRoute>} />
+        <Route path="/documents/upload" element={<GeenChauffeurRoute><DocumentUploadPage /></GeenChauffeurRoute>} />
+        <Route path="/documents/:id" element={<GeenChauffeurRoute><DocumentDetailPage /></GeenChauffeurRoute>} />
+        <Route path="/documents/:id/sign" element={<GeenChauffeurRoute><DocumentSignPage /></GeenChauffeurRoute>} />
 
         {/* Bestandsverkenner */}
-        <Route path="/bestanden" element={<FilesExplorerPage />} />
+        <Route path="/bestanden" element={<GeenChauffeurRoute><FilesExplorerPage /></GeenChauffeurRoute>} />
       </Route>
       
       {/* Catch all - redirect to home */}

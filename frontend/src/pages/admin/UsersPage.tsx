@@ -36,6 +36,7 @@ const roleConfig: Record<string, { key: string; color: string }> = {
   admin: { key: 'users.admin', color: 'bg-purple-100 text-purple-800' },
   gebruiker: { key: 'users.user', color: 'bg-blue-100 text-blue-800' },
   chauffeur: { key: 'users.driver', color: 'bg-green-100 text-green-800' },
+  opdrachtgever: { key: 'users.client', color: 'bg-amber-100 text-amber-800' },
 }
 
 // Modal component
@@ -159,6 +160,7 @@ function UserForm({
     telefoon: user?.telefoon || '',
     bedrijf: user?.bedrijf || '',
     rol: user?.rol || 'gebruiker',
+    opdrachtgever_bedrijf: user?.opdrachtgever_bedrijf || '',
     is_active: user?.is_active ?? true,
     mfa_required: user?.mfa_required ?? false,
     password: '',
@@ -190,6 +192,10 @@ function UserForm({
     if (!formData.username) newErrors.username = t('errors.required')
     if (!formData.voornaam) newErrors.voornaam = t('errors.required')
     if (!formData.achternaam) newErrors.achternaam = t('errors.required')
+
+    if (formData.rol === 'opdrachtgever' && !formData.opdrachtgever_bedrijf) {
+      newErrors.opdrachtgever_bedrijf = t('errors.required')
+    }
     
     if (!user) {
       // Password required for new users
@@ -247,13 +253,21 @@ function UserForm({
     e.preventDefault()
     if (!validate()) return
 
+    // De backend eist dat het bedrijf leeg is zodra de rol geen opdrachtgever is.
+    const isOpdrachtgever = formData.rol === 'opdrachtgever'
+    const basis = {
+      ...formData,
+      opdrachtgever_bedrijf: isOpdrachtgever ? formData.opdrachtgever_bedrijf : null,
+    }
+    const rechten = isOpdrachtgever ? [] : selectedPermissions
+
     if (user) {
       // Update - don't send password
-      const { password, password_confirm, ...updateData } = formData
-      onSave({ ...updateData, module_permissions: selectedPermissions })
+      const { password, password_confirm, ...updateData } = basis
+      onSave({ ...updateData, module_permissions: rechten })
     } else {
       // Create - send all data
-      onSave({ ...formData, module_permissions: selectedPermissions } as any)
+      onSave({ ...basis, module_permissions: rechten } as any)
     }
   }
 
@@ -391,9 +405,31 @@ function UserForm({
           >
             <option value="gebruiker">{t('users.user')}</option>
             <option value="chauffeur">{t('users.driver')}</option>
+            <option value="opdrachtgever">{t('users.client', 'Opdrachtgever')}</option>
             <option value="admin">{t('users.admin')}</option>
           </select>
         </div>
+        {formData.rol === 'opdrachtgever' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('users.clientCompany', 'Bedrijf opdrachtgever')} *
+            </label>
+            <select
+              name="opdrachtgever_bedrijf"
+              value={formData.opdrachtgever_bedrijf}
+              onChange={handleChange}
+              className="input min-h-[44px]"
+            >
+              <option value="">{t('common.select', 'Selecteer...')}</option>
+              {companies.map(c => (
+                <option key={c.id} value={c.id}>{c.naam}</option>
+              ))}
+            </select>
+            {errors.opdrachtgever_bedrijf && (
+              <p className="mt-1 text-sm text-red-600">{errors.opdrachtgever_bedrijf}</p>
+            )}
+          </div>
+        )}
         <div className="flex items-center pt-0 sm:pt-6">
           <label className="flex items-center cursor-pointer min-h-[44px]">
             <input
@@ -421,7 +457,7 @@ function UserForm({
       </div>
 
       {/* Module Permissions */}
-      {availablePermissions.length > 0 && (
+      {availablePermissions.length > 0 && formData.rol !== 'opdrachtgever' && (
         <div className="pt-4 border-t">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-semibold text-gray-900">{t('users.modulePermissions')}</h4>
@@ -884,6 +920,7 @@ export default function UsersPage() {
                   <option value="admin">{t('users.admin')}</option>
                   <option value="gebruiker">{t('users.user')}</option>
                   <option value="chauffeur">{t('users.driver')}</option>
+                  <option value="opdrachtgever">{t('users.client', 'Opdrachtgever')}</option>
                 </select>
               </div>
 

@@ -7,6 +7,7 @@ import {
   XMarkIcon,
   HomeIcon,
   UsersIcon,
+  BanknotesIcon,
   BuildingOfficeIcon,
   TruckIcon,
   ClockIcon,
@@ -60,9 +61,19 @@ interface NavItem {
   name: string
   href: string
   icon: React.ComponentType<{ className?: string }>
-  roles?: ('admin' | 'gebruiker' | 'chauffeur')[]
+  roles?: ('admin' | 'gebruiker' | 'chauffeur' | 'opdrachtgever')[]
   permission?: string
 }
+
+// De opdrachtgever is een externe gebruiker: alleen deze items, niets anders.
+const opdrachtgeverNavigation: NavItem[] = [
+  { name: 'nav.portaalDashboard', href: '/portaal', icon: HomeIcon, roles: ['opdrachtgever'] },
+  { name: 'nav.portaalOpdrachten', href: '/portaal/opdrachten', icon: ClipboardDocumentCheckIcon, roles: ['opdrachtgever'] },
+  { name: 'nav.portaalKlanten', href: '/portaal/klanten', icon: BuildingOfficeIcon, roles: ['opdrachtgever'] },
+  { name: 'nav.portaalUren', href: '/portaal/uren', icon: ClockIcon, roles: ['opdrachtgever'] },
+  { name: 'nav.portaalTol', href: '/portaal/tol', icon: BanknotesIcon, roles: ['opdrachtgever'] },
+  { name: 'nav.portaalKaart', href: '/portaal/kaart', icon: MapPinIcon, roles: ['opdrachtgever'] },
+]
 
 const navigation: NavItem[] = [
   { name: 'nav.dashboard', href: '/', icon: HomeIcon, roles: ['admin', 'gebruiker'], permission: 'view_dashboard' },
@@ -82,9 +93,9 @@ const navigation: NavItem[] = [
   { name: 'nav.leave', href: '/leave', icon: CalendarDaysIcon },
   { name: 'nav.leaveBalance', href: '/leave/balances', icon: ScaleIcon, roles: ['admin', 'gebruiker', 'chauffeur'], permission: 'view_leave_balances' },
   { name: 'nav.leaveRequests', href: '/leave/admin', icon: ClipboardDocumentCheckIcon, roles: ['admin'], permission: 'can_manage_leave_for_all' },
-  { name: 'nav.documents', href: '/documents', icon: PencilSquareIcon },
-  { name: 'nav.filesExplorer', href: '/bestanden', icon: FolderIcon },
-  { name: 'nav.tasks', href: '/tasks', icon: ClipboardDocumentCheckIcon },
+  { name: 'nav.documents', href: '/documents', icon: PencilSquareIcon, roles: ['admin', 'gebruiker'] },
+  { name: 'nav.filesExplorer', href: '/bestanden', icon: FolderIcon, roles: ['admin', 'gebruiker'] },
+  { name: 'nav.tasks', href: '/tasks', icon: ClipboardDocumentCheckIcon, roles: ['admin', 'gebruiker'] },
   { name: 'nav.notifications', href: '/notifications', icon: BellIcon, roles: ['admin'], permission: 'view_notifications' },
   { name: 'nav.invoices', href: '/invoices', icon: DocumentTextIcon, roles: ['admin', 'gebruiker'], permission: 'view_invoices' },
   { name: 'nav.factuurwizard', href: '/factuurwizard', icon: SparklesIcon, roles: ['admin', 'gebruiker'], permission: 'use_invoice_wizard' },
@@ -106,6 +117,9 @@ const navigation: NavItem[] = [
   { name: 'nav.tolheffingBuitenUren', href: '/tolheffing/buiten-uren', icon: ClockIcon, permission: 'view_tolling' },
   { name: 'nav.tolheffingAfrekening', href: '/tolheffing/afrekening', icon: DocumentTextIcon, roles: ['admin'], permission: 'view_tolling' },
   { name: 'nav.tolheffingDoorbelasting', href: '/tolheffing/doorbelasting', icon: ScaleIcon, roles: ['admin'], permission: 'view_tolling' },
+  { name: 'nav.opdrachtenBeheer', href: '/opdrachten', icon: ClipboardDocumentCheckIcon, roles: ['admin', 'gebruiker'] },
+  { name: 'nav.mijnOpdrachten', href: '/mijn-opdrachten', icon: ClipboardDocumentCheckIcon, roles: ['admin', 'chauffeur'] },
+  { name: 'nav.voltooideOpdrachten', href: '/mijn-opdrachten/voltooid', icon: ClipboardDocumentCheckIcon, roles: ['admin', 'chauffeur'] },
 ]
 
 const adminNavigation: NavItem[] = [
@@ -121,13 +135,14 @@ interface NavGroupDef {
   hrefs: string[]
 }
 const navGroups: NavGroupDef[] = [
-  { id: 'overview',     labelKey: 'nav.group.overview',     fallback: 'Overzicht',              hrefs: ['/', '/planning', '/notifications'] },
+  { id: 'overview',     labelKey: 'nav.group.overview',     fallback: 'Overzicht',              hrefs: ['/', '/planning', '/notifications', '/opdrachten', '/mijn-opdrachten', '/mijn-opdrachten/voltooid'] },
   { id: 'masterdata',   labelKey: 'nav.group.masterdata',   fallback: 'Basisgegevens',          hrefs: ['/companies', '/drivers', '/fleet', '/pakmiddelen'] },
   { id: 'hours',        labelKey: 'nav.group.hours',        fallback: 'Uren & verlof',          hrefs: ['/time-entries', '/my-hours', '/submitted-hours', '/uren-import', '/leave', '/leave/balances', '/leave/admin'] },
   { id: 'registration', labelKey: 'nav.group.registration', fallback: 'Registraties',           hrefs: ['/toll', '/toll/admin', '/kilometerheffing', '/track-trace', '/tachograph', '/tachograph/comparison', '/laadlijst', '/tolheffing', '/tolheffing/sync', '/tolheffing/buiten-uren', '/tolheffing/afrekening', '/tolheffing/doorbelasting'] },
   { id: 'invoicing',    labelKey: 'nav.group.invoicing',    fallback: 'Facturatie',             hrefs: ['/invoices', '/factuurwizard', '/factuurwizard/beheer', '/invoices/templates', '/imports', '/revenue'] },
   { id: 'documents',    labelKey: 'nav.group.documents',    fallback: 'Documenten & rapporten', hrefs: ['/documents', '/bestanden', '/tasks', '/reports', '/spreadsheets', '/spreadsheets/templates', '/maintenance'] },
   { id: 'admin',        labelKey: 'nav.group.admin',        fallback: 'Beheer',                 hrefs: ['/admin/users', '/settings'] },
+  { id: 'portaal',      labelKey: 'nav.group.portaal',      fallback: 'Portaal',                hrefs: ['/portaal', '/portaal/opdrachten', '/portaal/klanten', '/portaal/uren', '/portaal/tol', '/portaal/kaart'] },
 ]
 
 const COLLAPSE_KEY = 'tms.sidebar.collapsed'
@@ -155,9 +170,12 @@ export default function DashboardLayout() {
 
   const userRole = user?.rol || 'chauffeur'
   const userPermissions = user?.module_permissions || []
+  const isOpdrachtgever = userRole === 'opdrachtgever'
 
   const filterByRole = (items: NavItem[]) =>
     items.filter(item => {
+      // Externe gebruikers krijgen niets tenzij het item hen expliciet noemt.
+      if (isOpdrachtgever) return item.roles?.includes('opdrachtgever') ?? false
       if (userRole === 'admin') {
         if (!item.roles) return true
         return item.roles.includes('admin')
@@ -168,8 +186,8 @@ export default function DashboardLayout() {
       return true
     })
 
-  const filteredNavigation = filterByRole(navigation)
-  const filteredAdminNavigation = filterByRole(adminNavigation)
+  const filteredNavigation = filterByRole(isOpdrachtgever ? opdrachtgeverNavigation : navigation)
+  const filteredAdminNavigation = isOpdrachtgever ? [] : filterByRole(adminNavigation)
   const allNavigation = useMemo(
     () => [...filteredNavigation, ...filteredAdminNavigation],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -351,7 +369,7 @@ export default function DashboardLayout() {
                 className={clsx('h-6 w-6 pointer-events-none', verversen && 'animate-spin')}
               />
             </button>
-            <NotificationBell />
+            {!isOpdrachtgever && <NotificationBell />}
 
             <Menu as="div" className="relative">
               <Menu.Button className="flex items-center gap-2 p-1.5 hover:bg-gray-100 rounded-lg touch-target transition-colors touch-manipulation">
@@ -410,7 +428,7 @@ export default function DashboardLayout() {
           </div>
         </div>
 
-        <LicenseExpiryBanner />
+        {!isOpdrachtgever && <LicenseExpiryBanner />}
 
         <main className="flex-1 overflow-auto min-w-0">
           <div className="page-container min-w-0">
@@ -420,7 +438,7 @@ export default function DashboardLayout() {
       </div>
 
       <PushNotificationPrompt delay={3000} />
-      <ActiveTasksPopup />
+      {!isOpdrachtgever && <ActiveTasksPopup />}
     </div>
   )
 }

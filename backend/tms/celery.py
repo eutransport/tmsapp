@@ -92,4 +92,9 @@ app.conf.beat_schedule = {
         'task': 'apps.tolling.tasks.controleer_tariefbronnen',
         'schedule': crontab(day_of_week=1, hour=6, minute=0),
     },
+    'ververs-opdracht-eta': {
+        # De taak slaat opdrachten over die binnen tien minuten al berekend zijn.
+        'task': 'apps.opdrachten.tasks.ververs_eta',
+        'schedule': crontab(minute='*/10'),
+    },
 }

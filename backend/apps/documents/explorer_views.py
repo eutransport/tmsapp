@@ -15,6 +15,8 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.core.permissions import NietVoorChauffeur
+
 from .explorer_serializers import (
     FileEntrySerializer,
     FolderDetailSerializer,
@@ -41,7 +43,7 @@ User = get_user_model()
 
 
 class FolderViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, NietVoorChauffeur]
     parser_classes = [JSONParser]
     serializer_class = FolderSerializer
 
@@ -258,7 +260,7 @@ class FolderViewSet(viewsets.ModelViewSet):
 
 
 class FileEntryViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, NietVoorChauffeur]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     serializer_class = FileEntrySerializer
 

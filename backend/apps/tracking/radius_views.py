@@ -23,6 +23,7 @@ from .radius_archive_service import (
 from .radius_service import (
     JOURNEYS_MAX_DAGEN,
     RadiusError,
+    actieve_koppeling,
     get_journey_summary_per_vehicle,
     get_journeys,
     get_telematics_customers,
@@ -50,11 +51,11 @@ def _fout_response(exc, melding):
     return Response({'detail': str(exc) or melding}, status=status.HTTP_400_BAD_REQUEST)
 
 
-def _bepaal_klant(klant_id):
+def _bepaal_klant(klant_id, koppeling=None):
     """Gebruik de meegegeven klant, of val terug op de eerste Telematics-klant."""
     if klant_id:
         return klant_id
-    klanten = get_telematics_customers()
+    klanten = get_telematics_customers(connection=koppeling)
     if not klanten:
         raise RadiusError('Er is geen Radius klant met een Telematics-abonnement gevonden.')
     return klanten[0]['id']
@@ -84,7 +85,7 @@ class RadiusConnectionTestView(APIView):
 
     def post(self, request):
         try:
-            resultaat = test_connection()
+            resultaat = test_connection(connection=actieve_koppeling())
         except RadiusError as exc:
             return Response(
                 {'ok': False, 'detail': str(exc)},
@@ -110,7 +111,7 @@ class RadiusCustomersView(APIView):
 
     def get(self, request):
         try:
-            klanten = get_telematics_customers()
+            klanten = get_telematics_customers(connection=actieve_koppeling())
         except RadiusError as exc:
             return _fout_response(exc, 'Kan de Radius klanten niet ophalen.')
         except Exception:
@@ -134,16 +135,17 @@ class RadiusVehiclesView(APIView):
 
     def get(self, request):
         klant_id = request.query_params.get('customer')
+        koppeling = actieve_koppeling()
         try:
             if not klant_id:
-                klanten = get_telematics_customers()
+                klanten = get_telematics_customers(connection=koppeling)
                 if not klanten:
                     return Response(
                         {'detail': 'Er is geen Radius klant met een Telematics-abonnement gevonden.'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 klant_id = klanten[0]['id']
-            resultaat = get_vehicles(klant_id)
+            resultaat = get_vehicles(klant_id, connection=koppeling)
         except RadiusError as exc:
             return _fout_response(exc, 'Kan de Radius voertuigen niet ophalen.')
         except Exception:
@@ -168,9 +170,10 @@ class RadiusJourneysView(APIView):
 
     def get(self, request):
         van, tot = _bepaal_periode(request)
+        koppeling = actieve_koppeling()
         try:
-            klant_id = _bepaal_klant(request.query_params.get('customer'))
-            resultaat = get_journeys(klant_id, van, tot)
+            klant_id = _bepaal_klant(request.query_params.get('customer'), koppeling)
+            resultaat = get_journeys(klant_id, van, tot, connection=koppeling)
         except RadiusError as exc:
             return _fout_response(exc, 'Kan de Radius ritgeschiedenis niet ophalen.')
         except Exception:
@@ -417,9 +420,10 @@ class RadiusJourneySummaryView(APIView):
 
     def get(self, request):
         van, tot = _bepaal_periode(request)
+        koppeling = actieve_koppeling()
         try:
-            klant_id = _bepaal_klant(request.query_params.get('customer'))
-            resultaat = get_journey_summary_per_vehicle(klant_id, van, tot)
+            klant_id = _bepaal_klant(request.query_params.get('customer'), koppeling)
+            resultaat = get_journey_summary_per_vehicle(klant_id, van, tot, connection=koppeling)
         except RadiusError as exc:
             return _fout_response(exc, 'Kan het Radius ritoverzicht niet ophalen.')
         except Exception:

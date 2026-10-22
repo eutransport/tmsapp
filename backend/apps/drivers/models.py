@@ -80,3 +80,32 @@ class Driver(models.Model):
     
     def __str__(self):
         return self.naam
+
+
+class DriverBedrijfPeriode(models.Model):
+    """Bij welk bedrijf een chauffeur in welke periode hoorde.
+
+    Het bedrijf op de chauffeur zelf kent geen geschiedenis; zonder deze
+    periodes zou een opdrachtgever na een wissel ook de uren zien van de tijd
+    dat de chauffeur elders reed.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    driver = models.ForeignKey(
+        Driver, on_delete=models.CASCADE, related_name='bedrijf_periodes'
+    )
+    bedrijf = models.ForeignKey(
+        'companies.Company', on_delete=models.CASCADE, related_name='chauffeur_periodes'
+    )
+    vanaf = models.DateField(verbose_name='Vanaf')
+    tot = models.DateField(null=True, blank=True, verbose_name='Tot en met')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Chauffeursperiode bij bedrijf'
+        verbose_name_plural = 'Chauffeursperiodes bij bedrijf'
+        ordering = ['driver__naam', '-vanaf']
+
+    def __str__(self):
+        return f'{self.driver} @ {self.bedrijf} ({self.vanaf} - {self.tot or "heden"})'
+

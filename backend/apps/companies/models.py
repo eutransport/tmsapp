@@ -15,7 +15,15 @@ class Company(models.Model):
     postcode = models.CharField(max_length=10, blank=True, verbose_name='Postcode')
     stad = models.CharField(max_length=100, blank=True, verbose_name='Stad')
     land = models.CharField(max_length=100, blank=True, verbose_name='Land')
-    
+
+    # Alleen beheerders vullen dit; bepaalt wat het opdrachtgeversportaal op de kaart toont.
+    volgbare_voertuigen = models.ManyToManyField(
+        'fleet.Vehicle',
+        blank=True,
+        related_name='volgbaar_voor_bedrijven',
+        verbose_name='Volgbare voertuigen'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

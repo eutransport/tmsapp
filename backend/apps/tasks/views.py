@@ -12,6 +12,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 
 from .models import Task, TaskNote, TaskActivity, TaskReminderSettings, TaskStatus
+from apps.core.permissions import NietVoorChauffeur
 from .serializers import (
     TaskSerializer,
     TaskListSerializer,
@@ -43,7 +44,7 @@ class TaskViewSet(viewsets.ModelViewSet):
       - `assigned_by_me`: taken die ik aan anderen heb toegewezen (alleen beheerders)
       - `all`: alle taken (alleen admins)
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, NietVoorChauffeur]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_serializer_class(self):

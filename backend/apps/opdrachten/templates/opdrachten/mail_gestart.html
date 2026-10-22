@@ -1,0 +1,38 @@
+{% extends "opdrachten/mail_basis.html" %}
+
+{% block regels %}
+  {% if opdracht.ritnummer %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;width:40%;">{{ T.ritnummer }}</td>
+    <td style="padding:8px 0;font-weight:600;">{{ opdracht.ritnummer }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;width:40%;">{{ T.chauffeur }}</td>
+    <td style="padding:8px 0;font-weight:600;">{{ chauffeur }}</td>
+  </tr>
+  {% if opdracht.kenteken %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;border-top:1px solid #e5e7eb;">{{ T.kenteken }}</td>
+    <td style="padding:8px 0;font-weight:600;border-top:1px solid #e5e7eb;">{{ opdracht.kenteken }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;border-top:1px solid #e5e7eb;">{{ T.klant }}</td>
+    <td style="padding:8px 0;font-weight:600;border-top:1px solid #e5e7eb;">{{ opdracht.klant_naam }}</td>
+  </tr>
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;border-top:1px solid #e5e7eb;">{{ T.adres }}</td>
+    <td style="padding:8px 0;border-top:1px solid #e5e7eb;">{{ opdracht.adres }}<br>{{ opdracht.postcode }} {{ opdracht.plaats }}</td>
+  </tr>
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;border-top:1px solid #e5e7eb;">{{ T.gestart_om }}</td>
+    <td style="padding:8px 0;font-weight:600;border-top:1px solid #e5e7eb;">{{ opdracht.gestart_op|date:"d-m-Y H:i" }}</td>
+  </tr>
+  {% if opdracht.geopend_tot %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;border-top:1px solid #e5e7eb;">{{ T.geopend_tot }}</td>
+    <td style="padding:8px 0;border-top:1px solid #e5e7eb;">{{ opdracht.geopend_tot|time:"H:i" }}</td>
+  </tr>
+  {% endif %}
+{% endblock %}

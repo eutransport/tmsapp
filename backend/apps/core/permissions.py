@@ -132,6 +132,43 @@ class IsAdminOnly(BasePermission):
         return request.user.rol == 'admin'
 
 
+class NietVoorChauffeur(BasePermission):
+    """
+    Interne kantoormodules: chauffeurs en opdrachtgevers horen hier niet.
+    """
+
+    message = 'Deze module is niet beschikbaar voor jouw rol.'
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if request.user.is_superuser:
+            return True
+
+        return request.user.rol not in ('chauffeur', 'opdrachtgever')
+
+
+class IsOpdrachtgever(BasePermission):
+    """
+    Alleen externe opdrachtgevers met een gekoppeld bedrijf.
+
+    De koppeling is verplicht: zonder bedrijf valt er niets te filteren en zou
+    een view ongemerkt alles kunnen teruggeven.
+    """
+
+    message = 'Alleen beschikbaar voor opdrachtgevers met een gekoppeld bedrijf.'
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        return bool(
+            getattr(request.user, 'is_opdrachtgever', False)
+            and request.user.opdrachtgever_bedrijf_id
+        )
+
+
 class PlanningPermission(BasePermission):
     """
     Planning permission:

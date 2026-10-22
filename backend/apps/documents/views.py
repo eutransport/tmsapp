@@ -14,6 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from apps.core.throttling import DocumentEmailRateThrottle, DocumentSignRateThrottle
+from apps.core.permissions import NietVoorChauffeur
 from .models import SignedDocument, SavedSignature
 from .serializers import (
     SignedDocumentListSerializer,
@@ -38,7 +39,7 @@ class SignedDocumentViewSet(viewsets.ModelViewSet):
     """
     ViewSet voor documenten die ondertekend moeten worden.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, NietVoorChauffeur]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get_queryset(self):

@@ -59,6 +59,7 @@ LOCAL_APPS = [
     'apps.tasks',
     'apps.loadlist',
     'apps.tolling',
+    'apps.opdrachten',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -70,6 +71,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'tms.middleware.OpdrachtgeverScopeMiddleware',
     'tms.middleware.LastActivityMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',

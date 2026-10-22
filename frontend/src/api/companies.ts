@@ -15,6 +15,7 @@ export interface CompanyCreate {
   postcode?: string
   stad?: string
   land?: string
+  volgbare_voertuigen?: string[]
 }
 
 export interface CompanyUpdate extends Partial<CompanyCreate> {}

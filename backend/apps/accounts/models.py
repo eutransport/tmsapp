@@ -3,6 +3,7 @@ Accounts app models - Custom User model.
 """
 import uuid
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.core.cache import cache
 from django.db import models
 
 
@@ -10,6 +11,7 @@ class UserRole(models.TextChoices):
     ADMIN = 'admin', 'Admin'
     GEBRUIKER = 'gebruiker', 'Gebruiker'
     CHAUFFEUR = 'chauffeur', 'Chauffeur'
+    OPDRACHTGEVER = 'opdrachtgever', 'Opdrachtgever'
 
 
 # Available module permissions that can be granted to individual users
@@ -116,6 +118,16 @@ class User(AbstractBaseUser, PermissionsMixin):
         default=UserRole.GEBRUIKER,
         verbose_name='Rol'
     )
+
+    # Bepaalt voor een opdrachtgever welke voertuigen, chauffeurs en opdrachten hij ziet.
+    opdrachtgever_bedrijf = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='portaal_gebruikers',
+        verbose_name='Bedrijf opdrachtgever'
+    )
     
     # 2FA/MFA
     mfa_enabled = models.BooleanField(default=False, verbose_name='2FA Ingeschakeld')
@@ -159,6 +171,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     def __str__(self):
         return f"{self.voornaam} {self.achternaam}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # OpdrachtgeverScopeMiddleware leest de rol uit de cache.
+        cache.delete(f'rol_{self.pk}')
     
     @property
     def full_name(self):
@@ -172,9 +189,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     def is_chauffeur(self):
         return self.rol == UserRole.CHAUFFEUR
 
+    @property
+    def is_opdrachtgever(self):
+        return self.rol == UserRole.OPDRACHTGEVER and not self.is_superuser
+
     def has_module_permission(self, permission: str) -> bool:
         """Check if this user has a specific module permission."""
         # Admins have all permissions implicitly
         if self.is_admin:
             return True
+        # Opdrachtgevers zijn externe gebruikers en krijgen nooit interne modules.
+        if self.is_opdrachtgever:
+            return False
         return permission in (self.module_permissions or [])

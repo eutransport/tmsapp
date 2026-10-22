@@ -15,12 +15,14 @@ class MailingListContactSerializer(serializers.ModelSerializer):
 class CompanySerializer(serializers.ModelSerializer):
     mailing_contacts = MailingListContactSerializer(many=True, read_only=True)
     mailing_contacts_count = serializers.SerializerMethodField()
+    volgbare_voertuigen_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = Company
         fields = [
             'id', 'naam', 'kvk', 'telefoon', 'contactpersoon',
             'email', 'adres', 'postcode', 'stad', 'land',
+            'volgbare_voertuigen', 'volgbare_voertuigen_detail',
             'mailing_contacts', 'mailing_contacts_count',
             'created_at', 'updated_at'
         ]
@@ -28,3 +30,9 @@ class CompanySerializer(serializers.ModelSerializer):
 
     def get_mailing_contacts_count(self, obj):
         return obj.mailing_contacts.filter(is_active=True).count()
+
+    def get_volgbare_voertuigen_detail(self, obj):
+        return [
+            {'id': str(v.id), 'kenteken': v.kenteken, 'type_wagen': v.type_wagen}
+            for v in obj.volgbare_voertuigen.all()
+        ]

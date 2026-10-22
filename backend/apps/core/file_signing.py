@@ -124,7 +124,19 @@ def serve_signed_media(request, path: str):
     if not os.path.isfile(resolved):
         raise Http404('Bestand niet gevonden')
 
-    response = FileResponse(open(resolved, 'rb'))
+    # ?dl=1 forceert een download in plaats van een voorvertoning.
+    als_bijlage = request.GET.get('dl') in ('1', 'true')
+    naam = os.path.basename(resolved)
+    gevraagd = (request.GET.get('naam') or '').strip()
+    if als_bijlage and gevraagd:
+        # Alleen de kale bestandsnaam overnemen, nooit een pad.
+        naam = os.path.basename(gevraagd.replace('\\', '/'))[:120] or naam
+
+    response = FileResponse(
+        open(resolved, 'rb'),
+        as_attachment=als_bijlage,
+        filename=naam if als_bijlage else None,
+    )
     # Allow same-origin iframe embedding so PDFs can be previewed inline.
     response['X-Frame-Options'] = 'SAMEORIGIN'
     return response

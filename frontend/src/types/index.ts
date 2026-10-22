@@ -1,4 +1,6 @@
 // User types
+export type UserRole = 'admin' | 'gebruiker' | 'chauffeur' | 'opdrachtgever'
+
 export interface User {
   id: string
   email: string
@@ -8,7 +10,9 @@ export interface User {
   full_name: string
   telefoon: string
   bedrijf: string
-  rol: 'admin' | 'gebruiker' | 'chauffeur'
+  rol: UserRole
+  opdrachtgever_bedrijf?: string | null
+  opdrachtgever_bedrijf_naam?: string | null
   mfa_enabled: boolean
   mfa_required: boolean
   module_permissions: string[]
@@ -27,7 +31,8 @@ export interface UserCreate {
   achternaam: string
   telefoon?: string
   bedrijf?: string
-  rol: 'admin' | 'gebruiker' | 'chauffeur'
+  rol: UserRole
+  opdrachtgever_bedrijf?: string | null
   is_active?: boolean
 }
 
@@ -136,6 +141,8 @@ export interface Company {
   postcode: string
   stad: string
   land: string
+  volgbare_voertuigen: string[]
+  volgbare_voertuigen_detail?: { id: string; kenteken: string; type_wagen: string }[]
   mailing_contacts: MailingListContact[]
   mailing_contacts_count: number
   created_at: string

@@ -12,7 +12,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import VALID_MODULE_PERMISSIONS, MODULE_PERMISSION_DEPENDENCIES
+from .models import VALID_MODULE_PERMISSIONS, MODULE_PERMISSION_DEPENDENCIES, UserRole
 
 User = get_user_model()
 
@@ -29,12 +29,16 @@ def _resolve_permissions_with_dependencies(permissions: list) -> list:
 class UserSerializer(serializers.ModelSerializer):
     """Basic user serializer for listings."""
     full_name = serializers.CharField(read_only=True)
+    opdrachtgever_bedrijf_naam = serializers.CharField(
+        source='opdrachtgever_bedrijf.naam', read_only=True, default=None
+    )
     
     class Meta:
         model = User
         fields = [
             'id', 'email', 'username', 'voornaam', 'achternaam',
             'full_name', 'telefoon', 'bedrijf', 'rol',
+            'opdrachtgever_bedrijf', 'opdrachtgever_bedrijf_naam',
             'module_permissions', 'nav_favorites',
             'mfa_enabled', 'mfa_required', 'is_active', 'date_joined', 'last_login'
         ]
@@ -44,16 +48,35 @@ class UserSerializer(serializers.ModelSerializer):
 class UserDetailSerializer(serializers.ModelSerializer):
     """Detailed user serializer for profile."""
     full_name = serializers.CharField(read_only=True)
+    opdrachtgever_bedrijf_naam = serializers.CharField(
+        source='opdrachtgever_bedrijf.naam', read_only=True, default=None
+    )
     
     class Meta:
         model = User
         fields = [
             'id', 'email', 'username', 'voornaam', 'achternaam',
             'full_name', 'telefoon', 'bedrijf', 'rol',
+            'opdrachtgever_bedrijf', 'opdrachtgever_bedrijf_naam',
             'module_permissions', 'nav_favorites',
             'mfa_enabled', 'mfa_required', 'is_active', 'date_joined', 'last_login'
         ]
-        read_only_fields = ['id', 'email', 'rol', 'is_active', 'date_joined', 'last_login']
+        read_only_fields = [
+            'id', 'email', 'rol', 'opdrachtgever_bedrijf', 'is_active',
+            'date_joined', 'last_login'
+        ]
+
+
+def _controleer_opdrachtgever_bedrijf(rol, bedrijf):
+    """Een opdrachtgever zonder bedrijf ziet niets en mag niet bestaan."""
+    if rol == UserRole.OPDRACHTGEVER and not bedrijf:
+        raise serializers.ValidationError({
+            'opdrachtgever_bedrijf': 'Kies een bedrijf voor deze opdrachtgever.'
+        })
+    if rol != UserRole.OPDRACHTGEVER and bedrijf:
+        raise serializers.ValidationError({
+            'opdrachtgever_bedrijf': 'Alleen een opdrachtgever kan aan een bedrijf gekoppeld worden.'
+        })
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
@@ -66,7 +89,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         fields = [
             'email', 'username', 'password', 'password_confirm',
             'voornaam', 'achternaam', 'telefoon', 'bedrijf', 'rol', 'is_active',
-            'module_permissions',
+            'opdrachtgever_bedrijf', 'module_permissions',
         ]
     
     def validate_module_permissions(self, value):
@@ -103,7 +126,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'email', 'username', 'voornaam', 'achternaam',
             'telefoon', 'bedrijf', 'rol', 'is_active', 'mfa_required',
-            'module_permissions',
+            'opdrachtgever_bedrijf', 'module_permissions',
         ]
 
     def validate_module_permissions(self, value):
@@ -115,6 +138,15 @@ class UserUpdateSerializer(serializers.ModelSerializer):
                 f'Ongeldige rechten: {", ".join(invalid)}'
             )
         return _resolve_permissions_with_dependencies(value)
+
+    def validate(self, attrs):
+        rol = attrs.get('rol', self.instance.rol if self.instance else None)
+        bedrijf = attrs.get(
+            'opdrachtgever_bedrijf',
+            self.instance.opdrachtgever_bedrijf if self.instance else None,
+        )
+        _controleer_opdrachtgever_bedrijf(rol, bedrijf)
+        return attrs
 
     def update(self, instance, validated_data):
         # Sync is_staff with admin role so Django permissions work correctly

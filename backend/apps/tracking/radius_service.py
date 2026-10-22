@@ -305,7 +305,7 @@ def _valideer_klant_id(customer_id):
     return klant_id
 
 
-def get_live_positions(customer_id):
+def get_live_positions(customer_id, connection=None):
     """
     Haal de laatst bekende positie van alle telematics-apparaten van een klant.
 
@@ -317,6 +317,7 @@ def get_live_positions(customer_id):
         LIVE_POSITIONS_PATH,
         params={'customer': klant_id, 'useUTC': ''},
         timeout=LIVE_TIMEOUT,
+        connection=connection,
     )
 
 
@@ -348,7 +349,7 @@ def _adres(device):
     return ', '.join(str(d).strip() for d in delen if d and str(d).strip())
 
 
-def get_devices(customer_id):
+def get_devices(customer_id, connection=None):
     """
     Geef een opgeschoonde lijst van alle telematics-apparaten met hun laatst
     bekende positie. Een voertuig kan meerdere apparaten hebben.
@@ -356,7 +357,7 @@ def get_devices(customer_id):
     Chauffeursnamen die Radius zelf verzint ("Driver of 06-BZF-5") worden
     leeggelaten, zodat de app niet doet alsof er een chauffeur bekend is.
     """
-    data = get_live_positions(customer_id)
+    data = get_live_positions(customer_id, connection=connection)
 
     apparaten = []
     for device in _verzamel_devices(data):
@@ -402,14 +403,14 @@ def get_devices(customer_id):
     }
 
 
-def get_vehicles(customer_id):
+def get_vehicles(customer_id, connection=None):
     """
     Geef één regel per voertuig (kenteken) met de meest recente positie.
 
     Een voertuig kan meerdere trackers hebben; die worden onder ``devices``
     meegegeven zodat er geen gegevens verloren gaan.
     """
-    ruw = get_devices(customer_id)
+    ruw = get_devices(customer_id, connection=connection)
 
     per_kenteken = {}
     zonder_kenteken = []
@@ -608,12 +609,12 @@ def get_journeys(customer_id, van, tot, connection=None):
     }
 
 
-def get_journey_summary_per_vehicle(customer_id, van, tot):
+def get_journey_summary_per_vehicle(customer_id, van, tot, connection=None):
     """
     Vat de ritten samen per voertuig, zoals het overzicht in het Radius-portaal:
     afstand, aantal ritten en totale duur per kenteken.
     """
-    resultaat = get_journeys(customer_id, van, tot)
+    resultaat = get_journeys(customer_id, van, tot, connection=connection)
 
     per_kenteken = {}
     for rit in resultaat['journeys']:

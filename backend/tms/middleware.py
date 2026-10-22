@@ -3,6 +3,7 @@ Custom middleware for TMS application.
 """
 from django.utils import timezone
 from django.core.cache import cache
+from django.http import JsonResponse
 
 
 class LastActivityMiddleware:
@@ -52,3 +53,68 @@ class MediaXFrameOptionsMiddleware:
             response['X-Content-Type-Options'] = 'nosniff'
         
         return response
+
+
+# Paden die een opdrachtgever wel mag benaderen. Alles daarbuiten is verboden.
+OPDRACHTGEVER_TOEGESTANE_PADEN = (
+    '/api/auth/',
+    '/api/portaal/',
+    '/api/core/settings/',
+    '/api/core/fonts/css/',
+    '/api/licensing/',
+    # Alleen het aan- en afmelden voor pushberichten; beheer blijft dicht.
+    '/api/notifications/config/',
+    '/api/notifications/subscriptions/',
+    '/files/',
+    '/media/',
+)
+
+
+class OpdrachtgeverScopeMiddleware:
+    """
+    Sluit het hele interne systeem af voor de rol opdrachtgever.
+
+    De bestaande views gaan er allemaal van uit dat elke ingelogde gebruiker
+    intern is; een flink deel vraagt alleen om IsAuthenticated. In plaats van
+    ruim honderd views aan te passen weigeren we hier alles wat niet expliciet
+    bij het portaal hoort. De rol wordt uit het JWT gehaald, want DRF heeft de
+    gebruiker op dit punt nog niet bepaald.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if self._is_opdrachtgever(request) and not request.path.startswith(
+            OPDRACHTGEVER_TOEGESTANE_PADEN
+        ):
+            return JsonResponse(
+                {'detail': 'Geen toegang tot dit onderdeel.'}, status=403
+            )
+        return self.get_response(request)
+
+    def _is_opdrachtgever(self, request) -> bool:
+        gebruiker_id = self._gebruiker_uit_token(request)
+        if not gebruiker_id:
+            return False
+
+        cache_key = f'rol_{gebruiker_id}'
+        rol = cache.get(cache_key)
+        if rol is None:
+            from apps.accounts.models import User
+            rol = User.objects.filter(pk=gebruiker_id).values_list(
+                'rol', flat=True
+            ).first() or ''
+            cache.set(cache_key, rol, 300)
+        return rol == 'opdrachtgever'
+
+    @staticmethod
+    def _gebruiker_uit_token(request):
+        header = request.META.get('HTTP_AUTHORIZATION', '')
+        if not header.startswith('Bearer '):
+            return None
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            return AccessToken(header[7:]).get('user_id')
+        except Exception:
+            return None
