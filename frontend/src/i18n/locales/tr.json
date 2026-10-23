@@ -258,6 +258,8 @@
     "driving": "Hareket halinde",
     "idling": "Duruyor, motor çalışıyor",
     "parked": "Park halinde",
+    "vehicles": "Araçlar",
+    "noPosition": "Konum bilinmiyor",
     "startKm": "Başlangıç km",
     "endKm": "Bitiş km",
     "drivenKm": "Gidilen"

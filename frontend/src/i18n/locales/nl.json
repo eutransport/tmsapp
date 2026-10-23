@@ -258,6 +258,8 @@
     "driving": "Rijdt",
     "idling": "Stilstaand, motor aan",
     "parked": "Geparkeerd",
+    "vehicles": "Wagens",
+    "noPosition": "Geen positie bekend",
     "startKm": "Beginstand",
     "endKm": "Eindstand",
     "drivenKm": "Gereden"

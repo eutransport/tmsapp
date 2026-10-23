@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import { portaalTracking } from '@/api/portaalTracking'
 import PortaalRittenPerDag from '@/components/portaal/PortaalRittenPerDag'
 import PortaalWagenStatus from '@/components/portaal/PortaalWagenStatus'
+import PortaalWagenLijst from '@/components/portaal/PortaalWagenLijst'
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
@@ -116,14 +117,6 @@ export default function PortaalKaartPage() {
         </h1>
         <div className="flex flex-wrap gap-2">
           <select
-            value={kenteken}
-            onChange={e => setKenteken(e.target.value)}
-            className="input-field"
-          >
-            <option value="">{t('portaalMap.allVehicles', 'Alle wagens')}</option>
-            {voertuigen.map(v => <option key={v.id} value={v.kenteken}>{v.kenteken}</option>)}
-          </select>
-          <select
             value={dagen}
             onChange={e => setDagen(Number(e.target.value))}
             className="input-field"
@@ -147,7 +140,17 @@ export default function PortaalKaartPage() {
         </p>
       )}
 
-      <div ref={kaartElement} className="h-[50vh] w-full card sm:h-[60vh]" />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div ref={kaartElement} className="card h-[50vh] w-full sm:h-[60vh] lg:col-span-2" />
+        <div className="max-h-[50vh] sm:max-h-[60vh] lg:max-h-none">
+          <PortaalWagenLijst
+            voertuigen={voertuigen}
+            posities={posities?.positions || []}
+            gekozen={kenteken}
+            onKies={setKenteken}
+          />
+        </div>
+      </div>
 
       {wagenDag && <PortaalWagenStatus dag={wagenDag} />}
 

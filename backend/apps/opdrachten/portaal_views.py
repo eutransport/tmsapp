@@ -119,6 +119,7 @@ class PortaalPositiesView(PortaalBasisView):
                 'direction': positie.get('direction'),
                 'timestamp': positie.get('timestamp') or positie.get('datetime'),
                 'address': positie.get('address', ''),
+                'status': positie.get('vehicle_status') or '',
             })
 
         return Response({'positions': resultaat, 'count': len(resultaat)})

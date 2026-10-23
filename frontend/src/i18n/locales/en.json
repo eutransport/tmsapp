@@ -258,6 +258,8 @@
     "driving": "Driving",
     "idling": "Stopped, engine running",
     "parked": "Parked",
+    "vehicles": "Vehicles",
+    "noPosition": "No position known",
     "startKm": "Start odometer",
     "endKm": "End odometer",
     "drivenKm": "Driven"

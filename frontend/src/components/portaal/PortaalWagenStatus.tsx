@@ -10,11 +10,7 @@ export default function PortaalWagenStatus({ dag }: { dag: PortaalVoertuigDag })
     waarde ? new Date(waarde).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' }) : '-'
 
   const rijdt = dag.rijdt
-  const status = rijdt
-    ? t('portaalMap.driving', 'Rijdt')
-    : dag.motor_aan
-      ? t('portaalMap.idling', 'Stilstaand, motor aan')
-      : t('portaalMap.parked', 'Geparkeerd')
+  const status = rijdt ? t('portaalMap.driving', 'Rijdt') : t('portaalMap.parked', 'Geparkeerd')
 
   return (
     <div className="card p-4">
@@ -22,7 +18,6 @@ export default function PortaalWagenStatus({ dag }: { dag: PortaalVoertuigDag })
         <div className="flex items-center gap-3">
           <h2 className="section-title">{dag.kenteken}</h2>
           <span className={`chip ${rijdt ? 'chip-success' : 'chip-warning'}`}>{status}</span>
-          {rijdt && <span className="text-sm text-muted">{Math.round(dag.snelheid)} km/u</span>}
         </div>
         <span className="text-xs text-muted">
           {dag.positie_adres} &middot; {tijd(dag.positie_moment)}

@@ -15,6 +15,7 @@ export interface PortaalPositie {
   direction: number | null
   timestamp: string | null
   address: string
+  status: string
 }
 
 export interface PortaalRit {
@@ -49,8 +50,7 @@ export interface PortaalVoertuigDag {
   eerste_start: string | null
   laatste_eind: string | null
   rijdt: boolean
-  snelheid: number
-  motor_aan: boolean
+  toestand: string
   positie_adres: string
   positie_moment: string | null
   latitude: number | null

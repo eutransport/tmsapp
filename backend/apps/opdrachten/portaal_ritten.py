@@ -185,7 +185,8 @@ def dagoverzicht(kenteken, datum):
 
     object_info = linqo_objecten().get(normaliseer(kenteken))
     positie = _live_positie(object_info['object_id']) if object_info else None
-    snelheid = (positie or {}).get('speed') or 0
+    # De volgdienst laat de snelheid op nul staan; alleen vehicle_status is bruikbaar.
+    toestand = (positie or {}).get('vehicle_status') or ''
 
     return {
         'kenteken': kenteken,
@@ -198,9 +199,8 @@ def dagoverzicht(kenteken, datum):
         'km_gereden': round(sum(r['afstand_km'] or 0 for r in ritten), 1),
         'eerste_start': op_volgorde[0]['start_tijd'] if op_volgorde else None,
         'laatste_eind': max(eindtijden) if eindtijden else None,
-        'rijdt': bool(snelheid),
-        'snelheid': snelheid,
-        'motor_aan': bool((positie or {}).get('ignition')),
+        'rijdt': toestand == 'driving',
+        'toestand': toestand,
         'positie_adres': (positie or {}).get('address') or '',
         'positie_moment': (positie or {}).get('timestamp'),
         'latitude': (positie or {}).get('latitude'),
