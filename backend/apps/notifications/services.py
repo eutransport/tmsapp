@@ -11,6 +11,9 @@ from .models import PushSettings, PushSubscription, PushNotification, PushProvid
 
 logger = logging.getLogger(__name__)
 
+# De Microsoft-pushdienst (Edge op Windows) weigert berichten zonder TTL met een 400.
+WEBPUSH_TTL = 86400
+
 
 class PushNotificationService:
     """
@@ -289,6 +292,7 @@ class PushNotificationService:
                     data=json.dumps(payload),
                     vapid_private_key=vapid_private_key,
                     vapid_claims=vapid_claims,
+                    ttl=WEBPUSH_TTL,
                 )
                 
                 # Update last used timestamp

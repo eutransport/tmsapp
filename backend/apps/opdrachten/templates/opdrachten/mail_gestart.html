@@ -29,6 +29,12 @@
     <td style="padding:8px 0;color:#6b7280;border-top:1px solid #e5e7eb;">{{ T.gestart_om }}</td>
     <td style="padding:8px 0;font-weight:600;border-top:1px solid #e5e7eb;">{{ opdracht.gestart_op|date:"d-m-Y H:i" }}</td>
   </tr>
+  {% if eta_tekst %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;border-top:1px solid #e5e7eb;">{{ T.verwachte_aankomst }}</td>
+    <td style="padding:8px 0;font-weight:600;border-top:1px solid #e5e7eb;">{{ eta_tekst }}</td>
+  </tr>
+  {% endif %}
   {% if opdracht.geopend_tot %}
   <tr>
     <td style="padding:8px 0;color:#6b7280;border-top:1px solid #e5e7eb;">{{ T.geopend_tot }}</td>

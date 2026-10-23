@@ -19,6 +19,10 @@ TEKSTEN = {
         'afgeleverd_body': '%(chauffeur)s heeft afgeleverd bij %(klant)s',
         'niet_geleverd_titel': 'Niet geleverd',
         'niet_geleverd_body': '%(chauffeur)s kon niet afleveren bij %(klant)s',
+        'ingetrokken_titel': 'Opdracht ingetrokken',
+        'ingetrokken_body': '%(klant)s, %(adres)s is vervallen',
+        'overgezet_titel': 'Opdracht overgedragen',
+        'overgezet_body': '%(klant)s, %(adres)s staat nu bij een andere chauffeur',
         'eta': 'Verwacht over %(minuten)s minuten',
     },
     'en': {
@@ -30,6 +34,10 @@ TEKSTEN = {
         'afgeleverd_body': '%(chauffeur)s delivered at %(klant)s',
         'niet_geleverd_titel': 'Not delivered',
         'niet_geleverd_body': '%(chauffeur)s could not deliver at %(klant)s',
+        'ingetrokken_titel': 'Order withdrawn',
+        'ingetrokken_body': '%(klant)s, %(adres)s has been cancelled',
+        'overgezet_titel': 'Order reassigned',
+        'overgezet_body': '%(klant)s, %(adres)s has been given to another driver',
         'eta': 'Expected in %(minuten)s minutes',
     },
     'tr': {
@@ -41,6 +49,10 @@ TEKSTEN = {
         'afgeleverd_body': '%(chauffeur)s %(klant)s adresine teslim etti',
         'niet_geleverd_titel': 'Teslim edilmedi',
         'niet_geleverd_body': '%(chauffeur)s %(klant)s adresine teslim edemedi',
+        'ingetrokken_titel': 'Sipariş iptal edildi',
+        'ingetrokken_body': '%(klant)s, %(adres)s iptal edildi',
+        'overgezet_titel': 'Sipariş devredildi',
+        'overgezet_body': '%(klant)s, %(adres)s artık başka bir şoförde',
         'eta': 'Tahmini %(minuten)s dakika',
     },
 }
@@ -55,6 +67,10 @@ def _taal(opdracht):
 def _chauffeur_naam(opdracht):
     chauffeur = opdracht.chauffeur
     return getattr(chauffeur, 'naam', '') or '-'
+
+
+def _adres(opdracht):
+    return ' '.join(deel for deel in (opdracht.adres, opdracht.plaats) if deel)
 
 
 def _portaalgebruikers(opdracht):
@@ -92,13 +108,38 @@ def meld_nieuwe_opdracht(opdracht):
     if gebruiker is None:
         return False
     T = TEKSTEN[_taal(opdracht)]
-    adres = ' '.join(deel for deel in (opdracht.adres, opdracht.plaats) if deel)
     return _stuur(
         [gebruiker],
         T['nieuw_titel'],
-        T['nieuw_body'] % {'klant': opdracht.klant_naam, 'adres': adres},
+        T['nieuw_body'] % {'klant': opdracht.klant_naam, 'adres': _adres(opdracht)},
         '/mijn-opdrachten',
     )
+
+
+def meld_ingetrokken(opdracht):
+    """De chauffeur hoort dat hij niet meer hoeft te rijden."""
+    gebruiker = getattr(opdracht.chauffeur, 'gekoppelde_gebruiker', None)
+    if gebruiker is None:
+        return False
+    T = TEKSTEN[_taal(opdracht)]
+    return _stuur(
+        [gebruiker],
+        T['ingetrokken_titel'],
+        T['ingetrokken_body'] % {'klant': opdracht.klant_naam, 'adres': _adres(opdracht)},
+        '/mijn-opdrachten',
+    )
+
+
+def meld_overgezet(opdracht, vorige_chauffeur):
+    """De oude chauffeur raakt de opdracht kwijt, de nieuwe krijgt hem erbij."""
+    T = TEKSTEN[_taal(opdracht)]
+    gegevens = {'klant': opdracht.klant_naam, 'adres': _adres(opdracht)}
+
+    oud = getattr(vorige_chauffeur, 'gekoppelde_gebruiker', None)
+    if oud is not None:
+        _stuur([oud], T['overgezet_titel'], T['overgezet_body'] % gegevens, '/mijn-opdrachten')
+
+    return meld_nieuwe_opdracht(opdracht)
 
 
 def meld_gestart(opdracht):

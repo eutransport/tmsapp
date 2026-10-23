@@ -155,7 +155,10 @@ class PortaalOpdrachtViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         self._weiger_als_afgehandeld(serializer.instance)
-        serializer.save()
+        vorige_chauffeur = serializer.instance.chauffeur
+        opdracht = serializer.save()
+        if opdracht.chauffeur_id != getattr(vorige_chauffeur, 'id', None):
+            push.meld_overgezet(opdracht, vorige_chauffeur)
 
     def perform_destroy(self, instance):
         # Verwijderen mag ook na afloop; de opdrachtgever bevestigt dat in het scherm.
@@ -168,6 +171,7 @@ class PortaalOpdrachtViewSet(viewsets.ModelViewSet):
         opdracht.status = OpdrachtStatus.INGETROKKEN
         opdracht.ingetrokken_op = timezone.now()
         opdracht.save(update_fields=['status', 'ingetrokken_op', 'updated_at'])
+        push.meld_ingetrokken(opdracht)
         return Response(self.get_serializer(opdracht).data)
 
     @action(detail=True, methods=['post'], url_path='mail-opnieuw')

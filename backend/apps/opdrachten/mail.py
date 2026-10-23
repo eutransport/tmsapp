@@ -113,14 +113,27 @@ def _verstuur(opdracht, soort, template, extra_context=None, bijlagen=()):
         return _onthoud(opdracht, f'{type(fout).__name__}: {fout}')
 
 
+def _eta_tekst(opdracht, T):
+    """De verwachte aankomst zoals die bij het starten is berekend."""
+    minuten = opdracht.eta_start_minuten
+    if not minuten:
+        return ''
+    if opdracht.eta_aankomst:
+        tijd = timezone.localtime(opdracht.eta_aankomst).strftime('%H:%M')
+        return T['eta_tijd'] % {'tijd': tijd, 'minuten': minuten}
+    return T['eta_minuten'] % {'minuten': minuten}
+
+
 def meld_gestart(opdracht):
     instelling = _instelling(opdracht)
     if instelling is None or not instelling.mail_bij_start:
         return False
+    T = teksten_voor(instelling.taal)
     return _verstuur(
         opdracht,
         'gestart',
         'opdrachten/mail_gestart.html',
+        {'eta_tekst': _eta_tekst(opdracht, T)},
     )
 
 
