@@ -1472,6 +1472,7 @@
     "tachograafStartDatumHint": "Bu tarihten itibaren takograf verilerine dayalı saatler otomatik olarak gönderilir.",
     "reminders": "Hatırlatmalar",
     "remindersDescription": "Süresi dolan şoför belgeleri için otomatik hatırlatmaları yapılandırın.",
+    "pushNotifications": "Anlık bildirimler",
     "reminderEnabled": "Hatırlatmaları etkinleştir",
     "reminderEnabledHint": "Şoför belgelerinin süresi yaklaşınca otomatik e-posta gönder.",
     "reminderSchedule": "Planlama",

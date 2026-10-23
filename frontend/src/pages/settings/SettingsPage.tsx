@@ -43,6 +43,8 @@ import ServerMonitoringPanel from '@/components/ServerMonitoringPanel'
 import EmailProfilesManager from '@/components/settings/EmailProfilesManager'
 import AdministratiesManager from '@/components/settings/AdministratiesManager'
 import RadiusConnections from '@/components/settings/RadiusConnections'
+import PushSettingsTab from '@/components/settings/PushSettingsTab'
+import PushNotificationCard from '@/components/pwa/PushNotificationCard'
 
 export default function SettingsPage() {
   const { t } = useTranslation()
@@ -60,6 +62,7 @@ export default function SettingsPage() {
     { id: 'ai', name: t('settings.aiExtraction', 'AI Extractie'), icon: SparklesIcon },
     { id: 'integrations', name: t('settings.integrations', 'Koppelingen'), icon: LinkIcon },
     { id: 'reminders', name: t('settings.reminders', 'Herinneringen'), icon: BellAlertIcon },
+    { id: 'push', name: t('settings.pushNotifications', 'Pushmeldingen'), icon: BellAlertIcon },
     { id: 'server', name: t('settings.server', 'Server'), icon: ServerIcon },
     { id: 'leave', name: t('settings.leaveSettings', 'Verlof'), icon: CalendarDaysIcon, link: '/settings/leave' },
     { id: 'license', name: t('settings.license', 'Licentie'), icon: ShieldCheckIcon },
@@ -1642,6 +1645,14 @@ export default function SettingsPage() {
                 </p>
               </div>
               <AdministratiesManager />
+            </div>
+          )}
+
+          {/* Push Tab */}
+          {activeTab === 'push' && (
+            <div className="space-y-6">
+              <PushSettingsTab onSuccess={setSuccess} onError={setError} />
+              <PushNotificationCard />
             </div>
           )}
     </>

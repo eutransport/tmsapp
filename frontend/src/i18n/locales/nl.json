@@ -1472,6 +1472,7 @@
     "tachograafStartDatumHint": "Vanaf deze datum worden automatisch uren ingediend op basis van tachograaf gegevens.",
     "reminders": "Herinneringen",
     "remindersDescription": "Configureer automatische herinneringen voor verlopen chauffeursdocumenten.",
+    "pushNotifications": "Pushmeldingen",
     "reminderEnabled": "Herinneringen inschakelen",
     "reminderEnabledHint": "Stuur automatisch e-mails wanneer chauffeursdocumenten bijna verlopen.",
     "reminderSchedule": "Planning",

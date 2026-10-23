@@ -63,3 +63,6 @@ requests>=2.31,<3.0
 # System Monitoring
 psutil>=5.9,<7.0
 django-redis>=5.4,<6.0
+
+# Web Push (VAPID)
+pywebpush>=2.0,<3.0

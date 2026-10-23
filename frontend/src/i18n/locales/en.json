@@ -1472,6 +1472,7 @@
     "tachograafStartDatumHint": "From this date, hours will be automatically submitted based on tachograph data.",
     "reminders": "Reminders",
     "remindersDescription": "Configure automatic reminders for expiring driver documents.",
+    "pushNotifications": "Push notifications",
     "reminderEnabled": "Enable reminders",
     "reminderEnabledHint": "Automatically send emails when driver documents are about to expire.",
     "reminderSchedule": "Schedule",

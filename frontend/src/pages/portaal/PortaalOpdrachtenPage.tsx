@@ -9,6 +9,7 @@ import {
   ArrowUpIcon,
   ChatBubbleLeftRightIcon,
   EnvelopeIcon,
+  ExclamationTriangleIcon,
   PaperClipIcon,
   PencilSquareIcon,
   PlusIcon,
@@ -421,18 +422,27 @@ export default function PortaalOpdrachtenPage() {
 
       {verwijderDoel && (
         <div className="modal-overlay" onClick={() => setVerwijderDoel(null)}>
-          <div className="modal-panel max-w-md" onClick={e => e.stopPropagation()}>
-            <h2 className="section-title">{t('orders.deleteTitle', 'Opdracht verwijderen')}</h2>
-            <p className="mt-2 text-sm text-gray-700">
-              {t('orders.deleteBody', 'Weet u zeker dat u opdracht {{ritnummer}} voor {{klant}} wilt verwijderen?', {
-                ritnummer: verwijderDoel.ritnummer,
-                klant: verwijderDoel.klant_naam,
-              })}
-            </p>
-            <p className="mt-2 text-sm text-danger-700">
+          <div className="modal-panel w-full p-5 sm:max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100">
+                <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="section-title">{t('orders.deleteTitle', 'Opdracht verwijderen')}</h2>
+                <p className="mt-1 text-sm text-muted">
+                  {t('orders.deleteBody', 'Weet u zeker dat u opdracht {{ritnummer}} voor {{klant}} wilt verwijderen?', {
+                    ritnummer: verwijderDoel.ritnummer,
+                    klant: verwijderDoel.klant_naam,
+                  })}
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
               {t('orders.deleteWarning', 'De opdracht en de bijlagen verdwijnen definitief. Dit kan niet ongedaan worden gemaakt.')}
             </p>
-            <div className="mt-5 flex justify-end gap-2">
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button className="btn btn-secondary" onClick={() => setVerwijderDoel(null)}>
                 {t('common.cancel', 'Annuleren')}
               </button>
@@ -441,6 +451,7 @@ export default function PortaalOpdrachtenPage() {
                 disabled={verwijderen.isPending}
                 onClick={() => { verwijderen.mutate(verwijderDoel.id); setVerwijderDoel(null) }}
               >
+                <TrashIcon className="h-4 w-4" />
                 {t('common.delete', 'Verwijderen')}
               </button>
             </div>
