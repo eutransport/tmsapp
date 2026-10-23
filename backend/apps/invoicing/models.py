@@ -356,7 +356,9 @@ class Expense(models.Model):
 class FactuurHerinnering(models.Model):
     """Vastlegging van een verstuurde betalingsherinnering.
 
-    Dient als slot: per factuur en fase wordt hoogstens één mail verstuurd.
+    Dient als slot: per factuur en fase wordt hoogstens een mail bezorgd.
+    Mislukt het versturen, dan blijft het slot open tot het maximum aantal
+    pogingen is bereikt.
     """
 
     FASES = (1, 7, 14)
@@ -376,6 +378,13 @@ class FactuurHerinnering(models.Model):
     ontvangers = models.JSONField(default=list, verbose_name='Ontvangers')
     gelukt = models.BooleanField(default=False)
     fout = models.TextField(blank=True)
+    pogingen = models.PositiveSmallIntegerField(default=0, verbose_name='Pogingen')
+    laatste_poging = models.DateTimeField(null=True, blank=True)
+    opgegeven = models.BooleanField(
+        default=False,
+        verbose_name='Opgegeven',
+        help_text='Na herhaald mislukken wordt niet meer geprobeerd.',
+    )
 
     class Meta:
         verbose_name = 'Betalingsherinnering'

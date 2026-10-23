@@ -2,8 +2,13 @@
 
 De taak draait dagelijks en kijkt naar verstuurde verkoopfacturen die nog niet
 op betaald staan. Op 1, 7 en 14 dagen na de vervaldatum gaat er een mail naar de
-mailinglijst van het bedrijf. Per factuur en fase hoogstens een keer; dat wordt
-afgedwongen door een uniek slot in de database.
+mailinglijst van het bedrijf, maar alleen als dat bedrijf een opdrachtgeveraccount
+heeft en de facturen dus in het portaal ziet.
+
+Elke factuur en fase krijgt hoogstens een geslaagde mail; dat wordt afgedwongen
+door een uniek slot in de database. Mislukt het versturen, dan blijft het slot
+open voor een nieuwe poging op een volgende dag en gaat er een waarschuwing naar
+het eigen afzenderadres.
 """
 from __future__ import annotations
 
@@ -27,6 +32,7 @@ from .models import FactuurHerinnering, Invoice, InvoiceStatus, InvoiceType
 logger = logging.getLogger(__name__)
 
 STANDAARD_AFZENDER = 'info@moveo-bv.nl'
+MAX_POGINGEN = 3
 
 
 def _smtp_bron():
@@ -138,11 +144,98 @@ def _bedrijven_met_portaal():
     )
 
 
+def _poging(slot, mislukt: list) -> bool:
+    """Een verzendpoging voor een bestaand slot; legt de uitkomst vast."""
+    factuur = slot.invoice
+    slot.pogingen += 1
+    slot.laatste_poging = timezone.now()
+    slot.fout = ''
+    try:
+        slot.gelukt = _verstuur(factuur, slot.fase, slot.fase)
+        if not slot.gelukt:
+            slot.fout = 'Geen ontvangers of geen SMTP-server ingesteld.'
+    except Exception as fout:
+        logger.exception('Herinnering %s mislukt', factuur.factuurnummer)
+        slot.fout = f'{type(fout).__name__}: {fout}'[:500]
+
+    slot.opgegeven = not slot.gelukt and slot.pogingen >= MAX_POGINGEN
+    slot.save(update_fields=['gelukt', 'fout', 'pogingen', 'laatste_poging', 'opgegeven'])
+
+    if not slot.gelukt:
+        mislukt.append(slot)
+    return slot.gelukt
+
+
+def _meld_mislukkingen(mislukt: list):
+    """Interne waarschuwing zodat een mislukte herinnering niet onopgemerkt blijft."""
+    bron, afzender = _smtp_bron()
+    if bron is None or not afzender:
+        logger.error('Mislukte herinneringen (%s) maar geen SMTP-server om te melden', len(mislukt))
+        return
+
+    definitief = [s for s in mislukt if s.opgegeven]
+    rijen = []
+    for s in mislukt:
+        stand = 'opgegeven' if s.opgegeven else f'poging {s.pogingen} van {MAX_POGINGEN}'
+        rijen.append(
+            f'<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">{s.invoice.factuurnummer}</td>'
+            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">{s.invoice.bedrijf.naam}</td>'
+            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">{s.fase} dagen</td>'
+            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">{stand}</td>'
+            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#b91c1c">{s.fout}</td></tr>'
+        )
+
+    inhoud = (
+        '<div style="font-family:Arial,sans-serif;font-size:14px;color:#111827">'
+        '<div style="background:#0f172a;color:#fff;padding:16px 20px;font-size:18px;font-weight:bold">'
+        'MOVEO</div>'
+        f'<div style="background:#dc2626;color:#fff;padding:10px 20px;font-weight:bold">'
+        f'{len(mislukt)} betalingsherinnering(en) niet verstuurd</div>'
+        '<div style="padding:20px">'
+        '<p>De volgende herinneringen konden niet worden verstuurd. '
+        'Regels met "opgegeven" worden niet opnieuw geprobeerd en vragen om handmatige actie.</p>'
+        '<table style="border-collapse:collapse;width:100%">'
+        '<tr style="background:#f3f4f6;text-align:left">'
+        '<th style="padding:6px 10px">Factuur</th><th style="padding:6px 10px">Bedrijf</th>'
+        '<th style="padding:6px 10px">Fase</th><th style="padding:6px 10px">Stand</th>'
+        '<th style="padding:6px 10px">Melding</th></tr>'
+        + ''.join(rijen) +
+        '</table></div></div>'
+    )
+
+    onderwerp = f'Let op: {len(mislukt)} betalingsherinnering(en) niet verstuurd'
+    if definitief:
+        onderwerp = f'Actie nodig: {len(definitief)} betalingsherinnering(en) definitief mislukt'
+
+    try:
+        bericht = EmailMessage(
+            subject=onderwerp,
+            body=inhoud,
+            from_email=afzender,
+            to=[afzender],
+            connection=get_connection(
+                backend='django.core.mail.backends.smtp.EmailBackend',
+                host=bron.smtp_host,
+                port=bron.smtp_port,
+                username=bron.smtp_username or '',
+                password=bron.smtp_password,
+                use_tls=bron.smtp_use_tls,
+                fail_silently=False,
+            ),
+        )
+        bericht.content_subtype = 'html'
+        bericht.send()
+    except Exception:
+        logger.exception('Waarschuwing over mislukte herinneringen kon niet worden verstuurd')
+
+
 @shared_task
 def send_invoice_reminders():
     """Verstuur herinneringen voor facturen die 1, 7 of 14 dagen te laat zijn."""
     vandaag = timezone.localdate()
     verstuurd = 0
+    mislukt: list = []
+    nieuw: set = set()
 
     bedrijven = _bedrijven_met_portaal()
     if not bedrijven:
@@ -167,15 +260,47 @@ def send_invoice_reminders():
                 )
             except IntegrityError:
                 continue
-
-            try:
-                slot.gelukt = _verstuur(factuur, fase, fase)
-            except Exception as fout:
-                logger.exception('Herinnering %s mislukt', factuur.factuurnummer)
-                slot.fout = f'{type(fout).__name__}: {fout}'[:500]
-            slot.save(update_fields=['gelukt', 'fout'])
-            if slot.gelukt:
+            slot.invoice = factuur
+            nieuw.add(slot.pk)
+            if _poging(slot, mislukt):
                 verstuurd += 1
 
-    logger.info('Betalingsherinneringen verstuurd: %s', verstuurd)
+    for slot in _herkansingen(bedrijven, nieuw):
+        slot.ontvangers = _ontvangers(slot.invoice.bedrijf)
+        if _poging(slot, mislukt):
+            verstuurd += 1
+            FactuurHerinnering.objects.filter(pk=slot.pk).update(ontvangers=slot.ontvangers)
+
+    if mislukt:
+        _meld_mislukkingen(mislukt)
+
+    logger.info('Betalingsherinneringen verstuurd: %s, mislukt: %s', verstuurd, len(mislukt))
     return verstuurd
+
+
+def _herkansingen(bedrijven, nieuw):
+    """Eerder mislukte herinneringen die nog een poging verdienen.
+
+    Is de factuur inmiddels betaald of ingetrokken, dan wordt het slot gesloten
+    zonder nieuwe mail.
+    """
+    sloten = (
+        FactuurHerinnering.objects
+        .filter(gelukt=False, opgegeven=False, pogingen__lt=MAX_POGINGEN)
+        .exclude(pk__in=nieuw)
+        .select_related('invoice', 'invoice__bedrijf')
+    )
+    open_sloten = []
+    for slot in sloten:
+        factuur = slot.invoice
+        if (
+            factuur.status != InvoiceStatus.VERZONDEN
+            or factuur.type != InvoiceType.VERKOOP
+            or factuur.bedrijf_id not in bedrijven
+        ):
+            slot.opgegeven = True
+            slot.fout = 'Niet langer van toepassing; factuur of toegang is gewijzigd.'
+            slot.save(update_fields=['opgegeven', 'fout'])
+            continue
+        open_sloten.append(slot)
+    return open_sloten
