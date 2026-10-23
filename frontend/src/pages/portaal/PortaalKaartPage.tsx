@@ -5,6 +5,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { portaalTracking } from '@/api/portaalTracking'
 import PortaalRittenPerDag from '@/components/portaal/PortaalRittenPerDag'
+import PortaalWagenStatus from '@/components/portaal/PortaalWagenStatus'
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
@@ -44,6 +45,13 @@ export default function PortaalKaartPage() {
     queryFn: () => portaalTracking.ritten({ kenteken: kenteken || undefined, dagen }),
   })
 
+  const { data: wagenDag } = useQuery({
+    queryKey: ['portaal-voertuig-dag', kenteken],
+    queryFn: () => portaalTracking.voertuigDag(kenteken),
+    enabled: Boolean(kenteken),
+    refetchInterval: 60000,
+  })
+
   useEffect(() => {
     if (!kaartElement.current || kaart.current) return
     const map = L.map(kaartElement.current, { center: [52.1, 5.3], zoom: 7 })
@@ -75,6 +83,7 @@ export default function PortaalKaartPage() {
         bestaande.setLatLng(punt)
       } else {
         const marker = L.marker(punt, { icon: wagenIcoon(positie.kenteken) }).addTo(map)
+        marker.on('click', () => setKenteken(positie.kenteken))
         markers.current.set(positie.kenteken, marker)
       }
       markers.current.get(positie.kenteken)?.bindPopup(
@@ -139,6 +148,8 @@ export default function PortaalKaartPage() {
       )}
 
       <div ref={kaartElement} className="h-[50vh] w-full card sm:h-[60vh]" />
+
+      {wagenDag && <PortaalWagenStatus dag={wagenDag} />}
 
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-4 py-3">

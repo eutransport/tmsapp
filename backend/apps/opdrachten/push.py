@@ -130,6 +130,10 @@ def meld_ingetrokken(opdracht):
     )
 
 
+# Verwijderen voelt voor de chauffeur hetzelfde als intrekken: de rit vervalt.
+meld_vervallen = meld_ingetrokken
+
+
 def meld_overgezet(opdracht, vorige_chauffeur):
     """De oude chauffeur raakt de opdracht kwijt, de nieuwe krijgt hem erbij."""
     T = TEKSTEN[_taal(opdracht)]

@@ -254,7 +254,13 @@
     "date": "Tarih",
     "from": "Nereden",
     "to": "Nereye",
-    "distance": "Mesafe"
+    "distance": "Mesafe",
+    "driving": "Hareket halinde",
+    "idling": "Duruyor, motor çalışıyor",
+    "parked": "Park halinde",
+    "startKm": "Başlangıç km",
+    "endKm": "Bitiş km",
+    "drivenKm": "Gidilen"
   },
   "orders": {
     "title": "Siparişler",

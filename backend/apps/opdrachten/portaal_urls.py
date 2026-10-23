@@ -7,6 +7,7 @@ from .portaal_views import (
     PortaalRittenView,
     PortaalTolView,
     PortaalUrenView,
+    PortaalVoertuigDagView,
     PortaalVoertuigenView,
 )
 from .views import PortaalKlantViewSet, PortaalOpdrachtViewSet
@@ -18,6 +19,7 @@ router.register('klanten', PortaalKlantViewSet, basename='portaal-klant')
 urlpatterns = [
     path('dashboard/', PortaalDashboardView.as_view(), name='portaal-dashboard'),
     path('voertuigen/', PortaalVoertuigenView.as_view(), name='portaal-voertuigen'),
+    path('voertuigen/<str:kenteken>/dag/', PortaalVoertuigDagView.as_view(), name='portaal-voertuig-dag'),
     path('posities/', PortaalPositiesView.as_view(), name='portaal-posities'),
     path('ritten/', PortaalRittenView.as_view(), name='portaal-ritten'),
     path('uren/', PortaalUrenView.as_view(), name='portaal-uren'),

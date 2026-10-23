@@ -18,7 +18,7 @@ export interface PortaalPositie {
 }
 
 export interface PortaalRit {
-  id: number
+  id: string
   kenteken: string
   datum: string
   start_tijd: string
@@ -32,6 +32,29 @@ export interface PortaalRit {
   eind_latitude: number | null
   eind_longitude: number | null
   afstand_km: number
+  km_start: number | null
+  km_eind: number | null
+  bron: 'linqo' | 'radius'
+}
+
+export interface PortaalVoertuigDag {
+  kenteken: string
+  datum: string
+  bron: 'linqo' | 'radius'
+  ritten: PortaalRit[]
+  aantal_ritten: number
+  km_start: number | null
+  km_eind: number | null
+  km_gereden: number
+  eerste_start: string | null
+  laatste_eind: string | null
+  rijdt: boolean
+  snelheid: number
+  motor_aan: boolean
+  positie_adres: string
+  positie_moment: string | null
+  latitude: number | null
+  longitude: number | null
 }
 
 export interface PortaalChauffeurUren {
@@ -68,6 +91,12 @@ export const portaalTracking = {
   },
   ritten: async (params?: { kenteken?: string; dagen?: number }): Promise<PortaalRit[]> => {
     const response = await api.get('/portaal/ritten/', { params })
+    return response.data
+  },
+  voertuigDag: async (kenteken: string, datum?: string): Promise<PortaalVoertuigDag> => {
+    const response = await api.get(`/portaal/voertuigen/${encodeURIComponent(kenteken)}/dag/`, {
+      params: datum ? { datum } : undefined,
+    })
     return response.data
   },
 }

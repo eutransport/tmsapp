@@ -4,7 +4,7 @@ De filtering op voertuigen gebeurt hier in de backend: het portaal krijgt nooit
 meer te zien dan de voertuigen die een beheerder bij het bedrijf heeft gezet.
 """
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -20,6 +20,7 @@ from apps.timetracking.models import TimeEntry
 from apps.tolling.models import TollingEvent
 from apps.tracking.models import RadiusJourney
 
+from . import portaal_ritten
 from .models import Opdracht, OpdrachtStatus
 
 logger = logging.getLogger(__name__)
@@ -146,27 +147,34 @@ class PortaalRittenView(PortaalBasisView):
                 return Response([])
             kentekens = {gevraagd_norm}
 
-        ritten = (RadiusJourney.objects
-                  .filter(date__gte=vanaf, date__lte=vandaag)
-                  .order_by('-date', 'plate_number', 'start_time'))
-        ritten = [r for r in ritten if _normaliseer(r.plate_number) in kentekens]
+        origineel = {_normaliseer(v.kenteken): v.kenteken for v in voertuigen if v.kenteken}
+        gevraagde_kentekens = [origineel[k] for k in kentekens if k in origineel]
 
-        return Response([{
-            'id': rit.id,
-            'kenteken': rit.plate_number,
-            'datum': rit.date,
-            'start_tijd': rit.start_time,
-            'eind_tijd': rit.end_time,
-            'start_adres': rit.start_address,
-            'start_plaats': rit.start_city,
-            'eind_adres': rit.end_address,
-            'eind_plaats': rit.end_city,
-            'start_latitude': rit.start_latitude,
-            'start_longitude': rit.start_longitude,
-            'eind_latitude': rit.end_latitude,
-            'eind_longitude': rit.end_longitude,
-            'afstand_km': round(rit.distance_km or 0, 1),
-        } for rit in ritten[:MAX_RITTEN]])
+        ritten = portaal_ritten.haal_ritten(gevraagde_kentekens, vanaf, vandaag)
+        return Response(ritten[:MAX_RITTEN])
+
+
+class PortaalVoertuigDagView(PortaalBasisView):
+    """GET /api/portaal/voertuigen/<kenteken>/dag/ — status en kilometers van één dag."""
+
+    def get(self, request, kenteken):
+        toegestaan = {
+            _normaliseer(v.kenteken): v.kenteken
+            for v in _toegestane_voertuigen(self.bedrijf_id) if v.kenteken
+        }
+        echt = toegestaan.get(_normaliseer(kenteken))
+        if echt is None:
+            return Response({'error': 'Onbekend voertuig.'}, status=status.HTTP_404_NOT_FOUND)
+
+        datum = timezone.localdate()
+        gevraagd = request.query_params.get('datum')
+        if gevraagd:
+            try:
+                datum = datetime.strptime(gevraagd, '%Y-%m-%d').date()
+            except ValueError:
+                return Response({'error': 'Ongeldige datum.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(portaal_ritten.dagoverzicht(echt, datum))
 
 
 class PortaalDashboardView(PortaalBasisView):

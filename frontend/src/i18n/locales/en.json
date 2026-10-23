@@ -254,7 +254,13 @@
     "date": "Date",
     "from": "From",
     "to": "To",
-    "distance": "Distance"
+    "distance": "Distance",
+    "driving": "Driving",
+    "idling": "Stopped, engine running",
+    "parked": "Parked",
+    "startKm": "Start odometer",
+    "endKm": "End odometer",
+    "drivenKm": "Driven"
   },
   "orders": {
     "title": "Orders",

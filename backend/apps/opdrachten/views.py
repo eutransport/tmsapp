@@ -162,7 +162,10 @@ class PortaalOpdrachtViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         # Verwijderen mag ook na afloop; de opdrachtgever bevestigt dat in het scherm.
+        meld_chauffeur = instance.status in (OpdrachtStatus.NIEUW, OpdrachtStatus.GESTART)
         instance.delete()
+        if meld_chauffeur:
+            push.meld_vervallen(instance)
 
     @action(detail=True, methods=['post'])
     def intrekken(self, request, pk=None):
