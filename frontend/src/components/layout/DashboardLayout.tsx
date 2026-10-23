@@ -72,6 +72,7 @@ const opdrachtgeverNavigation: NavItem[] = [
   { name: 'nav.portaalKlanten', href: '/portaal/klanten', icon: BuildingOfficeIcon, roles: ['opdrachtgever'] },
   { name: 'nav.portaalUren', href: '/portaal/uren', icon: ClockIcon, roles: ['opdrachtgever'] },
   { name: 'nav.portaalTol', href: '/portaal/tol', icon: BanknotesIcon, roles: ['opdrachtgever'] },
+  { name: 'nav.portaalFacturen', href: '/portaal/facturen', icon: DocumentTextIcon, roles: ['opdrachtgever'] },
   { name: 'nav.portaalKaart', href: '/portaal/kaart', icon: MapPinIcon, roles: ['opdrachtgever'] },
 ]
 
@@ -142,7 +143,7 @@ const navGroups: NavGroupDef[] = [
   { id: 'invoicing',    labelKey: 'nav.group.invoicing',    fallback: 'Facturatie',             hrefs: ['/invoices', '/factuurwizard', '/factuurwizard/beheer', '/invoices/templates', '/imports', '/revenue'] },
   { id: 'documents',    labelKey: 'nav.group.documents',    fallback: 'Documenten & rapporten', hrefs: ['/documents', '/bestanden', '/tasks', '/reports', '/spreadsheets', '/spreadsheets/templates', '/maintenance'] },
   { id: 'admin',        labelKey: 'nav.group.admin',        fallback: 'Beheer',                 hrefs: ['/admin/users', '/settings'] },
-  { id: 'portaal',      labelKey: 'nav.group.portaal',      fallback: 'Portaal',                hrefs: ['/portaal', '/portaal/opdrachten', '/portaal/klanten', '/portaal/uren', '/portaal/tol', '/portaal/kaart'] },
+  { id: 'portaal',      labelKey: 'nav.group.portaal',      fallback: 'Portaal',                hrefs: ['/portaal', '/portaal/opdrachten', '/portaal/klanten', '/portaal/uren', '/portaal/tol', '/portaal/facturen', '/portaal/kaart'] },
 ]
 
 const COLLAPSE_KEY = 'tms.sidebar.collapsed'

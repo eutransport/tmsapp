@@ -30,6 +30,10 @@ app.conf.beat_schedule = {
         'task': 'apps.leave.tasks.send_leave_reminders',
         'schedule': crontab(hour=8, minute=15),
     },
+    'send-invoice-reminders': {
+        'task': 'apps.invoicing.tasks.send_invoice_reminders',
+        'schedule': crontab(hour=8, minute=30),
+    },
     'send-adr-reminders': {
         # Elk kwartier kijken of de ingestelde verzendtijd (standaard 06:00)
         # bereikt is; de taak verstuurt maximaal één keer per dag.

@@ -125,6 +125,7 @@ const PortaalKaartPage = React.lazy(() => import('@/pages/portaal/PortaalKaartPa
 const PortaalKlantenPage = React.lazy(() => import('@/pages/portaal/PortaalKlantenPage'))
 const PortaalUrenPage = React.lazy(() => import('@/pages/portaal/PortaalUrenPage'))
 const PortaalTolPage = React.lazy(() => import('@/pages/portaal/PortaalTolPage'))
+const PortaalFacturenPage = React.lazy(() => import('@/pages/portaal/PortaalFacturenPage'))
 const OpdrachtenBeheerPage = React.lazy(() => import('@/pages/opdrachten/OpdrachtenBeheerPage'))
 const MijnOpdrachtenPage = React.lazy(() => import('@/pages/opdrachten/MijnOpdrachtenPage'))
 
@@ -368,6 +369,7 @@ function App() {
         <Route path="/portaal/klanten" element={<OpdrachtgeverRoute><PortaalKlantenPage /></OpdrachtgeverRoute>} />
         <Route path="/portaal/uren" element={<OpdrachtgeverRoute><PortaalUrenPage /></OpdrachtgeverRoute>} />
         <Route path="/portaal/tol" element={<OpdrachtgeverRoute><PortaalTolPage /></OpdrachtgeverRoute>} />
+        <Route path="/portaal/facturen" element={<OpdrachtgeverRoute><PortaalFacturenPage /></OpdrachtgeverRoute>} />
         <Route path="/opdrachten" element={<OpdrachtenBeheerPage />} />
         <Route path="/mijn-opdrachten" element={<MijnOpdrachtenPage />} />
             <Route path="/mijn-opdrachten/voltooid" element={<MijnOpdrachtenPage archief />} />

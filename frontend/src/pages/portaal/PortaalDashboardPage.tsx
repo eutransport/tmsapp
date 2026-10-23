@@ -1,16 +1,20 @@
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import {
+  BanknotesIcon,
   BuildingOfficeIcon,
   CheckCircleIcon,
   ClipboardDocumentCheckIcon,
   ClockIcon,
+  DocumentTextIcon,
+  ExclamationTriangleIcon,
   MapPinIcon,
   TruckIcon,
 } from '@heroicons/react/24/outline'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { portaalTracking } from '@/api/portaalTracking'
+import { portaalFacturen } from '@/api/portaalFacturen'
 
 export default function PortaalDashboardPage() {
   const { t, i18n } = useTranslation()
@@ -20,6 +24,11 @@ export default function PortaalDashboardPage() {
     queryKey: ['portaal-dashboard'],
     queryFn: portaalTracking.dashboard,
     refetchInterval: 60000,
+  })
+
+  const { data: facturen } = useQuery({
+    queryKey: ['portaal-facturen-samenvatting'],
+    queryFn: portaalFacturen.samenvatting,
   })
 
   const tellers = [
@@ -89,6 +98,13 @@ export default function PortaalDashboardPage() {
       kleur: 'bg-teal-50 text-teal-600',
     },
     {
+      href: '/portaal/facturen',
+      icon: DocumentTextIcon,
+      titel: t('invoicePortal.title', 'Facturen'),
+      tekst: t('invoicePortal.subtitle', 'Uw facturen met betaalstatus en vervaldatum.'),
+      kleur: 'bg-amber-50 text-amber-600',
+    },
+    {
       href: '/portaal/kaart',
       icon: MapPinIcon,
       titel: t('portaal.map', 'Waar is mijn wagen'),
@@ -131,6 +147,37 @@ export default function PortaalDashboardPage() {
             <p className="mt-1 text-sm text-gray-500">{teller.label}</p>
           </Link>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Link to="/portaal/facturen?filter=open" className="card-interactive flex items-center gap-3 p-4">
+          <span className="rounded-lg bg-amber-50 p-2 text-amber-600"><BanknotesIcon className="h-5 w-5" /></span>
+          <div>
+            <div className="text-2xl font-semibold text-gray-900">{facturen?.open_aantal ?? '-'}</div>
+            <div className="text-xs text-gray-500">{t('invoicePortal.openCount', 'Openstaande facturen')}</div>
+          </div>
+        </Link>
+        <Link to="/portaal/facturen?filter=te_laat" className="card-interactive flex items-center gap-3 p-4">
+          <span className="rounded-lg bg-red-50 p-2 text-red-600"><ExclamationTriangleIcon className="h-5 w-5" /></span>
+          <div>
+            <div className="text-2xl font-semibold text-gray-900">{facturen?.te_laat_aantal ?? '-'}</div>
+            <div className="text-xs text-gray-500">{t('invoicePortal.overdueCount', 'Te laat')}</div>
+          </div>
+        </Link>
+        <Link to="/portaal/facturen" className="card-interactive flex items-center gap-3 p-4">
+          <span className="rounded-lg bg-primary-50 p-2 text-primary-600"><ClockIcon className="h-5 w-5" /></span>
+          <div className="min-w-0">
+            <div className="truncate text-2xl font-semibold text-gray-900">
+              {facturen?.eerstvolgende
+                ? new Date(facturen.eerstvolgende.vervaldatum).toLocaleDateString(i18n.language)
+                : '-'}
+            </div>
+            <div className="truncate text-xs text-gray-500">
+              {t('invoicePortal.nextDue', 'Eerstvolgende betaling')}
+              {facturen?.eerstvolgende ? ` · ${facturen.eerstvolgende.factuurnummer}` : ''}
+            </div>
+          </div>
+        </Link>
       </div>
 
       <div className="card overflow-hidden">

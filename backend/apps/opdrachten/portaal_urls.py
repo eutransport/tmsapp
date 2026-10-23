@@ -1,6 +1,13 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from apps.invoicing.portaal_views import (
+    PortaalFacturenView,
+    PortaalFactuurPdfView,
+    PortaalFactuurSamenvattingView,
+    PortaalFactuurTolView,
+)
+
 from .portaal_views import (
     PortaalDashboardView,
     PortaalPositiesView,
@@ -24,5 +31,9 @@ urlpatterns = [
     path('ritten/', PortaalRittenView.as_view(), name='portaal-ritten'),
     path('uren/', PortaalUrenView.as_view(), name='portaal-uren'),
     path('tol/', PortaalTolView.as_view(), name='portaal-tol'),
+    path('facturen/', PortaalFacturenView.as_view(), name='portaal-facturen'),
+    path('facturen/samenvatting/', PortaalFactuurSamenvattingView.as_view(), name='portaal-facturen-samenvatting'),
+    path('facturen/<uuid:factuur_id>/pdf/', PortaalFactuurPdfView.as_view(), name='portaal-factuur-pdf'),
+    path('facturen/<uuid:factuur_id>/tol/', PortaalFactuurTolView.as_view(), name='portaal-factuur-tol'),
     path('', include(router.urls)),
 ]

@@ -353,6 +353,45 @@ class Expense(models.Model):
         super().save(*args, **kwargs)
 
 
+class FactuurHerinnering(models.Model):
+    """Vastlegging van een verstuurde betalingsherinnering.
+
+    Dient als slot: per factuur en fase wordt hoogstens één mail verstuurd.
+    """
+
+    FASES = (1, 7, 14)
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    invoice = models.ForeignKey(
+        Invoice,
+        on_delete=models.CASCADE,
+        related_name='herinneringen',
+        verbose_name='Factuur',
+    )
+    fase = models.PositiveSmallIntegerField(
+        verbose_name='Dagen te laat',
+        help_text='Aantal dagen na de vervaldatum waarvoor deze mail bedoeld was.',
+    )
+    verstuurd_op = models.DateTimeField(auto_now_add=True)
+    ontvangers = models.JSONField(default=list, verbose_name='Ontvangers')
+    gelukt = models.BooleanField(default=False)
+    fout = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = 'Betalingsherinnering'
+        verbose_name_plural = 'Betalingsherinneringen'
+        ordering = ['-verstuurd_op']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['invoice', 'fase'],
+                name='uniek_herinnering_per_fase',
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.invoice.factuurnummer} - fase {self.fase}'
+
+
 # De configuratie van de factuurwizard staat in een eigen bestand, maar moet
 # hier binnengehaald worden zodat Django de modellen vindt.
 from .wizard_models import (  # noqa: E402,F401
