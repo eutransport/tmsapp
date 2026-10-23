@@ -44,6 +44,7 @@ export default function PortaalOpdrachtenPage() {
   const [bewerken, setBewerken] = useState<Opdracht | null>(null)
   const [mailOpen, setMailOpen] = useState(false)
   const [notitieId, setNotitieId] = useState<string | null>(null)
+  const [verwijderDoel, setVerwijderDoel] = useState<Opdracht | null>(null)
 
   const vandaagFilter = zoekParams.get('vandaag') || ''
   const openFilter = zoekParams.get('open') || ''
@@ -377,15 +378,13 @@ export default function PortaalOpdrachtenPage() {
                               title={t('orders.withdraw', 'Intrekken')}>
                               <XCircleIcon className="h-4 w-4" />
                             </button>
-                            <button onClick={() => {
-                              if (window.confirm(t('orders.confirmDelete', 'Deze opdracht verwijderen?'))) verwijderen.mutate(o.id)
-                            }}
-                              className="rounded-md bg-red-50 p-1.5 text-red-700 hover:bg-red-100"
-                              title={t('common.delete', 'Verwijderen')}>
-                              <TrashIcon className="h-4 w-4" />
-                            </button>
                           </>
                         )}
+                        <button onClick={() => setVerwijderDoel(o)}
+                          className="rounded-md bg-red-50 p-1.5 text-red-700 hover:bg-red-100"
+                          title={t('common.delete', 'Verwijderen')}>
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -418,6 +417,35 @@ export default function PortaalOpdrachtenPage() {
       {mailOpen && <MailInstellingModal onSluiten={() => setMailOpen(false)} />}
       {notitieVan && (
         <OpdrachtNotitieModal opdracht={notitieVan} onSluiten={() => setNotitieId(null)} />
+      )}
+
+      {verwijderDoel && (
+        <div className="modal-overlay" onClick={() => setVerwijderDoel(null)}>
+          <div className="modal-panel max-w-md" onClick={e => e.stopPropagation()}>
+            <h2 className="section-title">{t('orders.deleteTitle', 'Opdracht verwijderen')}</h2>
+            <p className="mt-2 text-sm text-gray-700">
+              {t('orders.deleteBody', 'Weet u zeker dat u opdracht {{ritnummer}} voor {{klant}} wilt verwijderen?', {
+                ritnummer: verwijderDoel.ritnummer,
+                klant: verwijderDoel.klant_naam,
+              })}
+            </p>
+            <p className="mt-2 text-sm text-danger-700">
+              {t('orders.deleteWarning', 'De opdracht en de bijlagen verdwijnen definitief. Dit kan niet ongedaan worden gemaakt.')}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className="btn btn-secondary" onClick={() => setVerwijderDoel(null)}>
+                {t('common.cancel', 'Annuleren')}
+              </button>
+              <button
+                className="btn btn-danger"
+                disabled={verwijderen.isPending}
+                onClick={() => { verwijderen.mutate(verwijderDoel.id); setVerwijderDoel(null) }}
+              >
+                {t('common.delete', 'Verwijderen')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

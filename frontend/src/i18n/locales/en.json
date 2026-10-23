@@ -322,7 +322,10 @@
     "clearFilter": "Clear filter",
     "created": "Created",
     "editTripNumber": "Edit trip number",
-    "download": "Download"
+    "download": "Download",
+    "deleteTitle": "Delete order",
+    "deleteBody": "Are you sure you want to delete order {{ritnummer}} for {{klant}}?",
+    "deleteWarning": "The order and its attachments are removed permanently. This cannot be undone."
   },
   "myOrders": {
     "title": "My orders",

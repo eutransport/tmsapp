@@ -322,7 +322,10 @@
     "clearFilter": "Filter wissen",
     "created": "Aangemaakt",
     "editTripNumber": "Ritnummer wijzigen",
-    "download": "Downloaden"
+    "download": "Downloaden",
+    "deleteTitle": "Opdracht verwijderen",
+    "deleteBody": "Weet u zeker dat u opdracht {{ritnummer}} voor {{klant}} wilt verwijderen?",
+    "deleteWarning": "De opdracht en de bijlagen verdwijnen definitief. Dit kan niet ongedaan worden gemaakt."
   },
   "myOrders": {
     "title": "Mijn opdrachten",

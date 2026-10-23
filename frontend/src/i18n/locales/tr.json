@@ -322,7 +322,10 @@
     "clearFilter": "Filtreyi temizle",
     "created": "Olusturuldu",
     "editTripNumber": "Sefer numarasini degistir",
-    "download": "Indir"
+    "download": "Indir",
+    "deleteTitle": "Siparişi sil",
+    "deleteBody": "{{klant}} için {{ritnummer}} numaralı siparişi silmek istediğinize emin misiniz?",
+    "deleteWarning": "Sipariş ve ekleri kalıcı olarak silinir. Bu işlem geri alınamaz."
   },
   "myOrders": {
     "title": "Siparişlerim",

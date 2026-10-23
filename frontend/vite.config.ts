@@ -172,6 +172,8 @@ export default defineConfig({
         ],
         // Precache belangrijke routes
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Zonder deze regel kent de service worker geen push-afhandeling en blijft een melding onzichtbaar.
+        importScripts: ['/sw-push.js'],
         // Skip waiting en claim clients direct - crucial for iOS
         skipWaiting: true,
         clientsClaim: true,

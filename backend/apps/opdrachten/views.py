@@ -156,7 +156,7 @@ class PortaalOpdrachtViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def perform_destroy(self, instance):
-        self._weiger_als_afgehandeld(instance)
+        # Verwijderen mag ook na afloop; de opdrachtgever bevestigt dat in het scherm.
         instance.delete()
 
     @action(detail=True, methods=['post'])
