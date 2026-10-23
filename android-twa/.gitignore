@@ -21,3 +21,10 @@ store_icon.png
 # Signing key info (contains passwords)
 signing-key-info.txt
 android.keystore.base64
+*.keystore.oud
+build-log.txt
+*.idsig
+build.gradle
+settings.gradle
+gradle.properties
+manifest-checksum.txt

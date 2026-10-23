@@ -1,0 +1,292 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Moveo TMS - Sofor Kullanim Kilavuzu</title>
+<link rel="stylesheet" href="tr-img/kilavuz.css">
+</head>
+<body>
+
+<div class="merk"><img src="tr-img/logo.png" alt="Moveo"></div>
+
+<section class="kapak">
+  <img class="logo" src="tr-img/logo.png" alt="Moveo">
+  <h1>Moveo TMS<br>Şoför Kılavuzu</h1>
+  <p class="alt">Siparişleri görme, başlatma ve bildirme kılavuzu</p>
+  <span class="rol">Şoförler için</span>
+  <div class="voet">
+    Moveo BV &middot; Rijnvallei 12, 6718 NV Ede &middot; tms.moveo-bv.nl<br>
+    Sürüm 1.0 &middot; Ekim 2026
+  </div>
+</section>
+
+<h2>İçindekiler</h2>
+<div class="icindekiler">
+<ol>
+  <li>Sistem nasıl çalışır</li>
+  <li>Giriş yapma ve dil seçimi</li>
+  <li>Uygulamayı telefona kurma</li>
+  <li>Ana ekran</li>
+  <li>Siparişlerim listesi</li>
+  <li>Sipariş detayı ve navigasyon</li>
+  <li>Siparişi başlatma</li>
+  <li>Teslim edildi olarak bildirme</li>
+  <li>Teslim edilemedi bildirimi</li>
+  <li>Fotoğraf ve belge ekleme</li>
+  <li>Bildirimler</li>
+  <li>Sık sorulan sorular</li>
+</ol>
+</div>
+
+<h2 class="yeni-sayfa">1. Sistem nasıl çalışır</h2>
+
+<p>Moveo TMS, nakliye işini tek bir yerde toplayan bir taşıma yönetim sistemidir.
+Sistemde üç taraf birlikte çalışır: siparişi veren <strong>müşteri</strong>, işi
+yapan <strong>şoför</strong> ve her şeyi gözeten <strong>planlama ekibi</strong>.
+Üçü de aynı veriyi görür; kimse ayrı bir listeyle çalışmaz. Bu nedenle telefonla
+durum sorma ihtiyacı büyük ölçüde ortadan kalkar.</p>
+
+<p>Bir siparişin hayatı her zaman aynı yolu izler. Müşteri bir sipariş
+oluşturur ve onu bir şoföre atar. Siz siparişi telefonunuzda anında
+görürsünüz. Yola çıktığınızda siparişi başlatırsınız, teslimatı yaptığınızda
+teslim edildi olarak bildirirsiniz. Teslimat gerçekleşmezse sebebini
+yazarsınız. Her adımda sistem müşteriyi bilgilendirir; sizin ayrıca telefon
+etmenize gerek kalmaz.</p>
+
+<h3>Sipariş durumları</h3>
+
+<table>
+  <tr><th>Durum</th><th>Anlamı</th><th>Ne zaman oluşur</th></tr>
+  <tr>
+    <td><span class="durum d-yeni">Yeni</span></td>
+    <td>Sipariş size atandı, henüz başlamadınız.</td>
+    <td>Müşteri siparişi kaydettiğinde.</td>
+  </tr>
+  <tr>
+    <td><span class="durum d-yolda">Yolda</span></td>
+    <td>İşe başladınız.</td>
+    <td>"Siparişi başlat" dediğinizde.</td>
+  </tr>
+  <tr>
+    <td><span class="durum d-teslim">Teslim edildi</span></td>
+    <td>Yük teslim edildi, iş bitti.</td>
+    <td>Teslimatı bildirdiğinizde.</td>
+  </tr>
+  <tr>
+    <td><span class="durum d-olmadi">Teslim edilmedi</span></td>
+    <td>Teslimat yapılamadı; sebebi kayıtlı.</td>
+    <td>Sebep yazıp bildirdiğinizde.</td>
+  </tr>
+  <tr>
+    <td><span class="durum d-iptal">İptal edildi</span></td>
+    <td>Sipariş geri çekildi, artık yapmanız gerekmiyor.</td>
+    <td>Müşteri siparişi iptal ettiğinde.</td>
+  </tr>
+</table>
+
+<h3>Bildirimler</h3>
+
+<p>Sistem iki ayrı kanaldan haber verir. Size <strong>anlık bildirim</strong>
+(push) gelir: yeni bir sipariş geldiğinde, bir sipariş iptal edildiğinde veya
+listenizin sırası değiştiğinde telefonunuzda uyarı belirir. Müşteriye ise
+<strong>e-posta</strong> gider: siz işe başladığınızda, teslim ettiğinizde ve
+teslim edemediğinizde.</p>
+
+<div class="kutu">
+  <strong>Bu sizin için ne demek:</strong> Siparişi başlattığınızda ve
+  bildirdiğinizde müşteri anında haberdar olur. Bu adımları atlamayın;
+  aksi halde müşteri işin yapıldığını göremez.
+</div>
+
+<h3>Araç takibi</h3>
+
+<p>Aracınızda bir takip cihazı bulunur. Sistem bu cihazdan aracın konumunu,
+hareket halinde olup olmadığını, yapılan seferleri ve kilometre sayacını alır.
+Müşteri size atanan aracı haritada görebilir. Bu veriler aynı zamanda çalışma
+sürenizin hesaplanmasında kullanılır.</p>
+
+<div class="uyari">
+  <strong>Not:</strong> Çalışma süresi aracın ilk hareketinden itibaren
+  hesaplanır ve molaları da içerir. Resmî mesai kaydınız ise ayrı olarak
+  <em>Mesai kaydı</em> ekranından girilir.
+</div>
+
+<h2>2. Giriş yapma ve dil seçimi</h2>
+
+<p>Telefonunuzun tarayıcısından <strong>tms.moveo-bv.nl</strong> adresine gidin.
+E-posta adresinizi ve şifrenizi girip <em>Giriş yap</em> düğmesine basın.
+Şifrenizi unuttuysanız planlama ekibinden sıfırlama isteyin.</p>
+
+<p>Giriş yaptıktan sonra menüden dili Hollandaca, İngilizce veya Türkçe olarak
+seçebilirsiniz. Seçiminiz telefonunuzda saklanır.</p>
+
+<figure class="mobil">
+  <img src="tr-img/10-sofor-giris.png" alt="Şoför ana ekranı">
+  <figcaption>Giriş yaptıktan sonraki ana ekran.</figcaption>
+</figure>
+
+<h2>3. Uygulamayı telefona kurma</h2>
+
+<p>Uygulamayı ana ekranınıza eklemenizi tavsiye ederiz. Android cihazlarda
+tarayıcı menüsünden <em>Ana ekrana ekle</em> seçeneğini kullanın. iPhone'da
+Safari ile açıp paylaş menüsünden <em>Ana Ekrana Ekle</em> deyin. Kurulumdan
+sonra simgeye dokunarak adres çubuğu olmadan, tam ekran açılır.</p>
+
+<div class="kutu">
+  <strong>iPhone kullanıcıları:</strong> Anlık bildirimler yalnızca iOS 16.4
+  ve üzeri sürümlerde ve uygulama ana ekrana eklendiyse çalışır. Bu adımı
+  atlarsanız yeni siparişlerden haberdar olamazsınız.
+</div>
+
+<div class="uyari">
+  <strong>Güncellemeden sonra:</strong> Sistem güncellendiğinde uygulamayı
+  tamamen kapatıp yeniden açın. Aksi halde eski sürüm çalışmaya devam edebilir.
+</div>
+
+<h2>4. Ana ekran</h2>
+
+<p>Giriş yaptığınızda dört hızlı erişim kartı görürsünüz. <em>Mesai kaydı</em>
+ile çalıştığınız saatleri girersiniz. <em>Saatlerim</em> ile gönderdiğiniz
+saatleri görürsünüz. <em>Planlama</em> size verilen seferleri gösterir.
+<em>İzin</em> ile izin talebinde bulunursunuz.</p>
+
+<p>Siparişlerinize sol menüdeki <strong>Siparişlerim</strong> bağlantısından
+ulaşırsınız. Günlük işinizi buradan yürüteceksiniz.</p>
+
+<h2>5. Siparişlerim listesi</h2>
+
+<p>Bu ekranda size atanmış bütün siparişler, yapılması gereken sırayla
+listelenir. Sıralamayı müşteri belirler; en üstteki iş ilk yapılacak iştir.
+Her satırda sefer numarası, firma adı, durum etiketi ve teslimat adresi
+görünür.</p>
+
+<figure class="mobil">
+  <img src="tr-img/11-sofor-siparisler.png" alt="Siparişlerim listesi">
+  <figcaption>Siparişlerim. Üstteki arama kutusuyla sefer numarası, firma veya şehir arayabilirsiniz.</figcaption>
+</figure>
+
+<p>Liste kendiliğinden tazelenir. Müşteri yeni bir iş eklediğinde veya sırayı
+değiştirdiğinde listeniz güncellenir ve telefonunuza bildirim gelir.</p>
+
+<h2>6. Sipariş detayı ve navigasyon</h2>
+
+<p>Bir siparişin üzerine dokunduğunuzda detaylar açılır. Burada ilgili kişinin
+adı, müşterinin yazdığı açıklama ve üç işlem düğmesi bulunur.</p>
+
+<figure class="mobil">
+  <img src="tr-img/12-sofor-detay.png" alt="Sipariş detayı">
+  <figcaption>Sipariş detayı: yol tarifi, telefon, ek ekleme ve işlem düğmeleri.</figcaption>
+</figure>
+
+<ul>
+  <li><strong>Yol tarifi:</strong> Adresi doğrudan haritada açar. Telefonunuzdaki
+  navigasyon uygulaması devreye girer.</li>
+  <li><strong>Telefon numarası:</strong> Dokunduğunuzda ilgili kişiyi arar.</li>
+  <li><strong>Ek ekle:</strong> Fotoğraf veya belge yükler.</li>
+</ul>
+
+<div class="kutu">
+  <strong>Açıklamayı mutlaka okuyun.</strong> Teslimat saati, kapı numarası
+  veya özel talimatlar genellikle buraya yazılır.
+</div>
+
+<h2>7. Siparişi başlatma</h2>
+
+<p>Yola çıkmadan önce <strong>Siparişi başlat</strong> düğmesine basın. Durum
+<span class="durum d-yolda">Yolda</span> olarak değişir ve müşteriye e-posta
+gider. Böylece müşteri işin yolda olduğunu bilir ve sizi aramaz.</p>
+
+<p>Başlattığınız bir işi müşteri yine de iptal edebilir. Böyle bir durumda
+telefonunuza bildirim gelir ve iş listenizden düşer. Bildirimi gördüğünüzde
+o adrese gitmeyi bırakın.</p>
+
+<h2>8. Teslim edildi olarak bildirme</h2>
+
+<p>Yükü teslim ettikten sonra <strong>Teslim edildi olarak bildir</strong>
+düğmesine basın. Açılan pencerede teslim saati hazır gelir; gerekirse
+değiştirebilirsiniz. İsterseniz kısa bir açıklama yazabilir ve teslimata
+ait fotoğraf veya imzalı belge ekleyebilirsiniz.</p>
+
+<figure class="mobil">
+  <img src="tr-img/13-teslim.png" alt="Teslim bildirimi">
+  <figcaption>Teslim bildirimi: saat, açıklama ve ek dosya.</figcaption>
+</figure>
+
+<p><strong>Siparişi tamamla</strong> dediğinizde durum
+<span class="durum d-teslim">Teslim edildi</span> olur ve müşteriye e-posta
+gider. İş listenizden kalkar.</p>
+
+<div class="kutu">
+  <strong>İpucu:</strong> Teslimat fotoğrafı eklemek sonradan çıkabilecek
+  tartışmaları önler. Özellikle hasarlı yük veya eksik teslimat durumunda
+  fotoğraf çekmeyi alışkanlık haline getirin.
+</div>
+
+<h2>9. Teslim edilemedi bildirimi</h2>
+
+<p>Teslimat yapılamadıysa <strong>Teslim edilmedi</strong> düğmesine basın ve
+sebebini yazın. Sebep alanını boş bırakmayın; müşteri yalnızca bu açıklamayı
+görür ve buna göre hareket eder.</p>
+
+<figure class="mobil">
+  <img src="tr-img/14-teslim-edilmedi.png" alt="Teslim edilemedi bildirimi">
+  <figcaption>Teslim edilemedi bildirimi. Sebebi açık ve kısa yazın.</figcaption>
+</figure>
+
+<p>Sık karşılaşılan sebepler: alıcı adreste bulunamadı, depo kapalıydı,
+yük kabul edilmedi, adres yanlış, bekleme süresi aşıldı. Mümkünse saati de
+belirtin.</p>
+
+<h2>10. Fotoğraf ve belge ekleme</h2>
+
+<p>Siparişe istediğiniz zaman ek yükleyebilirsiniz. Sipariş detayındaki
+<em>Ek ekle</em> bağlantısına dokunun, ardından kamerayı veya dosya seçmeyi
+tercih edin. Fotoğraf, PDF ve Excel dosyaları desteklenir.</p>
+
+<p>Yüklediğiniz dosyayı müşteri kendi ekranında görür. Aynı şekilde müşterinin
+eklediği irsaliye veya çizimler de size görünür.</p>
+
+<h2>11. Bildirimler</h2>
+
+<p>Telefonunuza şu durumlarda bildirim gelir:</p>
+
+<table>
+  <tr><th>Olay</th><th>Ne yapmalısınız</th></tr>
+  <tr><td>Yeni sipariş</td><td>Listeyi açın, sırayı kontrol edin.</td></tr>
+  <tr><td>Sipariş iptal edildi</td><td>O adrese gitmeyi bırakın.</td></tr>
+  <tr><td>Sıralama değişti</td><td>Listedeki yeni sıraya göre devam edin.</td></tr>
+</table>
+
+<p>Bildirim gelmiyorsa önce telefon ayarlarından uygulamaya bildirim izni
+verildiğini kontrol edin. iPhone'da uygulamanın ana ekrana eklenmiş olması
+şarttır.</p>
+
+<h2>12. Sık sorulan sorular</h2>
+
+<h3>Listemde olmayan bir iş söylendi, ne yapmalıyım?</h3>
+<p>Uygulamayı tamamen kapatıp yeniden açın. İş yine görünmüyorsa planlama
+ekibini arayın; sipariş muhtemelen başka bir şoföre atanmıştır.</p>
+
+<h3>Yanlışlıkla teslim edildi olarak bildirdim.</h3>
+<p>Hemen planlama ekibine haber verin. Durumu onlar düzeltebilir.</p>
+
+<h3>Ek yükleyemiyorum.</h3>
+<p>İnternet bağlantınızı kontrol edin. Dosya çok büyükse fotoğrafı daha düşük
+çözünürlükte çekmeyi deneyin. Sorun sürerse planlama ekibine bildirin.</p>
+
+<h3>Navigasyon açılmıyor.</h3>
+<p>Adres eksik veya hatalı olabilir. Sipariş detayındaki adresi okuyup elle
+girin ve durumu müşteriye iletilmek üzere planlama ekibine bildirin.</p>
+
+<h3>Çalışma sürem neden olduğundan uzun görünüyor?</h3>
+<p>Bu süre aracın ilk hareketinden son duruşuna kadar geçen zamandır ve
+molaları da içerir. Resmî mesai kaydınız ayrıdır ve <em>Mesai kaydı</em>
+ekranından girdiğiniz saatlere dayanır.</p>
+
+<div class="kutu">
+  <strong>Yardım gerekirse:</strong> Planlama ekibiyle iletişime geçin.
+  Sefer numarasını ve varsa aracın plakasını belirtmeniz çözümü hızlandırır.
+</div>
+
+</body>
+</html>

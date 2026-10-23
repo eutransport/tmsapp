@@ -1,0 +1,345 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Moveo TMS - Musteri Portali Kullanim Kilavuzu</title>
+<link rel="stylesheet" href="tr-img/kilavuz.css">
+</head>
+<body>
+
+<div class="merk"><img src="tr-img/logo.png" alt="Moveo"></div>
+
+<section class="kapak">
+  <img class="logo" src="tr-img/logo.png" alt="Moveo">
+  <h1>Moveo TMS<br>Müşteri Portalı</h1>
+  <p class="alt">Sipariş verme, takip etme ve araç izleme kılavuzu</p>
+  <span class="rol">Müşteri (Opdrachtgever) kullanıcıları için</span>
+  <div class="voet">
+    Moveo BV &middot; Rijnvallei 12, 6718 NV Ede &middot; tms.moveo-bv.nl<br>
+    Sürüm 1.0 &middot; Ekim 2026
+  </div>
+</section>
+
+<h2>İçindekiler</h2>
+<div class="icindekiler">
+<ol>
+  <li>Sistem nasıl çalışır</li>
+  <li>Giriş yapma ve dil seçimi</li>
+  <li>Uygulamayı telefona kurma</li>
+  <li>Genel bakış ekranı</li>
+  <li>Sipariş oluşturma</li>
+  <li>Siparişleri yönetme: sıralama, düzenleme, iptal</li>
+  <li>Ek (fotoğraf, PDF) ekleme</li>
+  <li>E-posta bildirimleri</li>
+  <li>Müşteri adres defteri</li>
+  <li>Aracım nerede: canlı takip ve seferler</li>
+  <li>Saat kaydı ve geçiş ücretleri</li>
+  <li>Sık sorulan sorular</li>
+</ol>
+</div>
+
+<h2 class="yeni-sayfa">1. Sistem nasıl çalışır</h2>
+
+<p>Moveo TMS, nakliye işini tek bir yerde toplayan bir taşıma yönetim sistemidir.
+Sistemde üç taraf birlikte çalışır: siparişi veren <strong>müşteri</strong>, işi
+yapan <strong>şoför</strong> ve her şeyi gözeten <strong>planlama ekibi</strong>.
+Üçü de aynı veriyi görür; kimse ayrı bir listeyle çalışmaz. Bu nedenle telefonla
+durum sorma ihtiyacı büyük ölçüde ortadan kalkar.</p>
+
+<p>Bir siparişin hayatı her zaman aynı yolu izler. Siz bir sipariş
+oluşturursunuz ve onu bir şoföre atarsınız. Şoför siparişi telefonunda anında
+görür. Yola çıktığında siparişi başlatır, teslimatı yaptığında teslim edildi
+olarak bildirir. Teslimat gerçekleşmezse bunun sebebini yazar. Her adımda sistem
+sizi bilgilendirir ve sipariş listenizdeki durum kendiliğinden güncellenir.</p>
+
+<h3>Sipariş durumları</h3>
+
+<table>
+  <tr><th>Durum</th><th>Anlamı</th><th>Ne zaman oluşur</th></tr>
+  <tr>
+    <td><span class="durum d-yeni">Yeni</span></td>
+    <td>Sipariş oluşturuldu, şoför henüz başlamadı.</td>
+    <td>Siz siparişi kaydettiğiniz anda.</td>
+  </tr>
+  <tr>
+    <td><span class="durum d-yolda">Yolda</span></td>
+    <td>Şoför işe başladı ve yola çıktı.</td>
+    <td>Şoför telefonunda "Siparişi başlat" dediğinde.</td>
+  </tr>
+  <tr>
+    <td><span class="durum d-teslim">Teslim edildi</span></td>
+    <td>Yük teslim edildi, iş tamamlandı.</td>
+    <td>Şoför teslimatı bildirdiğinde.</td>
+  </tr>
+  <tr>
+    <td><span class="durum d-olmadi">Teslim edilmedi</span></td>
+    <td>Teslimat yapılamadı; sebebi kayıtlıdır.</td>
+    <td>Şoför sebep yazarak bildirdiğinde.</td>
+  </tr>
+  <tr>
+    <td><span class="durum d-iptal">İptal edildi</span></td>
+    <td>Sipariş geri çekildi.</td>
+    <td>Siz siparişi iptal ettiğinizde.</td>
+  </tr>
+</table>
+
+<h3>Bildirimler</h3>
+
+<p>Sistem iki ayrı kanaldan haber verir. Şoföre <strong>anlık bildirim</strong>
+(push) gider: yeni bir sipariş geldiğinde, bir sipariş iptal edildiğinde veya
+sıralaması değiştiğinde telefonunda uyarı belirir. Size ve belirlediğiniz
+adreslere ise <strong>e-posta</strong> gider: iş başladığında, teslim
+edildiğinde ve teslim edilemediğinde. Hangi olaylarda e-posta gideceğini ve
+hangi adreslere gideceğini kendiniz belirlersiniz; bunu 8. bölümde anlatıyoruz.</p>
+
+<div class="kutu">
+  <strong>Önemli:</strong> E-posta bildirimlerinin dili, şirketiniz için
+  seçilen dile göre gönderilir. Kullanıcı başına değil, şirket başına ayarlanır.
+</div>
+
+<h3>Araç takibi</h3>
+
+<p>Araçlar, araçlara takılı olan takip cihazları üzerinden izlenir. Sistem
+bu cihazlardan aracın bulunduğu konumu, hareket halinde olup olmadığını,
+yapılan seferleri, kilometre sayacını ve sürüş süresini alır. Bu veriler
+hem haritada hem de sipariş listenizde kullanılır. Size yalnızca kendi
+şirketinize atanmış araçlar gösterilir; diğer araçları göremezsiniz.</p>
+
+<div class="uyari">
+  <strong>Dikkat:</strong> Takip cihazı hız bilgisini her zaman güvenilir
+  şekilde vermez. Bu yüzden sistem aracın durumunu cihazın kendi durum
+  bilgisinden okur: <em>Hareket halinde</em> veya <em>Park halinde</em>.
+</div>
+
+<h2>2. Giriş yapma ve dil seçimi</h2>
+
+<p>Tarayıcınızdan <strong>tms.moveo-bv.nl</strong> adresine gidin. E-posta
+adresinizi ve şifrenizi girip <em>Giriş yap</em> düğmesine basın. Şifrenizi
+unuttuysanız planlama ekibinden sıfırlama isteyin.</p>
+
+<figure>
+  <img src="tr-img/01-login.png" alt="Giriş ekranı">
+  <figcaption>Giriş ekranı. Bağlantı her zaman şifrelidir.</figcaption>
+</figure>
+
+<p>Giriş yaptıktan sonra sağ üst köşede dil düğmesini görürsünüz. Hollandaca,
+İngilizce ve Türkçe arasında istediğiniz zaman geçiş yapabilirsiniz. Seçiminiz
+tarayıcınızda saklanır, bir dahaki girişinizde aynı dille açılır.</p>
+
+<h2>3. Uygulamayı telefona kurma</h2>
+
+<p>Portal telefonda da çalışır ve ayrı bir uygulama gibi kurulabilir.
+Android cihazlarda tarayıcı menüsünden <em>Ana ekrana ekle</em> seçeneğini
+kullanın. iPhone'da Safari ile açıp paylaş menüsünden <em>Ana Ekrana Ekle</em>
+deyin. Kurulumdan sonra simgeye dokunarak adres çubuğu olmadan açılır.</p>
+
+<div class="kutu">
+  <strong>iPhone kullanıcıları:</strong> Anlık bildirimler yalnızca iOS 16.4
+  ve üzeri sürümlerde ve uygulama ana ekrana eklendiyse çalışır.
+</div>
+
+<h2>4. Genel bakış ekranı</h2>
+
+<p>Giriş yaptığınızda karşınıza gelen ilk ekran günün özetidir. Üstte dört
+sayaç bulunur: bugün oluşturulan siparişler, bugün teslim edilenler, hâlâ açık
+olanlar ve şu anda yolda olanlar. Her sayacın üzerine tıkladığınızda sipariş
+listesi o filtreyle açılır; böylece aradığınız grubu tek hareketle görürsünüz.</p>
+
+<p>Bunun altında şoförlerinizin bugünkü saatleri listelenir. Her satırda
+şoförün adı, kullandığı araç, o güne ait sipariş ve teslimat sayısı, yapılan
+sefer sayısı ve toplam süre yer alır. Buradaki süre, aracın ilk hareketinden
+itibaren geçen süredir; molalar ve beklemeler de bu sürenin içindedir.</p>
+
+<figure>
+  <img src="tr-img/02-dashboard.png" alt="Genel bakış ekranı">
+  <figcaption>Genel bakış: günlük sayaçlar, şoför saatleri ve hızlı erişim kartları.</figcaption>
+</figure>
+
+<h2>5. Sipariş oluşturma</h2>
+
+<p>Sol menüden <em>Siparişler</em> sayfasını açın ve sağ üstteki
+<strong>Yeni sipariş</strong> düğmesine basın. Açılan formda teslimatın
+yapılacağı firmayı, adresi, posta kodunu ve şehri girersiniz. Daha önce
+sipariş verdiğiniz bir firmayı yazmaya başladığınızda sistem adres defterinden
+öneri sunar; seçtiğinizde adres alanları kendiliğinden dolar.</p>
+
+<h3>Alanların anlamı</h3>
+
+<table>
+  <tr><th>Alan</th><th>Açıklama</th></tr>
+  <tr><td>Sefer numarası</td><td>Kendi referans numaranız. Listelerde ve e-postalarda görünür.</td></tr>
+  <tr><td>Firma adı</td><td>Teslimatın yapılacağı müşteri.</td></tr>
+  <tr><td>Adres, posta kodu, şehir</td><td>Şoförün navigasyonu bu bilgiyle açılır.</td></tr>
+  <tr><td>İlgili kişi ve telefon</td><td>Şoför tek dokunuşla arayabilir.</td></tr>
+  <tr><td>Şoför</td><td>Şirketinizin tüm şoförleri arasından seçebilirsiniz.</td></tr>
+  <tr><td>Açıklama</td><td>Teslimat saati, kapı numarası, özel talimatlar.</td></tr>
+  <tr><td>Şu saate kadar açık</td><td>Teslimatın en geç yapılması gereken saat.</td></tr>
+</table>
+
+<figure>
+  <img src="tr-img/04-yeni-siparis.png" alt="Yeni sipariş formu">
+  <figcaption>Yeni sipariş formu. Kaydettiğiniz anda şoförün telefonuna bildirim gider.</figcaption>
+</figure>
+
+<div class="kutu">
+  <strong>İpucu:</strong> Açıklama alanını iyi kullanın. Şoför bu notu
+  telefonunda siparişin detayında görür ve çoğu yanlış anlaşılma burada önlenir.
+</div>
+
+<h2>6. Siparişleri yönetme</h2>
+
+<p>Siparişler sayfası, verdiğiniz bütün işlerin listesidir. Üstteki arama
+kutusuyla sefer numarasına, firmaya veya şehre göre arayabilir; yanındaki iki
+açılır listeyle şoföre ve duruma göre süzebilirsiniz. Liste kendiliğinden
+yenilenir, yani şoför bir siparişi başlattığında siz sayfayı yenilemeden
+görürsünüz.</p>
+
+<figure>
+  <img src="tr-img/03-siparisler.png" alt="Sipariş listesi">
+  <figcaption>Sipariş listesi. Her satırın sağında o sipariş için yapabileceğiniz işlemler bulunur.</figcaption>
+</figure>
+
+<h3>Satır sonundaki düğmeler</h3>
+
+<ul>
+  <li><strong>Yukarı / aşağı oklar:</strong> Siparişin şoförün listesindeki
+  sırasını değiştirir. Şoför bu sırayla çalışır, bu yüzden acil bir iş çıktığında
+  onu yukarı taşımanız yeterlidir.</li>
+  <li><strong>Mesaj simgesi:</strong> Şoförün bu siparişe yazdığı yanıtı gösterir.</li>
+  <li><strong>Zarf simgesi:</strong> Bu sipariş için gönderilen e-postaları gösterir.</li>
+  <li><strong>Ataç simgesi:</strong> Siparişe ek dosya ekler.</li>
+  <li><strong>Kalem simgesi:</strong> Siparişi düzenler.</li>
+  <li><strong>Çarpı simgesi:</strong> Siparişi iptal eder (geri çeker).</li>
+  <li><strong>Çöp kutusu:</strong> Siparişi tamamen siler.</li>
+</ul>
+
+<h3>Başlamış bir siparişi değiştirmek</h3>
+
+<p>Şoför işe başlamış olsa bile siparişi iptal edebilir, silebilir veya
+sırasını değiştirebilirsiniz. Böyle bir durumda şoförün telefonuna anında
+bildirim gider; iptal edilen veya silinen iş onun listesinden kalkar. Yanlış
+bir siparişin yola çıkması durumunda müdahale etmekten çekinmeyin.</p>
+
+<div class="uyari">
+  <strong>İptal mi, silme mi?</strong> İptal ettiğinizde sipariş listede
+  kalır ve geçmişi görünür. Sildiğinizde sipariş tamamen kaybolur ve geri
+  getirilemez. Günlük işte iptal etmeyi tercih edin.
+</div>
+
+<h2>7. Ek (fotoğraf, PDF) ekleme</h2>
+
+<p>Bir siparişe irsaliye, çizim, yükleme listesi gibi belgeler ekleyebilirsiniz.
+Sipariş satırındaki ataç simgesine basın, dosyayı seçin; yükleme biter bitmez
+şoför bu dosyayı telefonunda görür. Fotoğraf, PDF ve Excel dosyaları
+desteklenir.</p>
+
+<p>Şoför de aynı şekilde ek yükleyebilir. Teslimat sırasında çektiği fotoğraf
+veya imzalı irsaliye doğrudan siparişin altında size ulaşır. Yüklenen
+dosyalar güvenli bir bağlantıyla korunur; yalnızca yetkili kullanıcılar açabilir.</p>
+
+<h2>8. E-posta bildirimleri</h2>
+
+<p>Siparişler sayfasının üst kısmındaki <strong>E-posta bildirimleri</strong>
+düğmesiyle ayarları açarsınız. Burada üç olayın her biri için bildirim
+gönderilip gönderilmeyeceğini seçersiniz: iş başladığında, teslim edildiğinde
+ve teslim edilemediğinde. Ayrıca bildirimlerin gideceği adresleri ve
+gönderici adresini belirlersiniz.</p>
+
+<p>Birden fazla adres ekleyebilirsiniz; örneğin kendi adresiniz, muhasebe ve
+depo sorumlusu. Adresleri tek tek ekleyip kaldırabilirsiniz. Bir e-posta
+gönderilemezse sistem bunu sipariş satırında işaretler, böylece sessizce
+kaybolmaz.</p>
+
+<h2>9. Müşteri adres defteri</h2>
+
+<p><em>Müşterilerim</em> sayfası, sipariş verdiğiniz firmaların listesidir.
+Yeni bir firmaya sipariş oluşturduğunuzda sistem o firmayı kendiliğinden
+buraya ekler. Böylece ikinci kez aynı adresi yazmak zorunda kalmazsınız.</p>
+
+<p>Bir kaydın üzerindeki kalem simgesiyle adresi, ilgili kişiyi, telefonu ve
+teslimat için son saati düzenleyebilirsiniz. Kaydın yanındaki sipariş sayısına
+basarsanız o firmaya ait bütün siparişler listelenir.</p>
+
+<figure>
+  <img src="tr-img/08-musteriler.png" alt="Müşteri adres defteri">
+  <figcaption>Adres defteri siparişlerinizden otomatik olarak dolar.</figcaption>
+</figure>
+
+<h2>10. Aracım nerede</h2>
+
+<p>Bu sayfa iki bölümden oluşur. Solda harita, sağda araç listesi vardır.
+Listede size atanmış her aracın plakası, o anki durumu, bulunduğu adres ve
+bu bilginin alındığı saat görünür. Bir araca tıkladığınızda harita o araca
+odaklanır ve alt kısımda o aracın günlük özeti açılır.</p>
+
+<figure>
+  <img src="tr-img/05-harita.png" alt="Araç takip haritası">
+  <figcaption>Harita ve araç listesi. Durum etiketi aracın hareket halinde mi park halinde mi olduğunu gösterir.</figcaption>
+</figure>
+
+<h3>Günlük özet ve seferler</h3>
+
+<p>Araç seçtiğinizde ilk hareket saati, son duruş saati, kilometre sayacının
+gün başındaki ve o anki değeri ile gün içinde yapılan toplam kilometre
+gösterilir. Sayfanın altındaki tabloda ise günlere göre sefer listesi bulunur.
+Bir günün satırını açtığınızda o günün tek tek seferlerini, nereden nereye
+gidildiğini ve her seferin mesafesini görürsünüz.</p>
+
+<figure>
+  <img src="tr-img/06-arac-detay.png" alt="Araç günlük özeti">
+  <figcaption>Seçilen aracın günlük özeti ve sefer dökümü.</figcaption>
+</figure>
+
+<p>Üst sağdaki açılır listeden bugünü, son yedi günü veya son otuz bir günü
+seçebilirsiniz. Takip sağlayıcısı en fazla yaklaşık bir aylık geçmiş verir;
+daha eski veriler bu ekranda gösterilmez.</p>
+
+<h2>11. Saat kaydı ve geçiş ücretleri</h2>
+
+<p><em>Saat kaydı</em> sayfası şoförlerinizin haftalık çalışma sürelerini
+gösterir. Süreler araç verisinden hesaplanır; aracın ilk hareketi ile son
+duruşu arasındaki zamanı kapsar.</p>
+
+<p><em>Geçiş ücreti</em> sayfasında araçlarınızın geçtiği ücretli yollar ve
+bunların tutarları listelenir. Bu bilgiler yakıt ve geçiş kartı sağlayıcısından
+gelir ve faturalandırmaya esas oluşturur.</p>
+
+<figure>
+  <img src="tr-img/07-saatler.png" alt="Saat kaydı">
+  <figcaption>Haftalık saat dökümü.</figcaption>
+</figure>
+
+<h2>12. Sık sorulan sorular</h2>
+
+<h3>Şoför siparişi göremiyor, ne yapmalıyım?</h3>
+<p>Önce siparişin doğru şoföre atandığından emin olun. Şoför uygulamayı
+tamamen kapatıp yeniden açtığında liste güncellenir. Sorun sürerse planlama
+ekibine bildirin.</p>
+
+<h3>Bildirim gelmiyor.</h3>
+<p>Telefonun bildirim izni kapalı olabilir. Cihaz ayarlarından uygulamaya
+bildirim izni verildiğinden emin olun. iPhone'da uygulamanın ana ekrana
+eklenmiş olması gerekir.</p>
+
+<h3>Haritada araç görünmüyor.</h3>
+<p>Araç uzun süre hareketsizse veya cihaz sinyal alamıyorsa konum
+güncellenmez. Listede "Konum bilinmiyor" yazar. Araç yeniden hareket ettiğinde
+konum kendiliğinden gelir.</p>
+
+<h3>Yanlış sipariş oluşturdum.</h3>
+<p>Henüz başlamamışsa düzenleyin veya silin. Şoför başlamışsa iptal edin;
+şoföre anında bildirim gider ve iş listesinden düşer.</p>
+
+<h3>Kilometre ve saat bilgileri neden tam olarak benim hesabımla uyuşmuyor?</h3>
+<p>Bu veriler araçtaki takip cihazından gelir ve aracın hareketine dayanır.
+Molalar, beklemeler ve manevra hareketleri de kayda girer. Bu nedenle
+rakamlar bir şoförün kendi kalemle tuttuğu kayıttan farklı olabilir.</p>
+
+<div class="kutu">
+  <strong>Yardım gerekirse:</strong> Planlama ekibiyle iletişime geçin.
+  Sorununuzu anlatırken sefer numarasını ve varsa aracın plakasını belirtmeniz
+  çözümü hızlandırır.
+</div>
+
+</body>
+</html>

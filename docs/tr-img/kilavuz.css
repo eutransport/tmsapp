@@ -1,0 +1,180 @@
+:root {
+  --marine: #1e3a5f;
+  --marine-licht: #2f5786;
+  --accent: #4f46e5;
+  --grijs: #4b5563;
+  --lijn: #e5e7eb;
+  --zacht: #f8fafc;
+}
+
+@page {
+  size: A4;
+  margin: 16mm 0 18mm 0;
+}
+
+@page kapak {
+  margin: 0;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color: #1f2937;
+  font-size: 10.5pt;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0 17mm;
+}
+
+.merk {
+  position: fixed;
+  top: 2mm;
+  right: 10mm;
+  width: 15mm;
+  height: 15mm;
+  border-radius: 3mm;
+  overflow: hidden;
+  opacity: 0.95;
+}
+.merk img { width: 100%; height: 100%; display: block; }
+
+.kapak {
+  page: kapak;
+  page-break-after: always;
+  background: linear-gradient(145deg, var(--marine) 0%, var(--marine-licht) 100%);
+  color: #fff;
+  margin: 0 -17mm;
+  padding: 45mm 20mm 25mm 20mm;
+  height: 297mm;
+  overflow: hidden;
+}
+.kapak img.logo {
+  width: 32mm;
+  border-radius: 6mm;
+  margin-bottom: 14mm;
+}
+.kapak h1 {
+  font-size: 30pt;
+  line-height: 1.15;
+  margin: 0 0 6mm 0;
+  font-weight: 700;
+}
+.kapak p.alt {
+  font-size: 13pt;
+  opacity: 0.9;
+  margin: 0 0 20mm 0;
+}
+.kapak .rol {
+  display: inline-block;
+  border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 999px;
+  padding: 2mm 7mm;
+  font-size: 11pt;
+  letter-spacing: 0.5px;
+}
+.kapak .voet {
+  margin-top: 30mm;
+  font-size: 9.5pt;
+  opacity: 0.8;
+  border-top: 1px solid rgba(255,255,255,0.3);
+  padding-top: 5mm;
+}
+
+h2 {
+  color: var(--marine);
+  font-size: 17pt;
+  margin: 10mm 0 3mm 0;
+  padding-bottom: 2mm;
+  border-bottom: 2px solid var(--marine);
+  page-break-after: avoid;
+}
+h3 {
+  color: var(--marine-licht);
+  font-size: 12.5pt;
+  margin: 7mm 0 2mm 0;
+  page-break-after: avoid;
+}
+p { margin: 0 0 3mm 0; text-align: justify; }
+
+ul, ol { margin: 0 0 4mm 0; padding-left: 6mm; }
+li { margin-bottom: 1.5mm; }
+
+figure {
+  margin: 5mm 0 7mm 0;
+  page-break-inside: avoid;
+}
+figure img {
+  width: 100%;
+  border: 1px solid var(--lijn);
+  border-radius: 2mm;
+}
+figcaption {
+  font-size: 8.5pt;
+  color: var(--grijs);
+  margin-top: 1.5mm;
+  font-style: italic;
+}
+
+figure.mobil {
+  max-width: 62mm;
+  margin-left: auto;
+  margin-right: auto;
+}
+figure.mobil figcaption { text-align: center; }
+
+.kutu {
+  background: var(--zacht);
+  border-left: 3px solid var(--accent);
+  padding: 4mm 5mm;
+  margin: 4mm 0;
+  page-break-inside: avoid;
+}
+.kutu strong { color: var(--marine); }
+
+.uyari {
+  background: #fff7ed;
+  border-left: 3px solid #ea580c;
+  padding: 4mm 5mm;
+  margin: 4mm 0;
+  page-break-inside: avoid;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4mm 0 6mm 0;
+  font-size: 9.5pt;
+  page-break-inside: avoid;
+}
+th {
+  background: var(--marine);
+  color: #fff;
+  text-align: left;
+  padding: 2.5mm 3mm;
+  font-weight: 600;
+}
+td {
+  border-bottom: 1px solid var(--lijn);
+  padding: 2.5mm 3mm;
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: var(--zacht); }
+
+.durum {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.5mm 3mm;
+  font-size: 8.5pt;
+  font-weight: 600;
+}
+.d-yeni { background: #e0e7ff; color: #3730a3; }
+.d-yolda { background: #dbeafe; color: #1e40af; }
+.d-teslim { background: #dcfce7; color: #166534; }
+.d-olmadi { background: #fef3c7; color: #92400e; }
+.d-iptal { background: #fee2e2; color: #991b1b; }
+
+.icindekiler ol { padding-left: 5mm; }
+.icindekiler li { margin-bottom: 2mm; font-size: 11pt; }
+
+.yeni-sayfa { page-break-before: always; }
