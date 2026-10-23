@@ -356,12 +356,10 @@ class Expense(models.Model):
 class FactuurHerinnering(models.Model):
     """Vastlegging van een verstuurde betalingsherinnering.
 
-    Dient als slot: per factuur en fase wordt hoogstens een mail bezorgd.
+    Dient als slot: per factuur en ronde wordt hoogstens een mail bezorgd.
     Mislukt het versturen, dan blijft het slot open tot het maximum aantal
     pogingen is bereikt.
     """
-
-    FASES = (1, 7, 14)
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     invoice = models.ForeignKey(
@@ -370,7 +368,11 @@ class FactuurHerinnering(models.Model):
         related_name='herinneringen',
         verbose_name='Factuur',
     )
-    fase = models.PositiveSmallIntegerField(
+    ronde = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name='Hoeveelste herinnering',
+    )
+    dagen_te_laat = models.PositiveSmallIntegerField(
         verbose_name='Dagen te laat',
         help_text='Aantal dagen na de vervaldatum waarvoor deze mail bedoeld was.',
     )
@@ -392,13 +394,13 @@ class FactuurHerinnering(models.Model):
         ordering = ['-verstuurd_op']
         constraints = [
             models.UniqueConstraint(
-                fields=['invoice', 'fase'],
-                name='uniek_herinnering_per_fase',
+                fields=['invoice', 'ronde'],
+                name='uniek_herinnering_per_ronde',
             )
         ]
 
     def __str__(self):
-        return f'{self.invoice.factuurnummer} - fase {self.fase}'
+        return f'{self.invoice.factuurnummer} - herinnering {self.ronde}'
 
 
 # De configuratie van de factuurwizard staat in een eigen bestand, maar moet

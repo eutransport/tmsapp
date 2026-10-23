@@ -122,3 +122,28 @@ export async function updateMailingContact(id: string, data: MailingListContactU
 export async function deleteMailingContact(id: string): Promise<void> {
   await api.delete(`/companies/mailing-contacts/${id}/`)
 }
+
+// ---- Betalingsherinneringen ----
+
+export interface HerinneringInstelling {
+  id: string
+  bedrijf: string
+  actief: boolean
+  interval_dagen: number
+  max_herinneringen: number
+  dagen_reeks: number[]
+  updated_at: string
+}
+
+export async function getHerinneringInstelling(bedrijfId: string): Promise<HerinneringInstelling> {
+  const response = await api.get(`/companies/${bedrijfId}/herinneringen/`)
+  return response.data
+}
+
+export async function saveHerinneringInstelling(
+  bedrijfId: string,
+  data: Pick<HerinneringInstelling, 'actief' | 'interval_dagen' | 'max_herinneringen'>
+): Promise<HerinneringInstelling> {
+  const response = await api.patch(`/companies/${bedrijfId}/herinneringen/`, data)
+  return response.data
+}

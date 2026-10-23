@@ -13,6 +13,7 @@ import {
   BuildingOfficeIcon,
   EnvelopeIcon,
   UserGroupIcon,
+  BellAlertIcon,
 } from '@heroicons/react/24/outline'
 import { Company, MailingListContact, Vehicle } from '@/types'
 import { 
@@ -27,6 +28,9 @@ import {
   createMailingContact,
   updateMailingContact,
   deleteMailingContact,
+  getHerinneringInstelling,
+  saveHerinneringInstelling,
+  HerinneringInstelling,
 } from '@/api/companies'
 import { getAllVehicles } from '@/api/fleet'
 import Pagination, { PageSize } from '@/components/common/Pagination'
@@ -664,6 +668,158 @@ function MailingListPanel({
   )
 }
 
+// Betalingsherinneringen per opdrachtgever
+function HerinneringPanel({ company, onClose, onSaved }: {
+  company: Company
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const { t } = useTranslation()
+  const [instelling, setInstelling] = useState<HerinneringInstelling | null>(null)
+  const [laden, setLaden] = useState(true)
+  const [bezig, setBezig] = useState(false)
+  const [fout, setFout] = useState<string | null>(null)
+
+  useEffect(() => {
+    let actueel = true
+    getHerinneringInstelling(company.id)
+      .then(data => { if (actueel) setInstelling(data) })
+      .catch(() => { if (actueel) setFout(t('companies.reminderLoadError', 'Instelling laden mislukt')) })
+      .finally(() => { if (actueel) setLaden(false) })
+    return () => { actueel = false }
+  }, [company.id, t])
+
+  const wijzig = (velden: Partial<HerinneringInstelling>) => {
+    setInstelling(vorig => (vorig ? { ...vorig, ...velden } : vorig))
+  }
+
+  const opslaan = async () => {
+    if (!instelling) return
+    setBezig(true)
+    setFout(null)
+    try {
+      const data = await saveHerinneringInstelling(company.id, {
+        actief: instelling.actief,
+        interval_dagen: instelling.interval_dagen,
+        max_herinneringen: instelling.max_herinneringen,
+      })
+      setInstelling(data)
+      onSaved()
+      onClose()
+    } catch {
+      setFout(t('companies.reminderSaveError', 'Instelling opslaan mislukt'))
+    } finally {
+      setBezig(false)
+    }
+  }
+
+  if (laden) {
+    return (
+      <div className="flex items-center justify-center py-10">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary-600" />
+      </div>
+    )
+  }
+
+  if (!instelling) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-red-600">{fout}</p>
+        <div className="flex justify-end border-t pt-2">
+          <button onClick={onClose} className="btn-secondary">{t('common.close')}</button>
+        </div>
+      </div>
+    )
+  }
+
+  const reeks: number[] = Array.from(
+    { length: instelling.max_herinneringen },
+    (_, i) => instelling.interval_dagen * (i + 1)
+  )
+  const geenOntvangers = (company.mailing_contacts_count || 0) === 0 && !company.email
+
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-gray-600">
+        {t('companies.reminderIntro', 'Stuur automatisch een betalingsherinnering als een factuur van {{naam}} te laat is.', { naam: company.naam })}
+      </p>
+
+      {fout && <p className="text-sm text-red-600">{fout}</p>}
+
+      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3">
+        <input
+          type="checkbox"
+          checked={instelling.actief}
+          onChange={e => wijzig({ actief: e.target.checked })}
+          className="mt-0.5 h-5 w-5 rounded border-gray-300 text-primary-600"
+        />
+        <span>
+          <span className="block text-sm font-medium text-gray-900">
+            {t('companies.reminderActive', 'Herinneringen versturen')}
+          </span>
+          <span className="block text-xs text-gray-500">
+            {t('companies.reminderActiveHelp', 'Staat dit uit, dan krijgt deze opdrachtgever nooit een herinnering.')}
+          </span>
+        </span>
+      </label>
+
+      <div className={instelling.actief ? 'space-y-4' : 'space-y-4 pointer-events-none opacity-50'}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="interval-dagen">
+              {t('companies.reminderInterval', 'Om de hoeveel dagen')}
+            </label>
+            <input
+              id="interval-dagen"
+              type="number"
+              min={1}
+              max={90}
+              value={instelling.interval_dagen}
+              onChange={e => wijzig({ interval_dagen: Math.min(90, Math.max(1, Number(e.target.value) || 1)) })}
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="aantal-herinneringen">
+              {t('companies.reminderCount', 'Aantal herinneringen')}
+            </label>
+            <input
+              id="aantal-herinneringen"
+              type="number"
+              min={1}
+              max={10}
+              value={instelling.max_herinneringen}
+              onChange={e => wijzig({ max_herinneringen: Math.min(10, Math.max(1, Number(e.target.value) || 1)) })}
+              className="input"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
+          {t('companies.reminderSchedule', 'Herinnering op dag {{dagen}} na de vervaldatum.', {
+            dagen: reeks.join(', '),
+          })}
+        </div>
+      </div>
+
+      {instelling.actief && geenOntvangers && (
+        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+          {t('companies.reminderNoRecipients', 'Let op: er staan geen contacten in de mailinglijst, dus er kan niets verstuurd worden.')}
+        </p>
+      )}
+
+      <div className="flex justify-end gap-2 border-t pt-3">
+        <button onClick={onClose} className="btn-secondary" disabled={bezig}>
+          {t('common.cancel')}
+        </button>
+        <button onClick={opslaan} className="btn-primary" disabled={bezig}>
+          {bezig ? t('common.saving') : t('common.save')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // Main CompaniesPage component
 export default function CompaniesPage() {
   const { t } = useTranslation()
@@ -686,6 +842,7 @@ export default function CompaniesPage() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showMailingModal, setShowMailingModal] = useState(false)
+  const [showHerinneringModal, setShowHerinneringModal] = useState(false)
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
 
   // Helper to extract error message
@@ -971,6 +1128,13 @@ export default function CompaniesPage() {
                           )}
                         </button>
                         <button
+                          onClick={() => { setSelectedCompany(company); setShowHerinneringModal(true) }}
+                          className={`p-1 rounded hover:bg-gray-100 ${company.herinneringen?.actief ? 'text-primary-600' : 'text-gray-400 hover:text-primary-600'}`}
+                          title={t('companies.reminders', 'Betalingsherinneringen')}
+                        >
+                          <BellAlertIcon className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => { setSelectedCompany(company); setShowEditModal(true) }}
                           className="p-1 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded"
                           title={t('common.edit')}
@@ -1031,6 +1195,13 @@ export default function CompaniesPage() {
                       title={t('companies.mailingList')}
                     >
                       <EnvelopeIcon className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => { setSelectedCompany(company); setShowHerinneringModal(true) }}
+                      className={`p-2 min-w-[44px] min-h-[44px] rounded-lg hover:bg-gray-100 ${company.herinneringen?.actief ? 'text-primary-600' : 'text-gray-400 hover:text-primary-600'}`}
+                      title={t('companies.reminders', 'Betalingsherinneringen')}
+                    >
+                      <BellAlertIcon className="w-5 h-5" />
                     </button>
                     <button
                       onClick={() => { setSelectedCompany(company); setShowEditModal(true) }}
@@ -1147,6 +1318,22 @@ export default function CompaniesPage() {
           <MailingListPanel
             company={selectedCompany}
             onClose={() => { setShowMailingModal(false); setSelectedCompany(null) }}
+          />
+        )}
+      </Modal>
+
+      {/* Betalingsherinneringen */}
+      <Modal
+        isOpen={showHerinneringModal}
+        onClose={() => { setShowHerinneringModal(false); setSelectedCompany(null) }}
+        title={t('companies.reminders', 'Betalingsherinneringen')}
+        size="lg"
+      >
+        {selectedCompany && (
+          <HerinneringPanel
+            company={selectedCompany}
+            onClose={() => { setShowHerinneringModal(false); setSelectedCompany(null) }}
+            onSaved={fetchCompanies}
           />
         )}
       </Modal>

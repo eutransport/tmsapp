@@ -1,19 +1,21 @@
 """Teksten voor de betalingsherinnering, per taal.
 
 De taal volgt de mailinstelling van het bedrijf; ontbreekt die, dan Nederlands.
+De nummers staan voor de hoeveelste herinnering, niet voor een aantal dagen:
+het interval is per opdrachtgever instelbaar.
 """
 
 NL = {
     'onderwerp_1': 'Herinnering: factuur %(nummer)s is vervallen',
-    'onderwerp_7': 'Tweede herinnering: factuur %(nummer)s staat nog open',
-    'onderwerp_14': 'Laatste herinnering: factuur %(nummer)s staat nog open',
+    'onderwerp_2': 'Tweede herinnering: factuur %(nummer)s staat nog open',
+    'onderwerp_3': 'Laatste herinnering: factuur %(nummer)s staat nog open',
     'kop': 'Betalingsherinnering',
     'koptekst_1': 'Factuur %(nummer)s is vervallen',
-    'koptekst_7': 'Factuur %(nummer)s staat nog open',
-    'koptekst_14': 'Factuur %(nummer)s staat nog steeds open',
+    'koptekst_2': 'Factuur %(nummer)s staat nog open',
+    'koptekst_3': 'Factuur %(nummer)s staat nog steeds open',
     'inleiding_1': 'De betaaltermijn van onderstaande factuur is verstreken. Mogelijk is dit aan uw aandacht ontsnapt.',
-    'inleiding_7': 'Onze factuur staat inmiddels een week open. Wij verzoeken u vriendelijk het bedrag alsnog over te maken.',
-    'inleiding_14': 'Ondanks eerdere herinneringen is deze factuur nog niet voldaan. Wij verzoeken u dringend binnen vijf dagen te betalen.',
+    'inleiding_2': 'Onze factuur staat nog altijd open. Wij verzoeken u vriendelijk het bedrag alsnog over te maken.',
+    'inleiding_3': 'Ondanks eerdere herinneringen is deze factuur nog niet voldaan. Wij verzoeken u dringend op korte termijn te betalen.',
     'factuurnummer': 'Factuurnummer',
     'factuurdatum': 'Factuurdatum',
     'vervaldatum': 'Vervaldatum',
@@ -26,15 +28,15 @@ NL = {
 
 EN = {
     'onderwerp_1': 'Reminder: invoice %(nummer)s is overdue',
-    'onderwerp_7': 'Second reminder: invoice %(nummer)s is still outstanding',
-    'onderwerp_14': 'Final reminder: invoice %(nummer)s is still outstanding',
+    'onderwerp_2': 'Second reminder: invoice %(nummer)s is still outstanding',
+    'onderwerp_3': 'Final reminder: invoice %(nummer)s is still outstanding',
     'kop': 'Payment reminder',
     'koptekst_1': 'Invoice %(nummer)s is overdue',
-    'koptekst_7': 'Invoice %(nummer)s is still outstanding',
-    'koptekst_14': 'Invoice %(nummer)s remains unpaid',
+    'koptekst_2': 'Invoice %(nummer)s is still outstanding',
+    'koptekst_3': 'Invoice %(nummer)s remains unpaid',
     'inleiding_1': 'The payment term for the invoice below has passed. This may have escaped your attention.',
-    'inleiding_7': 'Our invoice has now been outstanding for a week. We kindly ask you to transfer the amount.',
-    'inleiding_14': 'Despite earlier reminders this invoice remains unpaid. We urge you to pay within five days.',
+    'inleiding_2': 'Our invoice is still outstanding. We kindly ask you to transfer the amount.',
+    'inleiding_3': 'Despite earlier reminders this invoice remains unpaid. We urge you to pay without further delay.',
     'factuurnummer': 'Invoice number',
     'factuurdatum': 'Invoice date',
     'vervaldatum': 'Due date',
@@ -46,28 +48,35 @@ EN = {
 }
 
 TR = {
-    'onderwerp_1': 'Hatirlatma: %(nummer)s numarali faturanin vadesi gecti',
-    'onderwerp_7': 'Ikinci hatirlatma: %(nummer)s numarali fatura hala odenmedi',
-    'onderwerp_14': 'Son hatirlatma: %(nummer)s numarali fatura hala odenmedi',
-    'kop': 'Odeme hatirlatmasi',
-    'koptekst_1': '%(nummer)s numarali faturanin vadesi gecti',
-    'koptekst_7': '%(nummer)s numarali fatura hala odenmedi',
-    'koptekst_14': '%(nummer)s numarali fatura halen odenmemis durumda',
-    'inleiding_1': 'Asagidaki faturanin odeme suresi doldu. Gozunuzden kacmis olabilir.',
-    'inleiding_7': 'Faturamiz bir haftadir odenmemis durumda. Tutari havale etmenizi rica ederiz.',
-    'inleiding_14': 'Onceki hatirlatmalara ragmen bu fatura odenmedi. Bes gun icinde odeme yapmanizi onemle rica ederiz.',
-    'factuurnummer': 'Fatura numarasi',
+    'onderwerp_1': 'Hatırlatma: %(nummer)s numaralı faturanın vadesi geçti',
+    'onderwerp_2': 'İkinci hatırlatma: %(nummer)s numaralı fatura hâlâ ödenmedi',
+    'onderwerp_3': 'Son hatırlatma: %(nummer)s numaralı fatura hâlâ ödenmedi',
+    'kop': 'Ödeme hatırlatması',
+    'koptekst_1': '%(nummer)s numaralı faturanın vadesi geçti',
+    'koptekst_2': '%(nummer)s numaralı fatura hâlâ ödenmedi',
+    'koptekst_3': '%(nummer)s numaralı fatura hâlen ödenmemiş durumda',
+    'inleiding_1': 'Aşağıdaki faturanın ödeme süresi doldu. Gözünüzden kaçmış olabilir.',
+    'inleiding_2': 'Faturamız hâlâ ödenmemiş durumda. Tutarı havale etmenizi rica ederiz.',
+    'inleiding_3': 'Önceki hatırlatmalara rağmen bu fatura ödenmedi. En kısa sürede ödeme yapmanızı önemle rica ederiz.',
+    'factuurnummer': 'Fatura numarası',
     'factuurdatum': 'Fatura tarihi',
-    'vervaldatum': 'Son odeme tarihi',
-    'dagen_te_laat': 'Geciken gun',
-    'bedrag': 'Odenmemis tutar',
-    'slot': 'Odemeyi yaptiysaniz bu mesaji dikkate almayiniz.',
-    'portaal': 'Tum faturalarinizi musteri portalinda gorebilirsiniz.',
-    'voettekst': 'Bu mesaj Moveo BV tasima yonetim sistemi tarafindan otomatik olarak gonderilmistir.',
+    'vervaldatum': 'Son ödeme tarihi',
+    'dagen_te_laat': 'Geciken gün',
+    'bedrag': 'Ödenmemiş tutar',
+    'slot': 'Ödemeyi yaptıysanız bu mesajı dikkate almayınız.',
+    'portaal': 'Tüm faturalarınızı müşteri portalında görebilirsiniz.',
+    'voettekst': 'Bu mesaj Moveo BV taşıma yönetim sistemi tarafından otomatik olarak gönderilmiştir.',
 }
 
 TALEN = {'nl': NL, 'en': EN, 'tr': TR}
 
+MAX_RONDE_TEKST = 3
+
 
 def teksten_voor(taal):
     return TALEN.get((taal or 'nl').lower(), NL)
+
+
+def tekstronde(ronde: int) -> int:
+    """Welke tekstvariant hoort bij deze herinnering; de laatste wordt hergebruikt."""
+    return min(max(int(ronde), 1), MAX_RONDE_TEKST)

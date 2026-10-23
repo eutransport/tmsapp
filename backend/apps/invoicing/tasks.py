@@ -20,13 +20,14 @@ from celery import shared_task
 from django.conf import settings
 from django.core.mail import EmailMessage, get_connection
 from django.db import IntegrityError
+from django.db.models import Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 
 from apps.companies.models import MailingListContact
 from apps.accounts.models import UserRole
 
-from .herinnering_teksten import teksten_voor
+from .herinnering_teksten import teksten_voor, tekstronde
 from .models import FactuurHerinnering, Invoice, InvoiceStatus, InvoiceType
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ def _bedrag(waarde: Decimal) -> str:
     return f'{met_punten},{decimalen}'
 
 
-def _verstuur(factuur: Invoice, fase: int, dagen_te_laat: int) -> bool:
+def _verstuur(factuur: Invoice, ronde: int, dagen_te_laat: int) -> bool:
     ontvangers = _ontvangers(factuur.bedrijf)
     if not ontvangers:
         logger.warning('Geen ontvangers voor herinnering %s', factuur.factuurnummer)
@@ -87,17 +88,19 @@ def _verstuur(factuur: Invoice, fase: int, dagen_te_laat: int) -> bool:
         logger.warning('Geen SMTP-server ingesteld; herinnering niet verstuurd')
         return False
 
-    T = teksten_voor(_taal_van(factuur.bedrijf_id))
+    taal = _taal_van(factuur.bedrijf_id)
+    T = teksten_voor(taal)
+    variant = tekstronde(ronde)
     namen = {'nummer': factuur.factuurnummer}
-    onderwerp = T[f'onderwerp_{fase}'] % namen
+    onderwerp = T[f'onderwerp_{variant}'] % namen
 
     inhoud = render_to_string('invoicing/mail_herinnering.html', {
         'T': T,
-        'taal': _taal_van(factuur.bedrijf_id),
-        'fase': fase,
+        'taal': taal,
+        'ronde': variant,
         'onderwerp': onderwerp,
-        'koptekst': T[f'koptekst_{fase}'] % namen,
-        'inleiding': T[f'inleiding_{fase}'],
+        'koptekst': T[f'koptekst_{variant}'] % namen,
+        'inleiding': T[f'inleiding_{variant}'],
         'factuur': factuur,
         'dagen_te_laat': dagen_te_laat,
         'bedrag': _bedrag(abs(factuur.totaal)),
@@ -151,7 +154,7 @@ def _poging(slot, mislukt: list) -> bool:
     slot.laatste_poging = timezone.now()
     slot.fout = ''
     try:
-        slot.gelukt = _verstuur(factuur, slot.fase, slot.fase)
+        slot.gelukt = _verstuur(factuur, slot.ronde, slot.dagen_te_laat)
         if not slot.gelukt:
             slot.fout = 'Geen ontvangers of geen SMTP-server ingesteld.'
     except Exception as fout:
@@ -180,7 +183,7 @@ def _meld_mislukkingen(mislukt: list):
         rijen.append(
             f'<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">{s.invoice.factuurnummer}</td>'
             f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">{s.invoice.bedrijf.naam}</td>'
-            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">{s.fase} dagen</td>'
+            f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">herinnering {s.ronde}, {s.dagen_te_laat} dagen</td>'
             f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">{stand}</td>'
             f'<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#b91c1c">{s.fout}</td></tr>'
         )
@@ -229,43 +232,72 @@ def _meld_mislukkingen(mislukt: list):
         logger.exception('Waarschuwing over mislukte herinneringen kon niet worden verstuurd')
 
 
+def _schemas():
+    """Per bedrijf het eigen herinneringsschema, alleen waar het aanstaat.
+
+    Een bedrijf telt pas mee als het ook een actief opdrachtgeveraccount heeft;
+    wat niet in het portaal zichtbaar is, wordt ook niet aangemaand.
+    """
+    from apps.companies.models import HerinneringInstelling
+
+    met_portaal = _bedrijven_met_portaal()
+    if not met_portaal:
+        return {}
+    return {
+        i.bedrijf_id: i
+        for i in HerinneringInstelling.objects.filter(
+            actief=True, bedrijf_id__in=met_portaal
+        )
+    }
+
+
 @shared_task
 def send_invoice_reminders():
-    """Verstuur herinneringen voor facturen die 1, 7 of 14 dagen te laat zijn."""
+    """Verstuur betalingsherinneringen volgens het schema van elke opdrachtgever."""
     vandaag = timezone.localdate()
     verstuurd = 0
     mislukt: list = []
     nieuw: set = set()
 
-    bedrijven = _bedrijven_met_portaal()
-    if not bedrijven:
-        logger.info('Geen bedrijven met portaaltoegang; geen herinneringen verstuurd')
+    schemas = _schemas()
+    if not schemas:
+        logger.info('Geen opdrachtgever met herinneringen aan; niets verstuurd')
         return 0
 
-    for fase in FactuurHerinnering.FASES:
-        vervaldatum = vandaag - timedelta(days=fase)
-        facturen = Invoice.objects.filter(
-            type=InvoiceType.VERKOOP,
-            status=InvoiceStatus.VERZONDEN,
-            vervaldatum=vervaldatum,
-            bedrijf_id__in=bedrijven,
-        ).exclude(herinneringen__fase=fase).select_related('bedrijf')
+    # Per bedrijf gelden eigen dagen; een gecombineerde voorwaarde scheelt queries.
+    voorwaarde = Q()
+    rondes = {}
+    for bedrijf_id, instelling in schemas.items():
+        datums = {}
+        for ronde, dagen in enumerate(instelling.dagen_reeks(), start=1):
+            datums[vandaag - timedelta(days=dagen)] = (ronde, dagen)
+        rondes[bedrijf_id] = datums
+        voorwaarde |= Q(bedrijf_id=bedrijf_id, vervaldatum__in=list(datums))
 
-        for factuur in facturen:
-            # Het slot wordt eerst gezet, zodat een tweede worker niet dezelfde
-            # mail verstuurt als de verzending traag is.
-            try:
-                slot = FactuurHerinnering.objects.create(
-                    invoice=factuur, fase=fase, ontvangers=_ontvangers(factuur.bedrijf)
-                )
-            except IntegrityError:
-                continue
-            slot.invoice = factuur
-            nieuw.add(slot.pk)
-            if _poging(slot, mislukt):
-                verstuurd += 1
+    facturen = Invoice.objects.filter(
+        type=InvoiceType.VERKOOP,
+        status=InvoiceStatus.VERZONDEN,
+    ).filter(voorwaarde).select_related('bedrijf')
 
-    for slot in _herkansingen(bedrijven, nieuw):
+    for factuur in facturen:
+        ronde, dagen = rondes[factuur.bedrijf_id][factuur.vervaldatum]
+        # Het slot wordt eerst gezet, zodat een tweede worker niet dezelfde
+        # mail verstuurt als de verzending traag is.
+        try:
+            slot = FactuurHerinnering.objects.create(
+                invoice=factuur,
+                ronde=ronde,
+                dagen_te_laat=dagen,
+                ontvangers=_ontvangers(factuur.bedrijf),
+            )
+        except IntegrityError:
+            continue
+        slot.invoice = factuur
+        nieuw.add(slot.pk)
+        if _poging(slot, mislukt):
+            verstuurd += 1
+
+    for slot in _herkansingen(set(schemas), nieuw):
         slot.ontvangers = _ontvangers(slot.invoice.bedrijf)
         if _poging(slot, mislukt):
             verstuurd += 1
@@ -281,8 +313,8 @@ def send_invoice_reminders():
 def _herkansingen(bedrijven, nieuw):
     """Eerder mislukte herinneringen die nog een poging verdienen.
 
-    Is de factuur inmiddels betaald of ingetrokken, dan wordt het slot gesloten
-    zonder nieuwe mail.
+    Is de factuur inmiddels betaald of staan de herinneringen voor dat bedrijf
+    uit, dan wordt het slot gesloten zonder nieuwe mail.
     """
     sloten = (
         FactuurHerinnering.objects
@@ -299,7 +331,7 @@ def _herkansingen(bedrijven, nieuw):
             or factuur.bedrijf_id not in bedrijven
         ):
             slot.opgegeven = True
-            slot.fout = 'Niet langer van toepassing; factuur of toegang is gewijzigd.'
+            slot.fout = 'Niet langer van toepassing; factuur of instelling is gewijzigd.'
             slot.save(update_fields=['opgegeven', 'fout'])
             continue
         open_sloten.append(slot)

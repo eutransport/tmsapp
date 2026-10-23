@@ -145,6 +145,12 @@ export interface Company {
   volgbare_voertuigen_detail?: { id: string; kenteken: string; type_wagen: string }[]
   mailing_contacts: MailingListContact[]
   mailing_contacts_count: number
+  herinneringen?: {
+    actief: boolean
+    interval_dagen: number
+    max_herinneringen: number
+    dagen_reeks: number[]
+  }
   created_at: string
   updated_at: string
 }
