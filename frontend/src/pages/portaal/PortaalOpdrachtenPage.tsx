@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -46,6 +46,10 @@ export default function PortaalOpdrachtenPage() {
   const [mailOpen, setMailOpen] = useState(false)
   const [notitieId, setNotitieId] = useState<string | null>(null)
   const [verwijderDoel, setVerwijderDoel] = useState<Opdracht | null>(null)
+  // De lijst ververst elke vijftien seconden; een invoerveld in een rij overleeft
+  // het openstaande bestandsvenster niet, daarom staat het hier los van de lijst.
+  const bijlageDoel = useRef<string | null>(null)
+  const bijlageKiezer = useRef<HTMLInputElement>(null)
 
   const vandaagFilter = zoekParams.get('vandaag') || ''
   const openFilter = zoekParams.get('open') || ''
@@ -181,6 +185,19 @@ export default function PortaalOpdrachtenPage() {
 
   return (
     <div className="space-y-4">
+      <input
+        ref={bijlageKiezer}
+        type="file"
+        accept={BIJLAGE_ACCEPT}
+        className="sr-only"
+        onChange={e => {
+          const bestand = e.target.files?.[0]
+          const id = bijlageDoel.current
+          if (bestand && id) bijlage.mutate({ id, bestand })
+          e.target.value = ''
+          bijlageDoel.current = null
+        }}
+      />
       <div className="page-header">
         <h1 className="page-title">
           {t('orders.title', 'Opdrachten')}
@@ -357,15 +374,12 @@ export default function PortaalOpdrachtenPage() {
                           </button>
                         )}
                         {o.status !== 'ingetrokken' && (
-                          <label className="cursor-pointer rounded-md bg-teal-50 p-1.5 text-teal-700 hover:bg-teal-100"
+                          <button type="button"
+                            onClick={() => { bijlageDoel.current = o.id; bijlageKiezer.current?.click() }}
+                            className="rounded-md bg-teal-50 p-1.5 text-teal-700 hover:bg-teal-100"
                             title={t('orders.addAttachment', 'Bijlage toevoegen')}>
                             <PaperClipIcon className="h-4 w-4" />
-                            <input type="file" accept={BIJLAGE_ACCEPT} className="hidden" onChange={e => {
-                              const bestand = e.target.files?.[0]
-                              if (bestand) bijlage.mutate({ id: o.id, bestand })
-                              e.target.value = ''
-                            }} />
-                          </label>
+                          </button>
                         )}
                         {kanAanpassen(o) && (
                           <>

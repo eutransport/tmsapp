@@ -62,7 +62,7 @@ export default function AfmeldModal({ opdracht, onSluiten, onKlaar }: Props) {
           <label className="btn-secondary cursor-pointer">
             <PaperClipIcon className="h-5 w-5" />
             {t('myOrders.addPhoto', 'Foto of bestand toevoegen')}
-            <input type="file" multiple accept={BIJLAGE_ACCEPT} capture="environment" className="hidden"
+            <input type="file" multiple accept={BIJLAGE_ACCEPT} capture="environment" className="sr-only"
               onChange={e => setBestanden(Array.from(e.target.files || []))} />
           </label>
           {bestanden.length > 0 && (

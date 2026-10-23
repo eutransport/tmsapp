@@ -58,7 +58,7 @@ export default function NietGeleverdModal({ opdracht, onSluiten, onKlaar }: Prop
           <label className="btn-secondary btn-sm cursor-pointer">
             <PaperClipIcon className="h-4 w-4" />
             {t('myOrders.addPhoto', 'Foto of bestand toevoegen')}
-            <input type="file" multiple accept={BIJLAGE_ACCEPT} capture="environment" className="hidden"
+            <input type="file" multiple accept={BIJLAGE_ACCEPT} capture="environment" className="sr-only"
               onChange={e => setBestanden(Array.from(e.target.files || []))} />
           </label>
           {bestanden.length > 0 && (

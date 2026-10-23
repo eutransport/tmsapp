@@ -190,7 +190,7 @@ export default function MijnOpdrachtenPage({ archief = false }: Props) {
                         <label className="btn-secondary btn-sm cursor-pointer">
                           <PaperClipIcon className="h-4 w-4" />
                           {t('orders.addAttachment', 'Bijlage toevoegen')}
-                          <input type="file" accept={BIJLAGE_ACCEPT} capture="environment" className="hidden"
+                          <input type="file" accept={BIJLAGE_ACCEPT} capture="environment" className="sr-only"
                             onChange={e => {
                               const bestand = e.target.files?.[0]
                               if (bestand) bijlage.mutate({ id: o.id, bestand })

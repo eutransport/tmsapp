@@ -323,7 +323,7 @@ export default function OpdrachtFormulier({ opdracht, chauffeurs, bezig, onSluit
                   type="file"
                   multiple
                   accept={BIJLAGE_ACCEPT}
-                  className="hidden"
+                  className="sr-only"
                   onChange={e => {
                     setBijlagen(vorig => [...vorig, ...Array.from(e.target.files || [])])
                     e.target.value = ''
