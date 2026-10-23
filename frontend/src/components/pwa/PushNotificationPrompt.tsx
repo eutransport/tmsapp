@@ -13,7 +13,7 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
-import { usePushNotifications } from '@/hooks/usePushNotifications'
+import { usePushNotifications, getDeviceName } from '@/hooks/usePushNotifications'
 
 const PROMPT_DISMISSED_KEY = 'push_prompt_dismissed'
 const PROMPT_DISMISSED_DURATION = 7 * 24 * 60 * 60 * 1000 // 7 dagen
@@ -264,18 +264,3 @@ export default function PushNotificationPrompt({ delay = 2000 }: PushNotificatio
 /**
  * Get a friendly device name from the user agent
  */
-function getDeviceName(): string {
-  const ua = navigator.userAgent
-  
-  if (/iPhone/.test(ua)) return 'iPhone'
-  if (/iPad/.test(ua)) return 'iPad'
-  if (/Android/.test(ua)) {
-    if (/Mobile/.test(ua)) return 'Android Telefoon'
-    return 'Android Tablet'
-  }
-  if (/Windows/.test(ua)) return 'Windows PC'
-  if (/Mac/.test(ua)) return 'Mac'
-  if (/Linux/.test(ua)) return 'Linux'
-  
-  return 'Onbekend apparaat'
-}

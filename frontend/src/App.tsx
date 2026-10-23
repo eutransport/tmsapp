@@ -26,6 +26,7 @@ const lazyNamed = <M extends Record<string, any>, K extends keyof M>(
 // Setup / auth / licensing pages
 const ServerSetupPage = React.lazy(() => import('@/pages/setup/ServerSetupPage'))
 const LoginPage = React.lazy(() => import('@/pages/auth/LoginPage'))
+const AppInstallatiePage = React.lazy(() => import('@/pages/help/AppInstallatiePage'))
 const MfaSetupPage = React.lazy(() => import('@/pages/auth/MfaSetupPage'))
 const LicenseActivationPage = React.lazy(() => import('@/pages/licensing/LicenseActivationPage'))
 
@@ -342,6 +343,9 @@ function App() {
       
       {/* MFA Setup route - outside of protected route since it has its own protection */}
       <Route path="/setup-mfa" element={<MfaSetupPage />} />
+
+      {/* Uitleg over de app op telefoon zetten; ook zonder inloggen bereikbaar */}
+      <Route path="/app-installatie" element={<AppInstallatiePage />} />
       
       {/* License activation route */}
       <Route path="/license" element={<LicenseActivationPage />} />

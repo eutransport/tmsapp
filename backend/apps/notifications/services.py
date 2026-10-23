@@ -270,10 +270,8 @@ class PushNotificationService:
             return (0, len(subscriptions))
         
         vapid_private_key = self.settings.get_vapid_private_key()
-        vapid_claims = {
-            "sub": f"mailto:{self.settings.vapid_admin_email}"
-        }
-        
+        vapid_sub = f"mailto:{self.settings.vapid_admin_email}"
+
         success_count = 0
         failure_count = 0
         
@@ -291,7 +289,9 @@ class PushNotificationService:
                     subscription_info=subscription_info,
                     data=json.dumps(payload),
                     vapid_private_key=vapid_private_key,
-                    vapid_claims=vapid_claims,
+                    # pywebpush vult 'aud' in dit dict aan; hergebruik over meerdere
+                    # push-diensten levert "Invalid VAPID audience".
+                    vapid_claims={"sub": vapid_sub},
                     ttl=WEBPUSH_TTL,
                 )
                 
@@ -307,9 +307,9 @@ class PushNotificationService:
                 failure_count += 1
                 
                 # Handle expired subscriptions
-                if e.response and e.response.status_code in [404, 410]:
-                    subscription.is_active = False
-                    subscription.save(update_fields=['is_active'])
+                status = getattr(getattr(e, 'response', None), 'status_code', None)
+                if status in (404, 410):
+                    PushSubscription.objects.filter(pk=subscription.pk).update(is_active=False)
                     logger.info(f"Deactivated expired subscription for {subscription.user.email}")
                     
             except Exception as e:

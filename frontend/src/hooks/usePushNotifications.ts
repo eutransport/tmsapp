@@ -28,6 +28,20 @@ interface UsePushNotificationsResult {
   checkSubscription: () => Promise<void>
 }
 
+/** Herkenbare apparaatnaam voor in het abonnementenoverzicht. */
+export function getDeviceName(): string {
+  const ua = navigator.userAgent
+
+  if (/iPhone/.test(ua)) return 'iPhone'
+  if (/iPad/.test(ua)) return 'iPad'
+  if (/Android/.test(ua)) return /Mobile/.test(ua) ? 'Android Telefoon' : 'Android Tablet'
+  if (/Windows/.test(ua)) return 'Windows PC'
+  if (/Mac/.test(ua)) return 'Mac'
+  if (/Linux/.test(ua)) return 'Linux'
+
+  return 'Onbekend apparaat'
+}
+
 export function usePushNotifications(): UsePushNotificationsResult {
   const [isSupported] = useState(() => isPushSupported())
   const [permission, setPermission] = useState<NotificationPermission>(() => getNotificationPermission())
@@ -73,6 +87,16 @@ export function usePushNotifications(): UsePushNotificationsResult {
       const registration = await navigator.serviceWorker.ready
       const subscription = await registration.pushManager.getSubscription()
       setIsSubscribed(!!subscription)
+
+      // De server kan het abonnement hebben gedeactiveerd (410 Gone) terwijl de
+      // browser het nog kent; opnieuw aanmelden herstelt dat stilzwijgend.
+      if (subscription) {
+        try {
+          await pushApi.subscribe(subscription.toJSON(), getDeviceName())
+        } catch {
+          // Een mislukte hersynchronisatie mag de app niet blokkeren.
+        }
+      }
     } catch (err) {
       console.error('Failed to check subscription:', err)
       setIsSubscribed(false)

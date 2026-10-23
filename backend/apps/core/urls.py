@@ -24,6 +24,7 @@ from .views import (
     EmailProfileViewSet,
     AdministratieViewSet,
 )
+from .app_download import AndroidAppInfoView, AndroidAppDownloadView
 
 # Router for viewsets
 router = DefaultRouter()
@@ -37,6 +38,10 @@ urlpatterns = [
     
     # Public settings (no auth required)
     path('settings/', PublicSettingsView.as_view(), name='public-settings'),
+
+    # Android app download
+    path('app/android/', AndroidAppInfoView.as_view(), name='android-app-info'),
+    path('app/android/download/', AndroidAppDownloadView.as_view(), name='android-app-download'),
     
     # Dashboard stats
     path('dashboard/stats/', DashboardStatsView.as_view(), name='dashboard-stats'),

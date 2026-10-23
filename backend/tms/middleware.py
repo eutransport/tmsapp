@@ -61,6 +61,7 @@ OPDRACHTGEVER_TOEGESTANE_PADEN = (
     '/api/portaal/',
     '/api/core/settings/',
     '/api/core/fonts/css/',
+    '/api/core/app/android/',
     '/api/licensing/',
     # Alleen het aan- en afmelden voor pushberichten; beheer blijft dicht.
     '/api/notifications/config/',

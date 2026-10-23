@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
+import AppInstallBlok, { APK_NA_LOGIN, startApkDownload } from '@/components/app/AppInstallBlok'
 import toast from 'react-hot-toast'
 
 interface LoginForm {
@@ -28,6 +29,16 @@ export default function LoginPage() {
   
   const loginForm = useForm<LoginForm>()
   const twoFactorForm = useForm<TwoFactorForm>()
+
+  // Wie vóór het inloggen op de downloadknop drukte, krijgt de APK alsnog.
+  const apkNaLogin = async () => {
+    if (sessionStorage.getItem(APK_NA_LOGIN) !== '1') return
+    sessionStorage.removeItem(APK_NA_LOGIN)
+    const gelukt = await startApkDownload()
+    toast[gelukt ? 'success' : 'error'](
+      t(gelukt ? 'appInstall.downloadStarting' : 'appInstall.downloadFailed')
+    )
+  }
   
   const onLoginSubmit = async (data: LoginForm) => {
     setIsLoading(true)
@@ -44,6 +55,7 @@ export default function LoginPage() {
         navigate('/setup-mfa')
       } else {
         toast.success(t('auth.successfullyLoggedIn'))
+        await apkNaLogin()
         navigate('/')
       }
     } catch (error: unknown) {
@@ -61,6 +73,7 @@ export default function LoginPage() {
     try {
       await verify2FA(userId, data.code)
       toast.success(t('auth.successfullyLoggedIn'))
+      await apkNaLogin()
       navigate('/')
     } catch (error: unknown) {
       const err = error as { response?: { data?: { error?: string } } }
@@ -203,6 +216,11 @@ export default function LoginPage() {
           {t('auth.secureConnection')}
         </div>
       </form>
+
+      <AppInstallBlok
+        ingelogd={false}
+        onLoginVereist={() => loginForm.setFocus('email')}
+      />
     </div>
   )
 }
