@@ -15,6 +15,7 @@ from apps.drivers.models import Driver
 
 from . import eta as eta_module
 from . import mail
+from . import push
 from .models import (
     Opdracht,
     OpdrachtBijlage,
@@ -142,6 +143,7 @@ class PortaalOpdrachtViewSet(viewsets.ModelViewSet):
             volgorde=(eerste or 1) - 1,
         )
         _klant_bijwerken(opdracht)
+        push.meld_nieuwe_opdracht(opdracht)
 
     def _weiger_als_afgehandeld(self, opdracht):
         if opdracht.status in (

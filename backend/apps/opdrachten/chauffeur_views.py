@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from apps.drivers.models import Driver
 
 from . import mail
+from . import push
 from .chauffeur_serializers import (
     AfmeldSerializer,
     ChauffeurOpdrachtSerializer,
@@ -87,6 +88,7 @@ class MijnOpdrachtenViewSet(viewsets.ReadOnlyModelViewSet):
 
         eta_module.ververs([opdracht], geforceerd=True)
         mail.meld_gestart(opdracht)
+        push.meld_gestart(opdracht)
         return Response(self.get_serializer(opdracht).data)
 
     @action(detail=False, methods=['get'])
@@ -120,6 +122,7 @@ class MijnOpdrachtenViewSet(viewsets.ReadOnlyModelViewSet):
         ])
 
         mail.meld_afgeleverd(opdracht)
+        push.meld_afgeleverd(opdracht)
         return Response(self.get_serializer(opdracht).data)
 
     @action(detail=True, methods=['post'], url_path='niet-geleverd')
@@ -143,6 +146,7 @@ class MijnOpdrachtenViewSet(viewsets.ReadOnlyModelViewSet):
         ])
 
         mail.meld_niet_geleverd(opdracht)
+        push.meld_niet_geleverd(opdracht)
         return Response(self.get_serializer(opdracht).data)
 
     @action(detail=True, methods=['post'])
