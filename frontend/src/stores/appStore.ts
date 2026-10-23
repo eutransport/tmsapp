@@ -25,7 +25,8 @@ const defaultSettings: AppSettings = {
 export const useAppStore = create<AppState>((set) => ({
   settings: defaultSettings,
   isLoading: true,
-  sidebarOpen: true,
+  // Het mobiele menu is een overlay; bij het openen van de app hoort de pagina zelf zichtbaar te zijn.
+  sidebarOpen: false,
   
   fetchSettings: async () => {
     try {
