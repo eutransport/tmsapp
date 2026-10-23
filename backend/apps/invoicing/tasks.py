@@ -19,6 +19,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from apps.companies.models import MailingListContact
+from apps.accounts.models import UserRole
 
 from .herinnering_teksten import teksten_voor
 from .models import FactuurHerinnering, Invoice, InvoiceStatus, InvoiceType
@@ -117,11 +118,36 @@ def _verstuur(factuur: Invoice, fase: int, dagen_te_laat: int) -> bool:
     return True
 
 
+def _bedrijven_met_portaal():
+    """Bedrijven met minstens een actief opdrachtgever-account.
+
+    Alleen deze bedrijven zien hun facturen in het portaal en krijgen daarom
+    een herinnering; de rest blijft buiten beeld.
+    """
+    from django.contrib.auth import get_user_model
+
+    return set(
+        get_user_model().objects
+        .filter(
+            rol=UserRole.OPDRACHTGEVER,
+            is_active=True,
+            opdrachtgever_bedrijf__isnull=False,
+        )
+        .exclude(is_superuser=True)
+        .values_list('opdrachtgever_bedrijf_id', flat=True)
+    )
+
+
 @shared_task
 def send_invoice_reminders():
     """Verstuur herinneringen voor facturen die 1, 7 of 14 dagen te laat zijn."""
     vandaag = timezone.localdate()
     verstuurd = 0
+
+    bedrijven = _bedrijven_met_portaal()
+    if not bedrijven:
+        logger.info('Geen bedrijven met portaaltoegang; geen herinneringen verstuurd')
+        return 0
 
     for fase in FactuurHerinnering.FASES:
         vervaldatum = vandaag - timedelta(days=fase)
@@ -129,6 +155,7 @@ def send_invoice_reminders():
             type=InvoiceType.VERKOOP,
             status=InvoiceStatus.VERZONDEN,
             vervaldatum=vervaldatum,
+            bedrijf_id__in=bedrijven,
         ).exclude(herinneringen__fase=fase).select_related('bedrijf')
 
         for factuur in facturen:
