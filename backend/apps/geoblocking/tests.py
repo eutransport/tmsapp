@@ -1,9 +1,10 @@
 """Tests voor de geo-blocking regelevaluatie en IP-bepaling."""
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.test import RequestFactory, TestCase, override_settings
 
 from apps.core.ip_utils import get_client_ip
+from apps.geoblocking import services
 from apps.geoblocking.models import (
     EnforcementMode,
     GeoBlockSettings,
@@ -125,3 +126,31 @@ class RuleEvaluationTests(TestCase):
         self.config.save()
         with self._met_land(''):
             self.assertFalse(evaluate('93.184.216.9', 'gebruiker', self.config)['allowed'])
+
+
+class LandCacheTests(TestCase):
+    """Een onbekend land mag een herstelde database niet blijven tegenhouden."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        services.reset_reader()
+
+    def test_zonder_database_wordt_niets_onthouden(self):
+        with patch.object(services, '_get_reader', return_value=None):
+            self.assertEqual(services.lookup_country('93.184.216.34'), '')
+
+        # Zodra de database er is, moet het antwoord meteen kloppen en niet
+        # blijven hangen op de eerdere "onbekend".
+        nep = MagicMock()
+        nep.country.return_value.country.iso_code = 'NL'
+        with patch.object(services, '_get_reader', return_value=nep):
+            self.assertEqual(services.lookup_country('93.184.216.34'), 'NL')
+
+    def test_onbekend_land_wordt_kort_onthouden(self):
+        self.assertLess(
+            services.COUNTRY_CACHE_TTL_ONBEKEND,
+            services.COUNTRY_CACHE_TTL,
+            'Een onbekende uitkomst moet korter bewaard blijven dan een bekende.',
+        )

@@ -97,6 +97,11 @@ services:
       - SECURE_SSL_REDIRECT=false
       - SESSION_COOKIE_SECURE=true
       - CSRF_COOKIE_SECURE=true
+      # Geo-blokkering: noodrem-IPs en gegevens voor handmatige database-update.
+      - GEOBLOCK_BYPASS_IPS=${GEOBLOCK_BYPASS_IPS:-}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7}
+      - MAXMIND_ACCOUNT_ID=${MAXMIND_ACCOUNT_ID:-}
+      - MAXMIND_LICENSE_KEY=${MAXMIND_LICENSE_KEY:-}
     volumes:
       - static_files:/app/staticfiles
       - media_files:/app/media

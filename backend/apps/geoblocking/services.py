@@ -38,6 +38,10 @@ _reader_lock = threading.Lock()
 
 COUNTRY_CACHE_PREFIX = 'geoblock:country:'
 COUNTRY_CACHE_TTL = 3600
+# Een onbekende uitkomst houden we maar kort vast. Anders blijft een storing
+# van de database nog een uur doorwerken nadat hij allang hersteld is, en dat
+# zou met "onbekend land blokkeren" iedereen buitensluiten.
+COUNTRY_CACHE_TTL_ONBEKEND = 60
 RULES_CACHE_KEY = 'geoblock:rules:v1'
 RULES_CACHE_TTL = 60
 
@@ -118,14 +122,21 @@ def lookup_country(ip):
 
     country = UNKNOWN_COUNTRY
     reader = _get_reader()
-    if reader is not None:
-        try:
-            country = (reader.country(str(address)).country.iso_code or '').upper()
-        except Exception:
-            # AddressNotFoundError en alles wat er verder misgaat: onbekend land.
-            country = UNKNOWN_COUNTRY
+    if reader is None:
+        # Zonder database weten we niets. Niet onthouden, want zodra de
+        # database er wel is moet de eerstvolgende poging meteen kloppen.
+        return UNKNOWN_COUNTRY
+    try:
+        country = (reader.country(str(address)).country.iso_code or '').upper()
+    except Exception:
+        # AddressNotFoundError en alles wat er verder misgaat: onbekend land.
+        country = UNKNOWN_COUNTRY
 
-    cache.set(cache_key, country, COUNTRY_CACHE_TTL)
+    cache.set(
+        cache_key,
+        country,
+        COUNTRY_CACHE_TTL if country else COUNTRY_CACHE_TTL_ONBEKEND,
+    )
     return country
 
 
