@@ -47,7 +47,7 @@ function Toggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
-        checked ? 'bg-primary-600' : 'bg-gray-300'
+        checked ? 'bg-primary-600' : 'bg-[var(--color-card-border)]'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       <span
@@ -235,10 +235,10 @@ export default function GeoBlockingPage() {
       <div className="flex items-center gap-3">
         <ShieldCheckIcon className="h-8 w-8 text-primary-600" />
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="page-title">
             {t('geoBlocking.titel')}
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-muted">
             {t('geoBlocking.ondertitel')}
           </p>
         </div>
@@ -275,24 +275,24 @@ export default function GeoBlockingPage() {
 
       {/* Huidige positie van de beheerder: voorkomt dat je jezelf buitensluit */}
       {status && (
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <div className="card p-4">
           <div className="flex flex-wrap items-center gap-6 text-sm">
             <div className="flex items-center gap-2">
               <GlobeEuropeAfricaIcon className="h-5 w-5 text-primary-600" />
-              <span className="font-medium text-gray-700 dark:text-gray-200">
+              <span className="font-medium">
                 {t('geoBlocking.jouwVerbinding')}
               </span>
             </div>
             <div>
-              <span className="text-gray-500">IP: </span>
+              <span className="text-muted">IP: </span>
               <span className="font-mono">{status.jouw_ip || '—'}</span>
             </div>
             <div>
-              <span className="text-gray-500">{t('geoBlocking.land')}: </span>
+              <span className="text-muted">{t('geoBlocking.land')}: </span>
               <span className="font-semibold">{status.jouw_land || t('geoBlocking.onbekend')}</span>
             </div>
             <div>
-              <span className="text-gray-500">{t('geoBlocking.rol')}: </span>
+              <span className="text-muted">{t('geoBlocking.rol')}: </span>
               <span>{status.jouw_rol}</span>
             </div>
             <div
@@ -310,7 +310,7 @@ export default function GeoBlockingPage() {
         </div>
       )}
 
-      <div className="border-b border-gray-200 dark:border-gray-700">
+      <div className="border-b border-[var(--color-card-border)]">
         <nav className="-mb-px flex gap-6">
           {tabs.map((item) => (
             <button
@@ -319,7 +319,7 @@ export default function GeoBlockingPage() {
               className={`border-b-2 px-1 py-3 text-sm font-medium transition ${
                 tab === item.id
                   ? 'border-primary-600 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                  : 'border-transparent text-muted hover:border-[var(--color-card-border)]'
               }`}
             >
               {item.label}
@@ -329,13 +329,13 @@ export default function GeoBlockingPage() {
       </div>
 
       {tab === 'instellingen' && settings && (
-        <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+        <div className="card space-y-4 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-gray-900 dark:text-white">
+              <p className="font-medium">
                 {t('geoBlocking.inschakelen')}
               </p>
-              <p className="text-sm text-gray-500">{t('geoBlocking.inschakelenUitleg')}</p>
+              <p className="text-sm text-muted">{t('geoBlocking.inschakelenUitleg')}</p>
             </div>
             <Toggle
               checked={settings.enabled}
@@ -344,9 +344,9 @@ export default function GeoBlockingPage() {
             />
           </div>
 
-          <div className="border-t border-gray-100 pt-4 dark:border-gray-700">
-            <p className="font-medium text-gray-900 dark:text-white">{t('geoBlocking.modus')}</p>
-            <p className="mb-3 text-sm text-gray-500">{t('geoBlocking.modusUitleg')}</p>
+          <div className="border-t border-[var(--color-card-border)] pt-4">
+            <p className="font-medium">{t('geoBlocking.modus')}</p>
+            <p className="mb-3 text-sm text-muted">{t('geoBlocking.modusUitleg')}</p>
             <div className="flex gap-3">
               {(status?.modi || []).map((modus) => (
                 <button
@@ -356,7 +356,7 @@ export default function GeoBlockingPage() {
                   className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
                     settings.mode === modus.waarde
                       ? 'border-primary-600 bg-primary-50 text-primary-700'
-                      : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                      : 'border-[var(--color-card-border)] text-muted hover:bg-[var(--color-background-secondary)]'
                   }`}
                 >
                   {modus.label}
@@ -365,11 +365,11 @@ export default function GeoBlockingPage() {
             </div>
           </div>
 
-          <div className="border-t border-gray-100 pt-4 dark:border-gray-700">
-            <p className="font-medium text-gray-900 dark:text-white">
+          <div className="border-t border-[var(--color-card-border)] pt-4">
+            <p className="font-medium">
               {t('geoBlocking.standaardActie')}
             </p>
-            <p className="mb-3 text-sm text-gray-500">{t('geoBlocking.standaardActieUitleg')}</p>
+            <p className="mb-3 text-sm text-muted">{t('geoBlocking.standaardActieUitleg')}</p>
             <div className="flex gap-3">
               {(status?.acties || []).map((actie) => (
                 <button
@@ -379,7 +379,7 @@ export default function GeoBlockingPage() {
                   className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
                     settings.default_action === actie.waarde
                       ? 'border-primary-600 bg-primary-50 text-primary-700'
-                      : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                      : 'border-[var(--color-card-border)] text-muted hover:bg-[var(--color-background-secondary)]'
                   }`}
                 >
                   {actie.label}
@@ -407,11 +407,11 @@ export default function GeoBlockingPage() {
           ].map((optie) => (
             <div
               key={optie.veld}
-              className="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-gray-700"
+              className="flex items-center justify-between border-t border-[var(--color-card-border)] pt-4"
             >
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">{optie.titel}</p>
-                <p className="text-sm text-gray-500">{optie.uitleg}</p>
+                <p className="font-medium">{optie.titel}</p>
+                <p className="text-sm text-muted">{optie.uitleg}</p>
               </div>
               <Toggle
                 checked={Boolean(settings[optie.veld])}
@@ -425,20 +425,20 @@ export default function GeoBlockingPage() {
 
       {tab === 'landen' && (
         <div className="space-y-4">
-          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-            <p className="mb-3 font-medium text-gray-900 dark:text-white">
+          <div className="card p-4">
+            <p className="mb-3 font-medium">
               {t('geoBlocking.nieuweLandregel')}
             </p>
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="mb-1 block text-xs text-gray-500">{t('geoBlocking.land')}</label>
+                <label className="mb-1 block text-xs text-muted">{t('geoBlocking.land')}</label>
                 <input
                   list="landen-lijst"
                   value={nieuwLand.country_code}
                   onChange={(e) =>
                     setNieuwLand({ ...nieuwLand, country_code: e.target.value.toUpperCase() })
                   }
-                  className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase"
+                  className="input w-28 uppercase"
                   placeholder="NL"
                 />
                 <datalist id="landen-lijst">
@@ -451,11 +451,11 @@ export default function GeoBlockingPage() {
                 </datalist>
               </div>
               <div>
-                <label className="mb-1 block text-xs text-gray-500">{t('geoBlocking.rol')}</label>
+                <label className="mb-1 block text-xs text-muted">{t('geoBlocking.rol')}</label>
                 <select
                   value={nieuwLand.role}
                   onChange={(e) => setNieuwLand({ ...nieuwLand, role: e.target.value })}
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="input"
                 >
                   {(status?.rollen || []).map((rol) => (
                     <option key={rol.waarde} value={rol.waarde}>
@@ -465,11 +465,11 @@ export default function GeoBlockingPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs text-gray-500">{t('geoBlocking.actie')}</label>
+                <label className="mb-1 block text-xs text-muted">{t('geoBlocking.actie')}</label>
                 <select
                   value={nieuwLand.action}
                   onChange={(e) => setNieuwLand({ ...nieuwLand, action: e.target.value })}
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="input"
                 >
                   {(status?.acties || []).map((actie) => (
                     <option key={actie.waarde} value={actie.waarde}>
@@ -488,24 +488,24 @@ export default function GeoBlockingPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900">
+          <div className="card overflow-hidden">
+            <table className="min-w-full divide-y divide-[var(--color-card-border)]">
+              <thead className="bg-[var(--color-background-secondary)]">
                 <tr>
                   {['land', 'rol', 'actie', 'actief', ''].map((kop, index) => (
                     <th
                       key={index}
-                      className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500"
+                      className="px-4 py-3 text-left text-xs font-semibold uppercase text-muted"
                     >
                       {kop ? t(`geoBlocking.${kop}`) : ''}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              <tbody className="divide-y divide-[var(--color-card-border)]">
                 {rules.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-500">
+                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-muted">
                       {t('geoBlocking.geenRegels')}
                     </td>
                   </tr>
@@ -533,7 +533,7 @@ export default function GeoBlockingPage() {
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => verwijderLand(regel.id)}
-                        className="text-gray-400 hover:text-red-600"
+                        className="text-muted hover:text-red-600"
                       >
                         <TrashIcon className="h-4 w-4" />
                       </button>
@@ -548,38 +548,38 @@ export default function GeoBlockingPage() {
 
       {tab === 'ip' && (
         <div className="space-y-4">
-          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-            <p className="mb-1 font-medium text-gray-900 dark:text-white">
+          <div className="card p-4">
+            <p className="mb-1 font-medium">
               {t('geoBlocking.nieuweIpRegel')}
             </p>
-            <p className="mb-3 text-sm text-gray-500">{t('geoBlocking.ipUitleg')}</p>
+            <p className="mb-3 text-sm text-muted">{t('geoBlocking.ipUitleg')}</p>
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="mb-1 block text-xs text-gray-500">{t('geoBlocking.ipAdres')}</label>
+                <label className="mb-1 block text-xs text-muted">{t('geoBlocking.ipAdres')}</label>
                 <input
                   value={nieuwIp.cidr}
                   onChange={(e) => setNieuwIp({ ...nieuwIp, cidr: e.target.value })}
                   placeholder="84.25.11.7 of 84.25.11.0/24"
-                  className="w-56 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+                  className="input w-56 font-mono"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-gray-500">
+                <label className="mb-1 block text-xs text-muted">
                   {t('geoBlocking.omschrijving')}
                 </label>
                 <input
                   value={nieuwIp.label}
                   onChange={(e) => setNieuwIp({ ...nieuwIp, label: e.target.value })}
                   placeholder={t('geoBlocking.ipLabelVoorbeeld')}
-                  className="w-56 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="input w-56"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-gray-500">{t('geoBlocking.actie')}</label>
+                <label className="mb-1 block text-xs text-muted">{t('geoBlocking.actie')}</label>
                 <select
                   value={nieuwIp.action}
                   onChange={(e) => setNieuwIp({ ...nieuwIp, action: e.target.value })}
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="input"
                 >
                   {(status?.acties || []).map((actie) => (
                     <option key={actie.waarde} value={actie.waarde}>
@@ -598,12 +598,12 @@ export default function GeoBlockingPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+          <div className="card overflow-hidden">
+            <table className="min-w-full divide-y divide-[var(--color-card-border)]">
+              <tbody className="divide-y divide-[var(--color-card-border)]">
                 {ipRules.length === 0 && (
                   <tr>
-                    <td className="px-4 py-8 text-center text-sm text-gray-500">
+                    <td className="px-4 py-8 text-center text-sm text-muted">
                       {t('geoBlocking.geenRegels')}
                     </td>
                   </tr>
@@ -611,7 +611,7 @@ export default function GeoBlockingPage() {
                 {ipRules.map((regel) => (
                   <tr key={regel.id}>
                     <td className="px-4 py-3 font-mono text-sm">{regel.cidr}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{regel.label}</td>
+                    <td className="px-4 py-3 text-sm text-muted">{regel.label}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`rounded-full px-2 py-1 text-xs font-semibold ${
@@ -626,7 +626,7 @@ export default function GeoBlockingPage() {
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => verwijderIp(regel.id)}
-                        className="text-gray-400 hover:text-red-600"
+                        className="text-muted hover:text-red-600"
                       >
                         <TrashIcon className="h-4 w-4" />
                       </button>
@@ -637,22 +637,22 @@ export default function GeoBlockingPage() {
             </table>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-            <p className="mb-1 font-medium text-gray-900 dark:text-white">
+          <div className="card p-4">
+            <p className="mb-1 font-medium">
               {t('geoBlocking.testTitel')}
             </p>
-            <p className="mb-3 text-sm text-gray-500">{t('geoBlocking.testUitleg')}</p>
+            <p className="mb-3 text-sm text-muted">{t('geoBlocking.testUitleg')}</p>
             <div className="flex flex-wrap items-end gap-3">
               <input
                 value={testIp}
                 onChange={(e) => setTestIp(e.target.value)}
                 placeholder="8.8.8.8"
-                className="w-56 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+                className="input w-56 font-mono"
               />
               <select
                 value={testRol}
                 onChange={(e) => setTestRol(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                className="input"
               >
                 {(status?.rollen || []).map((rol) => (
                   <option key={rol.waarde} value={rol.waarde}>
@@ -689,31 +689,31 @@ export default function GeoBlockingPage() {
       )}
 
       {tab === 'logboek' && (
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-900">
+        <div className="card overflow-hidden">
+          <table className="min-w-full divide-y divide-[var(--color-card-border)]">
+            <thead className="bg-[var(--color-background-secondary)]">
               <tr>
                 {['tijd', 'ipAdres', 'land', 'rol', 'resultaat', 'pad'].map((kop) => (
                   <th
                     key={kop}
-                    className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500"
+                    className="px-4 py-3 text-left text-xs font-semibold uppercase text-muted"
                   >
                     {t(`geoBlocking.${kop}`)}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+            <tbody className="divide-y divide-[var(--color-card-border)]">
               {logs.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted">
                     {t('geoBlocking.geenLogs')}
                   </td>
                 </tr>
               )}
               {logs.map((log) => (
                 <tr key={log.id}>
-                  <td className="px-4 py-2 text-sm text-gray-500">
+                  <td className="px-4 py-2 text-sm text-muted">
                     {new Date(log.created_at).toLocaleString('nl-NL')}
                   </td>
                   <td className="px-4 py-2 font-mono text-sm">{log.ip_address}</td>
@@ -732,7 +732,7 @@ export default function GeoBlockingPage() {
                       {t(`geoBlocking.decision_${log.decision}`)}
                     </span>
                   </td>
-                  <td className="px-4 py-2 font-mono text-xs text-gray-500">{log.path}</td>
+                  <td className="px-4 py-2 font-mono text-xs text-muted">{log.path}</td>
                 </tr>
               ))}
             </tbody>
