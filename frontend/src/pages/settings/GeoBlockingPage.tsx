@@ -230,6 +230,14 @@ export default function GeoBlockingPage() {
     { id: 'logboek', label: t('geoBlocking.tabLogboek') },
   ]
 
+  // De server bewaart de rol als technische waarde ("anonymous"). In beeld
+  // hoort de leesbare naam te staan; onbekende waarden tonen we ongewijzigd.
+  const rolLabel = (waarde: string) => {
+    if (!waarde) return '—'
+    if (waarde === '*') return t('geoBlocking.alleRollen')
+    return status?.rollen?.find((rol) => rol.waarde === waarde)?.label || waarde
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -515,7 +523,7 @@ export default function GeoBlockingPage() {
                     <td className="px-4 py-3 font-mono text-sm font-semibold">
                       {regel.country_code}
                     </td>
-                    <td className="px-4 py-3 text-sm">{regel.role === '*' ? t('geoBlocking.alleRollen') : regel.role}</td>
+                    <td className="px-4 py-3 text-sm">{rolLabel(regel.role)}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`rounded-full px-2 py-1 text-xs font-semibold ${
@@ -718,7 +726,7 @@ export default function GeoBlockingPage() {
                   </td>
                   <td className="px-4 py-2 font-mono text-sm">{log.ip_address}</td>
                   <td className="px-4 py-2 text-sm font-semibold">{log.country_code || '—'}</td>
-                  <td className="px-4 py-2 text-sm">{log.role}</td>
+                  <td className="px-4 py-2 text-sm">{rolLabel(log.role)}</td>
                   <td className="px-4 py-2">
                     <span
                       className={`rounded-full px-2 py-1 text-xs font-semibold ${
