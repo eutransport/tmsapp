@@ -21,6 +21,7 @@ Voorbeelden:
 
 import ipaddress
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.geoblocking import services
@@ -143,4 +144,13 @@ class Command(BaseCommand):
             self.stdout.write('    (geen)')
         for regel in toegestaan:
             self.stdout.write(f'    {regel.cidr}  {regel.label}')
+
+        # De noodrem uit de serverinstellingen staat los van de database en
+        # werkt dus ook als de regels hierboven je buitensluiten.
+        bypass = (getattr(settings, 'GEOBLOCK_BYPASS_IPS', '') or '').strip()
+        self.stdout.write('  Noodrem via serverinstelling (GEOBLOCK_BYPASS_IPS):')
+        if not bypass:
+            self.stdout.write('    (geen)')
+        for deel in [d.strip() for d in bypass.split(',') if d.strip()]:
+            self.stdout.write(f'    {deel}')
         self.stdout.write('')
