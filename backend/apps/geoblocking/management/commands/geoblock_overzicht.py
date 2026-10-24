@@ -26,6 +26,10 @@ from apps.geoblocking.models import (
 # je per ongeluk buitensluit - en dus een reden om nog niet om te zetten.
 EIGEN_ROLLEN = {'admin', 'gebruiker', 'chauffeur', 'opdrachtgever'}
 
+# Onder dit aantal verzoeken is "geen bezwaren gevonden" geen bewijs, maar
+# gewoon een stille periode. Een weekendavond mag geen groen licht geven.
+MINIMUM_METING = 100
+
 
 class Command(BaseCommand):
     help = 'Vat het geo-logboek samen per land en rol, als hulp bij de beslissing.'
@@ -73,7 +77,7 @@ class Command(BaseCommand):
 
         self._tabel('Zou geweigerd worden, per land en rol', geweigerd)
         self._onbekend(geweigerd)
-        self._oordeel(geweigerd)
+        self._oordeel(geweigerd, totaal)
 
     def _tabel(self, titel, regels):
         self.stdout.write(titel)
@@ -99,7 +103,7 @@ class Command(BaseCommand):
         )
         self.stdout.write('')
 
-    def _oordeel(self, geweigerd):
+    def _oordeel(self, geweigerd, totaal):
         eigen = [lg for lg in geweigerd if lg.role in EIGEN_ROLLEN]
         anoniem_landen = {
             lg.country_code for lg in geweigerd
@@ -117,18 +121,32 @@ class Command(BaseCommand):
                 '  Voeg die landen toe (eventueel alleen voor de rol die je ziet) '
                 'en meet opnieuw.'
             )
-        else:
-            self.stdout.write(self.style.SUCCESS(
-                '  Geen enkele ingelogde eigen gebruiker zou geweigerd worden.'
+            return
+
+        # Geen bezwaren gevonden is alleen geruststellend als er genoeg
+        # gemeten is. Een stille zaterdagavond bewijst niets.
+        if totaal < MINIMUM_METING:
+            self.stdout.write(self.style.WARNING(
+                f'  TE WEINIG GEMETEN ({totaal} verzoeken). Er zijn geen bezwaren '
+                'gevonden, maar dat zegt bij zo weinig verkeer niets.'
             ))
-            if anoniem_landen:
-                self.stdout.write(
-                    '  Alleen niet-ingelogd verkeer uit: '
-                    + ', '.join(sorted(anoniem_landen))
-                    + '. Dat is doorgaans precies wat je wilt weren.'
-                )
             self.stdout.write(
-                '  Je kunt omzetten naar actief blokkeren. Zet daarna '
-                '"Ook toegestane verzoeken loggen" uit.'
+                '  Laat dit draaien tot na een volledige werkdag, zodat kantoor, '
+                'planners en chauffeurs allemaal langs zijn geweest. Meet daarna opnieuw.'
             )
+            return
+
+        self.stdout.write(self.style.SUCCESS(
+            '  Geen enkele ingelogde eigen gebruiker zou geweigerd worden.'
+        ))
+        if anoniem_landen:
+            self.stdout.write(
+                '  Alleen niet-ingelogd verkeer uit: '
+                + ', '.join(sorted(anoniem_landen))
+                + '. Dat is doorgaans precies wat je wilt weren.'
+            )
+        self.stdout.write(
+            '  Je kunt omzetten naar actief blokkeren. Zet daarna '
+            '"Ook toegestane verzoeken loggen" uit.'
+        )
         self.stdout.write('')
