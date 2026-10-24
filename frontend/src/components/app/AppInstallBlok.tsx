@@ -4,10 +4,6 @@ import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import { androidApp } from '@/api/androidApp'
 
-// Wordt gezet als iemand op de downloadknop drukt zonder ingelogd te zijn;
-// LoginPage leest hem na een geslaagde aanmelding.
-export const APK_NA_LOGIN = 'tms-apk-na-login'
-
 export function isAndroid() {
   return /android/i.test(navigator.userAgent)
 }
@@ -49,12 +45,7 @@ function AppleLogo({ className }: { className?: string }) {
   )
 }
 
-interface Props {
-  ingelogd: boolean
-  onLoginVereist: () => void
-}
-
-export default function AppInstallBlok({ ingelogd, onLoginVereist }: Props) {
+export default function AppInstallBlok() {
   const { t } = useTranslation()
   const [versie, setVersie] = useState<string | null>(null)
   const [beschikbaar, setBeschikbaar] = useState(false)
@@ -89,12 +80,6 @@ export default function AppInstallBlok({ ingelogd, onLoginVereist }: Props) {
   }
 
   const klik = async () => {
-    if (!ingelogd) {
-      sessionStorage.setItem(APK_NA_LOGIN, '1')
-      toast(t('appInstall.loginFirst'))
-      onLoginVereist()
-      return
-    }
     setBezig(true)
     const gelukt = await startApkDownload()
     setBezig(false)

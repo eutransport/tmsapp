@@ -56,6 +56,7 @@ urlpatterns = [
     path('api/spreadsheets/', include('apps.spreadsheets.urls')),
     path('api/maintenance/', include('apps.maintenance.urls')),
     path('api/licensing/', include('apps.licensing.urls')),
+    path('api/geoblocking/', include('apps.geoblocking.urls')),
     path('api/tracking/', include('apps.tracking.urls')),
     path('api/banking/', include('apps.banking.urls')),
     path('api/reports/', include('apps.reports.urls')),

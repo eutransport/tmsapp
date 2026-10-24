@@ -38,6 +38,7 @@ const ActivityPage = React.lazy(() => import('@/pages/activity/ActivityPage'))
 const UsersPage = React.lazy(() => import('@/pages/admin/UsersPage'))
 const SettingsPage = React.lazy(() => import('@/pages/settings/SettingsPage'))
 const FontManagementPage = React.lazy(() => import('@/pages/settings/FontManagementPage'))
+const GeoBlockingPage = React.lazy(() => import('@/pages/settings/GeoBlockingPage'))
 
 // Master data
 const CompaniesPage = React.lazy(() => import('@/pages/companies/CompaniesPage'))
@@ -377,6 +378,7 @@ function App() {
         <Route path="/admin/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
         <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
         <Route path="/settings/fonts" element={<AdminRoute><FontManagementPage /></AdminRoute>} />
+        <Route path="/settings/geo-blocking" element={<AdminRoute><GeoBlockingPage /></AdminRoute>} />
         
         {/* Master data */}
         <Route path="/companies" element={<CompaniesPage />} />

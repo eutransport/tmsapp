@@ -39,7 +39,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY . /app/
 
 # Create necessary directories including fonts, OCR temp and celery-beat schedule
-RUN mkdir -p /app/staticfiles /app/media/fonts /app/media/branding /app/media/imports /app/media/temp/ocr /app/logs /app/celerybeat
+RUN mkdir -p /app/staticfiles /app/media/fonts /app/media/branding /app/media/imports /app/media/temp/ocr /app/logs /app/celerybeat /app/geoip
 
 # Copy entrypoint script and fix line endings (Windows -> Linux)
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh

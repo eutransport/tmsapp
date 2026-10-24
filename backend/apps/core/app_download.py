@@ -1,8 +1,8 @@
 """Download van de Android-app (APK) vanaf de eigen server.
 
-De APK staat buiten de publieke mediapaden, dus hij is alleen bereikbaar via
-een ondertekende, aflopende URL die uitsluitend aan ingelogde gebruikers
-wordt uitgegeven.
+De APK staat buiten de publieke mediapaden en is alleen bereikbaar via een
+ondertekende, aflopende URL. Die URL wordt ook aan niet-ingelogde bezoekers
+afgegeven, zodat de app direct vanaf het inlogscherm te installeren is.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 from django.conf import settings
 from django.utils import timezone
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -60,9 +60,16 @@ class AndroidAppInfoView(APIView):
 
 
 class AndroidAppDownloadView(APIView):
-    """Geeft een kortlevende ondertekende URL terug waarmee de browser de APK ophaalt."""
+    """Geeft een kortlevende ondertekende URL terug waarmee de browser de APK ophaalt.
 
-    permission_classes = [IsAuthenticated]
+    Bewust zonder login: de app moet juist vanaf het inlogscherm te installeren
+    zijn. De APK bevat geen bedrijfsgegevens; de beveiliging zit in de inlog
+    binnen de app zelf. De ondertekende URL blijft kort geldig zodat de link
+    niet eindeloos rondgedeeld kan worden.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get(self, request):
         if not os.path.isfile(_apk_absolute_path()):

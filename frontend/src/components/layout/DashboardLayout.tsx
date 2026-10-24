@@ -16,6 +16,7 @@ import {
   DocumentDuplicateIcon,
   SparklesIcon,
   Cog6ToothIcon,
+  ShieldCheckIcon,
   ArrowRightOnRectangleIcon,
   UserCircleIcon,
   ChevronDownIcon,
@@ -126,6 +127,7 @@ const navigation: NavItem[] = [
 const adminNavigation: NavItem[] = [
   { name: 'nav.users', href: '/admin/users', icon: UsersIcon, roles: ['admin'] },
   { name: 'nav.settings', href: '/settings', icon: Cog6ToothIcon, roles: ['admin'] },
+  { name: 'nav.geoBlocking', href: '/settings/geo-blocking', icon: ShieldCheckIcon, roles: ['admin'] },
 ]
 
 // Grouped navigation. Items not listed here fall into the "other" catch-all.

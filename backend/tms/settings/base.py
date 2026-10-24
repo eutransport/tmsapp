@@ -60,6 +60,7 @@ LOCAL_APPS = [
     'apps.loadlist',
     'apps.tolling',
     'apps.opdrachten',
+    'apps.geoblocking',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -76,6 +77,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'apps.core.upload_validation.FileUploadValidationMiddleware',
+    'apps.geoblocking.middleware.GeoBlockMiddleware',
     'apps.licensing.middleware.LicenseMiddleware',
 ]
 
@@ -127,6 +129,33 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 # Media files (Uploads)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# ===========================================
+# Geo-blocking
+# ===========================================
+# Pad naar de MaxMind GeoLite2-Country database. Ophalen/bijwerken met:
+#   python manage.py update_geoip_db
+GEOIP_DATABASE_PATH = config(
+    'GEOIP_DATABASE_PATH',
+    default=str(BASE_DIR / 'geoip' / 'GeoLite2-Country.mmdb'),
+)
+MAXMIND_LICENSE_KEY = config('MAXMIND_LICENSE_KEY', default='')
+MAXMIND_ACCOUNT_ID = config('MAXMIND_ACCOUNT_ID', default='')
+
+# Netwerken van onze eigen reverse proxies. Alleen aan deze hosts geloven we
+# de X-Forwarded-For header; anders kan een client zijn herkomst vervalsen.
+TRUSTED_PROXIES = [
+    p.strip()
+    for p in config(
+        'TRUSTED_PROXIES',
+        default='127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7',
+    ).split(',')
+    if p.strip()
+]
+
+# Noodrem: deze adressen worden nooit geo-geblokkeerd. Houd hier je eigen
+# vaste IP in, zodat je jezelf niet kunt buitensluiten.
+GEOBLOCK_BYPASS_IPS = config('GEOBLOCK_BYPASS_IPS', default='')
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

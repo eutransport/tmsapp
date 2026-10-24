@@ -37,6 +37,9 @@ django-anymail[mailgun,sendgrid]>=10.0,<11.0
 nh3>=0.2.18,<1.0
 cryptography>=44.0,<45.0
 
+# Geo-blocking (IP -> land via MaxMind GeoLite2)
+geoip2>=4.8,<5.0
+
 # Task Queue
 celery[redis]>=5.3,<6.0
 

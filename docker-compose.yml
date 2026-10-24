@@ -101,6 +101,7 @@ services:
       - static_files:/app/staticfiles
       - media_files:/app/media
       - logs:/app/logs
+      - geoip_data:/app/geoip
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -176,6 +177,7 @@ services:
     volumes:
       - media_files:/app/media
       - logs:/app/logs
+      - geoip_data:/app/geoip
     depends_on:
       db:
         condition: service_healthy
@@ -233,6 +235,7 @@ services:
     volumes:
       - logs:/app/logs
       - celery_beat_schedule:/app/celerybeat
+      - geoip_data:/app/geoip
     depends_on:
       db:
         condition: service_healthy
@@ -278,6 +281,31 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # =========================================
+  # GeoIP database updater (officiele MaxMind-tool)
+  # =========================================
+  # Ververst GeoLite2-Country in het gedeelde geoip-volume dat backend,
+  # worker en beat lezen. Start alleen mee met het profiel 'geoip' en met
+  # geldige MaxMind-gegevens in .env; zonder database blokkeert de
+  # geo-blokkering niets (fail-open), dus de app blijft bereikbaar.
+  geoipupdate:
+    image: maxmindinc/geoipupdate:latest
+    container_name: tms_geoipupdate
+    restart: always
+    environment:
+      - GEOIPUPDATE_ACCOUNT_ID=${MAXMIND_ACCOUNT_ID:-}
+      - GEOIPUPDATE_LICENSE_KEY=${MAXMIND_LICENSE_KEY:-}
+      - GEOIPUPDATE_EDITION_IDS=${MAXMIND_EDITION_IDS:-GeoLite2-Country}
+      # Uren tussen controles; 0 betekent eenmalig draaien en stoppen.
+      - GEOIPUPDATE_FREQUENCY=${MAXMIND_UPDATE_FREQUENCY:-72}
+      - GEOIPUPDATE_PRESERVE_FILE_TIMES=1
+    volumes:
+      - geoip_data:/usr/share/GeoIP
+    networks:
+      - tms_external
+    profiles:
+      - geoip
 
   # =========================================
   # Nginx Proxy Manager
@@ -367,6 +395,8 @@ volumes:
     name: tms_portainer_data
   celery_beat_schedule:
     name: tms_celery_beat_schedule
+  geoip_data:
+    name: tms_geoip_data
 
 # =========================================
 # Networks
