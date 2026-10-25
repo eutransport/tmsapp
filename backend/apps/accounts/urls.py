@@ -7,6 +7,8 @@ from rest_framework_simplejwt.views import TokenRefreshView, TokenBlacklistView
 
 from .views import (
     CustomTokenObtainPairView,
+    EntraConfigView,
+    EntraLoginView,
     MFAVerifyView,
     RegisterView,
     ProfileView,
@@ -25,6 +27,10 @@ urlpatterns = [
     path('login/verify-2fa/', MFAVerifyView.as_view(), name='token_verify_2fa'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('logout/', TokenBlacklistView.as_view(), name='token_blacklist'),
+
+    # Inloggen via Microsoft Entra External ID
+    path('entra/config/', EntraConfigView.as_view(), name='entra_config'),
+    path('entra/login/', EntraLoginView.as_view(), name='entra_login'),
     
     # Registration
     path('register/', RegisterView.as_view(), name='register'),

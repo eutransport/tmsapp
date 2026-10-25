@@ -17,6 +17,21 @@ export const authApi = {
     const response = await api.post('/auth/login/verify-2fa/', data)
     return response.data
   },
+
+  entraConfig: async (): Promise<{
+    enabled: boolean
+    client_id?: string
+    authority?: string
+    tenant_name?: string
+  }> => {
+    const response = await api.get('/auth/entra/config/')
+    return response.data
+  },
+
+  entraLogin: async (idToken: string): Promise<LoginResponse> => {
+    const response = await api.post('/auth/entra/login/', { id_token: idToken })
+    return response.data
+  },
   
   logout: async (refreshToken: string): Promise<void> => {
     await api.post('/auth/logout/', { refresh: refreshToken })

@@ -102,6 +102,14 @@ services:
       - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7}
       - MAXMIND_ACCOUNT_ID=${MAXMIND_ACCOUNT_ID:-}
       - MAXMIND_LICENSE_KEY=${MAXMIND_LICENSE_KEY:-}
+      # Microsoft Entra External ID. Zolang ENTRA_CLIENT_ID leeg is, staat de
+      # koppeling uit en verandert er niets aan het inloggen.
+      - ENTRA_TENANT_NAME=${ENTRA_TENANT_NAME:-}
+      - ENTRA_TENANT_ID=${ENTRA_TENANT_ID:-}
+      - ENTRA_CLIENT_ID=${ENTRA_CLIENT_ID:-}
+      - ENTRA_ALLOWED_EMAIL_DOMAINS=${ENTRA_ALLOWED_EMAIL_DOMAINS:-}
+      - ENTRA_AUTO_CREATE_USERS=${ENTRA_AUTO_CREATE_USERS:-false}
+      - ENTRA_DEFAULT_ROLE=${ENTRA_DEFAULT_ROLE:-opdrachtgever}
     volumes:
       - static_files:/app/staticfiles
       - media_files:/app/media

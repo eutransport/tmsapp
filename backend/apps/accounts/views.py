@@ -117,6 +117,84 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         return response
 
 
+class EntraConfigView(APIView):
+    """
+    Vertelt de inlogpagina of inloggen via Microsoft beschikbaar is.
+
+    Bewust openbaar en bewust karig: alleen wat de browser nodig heeft om de
+    inlogknop te tonen en MSAL te starten. Geen geheimen.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        from . import entra
+
+        if not entra.is_ingeschakeld():
+            return Response({'enabled': False})
+
+        from django.conf import settings
+
+        return Response({
+            'enabled': True,
+            'client_id': settings.ENTRA_CLIENT_ID,
+            'authority': entra.authority(),
+            'tenant_name': settings.ENTRA_TENANT_NAME,
+        })
+
+
+class EntraLoginView(APIView):
+    """
+    Wisselt een id-token van Microsoft om voor een eigen JWT.
+
+    Microsoft stelt de identiteit vast; de rol en rechten blijven van deze
+    applicatie. Zo verandert er niets aan autorisatie elders in de code.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        from . import entra
+
+        client_ip = get_client_ip(request)
+        rate_limit_key = f'entra:ip:{client_ip}'
+
+        is_blocked, _ = check_rate_limit(request, rate_limit_key)
+        if is_blocked:
+            logger.warning('Rate limit bereikt voor Entra-login vanaf %s', client_ip)
+            return Response(
+                {'detail': 'Te veel mislukte pogingen. Probeer het over 5 minuten opnieuw.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        token = request.data.get('id_token') or ''
+
+        try:
+            claims = entra.valideer_token(token)
+            gebruiker = entra.zoek_of_maak_gebruiker(claims)
+        except entra.EntraConfiguratieFout as exc:
+            logger.error('Entra-login niet mogelijk: %s', exc)
+            return Response(
+                {'detail': 'Inloggen via Microsoft is niet beschikbaar.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except entra.EntraTokenFout as exc:
+            increment_rate_limit(request, rate_limit_key)
+            logger.warning('Entra-login geweigerd vanaf %s: %s', client_ip, exc)
+            return Response({'detail': str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+
+        reset_rate_limit(rate_limit_key)
+
+        refresh = RefreshToken.for_user(gebruiker)
+        logger.info('Entra-login geslaagd voor %s vanaf %s', gebruiker.email, client_ip)
+
+        return Response({
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': UserSerializer(gebruiker).data,
+        })
+
+
 class MFAVerifyView(APIView):
     """Verify 2FA code during login."""
     permission_classes = [AllowAny]

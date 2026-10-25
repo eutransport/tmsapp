@@ -56,6 +56,7 @@ interface AuthState {
   setUser: (user: User | null) => void
   setTokens: (access: string, refresh: string) => void
   login: (email: string, password: string) => Promise<{ requires2FA: boolean; requires2FASetup: boolean; userId?: string }>
+  loginMetMicrosoft: (idToken: string) => Promise<void>
   verify2FA: (userId: string, code: string) => Promise<void>
   completeMfaSetup: () => void
   logout: () => void
@@ -110,6 +111,21 @@ export const useAuthStore = create<AuthState>()(
         })
         
         return { requires2FA: false, requires2FASetup: false }
+      },
+
+      loginMetMicrosoft: async (idToken) => {
+        // Microsoft heeft de identiteit al vastgesteld en regelt daar de
+        // tweede factor. Hier komt dus geen 2FA-stap meer overheen.
+        const response = await authApi.entraLogin(idToken)
+
+        set({
+          user: response.user,
+          accessToken: response.access,
+          refreshToken: response.refresh,
+          isAuthenticated: true,
+          pendingMfaSetup: false,
+          isLoading: false,
+        })
       },
       
       verify2FA: async (userId, code) => {

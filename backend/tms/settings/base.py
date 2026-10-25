@@ -223,6 +223,36 @@ SIMPLE_JWT = {
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
 }
 
+# ===========================================
+# Microsoft Entra External ID (externe gebruikers)
+# ===========================================
+# Externe mensen loggen in bij Microsoft met hun eigen e-mailadres. Wij
+# controleren alleen hun token en geven daarna ons eigen JWT uit, zodat rol en
+# module_permissions ongewijzigd blijven werken.
+#
+# ENTRA_TENANT_NAME is de naam van de external tenant, dus het deel voor
+# ".ciamlogin.com". Zolang ENTRA_CLIENT_ID leeg is, staat de koppeling uit en
+# verandert er niets aan het inloggen.
+ENTRA_TENANT_NAME = config('ENTRA_TENANT_NAME', default='')
+ENTRA_TENANT_ID = config('ENTRA_TENANT_ID', default='')
+ENTRA_CLIENT_ID = config('ENTRA_CLIENT_ID', default='')
+
+# Alleen deze domeinen mogen binnenkomen. Leeg betekent: geen beperking op
+# domein, de uitnodiging in Entra bepaalt wie er is.
+ENTRA_ALLOWED_EMAIL_DOMAINS = [
+    d.strip().lower()
+    for d in config('ENTRA_ALLOWED_EMAIL_DOMAINS', default='').split(',')
+    if d.strip()
+]
+
+# Mag een onbekend e-mailadres automatisch een account krijgen? Standaard niet:
+# dan moet een beheerder de gebruiker eerst aanmaken. Dat voorkomt dat iedereen
+# die zich bij Microsoft registreert ook meteen in de applicatie staat.
+ENTRA_AUTO_CREATE_USERS = config('ENTRA_AUTO_CREATE_USERS', default=False, cast=bool)
+ENTRA_DEFAULT_ROLE = config('ENTRA_DEFAULT_ROLE', default='opdrachtgever')
+
+ENTRA_ENABLED = bool(ENTRA_CLIENT_ID and ENTRA_TENANT_NAME)
+
 # DRF Spectacular (API Documentation)
 SPECTACULAR_SETTINGS = {
     'TITLE': 'TMS API',
