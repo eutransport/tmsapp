@@ -7,9 +7,11 @@ from apps.core.ip_utils import get_client_ip
 from apps.geoblocking import services
 from apps.geoblocking.models import (
     EnforcementMode,
+    GeoAccessLog,
     GeoBlockSettings,
     GeoRule,
     IPRule,
+    LogDecision,
     RuleAction,
 )
 from apps.geoblocking.services import evaluate, invalidate_rules_cache
@@ -154,3 +156,56 @@ class LandCacheTests(TestCase):
             services.COUNTRY_CACHE_TTL,
             'Een onbekende uitkomst moet korter bewaard blijven dan een bekende.',
         )
+
+
+class LogboekEndpointTests(TestCase):
+    """
+    Het logboek gaf een 500 zodra er een logregel met een gebruiker in stond:
+    de serializer riep get_full_name() aan, dat op dit User-model niet bestaat.
+    """
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        from apps.accounts.models import User
+
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            email='admin@test.com', password='testpass123', username='admin',
+            voornaam='Anne', achternaam='Beheer', rol='admin',
+        )
+        self.naamloos = User.objects.create_user(
+            email='leeg@test.com', password='testpass123', username='leeg',
+            voornaam='', achternaam='', rol='gebruiker',
+        )
+
+    def _logregel(self, user):
+        return GeoAccessLog.objects.create(
+            ip_address='62.45.106.191', country_code='NL',
+            role='admin', decision=LogDecision.ALLOWED,
+            path='/api/tasks/tasks/', user=user,
+        )
+
+    def test_logboek_met_gebruiker_geeft_geen_fout(self):
+        self._logregel(self.admin)
+        self.client.force_authenticate(self.admin)
+        antwoord = self.client.get('/api/geoblocking/logs/')
+        self.assertEqual(antwoord.status_code, 200, getattr(antwoord, 'data', antwoord.content))
+        regels = antwoord.data.get('results', antwoord.data)
+        self.assertEqual(regels[0]['gebruiker'], 'Anne Beheer')
+
+    def test_gebruiker_zonder_naam_valt_terug_op_username(self):
+        self._logregel(self.naamloos)
+        self.client.force_authenticate(self.admin)
+        antwoord = self.client.get('/api/geoblocking/logs/')
+        self.assertEqual(antwoord.status_code, 200)
+        regels = antwoord.data.get('results', antwoord.data)
+        self.assertEqual(regels[0]['gebruiker'], 'leeg')
+
+    def test_logregel_zonder_gebruiker_blijft_leeg(self):
+        self._logregel(None)
+        self.client.force_authenticate(self.admin)
+        antwoord = self.client.get('/api/geoblocking/logs/')
+        self.assertEqual(antwoord.status_code, 200)
+        regels = antwoord.data.get('results', antwoord.data)
+        self.assertEqual(regels[0]['gebruiker'], '')

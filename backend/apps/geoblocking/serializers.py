@@ -34,7 +34,7 @@ class GeoBlockSettingsSerializer(serializers.ModelSerializer):
     def get_updated_by_naam(self, obj):
         if not obj.updated_by:
             return ''
-        return obj.updated_by.get_full_name() or obj.updated_by.username
+        return (obj.updated_by.full_name or '').strip() or obj.updated_by.username
 
 
 class GeoRuleSerializer(serializers.ModelSerializer):
@@ -107,4 +107,4 @@ class GeoAccessLogSerializer(serializers.ModelSerializer):
     def get_gebruiker(self, obj):
         if not obj.user:
             return ''
-        return obj.user.get_full_name() or obj.user.username
+        return (obj.user.full_name or '').strip() or obj.user.username
