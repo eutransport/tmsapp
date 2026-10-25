@@ -139,6 +139,7 @@ class EntraConfigView(APIView):
             'enabled': True,
             'client_id': settings.ENTRA_CLIENT_ID,
             'authority': entra.authority(),
+            'tenant_type': settings.ENTRA_TENANT_TYPE,
             'tenant_name': settings.ENTRA_TENANT_NAME,
         })
 

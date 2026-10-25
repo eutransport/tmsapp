@@ -230,9 +230,18 @@ SIMPLE_JWT = {
 # controleren alleen hun token en geven daarna ons eigen JWT uit, zodat rol en
 # module_permissions ongewijzigd blijven werken.
 #
-# ENTRA_TENANT_NAME is de naam van de external tenant, dus het deel voor
-# ".ciamlogin.com". Zolang ENTRA_CLIENT_ID leeg is, staat de koppeling uit en
-# verandert er niets aan het inloggen.
+# Er zijn twee soorten tenants en ze gebruiken een ander inlogadres:
+#
+#   workforce  - de gewone Entra ID-tenant van het bedrijf. Externen nodig je
+#                uit als gast (B2B). Inlogadres: login.microsoftonline.com,
+#                herkend aan ENTRA_TENANT_ID.
+#   external   - een aparte Entra External ID-tenant (CIAM) voor klanten.
+#                Inlogadres: <naam>.ciamlogin.com, herkend aan
+#                ENTRA_TENANT_NAME.
+#
+# Zolang ENTRA_CLIENT_ID leeg is, staat de koppeling uit en verandert er niets
+# aan het inloggen.
+ENTRA_TENANT_TYPE = config('ENTRA_TENANT_TYPE', default='workforce').strip().lower()
 ENTRA_TENANT_NAME = config('ENTRA_TENANT_NAME', default='')
 ENTRA_TENANT_ID = config('ENTRA_TENANT_ID', default='')
 ENTRA_CLIENT_ID = config('ENTRA_CLIENT_ID', default='')
@@ -251,7 +260,11 @@ ENTRA_ALLOWED_EMAIL_DOMAINS = [
 ENTRA_AUTO_CREATE_USERS = config('ENTRA_AUTO_CREATE_USERS', default=False, cast=bool)
 ENTRA_DEFAULT_ROLE = config('ENTRA_DEFAULT_ROLE', default='opdrachtgever')
 
-ENTRA_ENABLED = bool(ENTRA_CLIENT_ID and ENTRA_TENANT_NAME)
+# Een external tenant heeft de naam nodig, een werknemers-tenant de id.
+ENTRA_ENABLED = bool(
+    ENTRA_CLIENT_ID
+    and (ENTRA_TENANT_NAME if ENTRA_TENANT_TYPE == 'external' else ENTRA_TENANT_ID)
+)
 
 # DRF Spectacular (API Documentation)
 SPECTACULAR_SETTINGS = {

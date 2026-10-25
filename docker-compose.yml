@@ -104,6 +104,7 @@ services:
       - MAXMIND_LICENSE_KEY=${MAXMIND_LICENSE_KEY:-}
       # Microsoft Entra External ID. Zolang ENTRA_CLIENT_ID leeg is, staat de
       # koppeling uit en verandert er niets aan het inloggen.
+      - ENTRA_TENANT_TYPE=${ENTRA_TENANT_TYPE:-workforce}
       - ENTRA_TENANT_NAME=${ENTRA_TENANT_NAME:-}
       - ENTRA_TENANT_ID=${ENTRA_TENANT_ID:-}
       - ENTRA_CLIENT_ID=${ENTRA_CLIENT_ID:-}

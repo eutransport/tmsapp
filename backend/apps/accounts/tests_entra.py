@@ -50,6 +50,7 @@ def maak_token(**overschrijf):
 
 @override_settings(
     ENTRA_ENABLED=True,
+    ENTRA_TENANT_TYPE='external',
     ENTRA_TENANT_NAME=TENANT,
     ENTRA_CLIENT_ID=CLIENT_ID,
     ENTRA_ALLOWED_EMAIL_DOMAINS=[],
@@ -121,6 +122,7 @@ class EntraTokenValidatieTests(TestCase):
 
 @override_settings(
     ENTRA_ENABLED=True,
+    ENTRA_TENANT_TYPE='external',
     ENTRA_TENANT_NAME=TENANT,
     ENTRA_CLIENT_ID=CLIENT_ID,
     ENTRA_ALLOWED_EMAIL_DOMAINS=[],
@@ -178,6 +180,7 @@ class EntraGebruikerKoppelingTests(TestCase):
 
 @override_settings(
     ENTRA_ENABLED=True,
+    ENTRA_TENANT_TYPE='external',
     ENTRA_TENANT_NAME=TENANT,
     ENTRA_CLIENT_ID=CLIENT_ID,
     ENTRA_ALLOWED_EMAIL_DOMAINS=[],
@@ -239,8 +242,61 @@ class EntraEndpointTests(TestCase):
         self.assertFalse(antwoord.data['enabled'])
 
 
+class EntraAuthorityTests(TestCase):
+    """
+    Het inlogadres verschilt per soort tenant. Een fout hierin leidt tot
+    sleutels ophalen bij de verkeerde partij, dus het ligt vast in een test.
+    """
+
+    @override_settings(
+        ENTRA_TENANT_TYPE='workforce',
+        ENTRA_TENANT_ID='9bd03e13-fa5f-4ea3-b449-99a7654eae05',
+        ENTRA_TENANT_NAME='',
+    )
+    def test_werknemers_tenant_gebruikt_login_microsoftonline(self):
+        self.assertEqual(
+            entra.authority(),
+            'https://login.microsoftonline.com/'
+            '9bd03e13-fa5f-4ea3-b449-99a7654eae05/v2.0',
+        )
+
+    @override_settings(
+        ENTRA_TENANT_TYPE='external',
+        ENTRA_TENANT_NAME='moveotest',
+        ENTRA_TENANT_ID='',
+    )
+    def test_external_tenant_gebruikt_ciamlogin(self):
+        self.assertEqual(
+            entra.authority(),
+            'https://moveotest.ciamlogin.com/moveotest.onmicrosoft.com/v2.0',
+        )
+
+    @override_settings(
+        ENTRA_TENANT_TYPE='workforce', ENTRA_TENANT_ID='', ENTRA_TENANT_NAME='naam',
+    )
+    def test_werknemers_tenant_zonder_id_is_een_configuratiefout(self):
+        with self.assertRaises(entra.EntraConfiguratieFout):
+            entra.authority()
+
+    @override_settings(
+        ENTRA_TENANT_TYPE='external', ENTRA_TENANT_NAME='', ENTRA_TENANT_ID='abc',
+    )
+    def test_external_tenant_zonder_naam_is_een_configuratiefout(self):
+        with self.assertRaises(entra.EntraConfiguratieFout):
+            entra.authority()
+
+    def test_metadata_url_hangt_aan_de_authority(self):
+        with self.settings(
+            ENTRA_TENANT_TYPE='workforce', ENTRA_TENANT_ID='abc-123',
+        ):
+            self.assertEqual(
+                entra.metadata_url(),
+                'https://login.microsoftonline.com/abc-123/v2.0'
+                '/.well-known/openid-configuration',
+            )
+
+
 class EntraUitgeschakeldTests(TestCase):
-    """Zonder configuratie mag er niets gebeuren, maar ook niets omvallen."""
 
     @override_settings(ENTRA_ENABLED=False)
     def test_login_endpoint_meldt_dat_het_uitstaat(self):

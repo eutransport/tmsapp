@@ -1,5 +1,5 @@
 """
-Inloggen via Microsoft Entra External ID.
+Inloggen via Microsoft Entra ID.
 
 De opzet is bewust klein gehouden: Microsoft stelt alleen vast *wie* iemand is.
 Wat die persoon vervolgens mag, bepaalt deze applicatie zelf via `rol` en
@@ -42,11 +42,27 @@ def is_ingeschakeld() -> bool:
 
 
 def authority() -> str:
-    """De basis-URL van de external tenant."""
-    naam = getattr(settings, 'ENTRA_TENANT_NAME', '')
-    if not naam:
-        raise EntraConfiguratieFout('ENTRA_TENANT_NAME ontbreekt.')
-    return f'https://{naam}.ciamlogin.com/{naam}.onmicrosoft.com/v2.0'
+    """
+    De basis-URL waar Microsoft het inloggen afhandelt.
+
+    Een werknemers-tenant (met B2B-gasten) gebruikt login.microsoftonline.com
+    met de tenant-id. Een aparte External ID-tenant gebruikt haar eigen
+    ciamlogin.com-adres.
+    """
+    soort = getattr(settings, 'ENTRA_TENANT_TYPE', 'workforce')
+
+    if soort == 'external':
+        naam = getattr(settings, 'ENTRA_TENANT_NAME', '')
+        if not naam:
+            raise EntraConfiguratieFout(
+                'ENTRA_TENANT_NAME ontbreekt voor een external tenant.'
+            )
+        return f'https://{naam}.ciamlogin.com/{naam}.onmicrosoft.com/v2.0'
+
+    tenant_id = getattr(settings, 'ENTRA_TENANT_ID', '')
+    if not tenant_id:
+        raise EntraConfiguratieFout('ENTRA_TENANT_ID ontbreekt.')
+    return f'https://login.microsoftonline.com/{tenant_id}/v2.0'
 
 
 def metadata_url() -> str:

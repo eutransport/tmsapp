@@ -1,5 +1,5 @@
 /**
- * Inloggen via Microsoft Entra External ID.
+ * Inloggen via Microsoft Entra ID.
  *
  * De instellingen komen van de server, zodat er niets in de frontend hoeft te
  * worden ingebakken en de knop vanzelf verdwijnt als de koppeling uitstaat.
@@ -16,6 +16,7 @@ export interface EntraConfig {
   enabled: boolean
   client_id?: string
   authority?: string
+  tenant_type?: string
   tenant_name?: string
 }
 
@@ -26,13 +27,20 @@ async function geefInstantie(config: EntraConfig): Promise<PublicClientApplicati
 
   const msal = await import('@azure/msal-browser')
 
+  // MSAL vertrouwt login.microsoftonline.com vanzelf. Een eigen External
+  // ID-tenant staat daar niet op en moet expliciet worden toegestaan.
+  const eigenAuthority =
+    config.tenant_type === 'external' && config.tenant_name
+      ? [`${config.tenant_name}.ciamlogin.com`]
+      : []
+
   instantie = new msal.PublicClientApplication({
     auth: {
       clientId: config.client_id!,
       authority: config.authority!,
-      // Zonder dit weigert MSAL een authority die niet op login.microsoftonline.com staat.
-      knownAuthorities: [`${config.tenant_name}.ciamlogin.com`],
-      redirectUri: `${window.location.origin}/auth/callback`,
+      knownAuthorities: eigenAuthority,
+      // Gelijk aan de redirect-URI die in Entra geregistreerd staat.
+      redirectUri: window.location.origin,
     },
     cache: {
       // Niet in localStorage: het Microsoft-token hoeft de sessie niet te
