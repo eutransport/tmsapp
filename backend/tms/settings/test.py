@@ -35,5 +35,10 @@ CACHES = {
     }
 }
 
+# De licentiecontrole weigert elk /api/-verzoek zolang er geen licentie in de
+# database staat. In tests is die er nooit, waardoor elke API-test een 403 kreeg
+# in plaats van het gedrag dat getest wordt.
+MIDDLEWARE = [m for m in MIDDLEWARE if m != 'apps.licensing.middleware.LicenseMiddleware']  # noqa: F405
+
 CELERY_TASK_ALWAYS_EAGER = True
 EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'

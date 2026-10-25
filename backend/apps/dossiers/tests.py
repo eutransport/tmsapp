@@ -297,7 +297,7 @@ class DossierMailTests(TestCase):
             'organisatie': str(self.org.id),
         }, format='json')
         self.assertEqual(resp.status_code, 201)
-        self.assertEqual(resp.data.get('organisatie'), str(self.org.id))
+        self.assertEqual(str(resp.data.get('organisatie')), str(self.org.id))
 
     def test_mail_with_type_saves_to_log(self):
         """stuur-mail accepts and saves a type on the mail log."""
@@ -386,7 +386,8 @@ class DossierMailTests(TestCase):
         self.assertEqual(len(sent.attachments), 1)
         name, content, mimetype = sent.attachments[0]
         self.assertEqual(name, 'test.txt')
-        self.assertEqual(content, b'hello world')
+        # Django levert tekstbijlagen als str aan, binaire als bytes.
+        self.assertEqual(content.decode() if isinstance(content, bytes) else content, 'hello world')
         self.assertEqual(mimetype, 'text/plain')
 
     @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
@@ -412,7 +413,7 @@ class DossierMailTests(TestCase):
         self.assertEqual(len(sent.attachments), 1)
         name, content, _mime = sent.attachments[0]
         self.assertEqual(name, 'extra.txt')
-        self.assertEqual(content, b'extra content')
+        self.assertEqual(content.decode() if isinstance(content, bytes) else content, 'extra content')
 
     @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
     def test_mail_invalid_bijlage_id_silently_skipped(self):
@@ -450,7 +451,7 @@ class DossierMailTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         logs = resp.data.get('maillogs', [])
         self.assertEqual(len(logs), 1)
-        self.assertEqual(logs[0]['type'], str(mail_type.id))
+        self.assertEqual(str(logs[0]['type']), str(mail_type.id))
         self.assertEqual(logs[0]['type_naam'], 'Statusupdate')
 
 

@@ -111,6 +111,8 @@ class TaskViewSet(viewsets.ModelViewSet):
             task=task, user=user,
             actie=f'Taak aangemaakt en toegewezen aan {assignee.full_name}',
         )
+        # Net als bij een nieuwe opdracht: wie werk krijgt, hoort dat meteen.
+        _notify_assignee(task, user)
 
     def _can_touch(self, task, user) -> bool:
         """Maker, uitvoerder, beheerder of admin mogen de taak wijzigen."""
@@ -259,6 +261,15 @@ class TaskViewSet(viewsets.ModelViewSet):
 
 def _notify_assignee(task, actor, manual: bool = False) -> bool:
     """Stuur een push-notificatie naar de uitvoerder van de taak. Best effort."""
+    uitvoerder = task.toegewezen_aan
+    if uitvoerder is None or not uitvoerder.is_active:
+        return False
+
+    # Een taak die je voor jezelf aanmaakt hoeft je niet gemeld te worden.
+    # Een handmatige herinnering sturen we wel altijd.
+    if not manual and actor is not None and uitvoerder.id == actor.id:
+        return False
+
     try:
         from apps.notifications.services import PushNotificationService
         service = PushNotificationService()
@@ -266,7 +277,7 @@ def _notify_assignee(task, actor, manual: bool = False) -> bool:
             return False
         title = 'Herinnering: openstaande taak' if manual else 'Nieuwe taak toegewezen'
         result = service.send_to_user(
-            user=task.toegewezen_aan,
+            user=uitvoerder,
             title=title,
             body=task.titel,
             url='/tasks',

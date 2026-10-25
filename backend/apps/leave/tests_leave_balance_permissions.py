@@ -10,8 +10,8 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from backend.apps.accounts.models import User
-from backend.apps.leave.models import LeaveBalance
+from apps.accounts.models import User
+from apps.leave.models import LeaveBalance
 
 
 def _make_user(email, rol='gebruiker', module_permissions=None):
@@ -46,19 +46,23 @@ class LeaveBalancePermissionTests(TestCase):
         # Admin user
         self.admin = _make_user('admin@test.com', rol='admin')
 
-        # Create leave balances
-        self.bal1 = LeaveBalance.objects.create(
-            user=self.employee1, vacation_hours=100, overtime_hours=5
-        )
-        self.bal2 = LeaveBalance.objects.create(
-            user=self.employee2, vacation_hours=200, overtime_hours=10
-        )
-        self.bal_manager = LeaveBalance.objects.create(
-            user=self.manager, vacation_hours=150, overtime_hours=8
-        )
-        self.bal_admin = LeaveBalance.objects.create(
-            user=self.admin, vacation_hours=180, overtime_hours=0
-        )
+        # Een signal maakt het saldo al aan bij de gebruiker; hier alleen bijwerken.
+        self.bal1 = LeaveBalance.objects.update_or_create(
+            user=self.employee1,
+            defaults={'vacation_hours': 100, 'overtime_hours': 5},
+        )[0]
+        self.bal2 = LeaveBalance.objects.update_or_create(
+            user=self.employee2,
+            defaults={'vacation_hours': 200, 'overtime_hours': 10},
+        )[0]
+        self.bal_manager = LeaveBalance.objects.update_or_create(
+            user=self.manager,
+            defaults={'vacation_hours': 150, 'overtime_hours': 8},
+        )[0]
+        self.bal_admin = LeaveBalance.objects.update_or_create(
+            user=self.admin,
+            defaults={'vacation_hours': 180, 'overtime_hours': 0},
+        )[0]
 
         self.url = '/api/leave/balances/'
 
