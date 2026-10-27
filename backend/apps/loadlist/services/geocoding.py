@@ -17,9 +17,14 @@ from django.core.cache import cache
 logger = logging.getLogger(__name__)
 
 NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
+NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse'
 USER_AGENT = 'TMS-LoadList/1.0 (transport route optimizer)'
 REQUEST_INTERVAL = 1.05  # seconds — Nominatim asks for max 1 req/s
 CACHE_TTL = 60 * 60 * 24 * 30  # 30 days
+# Een vrachtwagen die stilstaat wiebelt een paar meter heen en weer. Afronden
+# op drie decimalen (ongeveer honderd meter) zorgt ervoor dat zo'n wagen
+# steeds dezelfde cachesleutel houdt en Nominatim maar één keer bevraagd wordt.
+REVERSE_PRECISIE = 3
 _last_call_ts = 0.0
 
 
@@ -38,6 +43,76 @@ def _throttle():
     if wait > 0:
         time.sleep(wait)
     _last_call_ts = time.monotonic()
+
+
+def reverse_geocode(lat: float, lng: float) -> Optional[str]:
+    """Geef een leesbaar adres bij coordinaten, of None.
+
+    Resultaten worden ruim gecachet en op ongeveer honderd meter afgerond,
+    zodat een stilstaand voertuig Nominatim maar een keer bevraagt.
+    """
+    try:
+        lat_f = float(lat)
+        lng_f = float(lng)
+    except (TypeError, ValueError):
+        return None
+    if not (-90 <= lat_f <= 90 and -180 <= lng_f <= 180):
+        return None
+
+    sleutel_lat = round(lat_f, REVERSE_PRECISIE)
+    sleutel_lng = round(lng_f, REVERSE_PRECISIE)
+    cache_key = f'geo:reverse:{sleutel_lat}:{sleutel_lng}'
+    hit = cache.get(cache_key)
+    if hit is not None:
+        return None if hit == '__none__' else hit
+
+    _throttle()
+    try:
+        resp = requests.get(
+            NOMINATIM_REVERSE_URL,
+            params={
+                'lat': lat_f,
+                'lon': lng_f,
+                'format': 'jsonv2',
+                'zoom': 18,
+                'addressdetails': 1,
+            },
+            headers={'User-Agent': USER_AGENT, 'Accept-Language': 'nl,en'},
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        logger.warning('Reverse geocode mislukt voor %s,%s: %s', lat_f, lng_f, exc)
+        return None
+
+    if resp.status_code != 200:
+        logger.warning('Reverse geocode gaf %s voor %s,%s', resp.status_code, lat_f, lng_f)
+        return None
+
+    try:
+        data = resp.json()
+    except ValueError:
+        return None
+
+    adres = (data or {}).get('address') or {}
+    straat = adres.get('road') or adres.get('hamlet') or adres.get('suburb') or ''
+    nummer = adres.get('house_number') or ''
+    plaats = (
+        adres.get('city') or adres.get('town') or adres.get('village')
+        or adres.get('municipality') or ''
+    )
+    delen = []
+    if straat:
+        delen.append(f'{straat} {nummer}'.strip())
+    if plaats and plaats != straat:
+        delen.append(plaats)
+    kort = ', '.join(delen) or (data or {}).get('display_name') or ''
+
+    if not kort:
+        cache.set(cache_key, '__none__', CACHE_TTL)
+        return None
+
+    cache.set(cache_key, kort, CACHE_TTL)
+    return kort
 
 
 def geocode(address: str, country_hint: str = '') -> Optional[GeocodeResult]:

@@ -17,6 +17,12 @@ REQUEST_TIMEOUT = 20
 STATES_ENDPOINT = '/tracker/get_states'
 LIST_ENDPOINT = '/tracker/list'
 
+# Navixy levert geen straatnaam mee. Die zoeken we er zelf bij, maar alleen
+# voor voertuigen die stilstaan: een rijdende wagen is toch onderweg en elke
+# meting zou dan een nieuwe opzoeking kosten bij een dienst die om hooguit
+# een aanvraag per seconde vraagt.
+MAX_ADRESSEN_PER_UITVRAAG = 5
+
 # Foutcodes uit de Navixy-documentatie. Alles buiten deze lijst behandelen we
 # als een algemene fout; we geven nooit de ruwe upstream-tekst door aan de
 # gebruiker, om te voorkomen dat interne details uitlekken.
@@ -148,6 +154,31 @@ def _positie_van(state, tracker):
     }
 
 
+def _adressen_aanvullen(posities):
+    """Zoek de straatnaam erbij voor voertuigen die stilstaan.
+
+    Een mislukte of trage adresdienst mag de posities nooit tegenhouden; in dat
+    geval blijft het adres gewoon leeg.
+    """
+    from apps.loadlist.services.geocoding import reverse_geocode
+
+    gedaan = 0
+    for positie in posities:
+        if gedaan >= MAX_ADRESSEN_PER_UITVRAAG:
+            break
+        if positie.get('address') or positie.get('vehicle_status') == 'driving':
+            continue
+        try:
+            adres = reverse_geocode(positie['latitude'], positie['longitude'])
+        except Exception:
+            logger.exception('Adres opzoeken mislukt voor %s', positie.get('plate_number'))
+            continue
+        gedaan += 1
+        if adres:
+            positie['address'] = adres
+    return posities
+
+
 def get_vehicle_locations(koppeling=None):
     """Actuele posities van alle ingestelde Navixy-trackers.
 
@@ -195,4 +226,4 @@ def get_vehicle_locations(koppeling=None):
             logger.warning('Navixy-tracker %s is geblokkeerd (koppeling %s)',
                            geblokkeerd, verbinding.naam)
 
-    return posities
+    return _adressen_aanvullen(posities)

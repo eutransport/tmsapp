@@ -201,6 +201,43 @@ class SamenvoegenTests(NavixyBasis):
         self.assertEqual(resultaat[0]['object_id'], 999)
 
 
+class NavixyAdresTests(NavixyBasis):
+    """Navixy levert geen straatnaam; die zoeken we er zuinig bij."""
+
+    def _antwoord(self, snelheid=0, beweging='parked'):
+        return {'success': True, 'states': {
+            '3687634': _state(snelheid=snelheid, beweging=beweging),
+        }}
+
+    def test_stilstaande_wagen_krijgt_een_adres(self):
+        with patch.object(navixy_service, '_aanroep', return_value=self._antwoord()), \
+             patch('apps.loadlist.services.geocoding.reverse_geocode',
+                   return_value='Rietvelden, Breda') as opzoeken:
+            resultaat = navixy_service.get_vehicle_locations()
+
+        self.assertEqual(resultaat[0]['address'], 'Rietvelden, Breda')
+        opzoeken.assert_called_once()
+
+    def test_rijdende_wagen_belast_de_adresdienst_niet(self):
+        antwoord = self._antwoord(snelheid=80, beweging='moving')
+        with patch.object(navixy_service, '_aanroep', return_value=antwoord), \
+             patch('apps.loadlist.services.geocoding.reverse_geocode') as opzoeken:
+            resultaat = navixy_service.get_vehicle_locations()
+
+        opzoeken.assert_not_called()
+        self.assertEqual(resultaat[0]['address'], '')
+
+    def test_storing_bij_de_adresdienst_houdt_de_positie_niet_tegen(self):
+        with patch.object(navixy_service, '_aanroep', return_value=self._antwoord()), \
+             patch('apps.loadlist.services.geocoding.reverse_geocode',
+                   side_effect=RuntimeError('nominatim plat')):
+            resultaat = navixy_service.get_vehicle_locations()
+
+        self.assertEqual(len(resultaat), 1)
+        self.assertEqual(resultaat[0]['address'], '')
+        self.assertEqual(resultaat[0]['latitude'], 52.0)
+
+
 class EtaGebruiktNavixyTests(NavixyBasis):
     """De aankomstmelding moet ook werken voor een wagen die via Navixy binnenkomt."""
 
