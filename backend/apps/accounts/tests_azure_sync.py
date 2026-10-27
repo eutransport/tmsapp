@@ -15,6 +15,8 @@ from rest_framework.test import APIClient
 
 from apps.accounts import graph
 from apps.accounts.azure_sync import (
+    controleer_koppeling,
+    ontkoppel,
     synchroniseer_gebruiker_met_azure,
     werk_azure_status_bij,
 )
@@ -231,7 +233,8 @@ class SynchronisatieTests(TestCase):
         self.gebruiker.entra_object_id = 'oid-al'
         self.gebruiker.save()
 
-        with patch('apps.accounts.graph.zoek_account') as zoek, \
+        with patch('apps.accounts.graph.bestaat_account', return_value=True), \
+             patch('apps.accounts.graph.zoek_account') as zoek, \
              patch('apps.accounts.graph.maak_account') as maak:
             resultaat = synchroniseer_gebruiker_met_azure(self.gebruiker)
 
@@ -340,7 +343,8 @@ class SynchronisatieApiTests(TestCase):
         self.admin.save()
 
         self._als_admin()
-        with patch('apps.accounts.graph.zoek_account', return_value=None), \
+        with patch('apps.accounts.graph.bestaat_account', return_value=True), \
+             patch('apps.accounts.graph.zoek_account', return_value=None), \
              patch('apps.accounts.graph.maak_account') as maak:
             maak.return_value = (
                 {'id': 'oid-piet', 'userPrincipalName': 'piet@moveo-bv.nl'},
@@ -417,7 +421,7 @@ class WachtwoordLoginUitTests(TestCase):
         self.assertIn('Microsoft', str(antwoord.data))
 
     def test_uitzetten_kan_niet_zonder_azure_account(self):
-        """Anders sluit een beheerder iemand met één klik volledig buiten."""
+        """Anders sluit een beheerder iemand met Ã©Ã©n klik volledig buiten."""
         admin = User.objects.create_user(
             email='admin@moveo-bv.nl',
             username='admin',
@@ -736,7 +740,7 @@ class EntraKoppelingTests(TestCase):
         self.assertEqual(gevonden.id, self.gebruiker.id)
 
     def test_object_id_weegt_zwaarder_dan_een_gelijk_emailadres(self):
-        """Twee accounts, één e-mailadres: het object-ID bepaalt wie binnenkomt."""
+        """Twee accounts, Ã©Ã©n e-mailadres: het object-ID bepaalt wie binnenkomt."""
         from apps.accounts.entra import zoek_of_maak_gebruiker
 
         ander = User.objects.create_user(
@@ -946,3 +950,92 @@ class ChauffeurBijGebruikerTests(TestCase):
         self.assertEqual(antwoord.status_code, 201, antwoord.data)
         self.assertIsNone(antwoord.data['chauffeur']['id'])
         self.assertTrue(User.objects.filter(email='chauffeur@moveo-bv.nl').exists())
+
+class VerdwenenAzureAccountTests(TestCase):
+    """Een in Azure verwijderd account mag niet als gekoppeld blijven staan."""
+
+    def setUp(self):
+        i = AppSettings.get_settings()
+        i.entra_sync_enabled = True
+        i.entra_sync_client_id = 'client-1'
+        i.entra_sync_client_secret = 'geheim'
+        i.entra_sync_domain = 'moveo-bv.nl'
+        i.save()
+        graph.vergeet_token()
+        self.gebruiker = User.objects.create_user(
+            email='kwijt@moveo-bv.nl', username='kwijt', password='Geheim!123', voornaam='Kwijt',
+            achternaam='Geraakt',
+        )
+        self.gebruiker.entra_object_id = 'oid-weg'
+        self.gebruiker.entra_upn = 'kwijt@moveo-bv.nl'
+        self.gebruiker.wachtwoord_login_uitgeschakeld = True
+        self.gebruiker.save()
+
+    def test_bestaat_account_leest_404_als_weg(self):
+        with patch('apps.accounts.graph._verzoek',
+                   return_value=MagicMock(status_code=404)):
+            self.assertFalse(graph.bestaat_account('oid-weg'))
+
+    def test_bestaat_account_leest_200_als_aanwezig(self):
+        with patch('apps.accounts.graph._verzoek',
+                   return_value=MagicMock(status_code=200)):
+            self.assertTrue(graph.bestaat_account('oid-er'))
+
+    def test_controleer_koppeling_ruimt_op_en_herstelt_wachtwoord(self):
+        with patch('apps.accounts.graph.bestaat_account', return_value=False):
+            self.assertFalse(controleer_koppeling(self.gebruiker))
+        self.gebruiker.refresh_from_db()
+        self.assertEqual(self.gebruiker.entra_object_id, '')
+        self.assertEqual(self.gebruiker.entra_upn, '')
+        self.assertIsNone(self.gebruiker.entra_synced_at)
+        # Anders zou deze gebruiker nergens meer in kunnen.
+        self.assertFalse(self.gebruiker.wachtwoord_login_uitgeschakeld)
+
+    def test_controleer_koppeling_laat_bestaande_met_rust(self):
+        with patch('apps.accounts.graph.bestaat_account', return_value=True):
+            self.assertTrue(controleer_koppeling(self.gebruiker))
+        self.gebruiker.refresh_from_db()
+        self.assertEqual(self.gebruiker.entra_object_id, 'oid-weg')
+        self.assertTrue(self.gebruiker.wachtwoord_login_uitgeschakeld)
+
+    def test_synchroniseren_maakt_opnieuw_aan_na_verwijdering(self):
+        with patch('apps.accounts.graph.bestaat_account', return_value=False):
+            with patch('apps.accounts.graph.zoek_account', return_value=None):
+                with patch(
+                    'apps.accounts.graph.maak_account',
+                    return_value=(
+                        {'id': 'oid-nieuw', 'userPrincipalName': 'kwijt@moveo-bv.nl'},
+                        'Startwachtwoord1!',
+                    ),
+                ):
+                    resultaat = synchroniseer_gebruiker_met_azure(self.gebruiker)
+        self.assertEqual(resultaat['status'], 'aangemaakt')
+        self.gebruiker.refresh_from_db()
+        self.assertEqual(self.gebruiker.entra_object_id, 'oid-nieuw')
+
+    def test_ontkoppelactie_via_api(self):
+        admin = User.objects.create_user(
+            email='baas2@moveo-bv.nl', username='baas2', password='Geheim!123', voornaam='De',
+            achternaam='Baas', rol='admin', is_staff=True, is_superuser=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user=admin)
+        antwoord = client.post(
+            f'/api/auth/users/{self.gebruiker.id}/azure-ontkoppel/', format='json'
+        )
+        self.assertEqual(antwoord.status_code, 200, antwoord.data)
+        self.assertTrue(antwoord.data['wachtwoord_login_hersteld'])
+        self.gebruiker.refresh_from_db()
+        self.assertEqual(self.gebruiker.entra_object_id, '')
+
+    def test_ontkoppelen_weigert_zonder_koppeling(self):
+        admin = User.objects.create_user(
+            email='baas3@moveo-bv.nl', username='baas3', password='Geheim!123', voornaam='De',
+            achternaam='Baas', rol='admin', is_staff=True, is_superuser=True,
+        )
+        client = APIClient()
+        client.force_authenticate(user=admin)
+        antwoord = client.post(
+            f'/api/auth/users/{admin.id}/azure-ontkoppel/', format='json'
+        )
+        self.assertEqual(antwoord.status_code, 400)

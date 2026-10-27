@@ -16,6 +16,7 @@ import {
   ArrowPathIcon,
   CloudArrowUpIcon,
   LockClosedIcon,
+  LinkSlashIcon,
 } from '@heroicons/react/24/outline'
 import { User, UserCreate, Company } from '@/types'
 import { 
@@ -28,6 +29,7 @@ import {
   disableUserMFA,
   getAvailablePermissions,
   syncUserMetAzure,
+  ontkoppelUserVanAzure,
   getAzureOverzicht,
   syncAlleUsersMetAzure,
   UserFilters,
@@ -663,6 +665,7 @@ export default function UsersPage() {
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [showBlockModal, setShowBlockModal] = useState(false)
   const [showMfaModal, setShowMfaModal] = useState(false)
+  const [showOntkoppelModal, setShowOntkoppelModal] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
 
   // Azure / Microsoft Entra ID
@@ -896,6 +899,21 @@ export default function UsersPage() {
     }
   }
 
+  // Koppeling verbreken, bijvoorbeeld als het account in Azure verwijderd is
+  const handleAzureOntkoppel = async (user: User) => {
+    setAzureBezig(user.id)
+    setError(null)
+    try {
+      const resultaat = await ontkoppelUserVanAzure(user.id)
+      showSuccess(resultaat.message)
+      fetchUsers()
+    } catch (err: any) {
+      setError(getErrorMessage(err, 'Ontkoppelen is mislukt.'))
+    } finally {
+      setAzureBezig(null)
+    }
+  }
+
   // Eerst laten zien wat er zou gebeuren; pas daarna echt aanmaken
   const handleAzureOverzicht = async () => {
     setAzureBezig('overzicht')
@@ -903,6 +921,13 @@ export default function UsersPage() {
     try {
       const resultaat = await getAzureOverzicht()
       setAzureOverzicht(resultaat.gebruikers)
+      const opgeruimd = resultaat.gebruikers.filter(r => r.koppeling_opgeruimd)
+      if (opgeruimd.length > 0) {
+        showSuccess(
+          `${opgeruimd.length} koppeling(en) opgeruimd: het Microsoft-account bestond niet meer.`
+        )
+        fetchUsers()
+      }
     } catch (err: any) {
       setError(getErrorMessage(err, 'Het Azure-overzicht ophalen is mislukt.'))
     } finally {
@@ -1259,6 +1284,16 @@ export default function UsersPage() {
                               : 'Alleen nog inloggen via Microsoft toestaan'}
                           >
                             <LockClosedIcon className="w-5 h-5" />
+                          </button>
+                        )}
+                        {user.azure_gekoppeld && (
+                          <button
+                            onClick={() => { setSelectedUser(user); setShowOntkoppelModal(true) }}
+                            disabled={azureBezig === user.id}
+                            className="p-2 min-w-[40px] min-h-[40px] text-gray-500 hover:text-amber-600 hover:bg-gray-100 rounded disabled:opacity-40"
+                            title="Koppeling met Azure verbreken (als het Microsoft-account verwijderd is)"
+                          >
+                            <LinkSlashIcon className="w-5 h-5" />
                           </button>
                         )}
                         <button
@@ -1697,6 +1732,28 @@ export default function UsersPage() {
         cancelText={t('common.cancel')}
         confirmColor="red"
         isLoading={isActionLoading}
+      />
+
+      {/* Koppeling met Azure verbreken */}
+      <ConfirmDialog
+        isOpen={showOntkoppelModal}
+        onClose={() => { setShowOntkoppelModal(false); setSelectedUser(null) }}
+        onConfirm={async () => {
+          const gebruiker = selectedUser
+          setShowOntkoppelModal(false)
+          setSelectedUser(null)
+          if (gebruiker) await handleAzureOntkoppel(gebruiker)
+        }}
+        title="Koppeling met Azure verbreken"
+        message={
+          selectedUser?.wachtwoord_login_uitgeschakeld
+            ? `De verwijzing naar het Microsoft-account van ${selectedUser?.full_name} wordt verwijderd. In Azure wordt niets gewijzigd. Let op: inloggen met wachtwoord wordt weer aangezet, anders kan deze gebruiker nergens meer in.`
+            : `De verwijzing naar het Microsoft-account van ${selectedUser?.full_name} wordt verwijderd. In Azure wordt niets gewijzigd; daarna kun je opnieuw synchroniseren.`
+        }
+        confirmText="Ontkoppelen"
+        cancelText={t('common.cancel')}
+        confirmColor="red"
+        isLoading={azureBezig === selectedUser?.id}
       />
     </div>
   )

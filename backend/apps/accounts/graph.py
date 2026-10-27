@@ -204,6 +204,24 @@ def zoek_account(adres: str) -> dict | None:
     return gevonden[0] if gevonden else None
 
 
+def bestaat_account(object_id: str) -> bool:
+    """
+    Kijkt of een account met dit object-ID nog bestaat in Azure.
+
+    Bewust op object-ID en niet via de zoekopdracht: de zoekindex van Graph
+    loopt enkele seconden achter, een rechtstreekse opvraag niet.
+    """
+    if not object_id:
+        return False
+
+    antwoord = _verzoek('GET', f'/users/{object_id}?$select=id')
+    if antwoord.status_code == 404:
+        return False
+    if antwoord.status_code != 200:
+        raise GraphFout(f'Controleren mislukte: {_leesbare_fout(antwoord)}')
+    return True
+
+
 def genereer_wachtwoord(lengte: int = 20) -> str:
     """
     Een startwachtwoord dat aan het wachtwoordbeleid van Entra voldoet.
@@ -351,6 +369,7 @@ def verlooptermijn_bereikt(waarschuwingsdagen: int = 7) -> bool:
 
 
 __all__ = [
+    'bestaat_account',
     'GraphFout',
     'GraphNietIngesteld',
     'dagen_tot_verval',

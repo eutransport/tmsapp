@@ -20,7 +20,12 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from apps.core.throttling import RegistrationRateThrottle
 from apps.core.permissions import IsAdminOnly, IsAdminOrLeaveManagerReadOnly
-from .azure_sync import synchroniseer_gebruiker_met_azure, werk_azure_status_bij
+from .azure_sync import (
+    controleer_koppeling,
+    ontkoppel,
+    synchroniseer_gebruiker_met_azure,
+    werk_azure_status_bij,
+)
 from .graph import GraphFout
 
 from .serializers import (
@@ -770,6 +775,34 @@ class UserViewSet(viewsets.ModelViewSet):
             'azure_waarschuwing': azure_waarschuwing,
         })
     
+    @action(detail=True, methods=['post'], url_path='azure-ontkoppel')
+    def azure_ontkoppel(self, request, pk=None):
+        """
+        Verbreekt de koppeling met Azure voor deze gebruiker.
+
+        Bedoeld voor wanneer het Microsoft-account verwijderd is: de
+        verwijzing in het TMS klopt dan niet meer. Er wordt in Azure
+        niets gewijzigd of verwijderd.
+        """
+        gebruiker = self.get_object()
+        if not gebruiker.entra_object_id:
+            return Response(
+                {'error': 'Deze gebruiker is niet gekoppeld aan Azure.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        resultaat = ontkoppel(
+            gebruiker, 'handmatig losgekoppeld door een beheerder', request.user
+        )
+        bericht = f'De koppeling van {gebruiker.full_name} is verwijderd.'
+        if resultaat['wachtwoord_login_hersteld']:
+            bericht += (
+                ' Inloggen met wachtwoord staat weer aan, anders zou deze '
+                'gebruiker nergens meer in kunnen.'
+            )
+        resultaat['message'] = bericht
+        return Response(resultaat)
+
     @action(detail=True, methods=['post'], url_path='azure-sync')
     def azure_sync(self, request, pk=None):
         """
@@ -814,12 +847,25 @@ class UserViewSet(viewsets.ModelViewSet):
 
         regels = []
         for gebruiker in self.get_queryset().filter(is_active=True):
+            gekoppeld = bool(gebruiker.entra_object_id)
+            kwijt = False
+            if gekoppeld:
+                try:
+                    # Dit ruimt meteen op als het account in Azure weg is.
+                    gekoppeld = controleer_koppeling(gebruiker)
+                    kwijt = not gekoppeld
+                except GraphFout:
+                    # Kunnen we het niet controleren, dan laten we de
+                    # koppeling met rust: weggooien op een storing zou
+                    # onnodig accounts opnieuw laten aanmaken.
+                    pass
             regel = {
                 'id': str(gebruiker.id),
                 'naam': gebruiker.full_name,
                 'email': gebruiker.email,
                 'rol': gebruiker.rol,
-                'gekoppeld': bool(gebruiker.entra_object_id),
+                'gekoppeld': gekoppeld,
+                'koppeling_opgeruimd': kwijt,
             }
             try:
                 regel['voorstel'] = graph.stel_inlognaam_voor(
@@ -854,8 +900,13 @@ class UserViewSet(viewsets.ModelViewSet):
 
         for gebruiker in self.get_queryset().filter(is_active=True):
             if gebruiker.entra_object_id:
-                overgeslagen.append(gebruiker.email)
-                continue
+                try:
+                    if controleer_koppeling(gebruiker):
+                        overgeslagen.append(gebruiker.email)
+                        continue
+                except graph.GraphFout as fout:
+                    mislukt.append({'email': gebruiker.email, 'reden': str(fout)})
+                    continue
             try:
                 resultaat = synchroniseer_gebruiker_met_azure(
                     gebruiker, None, request.user

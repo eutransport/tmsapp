@@ -33,6 +33,7 @@ export interface AzureOverzichtRegel {
   email: string
   rol: string
   gekoppeld: boolean
+  koppeling_opgeruimd?: boolean
   voorstel: string | null
   probleem?: string
 }
@@ -148,6 +149,16 @@ export async function syncUserMetAzure(id: string, inlognaam?: string): Promise<
     `/auth/users/${id}/azure-sync/`,
     inlognaam ? { inlognaam } : {}
   )
+  return response.data
+}
+
+// Verbreekt de koppeling met Azure (bijvoorbeeld als het Microsoft-account
+// daar verwijderd is). In Azure wordt niets gewijzigd.
+export async function ontkoppelUserVanAzure(id: string): Promise<{
+  message: string
+  wachtwoord_login_hersteld: boolean
+}> {
+  const response = await api.post(`/auth/users/${id}/azure-ontkoppel/`)
   return response.data
 }
 

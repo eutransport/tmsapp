@@ -40,11 +40,15 @@ def synchroniseer_gebruiker_met_azure(gebruiker, inlognaam=None, beheerder=None)
         )
 
     if gebruiker.entra_object_id:
-        return {
-            'status': 'al_gekoppeld',
-            'inlognaam': gebruiker.entra_upn,
-            'object_id': gebruiker.entra_object_id,
-        }
+        # Is het account in Azure verwijderd, dan is onze verwijzing waardeloos.
+        # We ruimen hem op en maken hieronder gewoon een nieuw account aan.
+        if graph.bestaat_account(gebruiker.entra_object_id):
+            return {
+                'status': 'al_gekoppeld',
+                'inlognaam': gebruiker.entra_upn,
+                'object_id': gebruiker.entra_object_id,
+            }
+        ontkoppel(gebruiker, 'het account bestaat niet meer in Azure')
 
     instellingen = AppSettings.get_settings()
     inlognaam = (inlognaam or '').strip().lower() or graph.stel_inlognaam_voor(
@@ -113,3 +117,52 @@ def werk_azure_status_bij(gebruiker, beheerder=None) -> str:
         getattr(beheerder, 'email', 'systeem'),
     )
     return 'aangepast'
+
+def ontkoppel(gebruiker, reden: str, beheerder=None) -> dict:
+    """
+    Haalt de verwijzing naar Azure weg bij een gebruiker.
+
+    Belangrijk: als er alleen nog via Microsoft ingelogd mocht worden, zetten
+    we het wachtwoord-inloggen weer aan. Zonder Azure-account zou de gebruiker
+    anders nergens meer in kunnen.
+    """
+    oud = gebruiker.entra_object_id
+    velden = ['entra_object_id', 'entra_upn', 'entra_synced_at']
+    gebruiker.entra_object_id = ''
+    gebruiker.entra_upn = ''
+    gebruiker.entra_synced_at = None
+
+    wachtwoord_hersteld = False
+    if gebruiker.wachtwoord_login_uitgeschakeld:
+        gebruiker.wachtwoord_login_uitgeschakeld = False
+        velden.append('wachtwoord_login_uitgeschakeld')
+        wachtwoord_hersteld = True
+
+    gebruiker.save(update_fields=velden)
+    logger.warning(
+        'Entra-synchronisatie: koppeling van %s verwijderd (%s, oud id %s) door %s',
+        gebruiker.email,
+        reden,
+        oud or 'geen',
+        getattr(beheerder, 'email', 'systeem'),
+    )
+    return {
+        'status': 'ontkoppeld',
+        'reden': reden,
+        'wachtwoord_login_hersteld': wachtwoord_hersteld,
+    }
+
+
+def controleer_koppeling(gebruiker) -> bool:
+    """
+    Geeft terug of de koppeling van deze gebruiker nog klopt.
+
+    Bestaat het Azure-account niet meer, dan wordt de koppeling meteen
+    opgeruimd; blijven staan zou een verkeerd beeld geven in het scherm.
+    """
+    if not gebruiker.entra_object_id:
+        return False
+    if graph.bestaat_account(gebruiker.entra_object_id):
+        return True
+    ontkoppel(gebruiker, 'het account bestaat niet meer in Azure')
+    return False
