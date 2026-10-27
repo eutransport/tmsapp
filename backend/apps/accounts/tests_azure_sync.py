@@ -1039,3 +1039,86 @@ class VerdwenenAzureAccountTests(TestCase):
             f'/api/auth/users/{admin.id}/azure-ontkoppel/', format='json'
         )
         self.assertEqual(antwoord.status_code, 400)
+
+@override_settings(ENTRA_ENABLED=True, ENTRA_AUTO_CREATE_USERS=False,
+                   ENTRA_ALLOWED_EMAIL_DOMAINS=[])
+class BehoudtEigenGegevensTests(TestCase):
+    """
+    Wie wordt omgezet naar Microsoft-login moet exact dezelfde gebruiker
+    blijven. Een tweede account zou betekenen dat al zijn werk, ritten en
+    rechten onbereikbaar worden.
+    """
+
+    def setUp(self):
+        from apps.accounts import entra
+        self.entra = entra
+        i = AppSettings.get_settings()
+        i.entra_sync_enabled = True
+        i.entra_sync_client_id = 'client-1'
+        i.entra_sync_client_secret = 'geheim'
+        i.entra_sync_domain = 'moveo-bv.nl'
+        i.save()
+        graph.vergeet_token()
+
+        self.gebruiker = User.objects.create_user(
+            email='jan@moveo-bv.nl', username='jan', password='Geheim!123',
+            voornaam='Jan', achternaam='Jansen', rol='chauffeur',
+        )
+        self.oorspronkelijk_id = self.gebruiker.id
+
+    def _synchroniseer(self, upn):
+        with patch('apps.accounts.graph.zoek_account', return_value=None), \
+             patch('apps.accounts.graph.maak_account',
+                   return_value=({'id': 'oid-jan', 'userPrincipalName': upn}, 'Start1!')):
+            return synchroniseer_gebruiker_met_azure(self.gebruiker)
+
+    def test_zelfde_gebruiker_na_inloggen_met_microsoft(self):
+        from apps.drivers.models import Driver
+        chauffeur = Driver.objects.create(
+            naam='Jan Jansen', gekoppelde_gebruiker=self.gebruiker
+        )
+
+        self._synchroniseer('jan@moveo-bv.nl')
+        gevonden = self.entra.zoek_of_maak_gebruiker({
+            'oid': 'oid-jan',
+            'preferred_username': 'jan@moveo-bv.nl',
+            'email': 'jan@moveo-bv.nl',
+        })
+
+        self.assertEqual(gevonden.id, self.oorspronkelijk_id)
+        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(gevonden.rol, 'chauffeur')
+        chauffeur.refresh_from_db()
+        self.assertEqual(chauffeur.gekoppelde_gebruiker_id, self.oorspronkelijk_id)
+
+    def test_afwijkende_inlognaam_levert_geen_tweede_account_op(self):
+        # In Azure heet hij jan.jansen@..., in het TMS jan@...; de oid moet
+        # de doorslag geven, anders ontstaat er een dubbele gebruiker.
+        self._synchroniseer('jan.jansen@moveo-bv.nl')
+        gevonden = self.entra.zoek_of_maak_gebruiker({
+            'oid': 'oid-jan',
+            'preferred_username': 'jan.jansen@moveo-bv.nl',
+            'email': 'jan.jansen@moveo-bv.nl',
+        })
+        self.assertEqual(gevonden.id, self.oorspronkelijk_id)
+        self.assertEqual(User.objects.count(), 1)
+
+    def test_gewijzigd_emailadres_in_azure_blijft_dezelfde_gebruiker(self):
+        self._synchroniseer('jan@moveo-bv.nl')
+        # Jan trouwt en heet voortaan anders in Azure; de oid blijft gelijk.
+        gevonden = self.entra.zoek_of_maak_gebruiker({
+            'oid': 'oid-jan',
+            'preferred_username': 'jan.devries@moveo-bv.nl',
+            'email': 'jan.devries@moveo-bv.nl',
+        })
+        self.assertEqual(gevonden.id, self.oorspronkelijk_id)
+        self.assertEqual(User.objects.count(), 1)
+
+    def test_nog_niet_gesynchroniseerd_matcht_op_emailadres(self):
+        gevonden = self.entra.zoek_of_maak_gebruiker({
+            'oid': 'oid-onbekend',
+            'preferred_username': 'jan@moveo-bv.nl',
+            'email': 'jan@moveo-bv.nl',
+        })
+        self.assertEqual(gevonden.id, self.oorspronkelijk_id)
+        self.assertEqual(User.objects.count(), 1)
