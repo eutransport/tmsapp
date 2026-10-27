@@ -137,7 +137,7 @@ def _leesbare_fout(antwoord) -> str:
     return melding or f'HTTP {antwoord.status_code}'
 
 
-def _verzoek(methode: str, pad: str, **kwargs):
+def _verzoek(methode: str, pad: str, _opnieuw: bool = True, **kwargs):
     token = _haal_token()
     try:
         antwoord = requests.request(
@@ -151,6 +151,12 @@ def _verzoek(methode: str, pad: str, **kwargs):
         raise GraphFout(f'Azure is niet bereikbaar: {fout}') from fout
 
     if antwoord.status_code == 403:
+        # Vaak is de beheerderstoestemming net gegeven terwijl wij nog op een
+        # token van daarvoor draaien; daar zitten de rechten nog niet in.
+        # Daarom eenmalig een vers token halen voordat we het opgeven.
+        if _opnieuw:
+            vergeet_token()
+            return _verzoek(methode, pad, _opnieuw=False, **kwargs)
         raise GraphFout(
             'Azure weigert dit: de app-registratie mist de rechten '
             'User.Create, User.Read.All of User.EnableDisableAccount.All, '

@@ -820,3 +820,43 @@ class AzureStatusTests(TestCase):
         with patch('apps.accounts.graph._verzoek', return_value=antwoord):
             with self.assertRaises(graph.GraphFout):
                 graph.zet_account_status('oid-9', False)
+
+class HerkansingBijVerbodenTests(TestCase):
+    """Na nieuwe toestemming moet een oud token niet blijven hangen."""
+
+    def setUp(self):
+        i = AppSettings.get_settings()
+        i.entra_sync_enabled = True
+        i.entra_sync_client_id = 'client-1'
+        i.entra_sync_client_secret = 'geheim'
+        i.entra_sync_domain = 'moveo-bv.nl'
+        i.save()
+        graph.vergeet_token()
+
+    def test_403_probeert_eenmaal_met_vers_token(self):
+        verboden = MagicMock(status_code=403)
+        verboden.json.return_value = {}
+        goed = MagicMock(status_code=200)
+        with patch('apps.accounts.graph._haal_token', return_value='t'):
+            with patch('apps.accounts.graph.vergeet_token') as vergeet:
+                with patch(
+                    'apps.accounts.graph.requests.request',
+                    side_effect=[verboden, goed],
+                ) as verzoek:
+                    antwoord = graph._verzoek('GET', '/users/x')
+        self.assertEqual(antwoord.status_code, 200)
+        self.assertEqual(verzoek.call_count, 2)
+        vergeet.assert_called_once()
+
+    def test_403_blijft_fout_na_de_herkansing(self):
+        verboden = MagicMock(status_code=403)
+        verboden.json.return_value = {}
+        with patch('apps.accounts.graph._haal_token', return_value='t'):
+            with patch('apps.accounts.graph.vergeet_token'):
+                with patch(
+                    'apps.accounts.graph.requests.request',
+                    side_effect=[verboden, verboden],
+                ) as verzoek:
+                    with self.assertRaises(graph.GraphFout):
+                        graph._verzoek('GET', '/users/x')
+        self.assertEqual(verzoek.call_count, 2)
