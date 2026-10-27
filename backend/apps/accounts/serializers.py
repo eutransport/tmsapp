@@ -32,7 +32,13 @@ class UserSerializer(serializers.ModelSerializer):
     opdrachtgever_bedrijf_naam = serializers.CharField(
         source='opdrachtgever_bedrijf.naam', read_only=True, default=None
     )
-    
+    # Het object-ID zelf hoeft de browser niet te kennen; of er een koppeling
+    # is, is voldoende om de knop wel of niet aan te bieden.
+    azure_gekoppeld = serializers.SerializerMethodField()
+
+    def get_azure_gekoppeld(self, obj) -> bool:
+        return bool(obj.entra_object_id)
+
     class Meta:
         model = User
         fields = [
@@ -40,9 +46,14 @@ class UserSerializer(serializers.ModelSerializer):
             'full_name', 'telefoon', 'bedrijf', 'rol',
             'opdrachtgever_bedrijf', 'opdrachtgever_bedrijf_naam',
             'module_permissions', 'nav_favorites',
-            'mfa_enabled', 'mfa_required', 'is_active', 'date_joined', 'last_login'
+            'mfa_enabled', 'mfa_required', 'is_active', 'date_joined', 'last_login',
+            'azure_gekoppeld', 'entra_upn', 'entra_synced_at',
+            'wachtwoord_login_uitgeschakeld',
         ]
-        read_only_fields = ['id', 'date_joined', 'last_login']
+        read_only_fields = [
+            'id', 'date_joined', 'last_login',
+            'azure_gekoppeld', 'entra_upn', 'entra_synced_at',
+        ]
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -127,7 +138,24 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             'email', 'username', 'voornaam', 'achternaam',
             'telefoon', 'bedrijf', 'rol', 'is_active', 'mfa_required',
             'opdrachtgever_bedrijf', 'module_permissions',
+            'wachtwoord_login_uitgeschakeld',
         ]
+
+    def validate_wachtwoord_login_uitgeschakeld(self, value):
+        """
+        Alleen uitzetten als er ook echt via Microsoft ingelogd kan worden.
+
+        Zonder deze controle sluit een beheerder met één klik een gebruiker
+        buiten: geen wachtwoord meer én geen Azure-account om mee binnen te
+        komen.
+        """
+        if value and self.instance is not None and not self.instance.entra_object_id:
+            raise serializers.ValidationError(
+                'Deze gebruiker is nog niet gekoppeld aan Azure. Maak eerst het '
+                'Microsoft-account aan, anders kan er helemaal niet meer worden '
+                'ingelogd.'
+            )
+        return value
 
     def validate_module_permissions(self, value):
         if not isinstance(value, list):
@@ -181,6 +209,15 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             attrs['email'] = attrs['email'].lower()
         
         data = super().validate(attrs)
+
+        # Voor sommige gebruikers is alleen inloggen via Microsoft toegestaan.
+        # De controle staat bewust ná de wachtwoordcontrole: zo verraadt de
+        # foutmelding niet of een wachtwoord goed of fout was.
+        if self.user.wachtwoord_login_uitgeschakeld:
+            raise serializers.ValidationError(
+                'Voor dit account is inloggen met wachtwoord uitgeschakeld. '
+                'Gebruik de knop "Inloggen met Microsoft".'
+            )
         
         # Check if user has 2FA enabled
         if self.user.mfa_enabled:

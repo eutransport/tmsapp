@@ -10,7 +10,7 @@ from datetime import time
 from django.db import models
 from django.conf import settings
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.validators import FileExtensionValidator
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,30 @@ class EncryptedCharField(models.CharField):
                 except Exception:
                     return ''
         return value
+
+
+class StrictEncryptedCharField(EncryptedCharField):
+    """
+    Zelfde als EncryptedCharField, maar weigert onversleuteld op te slaan.
+
+    Het gewone veld valt stilletjes terug op platte tekst als `cryptography`
+    ontbreekt. Voor een wachtwoord van een mailserver is dat vervelend; voor
+    een sleutel waarmee accounts in Entra ID kunnen worden aangemaakt is het
+    onaanvaardbaar. Liever een harde fout dan een geheim in platte tekst.
+    """
+
+    def get_prep_value(self, value):
+        if not value:
+            return value
+        if isinstance(value, str) and value.startswith('enc:'):
+            return value
+        if self._get_fernet() is None:
+            raise ImproperlyConfigured(
+                'Dit geheim kan niet worden opgeslagen omdat de bibliotheek '
+                '"cryptography" ontbreekt. Opslaan in platte tekst is hier '
+                'niet toegestaan.'
+            )
+        return super().get_prep_value(value)
 
 
 def validate_font_file(value):
@@ -603,7 +627,56 @@ class AppSettings(models.Model):
         verbose_name='Secundair Font',
         help_text='Optioneel secundair font (voor accenten)'
     )
-    
+
+    # ------------------------------------------------------------------
+    # Koppeling met Entra ID voor het aanmaken van accounts.
+    #
+    # Dit is bewust een ANDERE app-registratie dan die voor het inloggen:
+    # de inlog-app draait in de browser van iedere gebruiker en mag nooit
+    # rechten hebben om accounts aan te maken.
+    # ------------------------------------------------------------------
+    entra_sync_enabled = models.BooleanField(
+        default=False,
+        verbose_name='Synchronisatie met Entra ID aan',
+        help_text='Uit betekent: geen enkel contact met Azure.'
+    )
+    entra_sync_client_id = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='Client-ID',
+        help_text='Van de app-registratie met de rechten User.Create en User.Read.All.'
+    )
+    entra_sync_client_secret = StrictEncryptedCharField(
+        max_length=512,
+        blank=True,
+        verbose_name='Clientgeheim',
+        help_text='Versleuteld opgeslagen en nooit teruggegeven aan de browser.'
+    )
+    entra_sync_secret_expires_on = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Geheim verloopt op',
+        help_text='Overnemen uit Azure. Een week vooraf volgt een herinnering per e-mail.'
+    )
+    entra_sync_secret_reminder_sent_on = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Herinnering verstuurd op',
+        help_text='Voorkomt dat dezelfde herinnering dagelijks opnieuw wordt verstuurd.'
+    )
+    entra_sync_domain = models.CharField(
+        max_length=255,
+        blank=True,
+        default='moveo-bv.nl',
+        verbose_name='Domein voor nieuwe accounts',
+        help_text='Moet een geverifieerd domein in de tenant zijn.'
+    )
+    entra_sync_auto_create = models.BooleanField(
+        default=False,
+        verbose_name='Automatisch aanmaken bij nieuwe gebruiker',
+        help_text='Maakt het Azure-account meteen aan zodra hier een gebruiker wordt toegevoegd.'
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

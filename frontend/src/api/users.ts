@@ -16,6 +16,34 @@ export interface UserUpdate {
   opdrachtgever_bedrijf?: string | null
   is_active?: boolean
   module_permissions?: string[]
+  wachtwoord_login_uitgeschakeld?: boolean
+}
+
+export interface AzureSyncResultaat {
+  status: 'al_gekoppeld' | 'gekoppeld' | 'aangemaakt'
+  inlognaam: string
+  object_id: string
+  /** Alleen bij `aangemaakt`, en maar één keer: dit wordt nergens bewaard. */
+  wachtwoord?: string
+}
+
+export interface AzureOverzichtRegel {
+  id: string
+  naam: string
+  email: string
+  rol: string
+  gekoppeld: boolean
+  voorstel: string | null
+  probleem?: string
+}
+
+export interface AzureSyncAllesResultaat {
+  aangemaakt: string[]
+  gekoppeld: string[]
+  overgeslagen: string[]
+  mislukt: { email: string; reden: string }[]
+  /** Startwachtwoorden per e-mailadres; eenmalig tonen, niet opslaan. */
+  wachtwoorden: Record<string, string>
 }
 
 export interface AvailablePermission {
@@ -111,5 +139,26 @@ export async function getAvailablePermissions(): Promise<AvailablePermissionsRes
 // Update user module permissions
 export async function updateUserPermissions(id: string, permissions: string[]): Promise<User> {
   const response = await api.patch(`/auth/users/${id}/`, { module_permissions: permissions })
+  return response.data
+}
+
+// Maak of koppel het Microsoft-account van één gebruiker
+export async function syncUserMetAzure(id: string, inlognaam?: string): Promise<AzureSyncResultaat> {
+  const response = await api.post(
+    `/auth/users/${id}/azure-sync/`,
+    inlognaam ? { inlognaam } : {}
+  )
+  return response.data
+}
+
+// Toont wat een synchronisatie zou doen, zonder iets aan te maken
+export async function getAzureOverzicht(): Promise<{ gebruikers: AzureOverzichtRegel[] }> {
+  const response = await api.get('/auth/users/azure-overzicht/')
+  return response.data
+}
+
+// Maakt in één ronde de ontbrekende Microsoft-accounts aan
+export async function syncAlleUsersMetAzure(): Promise<AzureSyncAllesResultaat> {
+  const response = await api.post('/auth/users/azure-sync-alles/')
   return response.data
 }

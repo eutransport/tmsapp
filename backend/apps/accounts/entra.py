@@ -201,7 +201,7 @@ def zoek_of_maak_gebruiker(claims: dict):
         logger.warning('Entra-login geweigerd, domein niet toegestaan: %s', email)
         raise EntraTokenFout('Dit e-maildomein mag niet inloggen.')
 
-    gebruiker = User.objects.filter(email__iexact=email).first()
+    gebruiker = _zoek_gebruiker(claims, email)
 
     if gebruiker is None:
         if not getattr(settings, 'ENTRA_AUTO_CREATE_USERS', False):
@@ -226,4 +226,60 @@ def zoek_of_maak_gebruiker(claims: dict):
         logger.warning('Entra-login geweigerd, account staat uit: %s', email)
         raise EntraTokenFout('Dit account is gedeactiveerd.')
 
+    _leg_koppeling_vast(gebruiker, claims)
+
     return gebruiker
+
+
+def _zoek_gebruiker(claims: dict, email: str):
+    """
+    Zoekt de gebruiker bij een Microsoft-identiteit.
+
+    De volgorde is niet willekeurig. De `oid` van Microsoft verandert nooit,
+    ook niet als iemand een ander e-mailadres krijgt, en is daarom de enige
+    echt betrouwbare sleutel. Het e-mailadres is de laatste redmiddel, voor
+    gebruikers die nog nooit via Microsoft zijn binnengekomen.
+    """
+    from apps.accounts.models import User
+
+    oid = (claims.get('oid') or '').strip()
+    if oid:
+        gebruiker = User.objects.filter(entra_object_id=oid).first()
+        if gebruiker is not None:
+            return gebruiker
+
+    upn = (claims.get('preferred_username') or claims.get('upn') or '').strip()
+    if upn:
+        gebruiker = User.objects.filter(entra_upn__iexact=upn).first()
+        if gebruiker is not None:
+            return gebruiker
+
+    return User.objects.filter(email__iexact=email).first()
+
+
+def _leg_koppeling_vast(gebruiker, claims: dict) -> None:
+    """
+    Onthoudt de Microsoft-gegevens bij de eerste geslaagde aanmelding.
+
+    Zonder dit zou de koppeling op e-mail blijven hangen en breken zodra een
+    adres wijzigt. Alleen opslaan wat nog ontbreekt of veranderd is, zodat er
+    niet bij elke aanmelding naar de database wordt geschreven.
+    """
+    gewijzigd = []
+
+    oid = (claims.get('oid') or '').strip()
+    if oid and gebruiker.entra_object_id != oid:
+        gebruiker.entra_object_id = oid
+        gewijzigd.append('entra_object_id')
+
+    upn = (claims.get('preferred_username') or claims.get('upn') or '').strip()
+    if upn and gebruiker.entra_upn != upn:
+        gebruiker.entra_upn = upn
+        gewijzigd.append('entra_upn')
+
+    if gewijzigd:
+        from django.utils import timezone
+
+        gebruiker.entra_synced_at = timezone.now()
+        gewijzigd.append('entra_synced_at')
+        gebruiker.save(update_fields=gewijzigd)

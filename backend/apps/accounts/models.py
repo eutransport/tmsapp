@@ -153,7 +153,41 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Status
     is_active = models.BooleanField(default=True, verbose_name='Actief')
     is_staff = models.BooleanField(default=False, verbose_name='Staff')
-    
+
+    # ------------------------------------------------------------------
+    # Koppeling met Microsoft Entra ID
+    #
+    # Koppelen op e-mailadres alleen is broos: zodra iemand een ander adres
+    # krijgt, raakt de applicatie het account kwijt en zou er een tweede
+    # gebruiker ontstaan. De `oid` van Microsoft verandert nooit en is
+    # daarom de echte sleutel.
+    # ------------------------------------------------------------------
+    entra_object_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name='Microsoft object-ID',
+        help_text='Onveranderlijke verwijzing naar het account in Entra ID.'
+    )
+    entra_upn = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        verbose_name='Azure-inlognaam',
+        help_text='Het adres waarmee bij Microsoft wordt ingelogd; kan afwijken van het e-mailadres hier.'
+    )
+    entra_synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Gekoppeld aan Azure op'
+    )
+    wachtwoord_login_uitgeschakeld = models.BooleanField(
+        default=False,
+        verbose_name='Wachtwoord-login uitgeschakeld',
+        help_text='Aan betekent: deze gebruiker kan uitsluitend via Microsoft inloggen.'
+    )
+
     # Timestamps
     date_joined = models.DateTimeField(auto_now_add=True, verbose_name='Aangemaakt op')
     last_login = models.DateTimeField(null=True, blank=True, verbose_name='Laatste login')

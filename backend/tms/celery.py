@@ -101,4 +101,10 @@ app.conf.beat_schedule = {
         'task': 'apps.opdrachten.tasks.ververs_eta',
         'schedule': crontab(minute='*/10'),
     },
+    'controleer-azure-geheim': {
+        # Dagelijks kijken of het clientgeheim van de Azure-koppeling bijna
+        # verloopt; de taak waarschuwt één keer per vervaldatum.
+        'task': 'apps.accounts.tasks.controleer_azure_geheim',
+        'schedule': crontab(hour=8, minute=5),
+    },
 }

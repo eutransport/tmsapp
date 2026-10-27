@@ -112,6 +112,8 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
     ai_status = serializers.SerializerMethodField()
     has_linqo_api_key = serializers.SerializerMethodField()
     has_radius_api_token = serializers.SerializerMethodField()
+    has_entra_sync_secret = serializers.SerializerMethodField()
+    entra_sync_secret_dagen = serializers.SerializerMethodField()
     
     class Meta:
         model = AppSettings
@@ -144,11 +146,16 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
             'radius_api_token',
             'has_radius_api_token',
             'radius_start_datum',
+            # Azure-koppeling voor het aanmaken van accounts
+            'entra_sync_enabled', 'entra_sync_client_id', 'entra_sync_client_secret',
+            'entra_sync_secret_expires_on', 'entra_sync_domain', 'entra_sync_auto_create',
+            'has_entra_sync_secret', 'entra_sync_secret_dagen',
             'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'created_at', 'updated_at', 'ai_status',
             'has_linqo_api_key', 'has_radius_api_token',
+            'has_entra_sync_secret', 'entra_sync_secret_dagen',
         ]
         extra_kwargs = {
             'smtp_password': {'write_only': True},
@@ -160,6 +167,11 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
             'ai_azure_api_key': {'write_only': True},
             'linqo_api_key': {'write_only': True},
             'radius_api_token': {'write_only': True},
+            # Waarmee accounts in Entra ID kunnen worden aangemaakt; mag de
+            # browser nooit terugzien, ook niet voor een beheerder.
+            'entra_sync_client_secret': {
+                'write_only': True, 'required': False, 'allow_blank': True,
+            },
         }
 
     def to_representation(self, instance):
@@ -178,6 +190,56 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
     def get_has_radius_api_token(self, obj):
         """Return whether a Radius API token is configured (never the value)."""
         return bool(getattr(obj, 'radius_api_token', ''))
+
+    def get_has_entra_sync_secret(self, obj) -> bool:
+        """Of er een clientgeheim is ingevuld; nooit het geheim zelf."""
+        return bool(getattr(obj, 'entra_sync_client_secret', ''))
+
+    def get_entra_sync_secret_dagen(self, obj):
+        """Aantal dagen tot het geheim verloopt; negatief als het al verlopen is."""
+        vervaldatum = getattr(obj, 'entra_sync_secret_expires_on', None)
+        if not vervaldatum:
+            return None
+        from django.utils import timezone
+
+        return (vervaldatum - timezone.localdate()).days
+
+    def update(self, instance, validated_data):
+        """
+        Een leeg geheim betekent 'laat staan', niet 'wis het'.
+
+        Het veld is write-only, dus de browser stuurt bij elk opslaan een lege
+        waarde mee. Zonder deze uitzondering zou het geheim verdwijnen zodra
+        een beheerder iets anders op de pagina wijzigt.
+        """
+        geheim_meegestuurd = 'entra_sync_client_secret' in validated_data
+        nieuw_geheim = validated_data.get('entra_sync_client_secret')
+        if geheim_meegestuurd and not nieuw_geheim:
+            validated_data.pop('entra_sync_client_secret')
+            geheim_meegestuurd = False
+
+        oude_vervaldatum = instance.entra_sync_secret_expires_on
+        oud_client_id = instance.entra_sync_client_id
+
+        instance = super().update(instance, validated_data)
+
+        geheim_gewijzigd = geheim_meegestuurd or (
+            instance.entra_sync_client_id != oud_client_id
+        )
+        if geheim_gewijzigd:
+            # Het bewaarde toegangstoken hoort bij het oude geheim.
+            from apps.accounts import graph
+
+            graph.vergeet_token()
+
+        if geheim_gewijzigd or instance.entra_sync_secret_expires_on != oude_vervaldatum:
+            # Een nieuw geheim of een nieuwe datum verdient een nieuwe
+            # waarschuwing; de vorige herinnering telt niet meer.
+            if instance.entra_sync_secret_reminder_sent_on is not None:
+                instance.entra_sync_secret_reminder_sent_on = None
+                instance.save(update_fields=['entra_sync_secret_reminder_sent_on'])
+
+        return instance
 
     def get_ai_status(self, obj):
         """Check if AI is properly configured and working."""

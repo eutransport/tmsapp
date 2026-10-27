@@ -20,6 +20,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from apps.core.throttling import RegistrationRateThrottle
 from apps.core.permissions import IsAdminOnly, IsAdminOrLeaveManagerReadOnly
+from .azure_sync import synchroniseer_gebruiker_met_azure
 
 from .serializers import (
     UserSerializer,
@@ -535,7 +536,49 @@ class UserViewSet(viewsets.ModelViewSet):
                 {'error': limit_check['message']},
                 status=status.HTTP_403_FORBIDDEN
             )
-        return super().create(request, *args, **kwargs)
+        antwoord = super().create(request, *args, **kwargs)
+
+        if antwoord.status_code == status.HTTP_201_CREATED:
+            self._azure_automatisch(antwoord, request)
+
+        return antwoord
+
+    def perform_create(self, serializer):
+        """Onthoudt de zojuist aangemaakte gebruiker voor de Azure-stap."""
+        super().perform_create(serializer)
+        self._nieuwe_gebruiker = serializer.instance
+
+    def _azure_automatisch(self, antwoord, request):
+        """
+        Maakt meteen een Microsoft-account aan, als dat zo is ingesteld.
+
+        Gaat dit mis, dan blijft de gebruiker gewoon bestaan: het account in
+        het TMS is al aangemaakt en terugdraaien zou verwarrender zijn dan
+        de beheerder vertellen dat de Azure-stap nog handmatig moet.
+        """
+        from apps.accounts import graph
+        from apps.core.models import AppSettings
+
+        instellingen = AppSettings.get_settings()
+        if not instellingen.entra_sync_auto_create or not graph.is_ingeschakeld():
+            return
+
+        gebruiker = getattr(self, '_nieuwe_gebruiker', None)
+        if gebruiker is None:
+            return
+
+        try:
+            resultaat = synchroniseer_gebruiker_met_azure(gebruiker, None, request.user)
+        except graph.GraphFout as fout:
+            logger.error(
+                'Automatisch aanmaken in Azure mislukt voor %s: %s',
+                gebruiker.email,
+                fout,
+            )
+            antwoord.data['azure'] = {'status': 'mislukt', 'reden': str(fout)}
+            return
+
+        antwoord.data['azure'] = resultaat
     
     def get_queryset(self):
         queryset = User.objects.all()
@@ -655,6 +698,114 @@ class UserViewSet(viewsets.ModelViewSet):
             'is_active': user.is_active,
         })
     
+    @action(detail=True, methods=['post'], url_path='azure-sync')
+    def azure_sync(self, request, pk=None):
+        """
+        Zorgt dat deze gebruiker een account in Entra ID heeft.
+
+        Bestaat het account al, dan wordt het alleen gekoppeld. Er wordt
+        nooit iets gewijzigd aan een bestaand Azure-account.
+        """
+        from apps.accounts import graph
+
+        gebruiker = self.get_object()
+        inlognaam = (request.data.get('inlognaam') or '').strip().lower()
+
+        try:
+            resultaat = synchroniseer_gebruiker_met_azure(
+                gebruiker, inlognaam or None, request.user
+            )
+        except graph.GraphNietIngesteld as fout:
+            return Response({'error': str(fout)}, status=status.HTTP_400_BAD_REQUEST)
+        except graph.GraphFout as fout:
+            return Response({'error': str(fout)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response(resultaat)
+
+    @action(detail=False, methods=['get'], url_path='azure-overzicht')
+    def azure_overzicht(self, request):
+        """
+        Welke gebruikers zouden worden aangemaakt, zonder iets te doen.
+
+        Zo kan de beheerder eerst zien wat er gaat gebeuren voordat er ook
+        maar één account in Azure ontstaat.
+        """
+        from apps.accounts import graph
+        from apps.core.models import AppSettings
+
+        instellingen = AppSettings.get_settings()
+        if not graph.is_ingeschakeld():
+            return Response(
+                {'error': 'De koppeling met Azure staat uit of is niet volledig ingevuld.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        regels = []
+        for gebruiker in self.get_queryset().filter(is_active=True):
+            regel = {
+                'id': str(gebruiker.id),
+                'naam': gebruiker.full_name,
+                'email': gebruiker.email,
+                'rol': gebruiker.rol,
+                'gekoppeld': bool(gebruiker.entra_object_id),
+            }
+            try:
+                regel['voorstel'] = graph.stel_inlognaam_voor(
+                    gebruiker, instellingen.entra_sync_domain
+                )
+            except graph.GraphFout as fout:
+                regel['voorstel'] = None
+                regel['probleem'] = str(fout)
+            regels.append(regel)
+
+        return Response({'gebruikers': regels})
+
+    @action(detail=False, methods=['post'], url_path='azure-sync-alles')
+    def azure_sync_alles(self, request):
+        """
+        Loopt alle actieve gebruikers langs en maakt ontbrekende accounts aan.
+
+        Eén mislukking stopt de hele ronde niet; die wordt gemeld en de rest
+        gaat door. Anders zou één gebruiker zonder e-mailadres de hele
+        synchronisatie blokkeren.
+        """
+        from apps.accounts import graph
+
+        if not graph.is_ingeschakeld():
+            return Response(
+                {'error': 'De koppeling met Azure staat uit of is niet volledig ingevuld.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        aangemaakt, gekoppeld, overgeslagen, mislukt = [], [], [], []
+        wachtwoorden = {}
+
+        for gebruiker in self.get_queryset().filter(is_active=True):
+            if gebruiker.entra_object_id:
+                overgeslagen.append(gebruiker.email)
+                continue
+            try:
+                resultaat = synchroniseer_gebruiker_met_azure(
+                    gebruiker, None, request.user
+                )
+            except graph.GraphFout as fout:
+                mislukt.append({'email': gebruiker.email, 'reden': str(fout)})
+                continue
+
+            if resultaat['status'] == 'aangemaakt':
+                aangemaakt.append(gebruiker.email)
+                wachtwoorden[gebruiker.email] = resultaat['wachtwoord']
+            else:
+                gekoppeld.append(gebruiker.email)
+
+        return Response({
+            'aangemaakt': aangemaakt,
+            'gekoppeld': gekoppeld,
+            'overgeslagen': overgeslagen,
+            'mislukt': mislukt,
+            'wachtwoorden': wachtwoorden,
+        })
+
     @action(detail=True, methods=['post'])
     def disable_mfa(self, request, pk=None):
         """Disable 2FA for a user (admin only)."""

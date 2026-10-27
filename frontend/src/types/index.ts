@@ -20,6 +20,11 @@ export interface User {
   date_joined: string
   last_login: string | null
   nav_favorites?: string[]
+  // Microsoft Entra ID
+  azure_gekoppeld?: boolean
+  entra_upn?: string
+  entra_synced_at?: string | null
+  wachtwoord_login_uitgeschakeld?: boolean
 }
 
 export interface UserCreate {
@@ -118,6 +123,15 @@ export interface AppSettingsAdmin extends AppSettings {
   radius_api_token?: string // Write-only
   has_radius_api_token?: boolean // Read-only
   radius_start_datum?: string | null
+  // Azure-koppeling voor het aanmaken van Microsoft-accounts
+  entra_sync_enabled?: boolean
+  entra_sync_client_id?: string
+  entra_sync_client_secret?: string // Write-only
+  has_entra_sync_secret?: boolean // Read-only
+  entra_sync_secret_expires_on?: string | null
+  entra_sync_secret_dagen?: number | null // Read-only
+  entra_sync_domain?: string
+  entra_sync_auto_create?: boolean
   // Reminder settings
   reminder_enabled: boolean
   reminder_time: string

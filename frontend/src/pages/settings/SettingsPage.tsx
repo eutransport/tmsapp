@@ -160,6 +160,13 @@ export default function SettingsPage() {
         tachograaf_start_datum: data.tachograaf_start_datum || '',
         radius_api_token: '',
         radius_start_datum: data.radius_start_datum || '',
+        // Azure-koppeling; het geheim komt bewust nooit terug van de server
+        entra_sync_enabled: data.entra_sync_enabled ?? false,
+        entra_sync_client_id: data.entra_sync_client_id || '',
+        entra_sync_client_secret: '',
+        entra_sync_secret_expires_on: data.entra_sync_secret_expires_on || '',
+        entra_sync_domain: data.entra_sync_domain || '',
+        entra_sync_auto_create: data.entra_sync_auto_create ?? false,
         // Reminder settings
         reminder_enabled: data.reminder_enabled ?? false,
         reminder_time: data.reminder_time || '08:00',
@@ -1345,6 +1352,131 @@ export default function SettingsPage() {
               </div>
 
               <RadiusConnections />
+
+              {/* Microsoft Entra ID – accounts aanmaken */}
+              <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-md font-medium text-gray-900 dark:text-white">
+                      Microsoft Entra ID (gebruikers aanmaken)
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Maakt vanuit het TMS Microsoft-accounts aan voor gebruikers die er nog geen hebben.
+                      Gebruik hiervoor een <strong>aparte</strong> app-registratie met alleen de rechten
+                      <code className="mx-1">User.Create</code> en <code className="mx-1">User.Read.All</code>.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange('entra_sync_enabled', !formData.entra_sync_enabled)}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                      formData.entra_sync_enabled ? 'bg-primary-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        formData.entra_sync_enabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Client ID (sync-app)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.entra_sync_client_id || ''}
+                      onChange={(e) => handleInputChange('entra_sync_client_id', e.target.value)}
+                      placeholder="00000000-0000-0000-0000-000000000000"
+                      className="input"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Clientgeheim
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.entra_sync_client_secret || ''}
+                      onChange={(e) => handleInputChange('entra_sync_client_secret', e.target.value)}
+                      placeholder={settings?.has_entra_sync_secret ? '••••••••••••••••' : 'Plak hier de waarde van het clientgeheim'}
+                      className="input"
+                      autoComplete="off"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {settings?.has_entra_sync_secret
+                        ? 'Het geheim is opgeslagen en versleuteld. Laat leeg om het te behouden.'
+                        : 'Let op: Azure toont de waarde van het geheim maar één keer.'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Vervaldatum geheim
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.entra_sync_secret_expires_on || ''}
+                      onChange={(e) => handleInputChange('entra_sync_secret_expires_on', e.target.value || null)}
+                      className="input"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Een week voor deze datum krijg je automatisch een e-mail.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Domein voor nieuwe accounts
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.entra_sync_domain || ''}
+                      onChange={(e) => handleInputChange('entra_sync_domain', e.target.value)}
+                      placeholder="moveo-bv.nl"
+                      className="input"
+                      autoComplete="off"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Dit domein moet in de tenant geverifieerd zijn, anders weigert Azure het account.
+                    </p>
+                  </div>
+                </div>
+
+                {typeof settings?.entra_sync_secret_dagen === 'number' && settings.entra_sync_secret_dagen <= 30 && (
+                  <p className={`text-sm ${settings.entra_sync_secret_dagen < 0 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {settings.entra_sync_secret_dagen < 0
+                      ? `Het clientgeheim is ${Math.abs(settings.entra_sync_secret_dagen)} dag(en) geleden verlopen. Accounts aanmaken werkt nu niet.`
+                      : `Het clientgeheim verloopt over ${settings.entra_sync_secret_dagen} dag(en).`}
+                  </p>
+                )}
+
+                <div className="flex items-start justify-between gap-4 border-t border-gray-200 dark:border-gray-600 pt-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      Nieuwe gebruikers meteen in Azure aanmaken
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Staat dit uit, dan maak je accounts handmatig aan via de knop bij de gebruiker.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange('entra_sync_auto_create', !formData.entra_sync_auto_create)}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                      formData.entra_sync_auto_create ? 'bg-primary-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        formData.entra_sync_auto_create ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

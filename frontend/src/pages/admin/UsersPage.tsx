@@ -13,6 +13,8 @@ import {
   ChevronUpIcon,
   ChevronDownIcon,
   ArrowPathIcon,
+  CloudArrowUpIcon,
+  LockClosedIcon,
 } from '@heroicons/react/24/outline'
 import { User, UserCreate, Company } from '@/types'
 import { 
@@ -24,9 +26,14 @@ import {
   toggleUserActive, 
   disableUserMFA,
   getAvailablePermissions,
+  syncUserMetAzure,
+  getAzureOverzicht,
+  syncAlleUsersMetAzure,
   UserFilters,
   UserUpdate,
   AvailablePermission,
+  AzureOverzichtRegel,
+  AzureSyncAllesResultaat,
 } from '@/api/users'
 import { getAllCompanies } from '@/api/companies'
 import Pagination, { PageSize } from '@/components/common/Pagination'
@@ -657,6 +664,14 @@ export default function UsersPage() {
   const [showMfaModal, setShowMfaModal] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
 
+  // Azure / Microsoft Entra ID
+  const [azureBezig, setAzureBezig] = useState<string | null>(null)
+  const [azureOverzicht, setAzureOverzicht] = useState<AzureOverzichtRegel[] | null>(null)
+  const [azureAlles, setAzureAlles] = useState<AzureSyncAllesResultaat | null>(null)
+  // Startwachtwoorden worden alleen in het geheugen gehouden en verdwijnen
+  // zodra het venster gesloten wordt; ze staan nergens opgeslagen.
+  const [azureWachtwoorden, setAzureWachtwoorden] = useState<Record<string, string> | null>(null)
+
   // Fetch users
   const fetchUsers = useCallback(async () => {
     setIsLoading(true)
@@ -727,8 +742,15 @@ export default function UsersPage() {
   const handleCreateUser = async (data: UserCreate | UserUpdate) => {
     setIsActionLoading(true)
     try {
-      await createUser(data as UserCreate)
+      const nieuw: any = await createUser(data as UserCreate)
       setShowCreateModal(false)
+      // Bij automatisch aanmaken in Azure komt het startwachtwoord mee; dat
+      // is de enige keer dat het te zien is.
+      if (nieuw?.azure?.wachtwoord) {
+        setAzureWachtwoorden({ [(data as UserCreate).email]: nieuw.azure.wachtwoord })
+      } else if (nieuw?.azure?.status === 'mislukt') {
+        setError(`Gebruiker aangemaakt, maar het Microsoft-account niet: ${nieuw.azure.reden}`)
+      }
       showSuccess(t('users.userCreated'))
       fetchUsers()
     } catch (err: any) {
@@ -828,9 +850,81 @@ export default function UsersPage() {
     }
   }
 
+  // Maak of koppel het Microsoft-account van één gebruiker
+  const handleAzureSync = async (user: User) => {
+    setAzureBezig(user.id)
+    setError(null)
+    try {
+      const resultaat = await syncUserMetAzure(user.id)
+      if (resultaat.wachtwoord) {
+        setAzureWachtwoorden({ [user.email]: resultaat.wachtwoord })
+      } else {
+        showSuccess(
+          resultaat.status === 'gekoppeld'
+            ? `${user.email} bestond al in Azure en is nu gekoppeld.`
+            : `${user.email} was al gekoppeld.`
+        )
+      }
+      fetchUsers()
+    } catch (err: any) {
+      setError(getErrorMessage(err, 'Synchroniseren met Azure is mislukt.'))
+    } finally {
+      setAzureBezig(null)
+    }
+  }
+
+  // Eerst laten zien wat er zou gebeuren; pas daarna echt aanmaken
+  const handleAzureOverzicht = async () => {
+    setAzureBezig('overzicht')
+    setError(null)
+    try {
+      const resultaat = await getAzureOverzicht()
+      setAzureOverzicht(resultaat.gebruikers)
+    } catch (err: any) {
+      setError(getErrorMessage(err, 'Het Azure-overzicht ophalen is mislukt.'))
+    } finally {
+      setAzureBezig(null)
+    }
+  }
+
+  const handleAzureSyncAlles = async () => {
+    setAzureBezig('alles')
+    setError(null)
+    try {
+      const resultaat = await syncAlleUsersMetAzure()
+      setAzureOverzicht(null)
+      setAzureAlles(resultaat)
+      fetchUsers()
+    } catch (err: any) {
+      setError(getErrorMessage(err, 'Synchroniseren met Azure is mislukt.'))
+    } finally {
+      setAzureBezig(null)
+    }
+  }
+
+  // Zet wachtwoord-login aan of uit voor één gebruiker
+  const handleWachtwoordLogin = async (user: User) => {
+    setAzureBezig(user.id)
+    setError(null)
+    try {
+      await updateUser(user.id, {
+        wachtwoord_login_uitgeschakeld: !user.wachtwoord_login_uitgeschakeld,
+      })
+      showSuccess(
+        user.wachtwoord_login_uitgeschakeld
+          ? `${user.email} kan weer met wachtwoord inloggen.`
+          : `${user.email} kan voortaan alleen nog via Microsoft inloggen.`
+      )
+      fetchUsers()
+    } catch (err: any) {
+      setError(getErrorMessage(err, 'Wijzigen is mislukt.'))
+    } finally {
+      setAzureBezig(null)
+    }
+  }
+
   // Pagination
   const totalPages = Math.ceil(totalCount / pageSize)
-
   // Format date
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-'
@@ -856,13 +950,24 @@ export default function UsersPage() {
       {/* Header */}
       <div className="page-header">
         <h1 className="page-title">{t('users.title')}</h1>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="btn-primary"
-        >
-          <PlusIcon className="w-5 h-5 mr-2" />
-          {t('users.newUser')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleAzureOverzicht}
+            disabled={azureBezig !== null}
+            className="btn-secondary disabled:opacity-50"
+            title="Laat eerst zien welke gebruikers een Microsoft-account zouden krijgen"
+          >
+            <CloudArrowUpIcon className="w-5 h-5 mr-2" />
+            {azureBezig === 'overzicht' ? 'Bezig...' : 'Synchroniseer met Azure'}
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary"
+          >
+            <PlusIcon className="w-5 h-5 mr-2" />
+            {t('users.newUser')}
+          </button>
+        </div>
       </div>
 
       {/* Success message */}
@@ -981,6 +1086,9 @@ export default function UsersPage() {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
                   2FA
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                  Microsoft
+                </th>
                 <th 
                   className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('last_login')}
@@ -995,7 +1103,7 @@ export default function UsersPage() {
             <tbody className="divide-y">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                       <span className="ml-3">{t('common.loading')}</span>
@@ -1004,7 +1112,7 @@ export default function UsersPage() {
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                     {t('users.noUsers')}
                   </td>
                 </tr>
@@ -1051,6 +1159,24 @@ export default function UsersPage() {
                         <span className="text-gray-400">Uit</span>
                       )}
                     </td>
+                    <td className="px-4 py-3 text-sm">
+                      {user.azure_gekoppeld ? (
+                        <div>
+                          <span className="flex items-center text-green-600">
+                            <CheckCircleIcon className="w-4 h-4 mr-1" />
+                            Gekoppeld
+                          </span>
+                          {user.entra_upn && (
+                            <div className="text-xs text-gray-500">{user.entra_upn}</div>
+                          )}
+                          {user.wachtwoord_login_uitgeschakeld && (
+                            <div className="text-xs text-purple-600">Alleen Microsoft</div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">Niet gekoppeld</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
                       {formatDate(user.last_login)}
                     </td>
@@ -1084,6 +1210,30 @@ export default function UsersPage() {
                             title={t('users.disable2FA')}
                           >
                             <ShieldCheckIcon className="w-5 h-5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleAzureSync(user)}
+                          disabled={!!user.azure_gekoppeld || azureBezig === user.id}
+                          className="p-2 min-w-[40px] min-h-[40px] text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-500"
+                          title={user.azure_gekoppeld
+                            ? 'Deze gebruiker heeft al een gekoppeld Microsoft-account'
+                            : 'Microsoft-account aanmaken of koppelen'}
+                        >
+                          <CloudArrowUpIcon className="w-5 h-5" />
+                        </button>
+                        {user.azure_gekoppeld && (
+                          <button
+                            onClick={() => handleWachtwoordLogin(user)}
+                            disabled={azureBezig === user.id}
+                            className={`p-2 min-w-[40px] min-h-[40px] hover:bg-gray-100 rounded disabled:opacity-40 ${
+                              user.wachtwoord_login_uitgeschakeld ? 'text-purple-600' : 'text-gray-500 hover:text-purple-600'
+                            }`}
+                            title={user.wachtwoord_login_uitgeschakeld
+                              ? 'Inloggen met wachtwoord weer toestaan'
+                              : 'Alleen nog inloggen via Microsoft toestaan'}
+                          >
+                            <LockClosedIcon className="w-5 h-5" />
                           </button>
                         )}
                         <button
@@ -1161,6 +1311,14 @@ export default function UsersPage() {
                       Laatste login: {formatDate(user.last_login)}
                     </span>
                   )}
+                  {user.azure_gekoppeld ? (
+                    <span className="flex items-center text-green-600">
+                      <CloudArrowUpIcon className="w-4 h-4 mr-1" />
+                      {user.wachtwoord_login_uitgeschakeld ? 'Alleen Microsoft' : 'Microsoft gekoppeld'}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">Geen Microsoft-account</span>
+                  )}
                 </div>
                 
                 {/* Action Buttons */}
@@ -1204,6 +1362,32 @@ export default function UsersPage() {
                     </button>
                   )}
                   <button
+                    onClick={() => handleAzureSync(user)}
+                    disabled={!!user.azure_gekoppeld || azureBezig === user.id}
+                    title={user.azure_gekoppeld ? 'Heeft al een Microsoft-account' : 'Microsoft-account aanmaken'}
+                    aria-label="Microsoft-account aanmaken"
+                    className="inline-flex items-center justify-center gap-1.5 h-9 px-2.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <CloudArrowUpIcon className="w-4 h-4" />
+                    <span className="hidden sm:inline">Azure</span>
+                  </button>
+                  {user.azure_gekoppeld && (
+                    <button
+                      onClick={() => handleWachtwoordLogin(user)}
+                      disabled={azureBezig === user.id}
+                      title={user.wachtwoord_login_uitgeschakeld
+                        ? 'Inloggen met wachtwoord weer toestaan'
+                        : 'Alleen nog inloggen via Microsoft'}
+                      aria-label="Wachtwoord-login omschakelen"
+                      className="inline-flex items-center justify-center gap-1.5 h-9 px-2.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-md transition-colors disabled:opacity-40"
+                    >
+                      <LockClosedIcon className="w-4 h-4" />
+                      <span className="hidden sm:inline">
+                        {user.wachtwoord_login_uitgeschakeld ? 'Wachtwoord aan' : 'Wachtwoord uit'}
+                      </span>
+                    </button>
+                  )}
+                  <button
                     onClick={() => { setSelectedUser(user); setShowDeleteModal(true) }}
                     title={t('common.delete')}
                     aria-label={t('common.delete')}
@@ -1228,6 +1412,173 @@ export default function UsersPage() {
           onPageSizeChange={(newSize) => { setPageSize(newSize); setPage(1); }}
         />
       </div>
+
+      {/* Azure: eerst tonen wat er zou gebeuren */}
+      <Modal
+        isOpen={azureOverzicht !== null}
+        onClose={() => setAzureOverzicht(null)}
+        title="Synchroniseren met Azure"
+        size="lg"
+      >
+        {azureOverzicht && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Er wordt nog niets aangemaakt. Hieronder zie je wat er gaat gebeuren als je doorgaat.
+              Gebruikers die al gekoppeld zijn, worden overgeslagen.
+            </p>
+            <div className="max-h-80 overflow-y-auto border rounded">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Gebruiker</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Wordt in Azure</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Actie</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {azureOverzicht.map(regel => (
+                    <tr key={regel.id}>
+                      <td className="px-3 py-2">
+                        <div className="text-gray-900">{regel.naam}</div>
+                        <div className="text-xs text-gray-500">{regel.email}</div>
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">
+                        {regel.voorstel || <span className="text-red-600">{regel.probleem}</span>}
+                      </td>
+                      <td className="px-3 py-2">
+                        {regel.gekoppeld ? (
+                          <span className="text-gray-400">Overslaan</span>
+                        ) : regel.voorstel ? (
+                          <span className="text-blue-600">Aanmaken of koppelen</span>
+                        ) : (
+                          <span className="text-red-600">Niet mogelijk</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm text-gray-600">
+              {azureOverzicht.filter(r => !r.gekoppeld && r.voorstel).length} gebruiker(s) worden verwerkt.
+              Startwachtwoorden zie je daarna <strong>één keer</strong>; bewaar ze meteen.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => setAzureOverzicht(null)}>
+                {t('common.cancel')}
+              </button>
+              <button
+                className="btn-primary disabled:opacity-50"
+                onClick={handleAzureSyncAlles}
+                disabled={azureBezig !== null || azureOverzicht.every(r => r.gekoppeld || !r.voorstel)}
+              >
+                {azureBezig === 'alles' ? 'Bezig...' : 'Doorgaan'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Azure: uitslag van een volledige ronde */}
+      <Modal
+        isOpen={azureAlles !== null}
+        onClose={() => setAzureAlles(null)}
+        title="Resultaat synchronisatie"
+        size="lg"
+      >
+        {azureAlles && (
+          <div className="space-y-4 text-sm">
+            <ul className="space-y-1">
+              <li><strong>{azureAlles.aangemaakt.length}</strong> account(s) aangemaakt</li>
+              <li><strong>{azureAlles.gekoppeld.length}</strong> bestaand account gekoppeld</li>
+              <li><strong>{azureAlles.overgeslagen.length}</strong> overgeslagen (al gekoppeld)</li>
+              <li className={azureAlles.mislukt.length ? 'text-red-600' : ''}>
+                <strong>{azureAlles.mislukt.length}</strong> mislukt
+              </li>
+            </ul>
+
+            {azureAlles.mislukt.length > 0 && (
+              <div className="border border-red-200 bg-red-50 rounded p-3 max-h-40 overflow-y-auto">
+                {azureAlles.mislukt.map(m => (
+                  <div key={m.email} className="text-red-700">
+                    <strong>{m.email}</strong>: {m.reden}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {Object.keys(azureAlles.wachtwoorden).length > 0 && (
+              <div className="border border-amber-300 bg-amber-50 rounded p-3 space-y-2">
+                <p className="text-amber-800 font-medium">
+                  Startwachtwoorden – deze worden nergens opgeslagen en zijn na sluiten weg.
+                </p>
+                <div className="max-h-48 overflow-y-auto font-mono text-xs space-y-1">
+                  {Object.entries(azureAlles.wachtwoorden).map(([email, ww]) => (
+                    <div key={email}>{email}: {ww}</div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => navigator.clipboard?.writeText(
+                    Object.entries(azureAlles.wachtwoorden)
+                      .map(([email, ww]) => `${email}\t${ww}`)
+                      .join('\n')
+                  )}
+                >
+                  Kopieer naar klembord
+                </button>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button className="btn-primary" onClick={() => setAzureAlles(null)}>
+                {t('common.close', 'Sluiten')}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Azure: startwachtwoord van één gebruiker, eenmalig */}
+      <Modal
+        isOpen={azureWachtwoorden !== null}
+        onClose={() => setAzureWachtwoorden(null)}
+        title="Microsoft-account aangemaakt"
+        size="md"
+      >
+        {azureWachtwoorden && (
+          <div className="space-y-4 text-sm">
+            <p className="text-gray-600">
+              Noteer dit startwachtwoord nu. Het wordt nergens bewaard en is na het sluiten
+              van dit venster niet meer op te vragen. De gebruiker moet het bij de eerste
+              aanmelding zelf wijzigen.
+            </p>
+            <div className="border border-amber-300 bg-amber-50 rounded p-3 font-mono">
+              {Object.entries(azureWachtwoorden).map(([email, ww]) => (
+                <div key={email}>
+                  <div className="text-xs text-gray-600">{email}</div>
+                  <div className="text-base">{ww}</div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => navigator.clipboard?.writeText(
+                  Object.values(azureWachtwoorden)[0] || ''
+                )}
+              >
+                Kopieer wachtwoord
+              </button>
+              <button className="btn-primary" onClick={() => setAzureWachtwoorden(null)}>
+                {t('common.close', 'Sluiten')}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Create Modal */}
       <Modal
