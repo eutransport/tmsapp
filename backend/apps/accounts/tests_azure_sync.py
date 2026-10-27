@@ -6,7 +6,7 @@ Wat hier wordt vastgelegd is het gedrag waar we op rekenen, inclusief de
 gevallen waarin het mis kan gaan.
 """
 from datetime import date, timedelta
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -14,7 +14,10 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from apps.accounts import graph
-from apps.accounts.azure_sync import synchroniseer_gebruiker_met_azure
+from apps.accounts.azure_sync import (
+    synchroniseer_gebruiker_met_azure,
+    werk_azure_status_bij,
+)
 from apps.core.models import AppSettings
 
 User = get_user_model()
@@ -759,3 +762,61 @@ class EntraKoppelingTests(TestCase):
 
         with self.assertRaises(EntraTokenFout):
             zoek_of_maak_gebruiker(self._claims())
+
+class AzureStatusTests(TestCase):
+    """Inactieve gebruikers: niet aanmaken, wel uitzetten in Azure."""
+
+    def setUp(self):
+        self.instellingen = AppSettings.get_settings()
+        self.instellingen.entra_sync_enabled = True
+        self.instellingen.entra_sync_client_id = 'client-1'
+        self.instellingen.entra_sync_client_secret = 'geheim'
+        self.instellingen.entra_sync_domain = 'moveo-bv.nl'
+        self.instellingen.save()
+        graph.vergeet_token()
+
+    def test_inactieve_gebruiker_wordt_niet_gesynchroniseerd(self):
+        gebruiker = User.objects.create_user(
+            email='weg@moveo-bv.nl', password='x', voornaam='Weg',
+            achternaam='Gebruiker', is_active=False,
+        )
+        with self.assertRaises(graph.GraphFout) as ctx:
+            synchroniseer_gebruiker_met_azure(gebruiker)
+        self.assertIn('inactief', str(ctx.exception).lower())
+
+    def test_status_bijwerken_zet_account_uit(self):
+        gebruiker = User.objects.create_user(
+            email='a@moveo-bv.nl', password='x', voornaam='A', achternaam='B',
+            is_active=False,
+        )
+        gebruiker.entra_object_id = 'oid-1'
+        gebruiker.save()
+        with patch('apps.accounts.graph.zet_account_status') as zet:
+            resultaat = werk_azure_status_bij(gebruiker)
+        self.assertEqual(resultaat, 'aangepast')
+        zet.assert_called_once_with('oid-1', False)
+
+    def test_status_bijwerken_slaat_ongekoppelde_over(self):
+        gebruiker = User.objects.create_user(
+            email='b@moveo-bv.nl', password='x', voornaam='A', achternaam='B',
+        )
+        with patch('apps.accounts.graph.zet_account_status') as zet:
+            resultaat = werk_azure_status_bij(gebruiker)
+        self.assertEqual(resultaat, 'niet_gekoppeld')
+        zet.assert_not_called()
+
+    def test_zet_account_status_stuurt_patch(self):
+        antwoord = MagicMock(status_code=204)
+        with patch('apps.accounts.graph._verzoek', return_value=antwoord) as verzoek:
+            graph.zet_account_status('oid-9', True)
+        methode, pad = verzoek.call_args[0]
+        self.assertEqual(methode, 'PATCH')
+        self.assertEqual(pad, '/users/oid-9')
+        self.assertEqual(verzoek.call_args[1]['json'], {'accountEnabled': True})
+
+    def test_zet_account_status_meldt_fout(self):
+        antwoord = MagicMock(status_code=400)
+        antwoord.json.return_value = {'error': {'message': 'nee'}}
+        with patch('apps.accounts.graph._verzoek', return_value=antwoord):
+            with self.assertRaises(graph.GraphFout):
+                graph.zet_account_status('oid-9', False)

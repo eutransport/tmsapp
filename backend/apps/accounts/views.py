@@ -20,7 +20,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from apps.core.throttling import RegistrationRateThrottle
 from apps.core.permissions import IsAdminOnly, IsAdminOrLeaveManagerReadOnly
-from .azure_sync import synchroniseer_gebruiker_met_azure
+from .azure_sync import synchroniseer_gebruiker_met_azure, werk_azure_status_bij
+from .graph import GraphFout
 
 from .serializers import (
     UserSerializer,
@@ -548,6 +549,30 @@ class UserViewSet(viewsets.ModelViewSet):
         super().perform_create(serializer)
         self._nieuwe_gebruiker = serializer.instance
 
+    def perform_update(self, serializer):
+        """
+        Houdt Azure gelijk als de actief-status hier verandert.
+
+        Mislukt dat, dan blijft de wijziging in het TMS staan; de beheerder
+        ziet de melding terug in het antwoord.
+        """
+        was_actief = serializer.instance.is_active
+        super().perform_update(serializer)
+        gebruiker = serializer.instance
+        self._azure_status_waarschuwing = None
+        if gebruiker.is_active != was_actief:
+            try:
+                werk_azure_status_bij(gebruiker, self.request.user)
+            except GraphFout as fout:
+                self._azure_status_waarschuwing = str(fout)
+
+    def update(self, request, *args, **kwargs):
+        antwoord = super().update(request, *args, **kwargs)
+        waarschuwing = getattr(self, '_azure_status_waarschuwing', None)
+        if waarschuwing and isinstance(antwoord.data, dict):
+            antwoord.data['azure_waarschuwing'] = waarschuwing
+        return antwoord
+
     def _azure_automatisch(self, antwoord, request):
         """
         Maakt meteen een Microsoft-account aan, als dat zo is ingesteld.
@@ -684,6 +709,14 @@ class UserViewSet(viewsets.ModelViewSet):
         
         user.is_active = not user.is_active
         user.save()
+
+        # In Azure dezelfde status aanhouden; anders kan een geblokkeerde
+        # gebruiker via Microsoft gewoon weer inloggen.
+        azure_waarschuwing = None
+        try:
+            werk_azure_status_bij(user, request.user)
+        except GraphFout as fout:
+            azure_waarschuwing = str(fout)
         
         # Log status change
         import logging
@@ -696,6 +729,7 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response({
             'message': f'Gebruiker {user.full_name} is {status_text}.',
             'is_active': user.is_active,
+            'azure_waarschuwing': azure_waarschuwing,
         })
     
     @action(detail=True, methods=['post'], url_path='azure-sync')

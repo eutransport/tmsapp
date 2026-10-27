@@ -31,6 +31,14 @@ def synchroniseer_gebruiker_met_azure(gebruiker, inlognaam=None, beheerder=None)
             'De koppeling met Azure staat uit of is niet volledig ingevuld.'
         )
 
+    # Een geblokkeerde gebruiker hoort geen werkend Microsoft-account te
+    # krijgen. Aanmaken en meteen weer uitzetten zou alleen maar rommel in
+    # de tenant opleveren.
+    if not gebruiker.is_active:
+        raise graph.GraphFout(
+            'Deze gebruiker is inactief en wordt niet met Azure gesynchroniseerd.'
+        )
+
     if gebruiker.entra_object_id:
         return {
             'status': 'al_gekoppeld',
@@ -78,3 +86,30 @@ def synchroniseer_gebruiker_met_azure(gebruiker, inlognaam=None, beheerder=None)
         'wachtwoord': wachtwoord,
         'aangemaakt_op': timezone.now().isoformat(),
     }
+
+
+def werk_azure_status_bij(gebruiker, beheerder=None) -> str:
+    """
+    Zet het gekoppelde Azure-account aan of uit, gelijk aan de TMS-status.
+
+    Geeft terug wat er gebeurd is: `niet_gekoppeld`, `uit`, `koppeling_uit`
+    of `aangepast`. Het blokkeren van een gebruiker in het TMS hoort ook in
+    Azure te gelden, anders kan iemand via Microsoft gewoon weer binnen.
+    """
+    if not gebruiker.entra_object_id:
+        return 'niet_gekoppeld'
+
+    if not graph.is_ingeschakeld():
+        return 'koppeling_uit'
+
+    graph.zet_account_status(gebruiker.entra_object_id, gebruiker.is_active)
+    gebruiker.entra_synced_at = timezone.now()
+    gebruiker.save(update_fields=['entra_synced_at'])
+
+    logger.warning(
+        'Entra-synchronisatie: account van %s %s door %s',
+        gebruiker.email,
+        'ingeschakeld' if gebruiker.is_active else 'uitgeschakeld',
+        getattr(beheerder, 'email', 'systeem'),
+    )
+    return 'aangepast'

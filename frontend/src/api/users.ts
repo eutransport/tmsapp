@@ -119,7 +119,7 @@ export async function resetUserPassword(id: string, newPassword: string): Promis
 }
 
 // Toggle user active status (block/unblock)
-export async function toggleUserActive(id: string): Promise<{ message: string; is_active: boolean }> {
+export async function toggleUserActive(id: string): Promise<{ message: string; is_active: boolean; azure_waarschuwing?: string | null }> {
   const response = await api.post(`/auth/users/${id}/toggle_active/`)
   return response.data
 }

@@ -817,10 +817,14 @@ export default function UsersPage() {
     if (!selectedUser) return
     setIsActionLoading(true)
     try {
-      await toggleUserActive(selectedUser.id)
+      const antwoord: any = await toggleUserActive(selectedUser.id)
       setShowBlockModal(false)
       setSelectedUser(null)
-      showSuccess(t('common.success'))
+      if (antwoord?.azure_waarschuwing) {
+        setError(`Status gewijzigd, maar in Azure niet: ${antwoord.azure_waarschuwing}`)
+      } else {
+        showSuccess(t('common.success'))
+      }
       fetchUsers()
     } catch (err: any) {
       setError(getErrorMessage(err, t('errors.saveFailed')))
@@ -1214,11 +1218,13 @@ export default function UsersPage() {
                         )}
                         <button
                           onClick={() => handleAzureSync(user)}
-                          disabled={!!user.azure_gekoppeld || azureBezig === user.id}
+                          disabled={!!user.azure_gekoppeld || !user.is_active || azureBezig === user.id}
                           className="p-2 min-w-[40px] min-h-[40px] text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-500"
                           title={user.azure_gekoppeld
                             ? 'Deze gebruiker heeft al een gekoppeld Microsoft-account'
-                            : 'Microsoft-account aanmaken of koppelen'}
+                            : !user.is_active
+                              ? 'Inactieve gebruikers worden niet met Azure gesynchroniseerd'
+                              : 'Microsoft-account aanmaken of koppelen'}
                         >
                           <CloudArrowUpIcon className="w-5 h-5" />
                         </button>
@@ -1363,8 +1369,12 @@ export default function UsersPage() {
                   )}
                   <button
                     onClick={() => handleAzureSync(user)}
-                    disabled={!!user.azure_gekoppeld || azureBezig === user.id}
-                    title={user.azure_gekoppeld ? 'Heeft al een Microsoft-account' : 'Microsoft-account aanmaken'}
+                    disabled={!!user.azure_gekoppeld || !user.is_active || azureBezig === user.id}
+                    title={user.azure_gekoppeld
+                      ? 'Heeft al een Microsoft-account'
+                      : !user.is_active
+                        ? 'Inactieve gebruikers worden niet gesynchroniseerd'
+                        : 'Microsoft-account aanmaken'}
                     aria-label="Microsoft-account aanmaken"
                     className="inline-flex items-center justify-center gap-1.5 h-9 px-2.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >

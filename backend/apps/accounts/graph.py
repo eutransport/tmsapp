@@ -6,12 +6,13 @@ draait in de browser van elke gebruiker; deze praat alleen server-naar-server
 en heeft rechten die je nooit in een browser wilt hebben.
 
 De rechten zijn zo krap mogelijk gehouden:
-  * User.Create    - uitsluitend nieuwe accounts aanmaken
-  * User.Read.All  - kijken of iemand al bestaat
+  * User.Create                     - uitsluitend nieuwe accounts aanmaken
+  * User.Read.All                   - kijken of iemand al bestaat
+  * User.EnableDisableAccount.All   - een account aan- of uitzetten
 
-Daarmee kan deze koppeling met opzet NIET: bestaande accounts wijzigen of
-verwijderen, wachtwoorden van anderen resetten, groepen of rollen aanpassen,
-of bij mail en bestanden komen.
+Daarmee kan deze koppeling met opzet NIET: namen of adressen van bestaande
+accounts wijzigen, accounts verwijderen, wachtwoorden van anderen resetten,
+groepen of rollen aanpassen, of bij mail en bestanden komen.
 """
 import logging
 import secrets
@@ -152,8 +153,8 @@ def _verzoek(methode: str, pad: str, **kwargs):
     if antwoord.status_code == 403:
         raise GraphFout(
             'Azure weigert dit: de app-registratie mist de rechten '
-            'User.Create en User.Read.All, of er is nog geen '
-            'beheerderstoestemming gegeven.'
+            'User.Create, User.Read.All of User.EnableDisableAccount.All, '
+            'of er is nog geen beheerderstoestemming gegeven.'
         )
     if antwoord.status_code == 401:
         # Een verlopen of ingetrokken geheim; het bewaarde token is waardeloos.
@@ -297,6 +298,36 @@ def koppel(gebruiker, gegevens: dict) -> None:
     )
 
 
+def zet_account_status(object_id: str, ingeschakeld: bool) -> None:
+    """
+    Zet een Azure-account aan of uit.
+
+    Dit is de enige wijziging die de koppeling aan een bestaand account mag
+    maken; daarvoor is de aparte permissie `User.EnableDisableAccount.All`
+    nodig. Verwijderen of wachtwoorden resetten kan de applicatie bewust niet.
+    """
+    if not object_id:
+        raise GraphFout('Deze gebruiker is niet gekoppeld aan een Azure-account.')
+
+    antwoord = _verzoek(
+        'PATCH',
+        f'/users/{object_id}',
+        json={'accountEnabled': bool(ingeschakeld)},
+    )
+    # Graph antwoordt op een geslaagde PATCH met 204 en een lege body.
+    if antwoord.status_code not in (200, 204):
+        raise GraphFout(
+            f'Account {"inschakelen" if ingeschakeld else "uitschakelen"} '
+            f'mislukte: {_leesbare_fout(antwoord)}'
+        )
+
+    logger.warning(
+        'Entra-synchronisatie: account %s %s',
+        object_id,
+        'ingeschakeld' if ingeschakeld else 'uitgeschakeld',
+    )
+
+
 def dagen_tot_verval() -> int | None:
     """
     Aantal dagen tot het clientgeheim verloopt, of `None` als er geen datum is.
@@ -324,5 +355,6 @@ __all__ = [
     'stel_inlognaam_voor',
     'vergeet_token',
     'verlooptermijn_bereikt',
+    'zet_account_status',
     'zoek_account',
 ]

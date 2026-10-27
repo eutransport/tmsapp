@@ -70,7 +70,9 @@ export default function SettingsPage() {
   ]
   
   // State
-  const [activeTab, setActiveTab] = useState('branding')
+  // Geen tab vooraf open: de pagina begint dichtgeklapt, zodat je zelf kiest
+  // waar je naartoe gaat.
+  const [activeTab, setActiveTab] = useState('')
   const [settings, setSettings] = useState<AppSettingsAdmin | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
