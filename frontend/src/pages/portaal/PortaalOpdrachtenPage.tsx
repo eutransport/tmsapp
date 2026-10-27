@@ -26,6 +26,7 @@ import {
   portaalOpdrachten,
 } from '@/api/opdrachten'
 import OpdrachtStatusBadge from '@/components/opdrachten/OpdrachtStatusBadge'
+import { FaseBadge, WerkBadge } from '@/components/opdrachten/OpdrachtBadges'
 import EtaBalk from '@/components/opdrachten/EtaBalk'
 import OpdrachtFormulier from '@/components/opdrachten/OpdrachtFormulier'
 import MailInstellingModal from '@/components/opdrachten/MailInstellingModal'
@@ -76,11 +77,11 @@ export default function PortaalOpdrachtenPage() {
     refetchIntervalInBackground: true,
   })
 
-  // De server rekent hooguit eens per tien minuten opnieuw; vaker pollen heeft geen zin.
+  // Vlak voor aankomst rekent de server elke minuut opnieuw; dat willen we zien.
   const { data: etas = [] } = useQuery<OpdrachtEta[]>({
     queryKey: ['portaal-opdracht-eta'],
     queryFn: portaalOpdrachten.eta,
-    refetchInterval: 600000,
+    refetchInterval: 60000,
     refetchIntervalInBackground: true,
   })
   const etaPer = Object.fromEntries(etas.map(e => [e.id, e]))
@@ -290,9 +291,7 @@ export default function PortaalOpdrachtenPage() {
                         {[o.adres, o.postcode, o.plaats].filter(Boolean).join(', ') || '-'}
                       </div>
                       <div className="mt-1">
-                        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
-                          {o.werk_omschrijving}
-                        </span>
+                        <WerkBadge werksoort={o.werksoort} label={o.werk_omschrijving} />
                       </div>
                       {o.regels.length > 0 && (
                         <ul className="mt-1 space-y-0.5">
@@ -353,13 +352,11 @@ export default function PortaalOpdrachtenPage() {
                       <OpdrachtStatusBadge status={o.status} label={o.status_label} />
                       {o.status === 'gestart' && o.fase !== 'onderweg' && (
                         <div className="mt-1">
-                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                            {o.fase_label}
-                          </span>
+                          <FaseBadge fase={o.fase} label={o.fase_label} />
                         </div>
                       )}
-                      {o.status === 'gestart' && o.fase === 'onderweg' && (
-                        <div className="mt-1.5"><EtaBalk eta={etaPer[o.id]} compact /></div>
+                      {o.status === 'gestart' && (
+                        <div className="mt-1.5"><EtaBalk eta={etaPer[o.id]} fase={o.fase} compact /></div>
                       )}
                     </td>
 

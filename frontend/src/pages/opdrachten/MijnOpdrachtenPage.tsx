@@ -18,6 +18,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { BIJLAGE_ACCEPT, MijnOpdracht, OpdrachtEta, mijnOpdrachten } from '@/api/opdrachten'
 import OpdrachtStatusBadge from '@/components/opdrachten/OpdrachtStatusBadge'
+import { FaseBadge, WerkBadge } from '@/components/opdrachten/OpdrachtBadges'
 import EtaBalk from '@/components/opdrachten/EtaBalk'
 import AfmeldModal from '@/components/opdrachten/AfmeldModal'
 import NietGeleverdModal from '@/components/opdrachten/NietGeleverdModal'
@@ -58,12 +59,12 @@ export default function MijnOpdrachtenPage({ archief = false }: Props) {
   const opdrachten = data?.results ?? []
   const totaal = data?.count ?? 0
 
-  // De server rekent hooguit eens per tien minuten opnieuw; vaker pollen heeft geen zin.
+  // Vlak voor aankomst rekent de server elke minuut opnieuw; dat willen we zien.
   const { data: etas = [] } = useQuery<OpdrachtEta[]>({
     queryKey: ['mijn-opdracht-eta'],
     queryFn: mijnOpdrachten.eta,
     enabled: !archief,
-    refetchInterval: 600000,
+    refetchInterval: 60000,
     refetchIntervalInBackground: true,
   })
   const etaPer = Object.fromEntries(etas.map(e => [e.id, e]))
@@ -183,13 +184,9 @@ export default function MijnOpdrachtenPage({ archief = false }: Props) {
                       )}
                       <span className="truncate font-semibold text-gray-900">{o.klant_naam}</span>
                       <OpdrachtStatusBadge status={o.status} label={o.status_label} />
-                      <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
-                        {o.werk_omschrijving}
-                      </span>
-                      {o.status === 'gestart' && o.fase !== 'onderweg' && (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                          {o.fase_label}
-                        </span>
+                      <WerkBadge werksoort={o.werksoort} label={o.werk_omschrijving} />
+                      {o.status === 'gestart' && (
+                        <FaseBadge fase={o.fase} label={o.fase_label} />
                       )}
                     </span>
                     <span className="mt-0.5 block truncate text-sm text-gray-600">
@@ -203,7 +200,7 @@ export default function MijnOpdrachtenPage({ archief = false }: Props) {
                     </span>
                     {o.status === 'gestart' && (
                       <span className="mt-1.5 block max-w-xs">
-                        <EtaBalk eta={etaPer[o.id]} />
+                        <EtaBalk eta={etaPer[o.id]} fase={o.fase} />
                       </span>
                     )}
                   </span>

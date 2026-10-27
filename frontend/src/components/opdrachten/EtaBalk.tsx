@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next'
-import { ClockIcon, MapPinIcon } from '@heroicons/react/24/outline'
-import { OpdrachtEta } from '@/api/opdrachten'
+import { CheckCircleIcon, ClockIcon, MapPinIcon } from '@heroicons/react/24/outline'
+import { OpdrachtEta, OpdrachtFase } from '@/api/opdrachten'
 
 interface Props {
   eta?: OpdrachtEta | null
   compact?: boolean
+  fase?: OpdrachtFase
 }
 
 const FOUTSLEUTELS: Record<string, string> = {
@@ -14,8 +15,24 @@ const FOUTSLEUTELS: Record<string, string> = {
   route_mislukt: 'eta.errorRoute',
 }
 
-export default function EtaBalk({ eta, compact = false }: Props) {
+export default function EtaBalk({ eta, compact = false, fase }: Props) {
   const { t, i18n } = useTranslation()
+
+  // Staat hij bij de klant, dan is de rit klaar: een volle balk zegt meer dan
+  // een aankomsttijd die op een paar minuten blijft hangen.
+  if (fase && fase !== 'onderweg') {
+    return (
+      <div className={compact ? 'w-40' : 'w-full'}>
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+          <CheckCircleIcon className="h-3.5 w-3.5" />
+          {t('eta.arrived', 'Aangekomen bij klant')}
+        </span>
+        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="h-full w-full rounded-full bg-emerald-500 transition-all duration-700" />
+        </div>
+      </div>
+    )
+  }
 
   if (!eta) return null
 

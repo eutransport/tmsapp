@@ -19,9 +19,27 @@ logger = logging.getLogger(__name__)
 
 VERVERS_NA_MINUTEN = 10
 
+# Dicht bij de bestemming vaker meten. Anders zou een wagen op de snelweg de
+# aankomstzone tussen twee metingen door volledig kunnen overslaan.
+VERVERS_TRAPPEN = (
+    (10, 1),   # tien minuten te gaan of minder: elke minuut
+    (30, 3),   # een half uur te gaan: elke drie minuten
+)
+
 # Hemelsbreed, niet over de weg: een vrachtwagen die het terrein op rijdt is er,
 # ook als de routeplanner nog een stuk eenrichtingsverkeer telt.
-AANKOMST_STRAAL_METER = getattr(settings, 'OPDRACHT_AANKOMST_STRAAL_METER', 300)
+AANKOMST_STRAAL_METER = getattr(settings, 'OPDRACHT_AANKOMST_STRAAL_METER', 1000)
+
+
+def _interval_minuten(opdracht):
+    """Hoe lang deze opdracht met rust gelaten mag worden."""
+    resterend = opdracht.eta_minuten
+    if resterend is None:
+        return VERVERS_NA_MINUTEN
+    for grens, interval in VERVERS_TRAPPEN:
+        if resterend <= grens:
+            return interval
+    return VERVERS_NA_MINUTEN
 
 
 def _afstand_meter(punt_a, punt_b):
@@ -110,14 +128,18 @@ def _bewaar(opdracht, **velden):
 
 
 def ververs(opdrachten, geforceerd=False):
-    """Werk de ETA bij van gestarte opdrachten die ouder zijn dan tien minuten."""
+    """Werk de ETA bij van gestarte opdrachten die aan de beurt zijn.
+
+    Hoe korter de resterende rijtijd, hoe vaker er gemeten wordt. Een chauffeur
+    die al bij de klant staat heeft geen aankomsttijd meer nodig.
+    """
     nu = timezone.now()
     te_doen = [
         o for o in opdrachten
-        if o.status == OpdrachtStatus.GESTART and (
+        if o.status == OpdrachtStatus.GESTART and o.fase == OpdrachtFase.ONDERWEG and (
             geforceerd
             or o.eta_bijgewerkt_op is None
-            or (nu - o.eta_bijgewerkt_op).total_seconds() >= VERVERS_NA_MINUTEN * 60
+            or (nu - o.eta_bijgewerkt_op).total_seconds() >= _interval_minuten(o) * 60
         )
     ]
     if not te_doen:
@@ -143,7 +165,9 @@ def ververs(opdrachten, geforceerd=False):
             _bewaar(opdracht, eta_fout='adres_onbekend')
             continue
 
-        _aankomst_bijwerken(opdracht, positie, bestemming)
+        if _aankomst_bijwerken(opdracht, positie, bestemming):
+            # Hij is er: de resterende rijtijd bevriezen zoals hij was.
+            continue
 
         punten = [(float(positie['latitude']), float(positie['longitude'])), bestemming]
         try:

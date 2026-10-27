@@ -5,7 +5,10 @@ bewaken dat de bestaande statussen onaangeroerd blijven.
 """
 from unittest.mock import patch
 
+from datetime import timedelta
+
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -294,3 +297,69 @@ class AutomatischeAankomstTests(BasisMixin, APITestCase):
         self._ververs(opdracht, 52.0009, 5.0)
         opdracht.refresh_from_db()
         self.assertEqual(opdracht.fase, OpdrachtFase.BEZIG_LOSSEN)
+
+    def test_binnen_een_kilometer_telt_als_aangekomen(self):
+        opdracht = self.maak_opdracht(
+            kenteken='AB-12-CD', bestemming_lat=52.0, bestemming_lng=5.0
+        )
+        # Ongeveer negenhonderd meter: nog net binnen de straal.
+        self._ververs(opdracht, 52.0081, 5.0)
+        opdracht.refresh_from_db()
+        self.assertEqual(opdracht.fase, OpdrachtFase.AANGEKOMEN)
+
+    def test_net_buiten_de_straal_telt_nog_niet(self):
+        opdracht = self.maak_opdracht(
+            kenteken='AB-12-CD', bestemming_lat=52.0, bestemming_lng=5.0
+        )
+        # Ongeveer anderhalve kilometer.
+        self._ververs(opdracht, 52.0135, 5.0)
+        opdracht.refresh_from_db()
+        self.assertEqual(opdracht.fase, OpdrachtFase.ONDERWEG)
+
+
+class VerversRitmeTests(BasisMixin, APITestCase):
+    """Dicht bij de klant moet er vaker gemeten worden dan ver weg."""
+
+    def setUp(self):
+        self.opzetten()
+
+    def test_interval_schaalt_mee_met_de_resterende_rijtijd(self):
+        from . import eta as eta_module
+
+        self.assertEqual(eta_module._interval_minuten(self.maak_opdracht(eta_minuten=90)), 10)
+        self.assertEqual(eta_module._interval_minuten(self.maak_opdracht(eta_minuten=25)), 3)
+        self.assertEqual(eta_module._interval_minuten(self.maak_opdracht(eta_minuten=5)), 1)
+        # Nog niets gemeten: dan hoort hij gewoon aan de beurt te komen.
+        self.assertEqual(eta_module._interval_minuten(self.maak_opdracht()), 10)
+
+    def test_opdracht_ver_weg_wordt_niet_elke_minuut_herberekend(self):
+        from . import eta as eta_module
+
+        opdracht = self.maak_opdracht(
+            kenteken='AB-12-CD', eta_minuten=90,
+            eta_bijgewerkt_op=timezone.now() - timedelta(minutes=2),
+        )
+        with patch.object(eta_module, '_posities_per_kenteken') as posities:
+            eta_module.ververs([opdracht])
+        posities.assert_not_called()
+
+    def test_opdracht_vlakbij_wordt_na_een_minuut_herberekend(self):
+        from . import eta as eta_module
+
+        opdracht = self.maak_opdracht(
+            kenteken='AB-12-CD', eta_minuten=5,
+            eta_bijgewerkt_op=timezone.now() - timedelta(minutes=2),
+        )
+        with patch.object(eta_module, '_posities_per_kenteken', return_value={}) as posities:
+            eta_module.ververs([opdracht])
+        posities.assert_called_once()
+
+    def test_chauffeur_bij_de_klant_kost_geen_gps_meer(self):
+        from . import eta as eta_module
+
+        opdracht = self.maak_opdracht(
+            kenteken='AB-12-CD', fase=OpdrachtFase.AANGEKOMEN, eta_minuten=2,
+        )
+        with patch.object(eta_module, '_posities_per_kenteken') as posities:
+            eta_module.ververs([opdracht], geforceerd=True)
+        posities.assert_not_called()

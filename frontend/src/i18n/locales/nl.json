@@ -390,7 +390,22 @@
     "download": "Downloaden",
     "deleteTitle": "Opdracht verwijderen",
     "deleteBody": "Weet u zeker dat u opdracht {{ritnummer}} voor {{klant}} wilt verwijderen?",
-    "deleteWarning": "De opdracht en de bijlagen verdwijnen definitief. Dit kan niet ongedaan worden gemaakt."
+    "deleteWarning": "De opdracht en de bijlagen verdwijnen definitief. Dit kan niet ongedaan worden gemaakt.",
+    "work": "Wat moet er gebeuren?",
+    "workLoad": "Laden / ophalen",
+    "workUnload": "Lossen / bezorgen",
+    "workHint": "Beide mag: de chauffeur laadt en lost dan op hetzelfde adres.",
+    "chooseWork": "Kies minstens laden of lossen.",
+    "sectionLines": "Orderregels",
+    "totalPallets": "{{aantal}} pallets",
+    "lineNumber": "Ordernummer",
+    "lineDetail": "Detail",
+    "linePallets": "Pallets",
+    "lineKindAny": "-",
+    "load": "Laden",
+    "unload": "Lossen",
+    "addLine": "Regel toevoegen",
+    "lineHint": "Bijvoorbeeld: HMMU6426781 - PEAR 999 BOX - 9 pallets"
   },
   "myOrders": {
     "title": "Mijn opdrachten",
@@ -411,7 +426,17 @@
     "confirmNotDelivered": "Melden",
     "reason": "Reden",
     "reportedAt": "Tijdstip",
-    "searchPlaceholder": "Zoek op ritnummer, klant of plaats"
+    "searchPlaceholder": "Zoek op ritnummer, klant of plaats",
+    "arrived": "Aangekomen bij klant",
+    "arrivedDone": "Aangekomen gemeld",
+    "waitForCustomer": "Wachten op klant",
+    "waitingDone": "Wachten doorgegeven",
+    "startLoading": "Begonnen met laden",
+    "startUnloading": "Begonnen met lossen",
+    "startedWork": "Doorgegeven",
+    "loaded": "Geladen melden",
+    "done": "Klaar melden",
+    "notLoaded": "Niet geladen"
   },
   "tasks": {
     "title": "Taken",
@@ -3117,7 +3142,8 @@
     "errorNoPosition": "Geen positie voor dit kenteken",
     "errorAddress": "Adres niet gevonden",
     "errorRoute": "Route niet berekend",
-    "errorUnknown": "Aankomsttijd niet beschikbaar"
+    "errorUnknown": "Aankomsttijd niet beschikbaar",
+    "arrived": "Aangekomen bij klant"
   },
   "orderStatus": {
     "nieuw": "Nieuw",
@@ -3189,5 +3215,18 @@
     "decision_allowed": "Toegestaan",
     "decision_blocked": "Geblokkeerd",
     "decision_would_block": "Zou blokkeren"
+  },
+  "orderWork": {
+    "laden": "Laden",
+    "lossen": "Lossen",
+    "beide": "Laden en lossen",
+    "geen": "Lossen"
+  },
+  "orderPhase": {
+    "onderweg": "Onderweg",
+    "aangekomen": "Aangekomen bij klant",
+    "wachten_op_klant": "Wacht op klant",
+    "bezig_laden": "Bezig met laden",
+    "bezig_lossen": "Bezig met lossen"
   }
 }

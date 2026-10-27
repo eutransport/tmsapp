@@ -97,9 +97,10 @@ app.conf.beat_schedule = {
         'schedule': crontab(day_of_week=1, hour=6, minute=0),
     },
     'ververs-opdracht-eta': {
-        # De taak slaat opdrachten over die binnen tien minuten al berekend zijn.
+        # De taak kiest zelf per opdracht hoe vaak er gemeten wordt: ver weg
+        # eens per tien minuten, vlak voor aankomst elke minuut.
         'task': 'apps.opdrachten.tasks.ververs_eta',
-        'schedule': crontab(minute='*/10'),
+        'schedule': crontab(minute='*'),
     },
     'controleer-azure-geheim': {
         # Dagelijks kijken of het clientgeheim van de Azure-koppeling bijna

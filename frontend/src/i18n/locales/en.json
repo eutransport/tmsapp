@@ -390,7 +390,22 @@
     "download": "Download",
     "deleteTitle": "Delete order",
     "deleteBody": "Are you sure you want to delete order {{ritnummer}} for {{klant}}?",
-    "deleteWarning": "The order and its attachments are removed permanently. This cannot be undone."
+    "deleteWarning": "The order and its attachments are removed permanently. This cannot be undone.",
+    "work": "What needs to be done?",
+    "workLoad": "Load / collect",
+    "workUnload": "Unload / deliver",
+    "workHint": "Both is fine: the driver then loads and unloads at the same address.",
+    "chooseWork": "Choose at least loading or unloading.",
+    "sectionLines": "Order lines",
+    "totalPallets": "{{aantal}} pallets",
+    "lineNumber": "Order number",
+    "lineDetail": "Detail",
+    "linePallets": "Pallets",
+    "lineKindAny": "-",
+    "load": "Loading",
+    "unload": "Unloading",
+    "addLine": "Add line",
+    "lineHint": "For example: HMMU6426781 - PEAR 999 BOX - 9 pallets"
   },
   "myOrders": {
     "title": "My orders",
@@ -411,7 +426,17 @@
     "confirmNotDelivered": "Report",
     "reason": "Reason",
     "reportedAt": "Time",
-    "searchPlaceholder": "Search by trip number, customer or city"
+    "searchPlaceholder": "Search by trip number, customer or city",
+    "arrived": "Arrived at customer",
+    "arrivedDone": "Arrival reported",
+    "waitForCustomer": "Waiting for customer",
+    "waitingDone": "Waiting reported",
+    "startLoading": "Started loading",
+    "startUnloading": "Started unloading",
+    "startedWork": "Reported",
+    "loaded": "Report as loaded",
+    "done": "Report as done",
+    "notLoaded": "Not loaded"
   },
   "tasks": {
     "title": "Tasks",
@@ -3117,7 +3142,8 @@
     "errorNoPosition": "No position for this plate",
     "errorAddress": "Address not found",
     "errorRoute": "Route not calculated",
-    "errorUnknown": "Arrival time unavailable"
+    "errorUnknown": "Arrival time unavailable",
+    "arrived": "Arrived at customer"
   },
   "orderStatus": {
     "nieuw": "New",
@@ -3189,5 +3215,18 @@
     "decision_allowed": "Allowed",
     "decision_blocked": "Blocked",
     "decision_would_block": "Would block"
+  },
+  "orderWork": {
+    "laden": "Loading",
+    "lossen": "Unloading",
+    "beide": "Loading and unloading",
+    "geen": "Unloading"
+  },
+  "orderPhase": {
+    "onderweg": "On the way",
+    "aangekomen": "Arrived at customer",
+    "wachten_op_klant": "Waiting for customer",
+    "bezig_laden": "Loading in progress",
+    "bezig_lossen": "Unloading in progress"
   }
 }

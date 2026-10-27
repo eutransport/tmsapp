@@ -3,7 +3,7 @@ import logging
 from celery import shared_task
 
 from . import eta
-from .models import Opdracht, OpdrachtStatus
+from .models import Opdracht, OpdrachtFase, OpdrachtStatus
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ def ververs_eta():
     lopend = list(
         Opdracht.objects
         .select_related('chauffeur__voertuig')
-        .filter(status=OpdrachtStatus.GESTART)
+        .filter(status=OpdrachtStatus.GESTART, fase=OpdrachtFase.ONDERWEG)
     )
     if not lopend:
         return 'geen lopende opdrachten'

@@ -390,7 +390,22 @@
     "download": "Indir",
     "deleteTitle": "Siparişi sil",
     "deleteBody": "{{klant}} için {{ritnummer}} numaralı siparişi silmek istediğinize emin misiniz?",
-    "deleteWarning": "Sipariş ve ekleri kalıcı olarak silinir. Bu işlem geri alınamaz."
+    "deleteWarning": "Sipariş ve ekleri kalıcı olarak silinir. Bu işlem geri alınamaz.",
+    "work": "Ne yapilmasi gerekiyor?",
+    "workLoad": "Yukleme / alma",
+    "workUnload": "Bosaltma / teslimat",
+    "workHint": "Ikisi de olabilir: sofor ayni adreste hem yukler hem bosaltir.",
+    "chooseWork": "En az yukleme veya bosaltma secin.",
+    "sectionLines": "Siparis satirlari",
+    "totalPallets": "{{aantal}} palet",
+    "lineNumber": "Siparis numarasi",
+    "lineDetail": "Detay",
+    "linePallets": "Palet",
+    "lineKindAny": "-",
+    "load": "Yukleme",
+    "unload": "Bosaltma",
+    "addLine": "Satir ekle",
+    "lineHint": "Ornek: HMMU6426781 - PEAR 999 BOX - 9 palet"
   },
   "myOrders": {
     "title": "Siparişlerim",
@@ -411,7 +426,17 @@
     "confirmNotDelivered": "Bildir",
     "reason": "Sebep",
     "reportedAt": "Saat",
-    "searchPlaceholder": "Sefer numarasi, musteri veya sehir ara"
+    "searchPlaceholder": "Sefer numarasi, musteri veya sehir ara",
+    "arrived": "Musteriye varildi",
+    "arrivedDone": "Varis bildirildi",
+    "waitForCustomer": "Musteriyi bekle",
+    "waitingDone": "Bekleme bildirildi",
+    "startLoading": "Yuklemeye baslandi",
+    "startUnloading": "Bosaltmaya baslandi",
+    "startedWork": "Bildirildi",
+    "loaded": "Yuklendi olarak bildir",
+    "done": "Tamamlandi olarak bildir",
+    "notLoaded": "Yuklenmedi"
   },
   "tasks": {
     "title": "Görevler",
@@ -3117,7 +3142,8 @@
     "errorNoPosition": "Bu plaka icin konum yok",
     "errorAddress": "Adres bulunamadi",
     "errorRoute": "Rota hesaplanamadi",
-    "errorUnknown": "Varis saati mevcut degil"
+    "errorUnknown": "Varis saati mevcut degil",
+    "arrived": "Musteriye varildi"
   },
   "orderStatus": {
     "nieuw": "Yeni",
@@ -3189,5 +3215,18 @@
     "decision_allowed": "İzin verildi",
     "decision_blocked": "Engellendi",
     "decision_would_block": "Engellenirdi"
+  },
+  "orderWork": {
+    "laden": "Yukleme",
+    "lossen": "Bosaltma",
+    "beide": "Yukleme ve bosaltma",
+    "geen": "Bosaltma"
+  },
+  "orderPhase": {
+    "onderweg": "Yolda",
+    "aangekomen": "Musteriye varildi",
+    "wachten_op_klant": "Musteri bekleniyor",
+    "bezig_laden": "Yukleme yapiliyor",
+    "bezig_lossen": "Bosaltma yapiliyor"
   }
 }
