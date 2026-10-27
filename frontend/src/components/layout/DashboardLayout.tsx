@@ -165,8 +165,13 @@ export default function DashboardLayout() {
   // volgende aanmelding gegarandeerd met een schone lei: geen resten van een
   // vorige Microsoft-sessie die het opnieuw inloggen kunnen laten stranden.
   const handleLogout = () => {
-    logout()
-    window.location.assign('/login')
+    try {
+      logout()
+    } finally {
+      // Ook als het opruimen struikelt moet de pagina echt opnieuw laden;
+      // anders blijft er oude aanmeldstaat in het geheugen hangen.
+      window.location.assign('/login')
+    }
   }
 
   // Op de iPhone draait de app zonder browserbalk: geen herlaadknop en geen

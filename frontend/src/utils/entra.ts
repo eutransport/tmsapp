@@ -54,6 +54,37 @@ export function heeftMicrosoftAntwoord(): boolean {
 // automatisch uit, en dat valt precies samen met de terugkeer van Microsoft.
 let bezigMetVerwerken = false
 
+// Onthoudt dat er al automatisch een tweede poging is gedaan. Staat bewust in
+// sessionStorage: de herkansing betekent een omweg langs Microsoft, dus een
+// variabele in het geheugen overleeft dat niet.
+const HERKANSING = 'entra.herkansing'
+
+function herkansingGebruikt(): boolean {
+  try {
+    return sessionStorage.getItem(HERKANSING) === '1'
+  } catch {
+    // Zonder sessionStorage kunnen we het niet bijhouden. Dan liever geen
+    // herkansing dan een eindeloze reeks omwegen.
+    return true
+  }
+}
+
+function markeerHerkansing(): void {
+  try {
+    sessionStorage.setItem(HERKANSING, '1')
+  } catch {
+    // Niet kunnen onthouden is niet erg genoeg om het inloggen te stoppen.
+  }
+}
+
+function vergeetHerkansing(): void {
+  try {
+    sessionStorage.removeItem(HERKANSING)
+  } catch {
+    // Zie hierboven.
+  }
+}
+
 /**
  * Wist de sporen van een Microsoft-aanmelding. Nodig bij uitloggen, anders
  * kan de applicatie de bewaarde sessie stilletjes opnieuw gebruiken.
@@ -63,12 +94,19 @@ export function vergeetMicrosoftSessie(): void {
   wisMicrosoftGegevens()
 }
 
+// MSAL bewaart lang niet alles onder een sleutel met "msal" erin. De
+// aanmelding zelf wel (`msal.<clientid>.request.params`), maar de tokens en
+// het account komen erna binnen onder sleutels als
+// `<account>-login.windows.net-idtoken-<clientid>-...`. Werden die niet
+// gewist, dan bleef iemand na het uitloggen bij Microsoft aangemeld.
+const MSAL_SLEUTEL = /(^|\.)msal|-(id|access|refresh)token-|-login\.(windows\.net|microsoftonline\.com)-/i
+
 function wisMicrosoftGegevens(): void {
   binnengekomenFragment = ''
   instantie = null
   try {
     for (const sleutel of Object.keys(sessionStorage)) {
-      if (sleutel.includes('msal')) {
+      if (MSAL_SLEUTEL.test(sleutel)) {
         sessionStorage.removeItem(sleutel)
       }
     }
@@ -222,6 +260,7 @@ export async function voltooiMicrosoftAanmelding(
     // Het fragment wordt meegegeven omdat de router het uit de adresbalk heeft
     // gehaald voordat deze code draait.
     const resultaat = await app.handleRedirectPromise({ hash: fragment })
+    vergeetHerkansing()
     return resultaat?.idToken ?? null
   } catch (fout) {
     // Een halfvergane poging mag de volgende niet blokkeren: opruimen, zodat
@@ -229,6 +268,15 @@ export async function voltooiMicrosoftAanmelding(
     wisMicrosoftGegevens()
     const code = (fout as { errorCode?: string })?.errorCode
     if (code === 'state_mismatch' || code === 'invalid_state') {
+      // Dit overkomt mensen vooral vlak na het uitloggen: de aanmelding die
+      // net begon, kon niet worden teruggevonden. Handmatig nog een keer op
+      // de knop drukken helpt altijd, dus doen we dat zelf. Eén keer, anders
+      // blijft de browser heen en weer stuiteren als het echt stuk is.
+      if (!herkansingGebruikt()) {
+        markeerHerkansing()
+        await logInBijMicrosoft(config)
+        return null
+      }
       throw new Error('De aanmelding bij Microsoft is verlopen. Probeer het opnieuw.')
     }
     throw fout
