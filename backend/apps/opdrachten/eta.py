@@ -103,7 +103,7 @@ def _bestemming(opdracht):
 
 
 def _posities_per_kenteken():
-    from apps.tracking.tachograph_service import get_vehicle_locations
+    from apps.tracking.positions import get_vehicle_locations
 
     gevonden = {}
     for positie in get_vehicle_locations():

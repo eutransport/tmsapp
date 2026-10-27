@@ -356,3 +356,77 @@ class RadiusSyncLog(models.Model):
 
     def __str__(self):
         return f"Radius sync {self.date} - {self.journeys_synced} ritten"
+
+
+class NavixyConnection(models.Model):
+    """Koppeling met het Navixy-volgsysteem.
+
+    Navixy geeft permanente API-sleutels uit die als ``Authorization: NVX <sleutel>``
+    meegestuurd worden. Een sessie-hash uit ``user/auth`` verloopt na dertig dagen
+    en is daarom ongeschikt voor een koppeling die blijft draaien.
+
+    De sleutel wordt versleuteld opgeslagen en komt nooit terug in een response.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    naam = models.CharField(max_length=120, unique=True, verbose_name='Naam')
+    api_key = EncryptedCharField(
+        max_length=512, verbose_name='Navixy API-sleutel',
+        help_text='Permanente API-sleutel uit Navixy (Instellingen > API keys).',
+    )
+    basis_url = models.CharField(
+        max_length=200, default='https://api.navixy.com/v2',
+        verbose_name='API-adres',
+        help_text='Pas dit alleen aan voor een eigen Navixy-omgeving.',
+    )
+    actief = models.BooleanField(default=True, db_index=True, verbose_name='Actief')
+    laatste_controle = models.DateTimeField(null=True, blank=True, verbose_name='Laatst gecontroleerd')
+    laatste_resultaat = models.CharField(max_length=255, blank=True, verbose_name='Laatste resultaat')
+    aangemaakt_door = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='navixy_connections',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Navixy koppeling'
+        verbose_name_plural = 'Navixy koppelingen'
+        ordering = ['naam']
+
+    def __str__(self):
+        return self.naam
+
+
+class NavixyTracker(models.Model):
+    """Welk Navixy-kastje bij welk kenteken hoort.
+
+    Navixy kent alleen een eigen tracker-nummer; de rest van de applicatie werkt
+    op kenteken. Deze tabel legt dat verband, zodat de posities op dezelfde
+    manier bruikbaar zijn als die uit de andere volgsystemen.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    koppeling = models.ForeignKey(
+        NavixyConnection, on_delete=models.CASCADE, related_name='trackers',
+        verbose_name='Koppeling',
+    )
+    tracker_id = models.BigIntegerField(verbose_name='Navixy tracker-id')
+    kenteken = models.CharField(max_length=20, db_index=True, verbose_name='Kenteken')
+    omschrijving = models.CharField(max_length=120, blank=True, verbose_name='Omschrijving')
+    actief = models.BooleanField(default=True, db_index=True, verbose_name='Actief')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Navixy tracker'
+        verbose_name_plural = 'Navixy trackers'
+        ordering = ['kenteken']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['koppeling', 'tracker_id'], name='navixy_tracker_uniek_per_koppeling',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.kenteken} (tracker {self.tracker_id})'

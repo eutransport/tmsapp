@@ -136,6 +136,29 @@ class RadiusConnectionTestThrottle(RadiusConnectionThrottle):
     scope = 'radius_connection_test'
 
 
+class NavixyConnectionThrottle(SimpleRateThrottle):
+    """Limiet op het beheren van Navixy-koppelingen en hun trackers."""
+    scope = 'navixy_connection'
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            return self.cache_format % {
+                'scope': self.scope,
+                'ident': request.user.pk,
+            }
+        return self.get_ident(request)
+
+
+class NavixyConnectionTestThrottle(NavixyConnectionThrottle):
+    """
+    Strengere limiet op het testen van een Navixy-koppeling.
+
+    Elke test doet een live aanroep met de opgegeven sleutel; zonder aparte
+    limiet zou dit endpoint gebruikt kunnen worden om sleutels te raden.
+    """
+    scope = 'navixy_connection_test'
+
+
 # ============ Anomaly Detection ============
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

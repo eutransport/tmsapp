@@ -5,9 +5,12 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from . import radius_views
 from .radius_connection_views import RadiusConnectionViewSet
+from .navixy_connection_views import NavixyConnectionViewSet, NavixyTrackerViewSet
 
 router = DefaultRouter()
 router.register(r'radius/koppelingen', RadiusConnectionViewSet, basename='radius-koppeling')
+router.register(r'navixy/koppelingen', NavixyConnectionViewSet, basename='navixy-koppeling')
+router.register(r'navixy/trackers', NavixyTrackerViewSet, basename='navixy-tracker')
 
 urlpatterns = [
     # Session management

@@ -632,7 +632,8 @@ class FMTrackPositionsView(APIView):
     permission_classes = [IsAdminOrManager]
 
     def get(self, request):
-        from apps.tracking.tachograph_service import get_vehicle_locations, FMTrackError
+        from apps.tracking.positions import get_vehicle_locations
+        from apps.tracking.tachograph_service import FMTrackError
         from apps.fleet.models import Vehicle
 
         try:

@@ -201,6 +201,8 @@ REST_FRAMEWORK = {
         'radius_export': '30/hour',      # Archief-export naar CSV/Excel/PDF
         'radius_connection': '120/hour',     # Koppelingen aanmaken en wijzigen
         'radius_connection_test': '20/hour',  # Live tokencontrole bij Radius
+        'navixy_connection': '120/hour',      # Navixy-koppelingen en trackers beheren
+        'navixy_connection_test': '20/hour',  # Live sleutelcontrole bij Navixy
         'tolling_factuur_import': '20/hour',  # Radius-factuur inlezen (PDF parsen)
         'tolling_backup': '30/hour',          # Tolbackup maken of terugzetten
         'rdw_lookup': '300/hour',        # Kenteken opzoeken tijdens het typen

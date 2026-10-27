@@ -161,7 +161,7 @@ def haal_ritten(kentekens, vanaf, tot):
 
 
 def _live_positie(object_id):
-    from apps.tracking.tachograph_service import get_vehicle_locations
+    from apps.tracking.positions import get_vehicle_locations
 
     try:
         posities = get_vehicle_locations()

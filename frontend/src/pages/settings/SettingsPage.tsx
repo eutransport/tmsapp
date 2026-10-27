@@ -43,6 +43,7 @@ import ServerMonitoringPanel from '@/components/ServerMonitoringPanel'
 import EmailProfilesManager from '@/components/settings/EmailProfilesManager'
 import AdministratiesManager from '@/components/settings/AdministratiesManager'
 import RadiusConnections from '@/components/settings/RadiusConnections'
+import NavixyConnections from '@/components/settings/NavixyConnections'
 import PushSettingsTab from '@/components/settings/PushSettingsTab'
 import PushNotificationCard from '@/components/pwa/PushNotificationCard'
 
@@ -1354,6 +1355,8 @@ export default function SettingsPage() {
               </div>
 
               <RadiusConnections />
+
+              <NavixyConnections />
 
               {/* Microsoft Entra ID – accounts aanmaken */}
               <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 space-y-4">
