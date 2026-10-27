@@ -242,6 +242,47 @@ class EntraEndpointTests(TestCase):
         self.assertFalse(antwoord.data['enabled'])
 
 
+class EntraGastEmailTests(TestCase):
+    """
+    Een uitgenodigde gast heeft in de tenant een omgebouwde inlognaam. Komt die
+    ongewijzigd binnen, dan vindt de applicatie het account niet en kan niemand
+    die via een uitnodiging binnenkomt inloggen.
+    """
+
+    def test_gastnaam_wordt_terugvertaald_naar_het_echte_adres(self):
+        self.assertEqual(
+            entra.email_uit_claims({
+                'preferred_username':
+                    'info_moveo-bv.nl#EXT#@moveotransport.onmicrosoft.com',
+            }),
+            'info@moveo-bv.nl',
+        )
+
+    def test_gewoon_adres_blijft_ongemoeid(self):
+        self.assertEqual(
+            entra.email_uit_claims({'email': 'Extern@Gmail.com'}),
+            'extern@gmail.com',
+        )
+
+    def test_onderstrepingsteken_in_het_adres_blijft_behouden(self):
+        self.assertEqual(
+            entra.email_uit_claims({
+                'upn': 'jan_de_vries_gmail.com#EXT#@mijntenant.onmicrosoft.com',
+            }),
+            'jan_de_vries@gmail.com',
+        )
+
+    def test_echte_emailclaim_gaat_voor_de_gastnaam(self):
+        self.assertEqual(
+            entra.email_uit_claims({
+                'email': 'info@moveo-bv.nl',
+                'preferred_username':
+                    'info_moveo-bv.nl#EXT#@moveotransport.onmicrosoft.com',
+            }),
+            'info@moveo-bv.nl',
+        )
+
+
 class EntraAuthorityTests(TestCase):
     """
     Het inlogadres verschilt per soort tenant. Een fout hierin leidt tot
@@ -318,3 +359,73 @@ class EntraUitgeschakeldTests(TestCase):
         )
         self.assertEqual(antwoord.status_code, 200, getattr(antwoord, 'data', antwoord.content))
         self.assertIn('access', antwoord.data)
+
+
+class EntraMetadataCacheTests(TestCase):
+    """
+    De metadata van Microsoft wordt gecachet. Bij een tenantwijziging mag die
+    cache niet de oude tenant blijven teruggeven: dan klopt de uitgever niet
+    meer en wordt elke login afgekeurd.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def _metadata_voor(self, tenant):
+        return {
+            'issuer': f'https://login.microsoftonline.com/{tenant}/v2.0',
+            'jwks_uri': f'https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys',
+        }
+
+    def test_tenantwijziging_omzeilt_de_cache(self):
+        oud = '11111111-1111-1111-1111-111111111111'
+        nieuw = '22222222-2222-2222-2222-222222222222'
+
+        def nep_get(url, timeout=None):
+            tenant = oud if oud in url else nieuw
+
+            class Antwoord:
+                @staticmethod
+                def raise_for_status():
+                    return None
+
+                @staticmethod
+                def json():
+                    return self._metadata_voor(tenant)
+
+            return Antwoord()
+
+        with patch('requests.get', side_effect=nep_get):
+            with override_settings(ENTRA_TENANT_TYPE='workforce', ENTRA_TENANT_ID=oud):
+                eerste = entra._haal_metadata()
+            with override_settings(ENTRA_TENANT_TYPE='workforce', ENTRA_TENANT_ID=nieuw):
+                tweede = entra._haal_metadata()
+
+        self.assertIn(oud, eerste['issuer'])
+        self.assertIn(nieuw, tweede['issuer'], 'De cache gaf de metadata van de vorige tenant terug.')
+
+    def test_zelfde_tenant_gebruikt_de_cache_wel(self):
+        tenant = '33333333-3333-3333-3333-333333333333'
+        aanroepen = []
+
+        def nep_get(url, timeout=None):
+            aanroepen.append(url)
+
+            class Antwoord:
+                @staticmethod
+                def raise_for_status():
+                    return None
+
+                @staticmethod
+                def json():
+                    return self._metadata_voor(tenant)
+
+            return Antwoord()
+
+        with patch('requests.get', side_effect=nep_get):
+            with override_settings(ENTRA_TENANT_TYPE='workforce', ENTRA_TENANT_ID=tenant):
+                entra._haal_metadata()
+                entra._haal_metadata()
+
+        self.assertEqual(len(aanroepen), 1, 'De metadata werd onnodig opnieuw opgehaald.')

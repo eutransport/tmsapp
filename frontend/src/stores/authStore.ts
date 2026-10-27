@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware'
 import type { User } from '@/types'
 import { authApi } from '@/api/auth'
+import { vergeetMicrosoftSessie } from '@/utils/entra'
 
 // Simple obfuscation for localStorage
 // This adds a layer of protection against casual inspection
@@ -150,6 +151,9 @@ export const useAuthStore = create<AuthState>()(
         if (refreshToken) {
           authApi.logout(refreshToken).catch(() => {})
         }
+        // Ook de Microsoft-kant opruimen, anders kan de applicatie de bewaarde
+        // aanmelding meteen opnieuw gebruiken en lijkt uitloggen te mislukken.
+        vergeetMicrosoftSessie()
         set({
           user: null,
           accessToken: null,

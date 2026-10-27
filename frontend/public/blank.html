@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <title>Bezig met aanmelden…</title>
+    <meta name="robots" content="noindex" />
+  </head>
+  <body>
+    <!--
+      Microsoft stuurt de bezoeker na het aanmelden hierheen terug, met het
+      antwoord achter een `#` in de URL. Deze pagina laadt bewust niet de hele
+      applicatie: die zou de URL herschrijven en het antwoord weggooien.
+
+      In plaats daarvan sturen we meteen door naar de inlogpagina, mét het
+      fragment. Zo hoeft er in Microsoft Entra niets te worden aangepast.
+    -->
+    <script>
+      (function () {
+        var fragment = window.location.hash || ''
+        window.location.replace('/login' + fragment)
+      })()
+    </script>
+  </body>
+</html>

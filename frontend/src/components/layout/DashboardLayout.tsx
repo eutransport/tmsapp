@@ -161,7 +161,13 @@ export default function DashboardLayout() {
   useEffect(() => { fetchSettings() }, [fetchSettings])
   useEffect(() => { applyTheme(currentTheme) }, [currentTheme, applyTheme])
 
-  const handleLogout = () => { logout(); navigate('/login') }
+  // Volledig herladen in plaats van intern navigeren. Daarmee begint de
+  // volgende aanmelding gegarandeerd met een schone lei: geen resten van een
+  // vorige Microsoft-sessie die het opnieuw inloggen kunnen laten stranden.
+  const handleLogout = () => {
+    logout()
+    window.location.assign('/login')
+  }
 
   // Op de iPhone draait de app zonder browserbalk: geen herlaadknop en geen
   // "naar beneden trekken". Deze knop doet dat werk, zonder uit te loggen.

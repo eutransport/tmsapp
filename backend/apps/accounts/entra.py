@@ -10,6 +10,7 @@ Wat hier expliciet NIET gebeurt: rollen of rechten uit het Microsoft-token
 overnemen. Die claims zijn beheerd in een andere omgeving en mogen nooit
 rechtstreeks bepalen wat iemand in deze applicatie kan.
 """
+import hashlib
 import logging
 
 import jwt
@@ -27,6 +28,23 @@ METADATA_CACHE_TTL = 3600
 # Entra levert het e-mailadres niet altijd in hetzelfde veld. Deze volgorde
 # gaat van meest naar minst betrouwbaar.
 EMAIL_CLAIMS = ('email', 'preferred_username', 'upn', 'unique_name')
+
+# Een uitgenodigde gast krijgt in de tenant een omgebouwde inlognaam:
+#   info@moveo-bv.nl  ->  info_moveo-bv.nl#EXT#@mijntenant.onmicrosoft.com
+# Dat is niet het adres waarop wij de gebruiker kennen, dus draaien we het terug.
+GAST_SCHEIDING = '#EXT#'
+
+
+def _herstel_gast_email(waarde: str) -> str:
+    if GAST_SCHEIDING not in waarde:
+        return waarde
+    oorspronkelijk = waarde.split(GAST_SCHEIDING, 1)[0]
+    # Bij het uitnodigen is de '@' vervangen door een '_'. Alleen de laatste
+    # telt; een onderstrepingsteken in het adres zelf blijft zo intact.
+    basis, _, domein = oorspronkelijk.rpartition('_')
+    if basis and domein:
+        return f'{basis}@{domein}'
+    return oorspronkelijk
 
 
 class EntraConfiguratieFout(Exception):
@@ -69,9 +87,20 @@ def metadata_url() -> str:
     return f'{authority()}/.well-known/openid-configuration'
 
 
+def _metadata_cache_key() -> str:
+    """
+    De cachesleutel bevat de authority, zodat een tenantwijziging niet urenlang
+    de metadata van de vorige tenant blijft gebruiken. Zonder dit worden na een
+    verhuizing alle tokens afgekeurd omdat de uitgever niet blijkt te kloppen.
+    """
+    vingerafdruk = hashlib.sha256(authority().encode()).hexdigest()[:16]
+    return f'{METADATA_CACHE_KEY}:{vingerafdruk}'
+
+
 def _haal_metadata() -> dict:
     """Haal de OIDC-metadata op, met cache."""
-    bewaard = cache.get(METADATA_CACHE_KEY)
+    sleutel = _metadata_cache_key()
+    bewaard = cache.get(sleutel)
     if bewaard:
         return bewaard
 
@@ -83,7 +112,7 @@ def _haal_metadata() -> dict:
     if 'jwks_uri' not in data or 'issuer' not in data:
         raise EntraConfiguratieFout('Onverwachte OIDC-metadata van Microsoft.')
 
-    cache.set(METADATA_CACHE_KEY, data, METADATA_CACHE_TTL)
+    cache.set(sleutel, data, METADATA_CACHE_TTL)
     return data
 
 
@@ -140,8 +169,11 @@ def valideer_token(token: str) -> dict:
 def email_uit_claims(claims: dict) -> str:
     for veld in EMAIL_CLAIMS:
         waarde = claims.get(veld)
-        if waarde and '@' in str(waarde):
-            return str(waarde).strip().lower()
+        if not waarde:
+            continue
+        hersteld = _herstel_gast_email(str(waarde).strip())
+        if '@' in hersteld:
+            return hersteld.lower()
     raise EntraTokenFout(
         'Het token bevat geen e-mailadres. Zet de claim "email" aan in de user flow.'
     )

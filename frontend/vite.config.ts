@@ -95,7 +95,7 @@ export default defineConfig({
         // Increase max file size to cache - needed for large bundles
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
         // Don't intercept downloads or backend routes with the SPA fallback
-        navigateFallbackDenylist: [/^\/media\//, /^\/api\//, /^\/files\//, /^\/admin\//, /^\/static\//],
+        navigateFallbackDenylist: [/^\/media\//, /^\/api\//, /^\/files\//, /^\/admin\//, /^\/static\//, /^\/blank\.html$/],
         // Cache strategieën
         runtimeCaching: [
           {

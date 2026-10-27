@@ -581,7 +581,7 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self';" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://login.microsoftonline.com https://*.ciamlogin.com; frame-src 'self' https://login.microsoftonline.com https://*.ciamlogin.com; form-action 'self' https://login.microsoftonline.com https://*.ciamlogin.com; frame-ancestors 'self';" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
     
     # Connection limits

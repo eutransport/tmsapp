@@ -69,7 +69,8 @@ export default function MfaSetupPage() {
 
   const handleLogout = () => {
     logout()
-    navigate('/login', { replace: true })
+    // Volledig herladen, zodat een volgende aanmelding schoon begint.
+    window.location.assign('/login')
   }
 
   if (loadingSetup) {

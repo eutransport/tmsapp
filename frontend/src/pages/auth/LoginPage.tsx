@@ -4,7 +4,13 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
 import { startApkDownload } from '@/components/app/AppInstallBlok'
-import { haalEntraConfig, logInBijMicrosoft, type EntraConfig } from '@/utils/entra'
+import {
+  haalEntraConfig,
+  heeftMicrosoftAntwoord,
+  logInBijMicrosoft,
+  voltooiMicrosoftAanmelding,
+  type EntraConfig,
+} from '@/utils/entra'
 import toast from 'react-hot-toast'
 
 interface LoginForm {
@@ -60,28 +66,52 @@ export default function LoginPage() {
   const twoFactorForm = useForm<TwoFactorForm>()
 
   useEffect(() => {
-    haalEntraConfig().then(setEntraConfig)
+    let afgebroken = false
+
+    haalEntraConfig().then(async (config) => {
+      if (afgebroken) return
+      setEntraConfig(config)
+
+      // Terugkeer van Microsoft afronden. Dit moet hier gebeuren en niet bij
+      // het indrukken van de knop: de browser is intussen weggenavigeerd en
+      // opnieuw geladen.
+      if (!heeftMicrosoftAntwoord()) return
+
+      setShowLogin(true)
+      setEntraBezig(true)
+      try {
+        const idToken = await voltooiMicrosoftAanmelding(config)
+        if (!idToken) return
+        await loginMetMicrosoft(idToken)
+        toast.success(t('auth.successfullyLoggedIn'))
+        navigate('/')
+      } catch (error: unknown) {
+        const err = error as {
+          errorCode?: string
+          message?: string
+          response?: { data?: { detail?: string } }
+        }
+        if (err.errorCode === 'user_cancelled') return
+        toast.error(err.response?.data?.detail || err.message || t('auth.invalidCredentials'))
+      } finally {
+        if (!afgebroken) setEntraBezig(false)
+      }
+    })
+
+    return () => {
+      afgebroken = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const onMicrosoftLogin = async () => {
     setEntraBezig(true)
     try {
-      const idToken = await logInBijMicrosoft(entraConfig)
-      await loginMetMicrosoft(idToken)
-      toast.success(t('auth.successfullyLoggedIn'))
-      navigate('/')
+      // Navigeert weg naar Microsoft; de afhandeling gebeurt na terugkeer.
+      await logInBijMicrosoft(entraConfig)
     } catch (error: unknown) {
-      const err = error as {
-        errorCode?: string
-        message?: string
-        response?: { data?: { detail?: string } }
-      }
-      // Het popupvenster sluiten is geen fout; dan hoeft er niets te knipperen.
-      if (err.errorCode === 'user_cancelled' || err.errorCode === 'popup_window_error') {
-        return
-      }
-      toast.error(err.response?.data?.detail || err.message || t('auth.invalidCredentials'))
-    } finally {
+      const err = error as { message?: string }
+      toast.error(err.message || t('auth.invalidCredentials'))
       setEntraBezig(false)
     }
   }
