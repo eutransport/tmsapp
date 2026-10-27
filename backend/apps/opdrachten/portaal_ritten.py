@@ -1,8 +1,9 @@
 """Ritten voor het opdrachtgeversportaal, uit de bron die de wagen werkelijk volgt.
 
-Linqo levert de GPS-ritten. Radius dient alleen als terugval voor wagens die
-niet in Linqo staan; die gegevens komen daar uit de tolregistratie en geven een
-grover beeld.
+Linqo levert de GPS-ritten. Navixy levert ze voor de wagens die daar een eigen
+tracker hebben. Radius dient alleen als terugval voor wagens die in geen van
+beide staan; die gegevens komen daar uit de tolregistratie en geven een grover
+beeld.
 """
 import logging
 from datetime import datetime, time, timedelta
@@ -11,7 +12,7 @@ from datetime import timezone as dt_timezone
 from django.core.cache import cache
 from django.utils import timezone
 
-from apps.tracking.models import RadiusJourney
+from apps.tracking.models import NavixyJourney, RadiusJourney
 
 logger = logging.getLogger(__name__)
 
@@ -140,19 +141,66 @@ def _radius_ritten(kentekens, vanaf, tot):
     } for rit in rijen if normaliseer(rit.plate_number) in gevraagd]
 
 
+def _navixy_ritten(kentekens, vanaf, tot):
+    gevraagd = {normaliseer(k) for k in kentekens}
+    rijen = (NavixyJourney.objects
+             .filter(date__gte=vanaf, date__lte=tot)
+             .order_by('date', 'plate_number', 'start_time'))
+    return [{
+        'id': f'navixy-{rit.id}',
+        'kenteken': rit.plate_number,
+        'datum': rit.date,
+        'start_tijd': rit.start_time,
+        'eind_tijd': rit.end_time,
+        'start_adres': rit.start_address,
+        'start_plaats': '',
+        'eind_adres': rit.end_address,
+        'eind_plaats': '',
+        'start_latitude': rit.start_latitude,
+        'start_longitude': rit.start_longitude,
+        'eind_latitude': rit.end_latitude,
+        'eind_longitude': rit.end_longitude,
+        'afstand_km': round(rit.distance_km or 0, 1),
+        'km_start': None,
+        'km_eind': None,
+        'bron': 'navixy',
+    } for rit in rijen if normaliseer(rit.plate_number) in gevraagd]
+
+
+def navixy_kentekens():
+    """Genormaliseerde kentekens die een eigen Navixy-tracker hebben."""
+    from apps.tracking.models import NavixyTracker
+
+    return {
+        normaliseer(kenteken)
+        for kenteken in NavixyTracker.objects
+        .filter(actief=True, koppeling__actief=True)
+        .values_list('kenteken', flat=True)
+    }
+
+
 def haal_ritten(kentekens, vanaf, tot):
-    """Per wagen de ritten uit Linqo, en uit Radius voor wat Linqo niet kent."""
+    """Per wagen de ritten uit de bron die hem werkelijk volgt.
+
+    Linqo gaat voor, dan Navixy, en Radius vangt op wat overblijft.
+    """
     objecten = linqo_objecten()
+    met_navixy = navixy_kentekens()
     ritten = []
+    via_navixy = []
     rest = []
 
     for kenteken in kentekens:
         object_info = objecten.get(normaliseer(kenteken))
         if object_info:
             ritten.extend(_linqo_ritten(object_info['object_id'], kenteken, vanaf, tot))
+        elif normaliseer(kenteken) in met_navixy:
+            via_navixy.append(kenteken)
         else:
             rest.append(kenteken)
 
+    if via_navixy:
+        ritten.extend(_navixy_ritten(via_navixy, vanaf, tot))
     if rest:
         ritten.extend(_radius_ritten(rest, vanaf, tot))
 
@@ -160,16 +208,27 @@ def haal_ritten(kentekens, vanaf, tot):
     return ritten
 
 
-def _live_positie(object_id):
+def _live_positie(object_id=None, kenteken=None):
+    """De actuele positie, gezocht op objectnummer of anders op kenteken.
+
+    Wagens die niet in Linqo staan hebben geen objectnummer dat het portaal
+    kent; voor die wagens zoeken we op kenteken, zodat ook een Navixy-wagen
+    zijn actuele positie toont.
+    """
     from apps.tracking.positions import get_vehicle_locations
 
     try:
         posities = get_vehicle_locations()
     except Exception:
-        logger.warning('Portaal: live positie niet beschikbaar voor %s', object_id)
+        logger.warning('Portaal: live positie niet beschikbaar voor %s',
+                       object_id or kenteken)
         return None
+
+    gezocht = normaliseer(kenteken) if kenteken else None
     for positie in posities:
-        if positie.get('object_id') == object_id:
+        if object_id and positie.get('object_id') == object_id:
+            return positie
+        if gezocht and normaliseer(positie.get('plate_number')) == gezocht:
             return positie
     return None
 
@@ -184,14 +243,24 @@ def dagoverzicht(kenteken, datum):
     eindtijden = [r['eind_tijd'] for r in op_volgorde if r['eind_tijd']]
 
     object_info = linqo_objecten().get(normaliseer(kenteken))
-    positie = _live_positie(object_info['object_id']) if object_info else None
+    positie = _live_positie(
+        object_id=object_info['object_id'] if object_info else None,
+        kenteken=kenteken,
+    )
     # De volgdienst laat de snelheid op nul staan; alleen vehicle_status is bruikbaar.
     toestand = (positie or {}).get('vehicle_status') or ''
+
+    if object_info:
+        standaard_bron = 'linqo'
+    elif normaliseer(kenteken) in navixy_kentekens():
+        standaard_bron = 'navixy'
+    else:
+        standaard_bron = 'radius'
 
     return {
         'kenteken': kenteken,
         'datum': datum,
-        'bron': op_volgorde[0]['bron'] if op_volgorde else ('linqo' if object_info else 'radius'),
+        'bron': op_volgorde[0]['bron'] if op_volgorde else standaard_bron,
         'ritten': ritten,
         'aantal_ritten': len(ritten),
         'km_start': min(standen) if standen else None,

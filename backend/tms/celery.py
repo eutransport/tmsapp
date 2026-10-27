@@ -66,6 +66,20 @@ app.conf.beat_schedule = {
         'schedule': crontab(minute='*/5'),
         'kwargs': {'dagen': 2},
     },
+    'sync-navixy-journeys': {
+        # Navixy bewaart maar een beperkte periode ritgeschiedenis; dagelijks
+        # ophalen zodat het eigen archief verder terug blijft gaan.
+        'task': 'apps.tracking.tasks.sync_navixy_journeys',
+        'schedule': crontab(hour=3, minute=35),
+        'kwargs': {'dagen': 7},
+    },
+    'sync-navixy-journeys-recent': {
+        # Elke 5 minuten de lopende en vorige dag bijwerken, zodat de ritten
+        # vrijwel actueel zijn. Doet niets zonder actieve koppeling.
+        'task': 'apps.tracking.tasks.sync_navixy_journeys',
+        'schedule': crontab(minute='*/5'),
+        'kwargs': {'dagen': 2},
+    },
     'send-daily-task-reminders': {
         # Runs every minute; the task itself checks the configured send time.
         'task': 'apps.tasks.tasks.send_daily_task_reminders',

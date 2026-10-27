@@ -1,10 +1,16 @@
 """Tests voor de Navixy-koppeling en het samenvoegen van positiebronnen."""
+from datetime import date, datetime, timedelta
+from datetime import timezone as dt_timezone
 from unittest.mock import patch
 
 from django.test import TestCase
+from django.utils import timezone
 
-from apps.tracking import navixy_service, positions
-from apps.tracking.models import NavixyConnection, NavixyTracker
+from apps.tracking import navixy_detail, navixy_service, positions
+from apps.tracking.models import (
+    NavixyConnection, NavixyJourney, NavixyTracker,
+)
+from apps.tracking.navixy_archive_service import sync_navixy_journeys
 from apps.tracking.tachograph_service import FMTrackError
 
 
@@ -254,3 +260,270 @@ class EtaGebruiktNavixyTests(NavixyBasis):
         # De ETA werkt op kenteken zonder streepjes.
         self.assertIn('71BTL6', gevonden)
         self.assertEqual(gevonden['71BTL6']['latitude'], 52.0)
+
+
+def _track(track_id=11, start='2026-10-27 08:00:00', eind='2026-10-27 09:30:00',
+           lengte=82.5, soort='regular'):
+    return {
+        'id': track_id,
+        'type': soort,
+        'start_date': start,
+        'end_date': eind,
+        'start_address': 'Rietvelden, Breda',
+        'end_address': 'Hudsonweg, Venlo',
+        'length': lengte,
+        'max_speed': 89,
+        'avg_speed': 55,
+        'points': 120,
+    }
+
+
+class NavixyRitTests(NavixyBasis):
+    """Het ophalen en omzetten van ritten uit /track/list."""
+
+    def test_rit_wordt_omgezet_met_duur_en_afstand(self):
+        antwoord = {'success': True, 'list': [_track()]}
+        with patch.object(navixy_service, '_aanroep', return_value=antwoord) as aanroep:
+            ritten = navixy_service.get_journeys(
+                self.tracker,
+                timezone.now() - timedelta(days=1),
+                timezone.now(),
+            )
+
+        self.assertEqual(len(ritten), 1)
+        rit = ritten[0]
+        self.assertEqual(rit['track_id'], 11)
+        self.assertEqual(rit['distance_km'], 82.5)
+        # Navixy geeft geen duur per rit; die rekenen we zelf uit.
+        self.assertEqual(rit['duration_seconds'], 90 * 60)
+        self.assertEqual(rit['plate_number'], '71-BTL-6')
+        self.assertEqual(rit['start_address'], 'Rietvelden, Breda')
+
+        # Losse ritten, anders levert Navixy een blok zonder eigen id.
+        payload = aanroep.call_args[0][2]
+        self.assertTrue(payload['split'])
+        self.assertEqual(payload['tracker_id'], 3687634)
+
+    def test_tijden_worden_als_nederlandse_tijd_gelezen(self):
+        antwoord = {'success': True, 'list': [_track(start='2026-10-27 08:00:00',
+                                                     eind='2026-10-27 08:30:00')]}
+        with patch.object(navixy_service, '_aanroep', return_value=antwoord):
+            ritten = navixy_service.get_journeys(
+                self.tracker, timezone.now() - timedelta(days=1), timezone.now())
+
+        # 08:00 Nederlandse wintertijd is 07:00 UTC.
+        self.assertEqual(ritten[0]['start_time'].astimezone(dt_timezone.utc).hour, 7)
+
+    def test_blokken_zonder_eigen_id_worden_overgeslagen(self):
+        antwoord = {'success': True, 'list': [
+            _track(track_id=None, soort='merged'),
+            _track(track_id=5, soort='single_report'),
+            _track(track_id=7),
+        ]}
+        with patch.object(navixy_service, '_aanroep', return_value=antwoord):
+            ritten = navixy_service.get_journeys(
+                self.tracker, timezone.now() - timedelta(days=1), timezone.now())
+
+        self.assertEqual([r['track_id'] for r in ritten], [7])
+
+    def test_rit_die_voor_de_start_eindigt_wordt_geweigerd(self):
+        antwoord = {'success': True, 'list': [
+            _track(start='2026-10-27 09:00:00', eind='2026-10-27 08:00:00'),
+        ]}
+        with patch.object(navixy_service, '_aanroep', return_value=antwoord):
+            ritten = navixy_service.get_journeys(
+                self.tracker, timezone.now() - timedelta(days=1), timezone.now())
+        self.assertEqual(ritten, [])
+
+    def test_lange_periode_wordt_opgeknipt(self):
+        antwoord = {'success': True, 'list': []}
+        with patch.object(navixy_service, '_aanroep', return_value=antwoord) as aanroep:
+            navixy_service.get_journeys(
+                self.tracker,
+                timezone.now() - timedelta(days=40),
+                timezone.now(),
+            )
+        # Veertien dagen per blok, dus veertig dagen past niet in een aanvraag.
+        self.assertGreater(aanroep.call_count, 1)
+
+    def test_te_lange_periode_geeft_begrijpelijke_melding(self):
+        antwoord = {'success': False, 'status': {'code': 211, 'description': 'time span too big'}}
+        with patch.object(navixy_service, '_aanroep', wraps=navixy_service._aanroep):
+            with patch('apps.tracking.navixy_service.requests.post') as post:
+                post.return_value.json.return_value = antwoord
+                post.return_value.status_code = 200
+                with self.assertRaises(navixy_service.NavixyError) as fout:
+                    navixy_service.get_journeys(
+                        self.tracker, timezone.now() - timedelta(days=1), timezone.now())
+        self.assertIn('periode', str(fout.exception).lower())
+        self.assertNotIn('time span', str(fout.exception))
+
+
+class NavixyArchiefTests(NavixyBasis):
+    """Het wegschrijven van ritten naar het eigen archief."""
+
+    def test_ritten_worden_opgeslagen(self):
+        antwoord = {'success': True, 'list': [_track(track_id=1), _track(track_id=2, lengte=10.0)]}
+        with patch.object(navixy_service, '_aanroep', return_value=antwoord):
+            overzicht = sync_navixy_journeys(dagen=2)
+
+        self.assertEqual(overzicht['nieuw'], 2)
+        self.assertEqual(NavixyJourney.objects.count(), 2)
+
+    def test_opnieuw_ophalen_maakt_geen_dubbele_ritten(self):
+        antwoord = {'success': True, 'list': [_track(track_id=1)]}
+        with patch.object(navixy_service, '_aanroep', return_value=antwoord):
+            sync_navixy_journeys(dagen=2)
+            tweede = sync_navixy_journeys(dagen=2)
+
+        self.assertEqual(tweede['nieuw'], 0)
+        self.assertEqual(NavixyJourney.objects.count(), 1)
+
+    def test_herberekende_rit_wordt_bijgewerkt(self):
+        with patch.object(navixy_service, '_aanroep',
+                          return_value={'success': True, 'list': [_track(track_id=1, lengte=50.0)]}):
+            sync_navixy_journeys(dagen=2)
+        with patch.object(navixy_service, '_aanroep',
+                          return_value={'success': True, 'list': [_track(track_id=1, lengte=57.5)]}):
+            tweede = sync_navixy_journeys(dagen=2)
+
+        self.assertEqual(tweede['bijgewerkt'], 1)
+        self.assertEqual(NavixyJourney.objects.count(), 1)
+        self.assertEqual(NavixyJourney.objects.get().distance_km, 57.5)
+
+    def test_storing_bij_een_tracker_stopt_de_rest_niet(self):
+        tweede_tracker = NavixyTracker.objects.create(
+            koppeling=self.koppeling, tracker_id=99, kenteken='41-BRR-3',
+        )
+        def wisselend(koppeling, endpoint, payload=None):
+            if payload and payload.get('tracker_id') == 3687634:
+                raise navixy_service.NavixyError('tracker geblokkeerd')
+            return {'success': True, 'list': [_track(track_id=3)]}
+
+        with patch.object(navixy_service, '_aanroep', side_effect=wisselend):
+            overzicht = sync_navixy_journeys(dagen=2)
+
+        self.assertEqual(overzicht['nieuw'], 1)
+        self.assertEqual(len(overzicht['fouten']), 1)
+        self.assertEqual(NavixyJourney.objects.get().tracker, tweede_tracker)
+
+    def test_inactieve_tracker_wordt_niet_opgehaald(self):
+        self.tracker.actief = False
+        self.tracker.save()
+        with patch.object(navixy_service, '_aanroep') as aanroep:
+            overzicht = sync_navixy_journeys(dagen=2)
+        aanroep.assert_not_called()
+        self.assertEqual(overzicht['trackers'], 0)
+
+
+class NavixyDagdetailTests(NavixyBasis):
+    """Het dagoverzicht dat het voertuigpaneel toont."""
+
+    def setUp(self):
+        super().setUp()
+        start = datetime(2026, 10, 27, 8, 0, tzinfo=navixy_detail.NL_TZ)
+        NavixyJourney.objects.create(
+            tracker=self.tracker, track_id=1, plate_number='71-BTL-6',
+            date=start.date(), start_time=start, end_time=start + timedelta(hours=2),
+            distance_km=120.0, duration_seconds=7200, max_speed=89,
+            start_address='Breda', end_address='Venlo',
+        )
+
+    def test_dagdetail_telt_ritten_afstand_en_duur_op(self):
+        with patch.object(navixy_service, 'get_track_points', return_value=[]):
+            detail = navixy_detail.dagdetail(self.tracker, date(2026, 10, 27))
+
+        self.assertEqual(detail['trip_count'], 1)
+        self.assertEqual(detail['total_distance_km'], 120.0)
+        self.assertEqual(detail['total_duration_seconds'], 7200)
+        self.assertEqual(detail['bron'], 'navixy')
+        self.assertEqual(detail['vehicle']['plate_number'], '71-BTL-6')
+        # Negen uur rijtijd per dag, waarvan twee gebruikt.
+        self.assertEqual(detail['remaining_drive_seconds'], 7 * 3600)
+
+    def test_rit_van_een_andere_dag_telt_niet_mee(self):
+        with patch.object(navixy_service, 'get_track_points', return_value=[]):
+            detail = navixy_detail.dagdetail(self.tracker, date(2026, 10, 26))
+        self.assertEqual(detail['trip_count'], 0)
+        self.assertEqual(detail['total_distance_km'], 0)
+
+    def test_zonder_route_blijft_het_overzicht_bruikbaar(self):
+        with patch.object(navixy_service, 'get_track_points',
+                          side_effect=navixy_service.NavixyError('geen route')):
+            detail = navixy_detail.dagdetail(self.tracker, date(2026, 10, 27))
+        self.assertEqual(detail['route_coordinates'], [])
+        self.assertEqual(detail['trip_count'], 1)
+
+    def test_object_id_wordt_herkend(self):
+        self.assertTrue(navixy_detail.is_navixy_object('navixy:3687634'))
+        self.assertFalse(navixy_detail.is_navixy_object('12345'))
+        self.assertEqual(navixy_detail.tracker_van_object('navixy:3687634'), self.tracker)
+        self.assertIsNone(navixy_detail.tracker_van_object('navixy:999'))
+        self.assertIsNone(navixy_detail.tracker_van_object('12345'))
+
+
+class NavixyTijdzoneTests(NavixyBasis):
+    """De accountklok van Navixy moet op onze tijd staan."""
+
+    def test_afwijkende_accountklok_wordt_gemeld(self):
+        verschoven = (datetime.now(navixy_service.NL_TZ) + timedelta(hours=5))
+        with self.assertLogs('tracking', level='ERROR') as logboek:
+            navixy_service.controleer_accountstijd({
+                'user_time': verschoven.strftime(navixy_service.NAVIXY_TIJD_FORMAAT),
+            })
+        self.assertIn('tijdzone', '\n'.join(logboek.output).lower())
+
+    def test_gelijke_klok_geeft_geen_melding(self):
+        nu = datetime.now(navixy_service.NL_TZ)
+        with patch.object(navixy_service.logger, 'error') as melding:
+            navixy_service.controleer_accountstijd({
+                'user_time': nu.strftime(navixy_service.NAVIXY_TIJD_FORMAAT),
+            })
+        melding.assert_not_called()
+
+class NavixyPortaalTests(NavixyBasis):
+    """Wat de opdrachtgever in het portaal ziet."""
+
+    def setUp(self):
+        super().setUp()
+        from apps.opdrachten import portaal_ritten
+        self.portaal = portaal_ritten
+        start = datetime(2026, 10, 27, 9, 0, tzinfo=navixy_detail.NL_TZ)
+        NavixyJourney.objects.create(
+            tracker=self.tracker, track_id=1, plate_number='71-BTL-6',
+            date=start.date(), start_time=start, end_time=start + timedelta(hours=1),
+            distance_km=64.0, duration_seconds=3600,
+            start_address='Breda', end_address='Venlo',
+        )
+
+    def test_ritten_komen_uit_navixy_als_linqo_de_wagen_niet_kent(self):
+        with patch.object(self.portaal, 'linqo_objecten', return_value={}):
+            ritten = self.portaal.haal_ritten(
+                ['71-BTL-6'], date(2026, 10, 27), date(2026, 10, 27))
+
+        self.assertEqual(len(ritten), 1)
+        self.assertEqual(ritten[0]['bron'], 'navixy')
+        self.assertEqual(ritten[0]['afstand_km'], 64.0)
+
+    def test_dagoverzicht_toont_de_actuele_positie_op_kenteken(self):
+        positie = {
+            'object_id': 'navixy:3687634', 'plate_number': '71-BTL-6',
+            'latitude': 51.48, 'longitude': 4.73, 'address': 'Rietvelden, Breda',
+            'vehicle_status': 'parked', 'timestamp': '2026-10-27 21:19:35',
+        }
+        with patch.object(self.portaal, 'linqo_objecten', return_value={}), \
+             patch('apps.tracking.positions.get_vehicle_locations', return_value=[positie]):
+            overzicht = self.portaal.dagoverzicht('71-BTL-6', date(2026, 10, 27))
+
+        self.assertEqual(overzicht['bron'], 'navixy')
+        self.assertEqual(overzicht['aantal_ritten'], 1)
+        self.assertEqual(overzicht['km_gereden'], 64.0)
+        # Zonder objectnummer moet de positie op kenteken gevonden worden.
+        self.assertEqual(overzicht['positie_adres'], 'Rietvelden, Breda')
+        self.assertEqual(overzicht['toestand'], 'parked')
+
+    def test_wagen_zonder_navixy_valt_terug_op_radius(self):
+        with patch.object(self.portaal, 'linqo_objecten', return_value={}), \
+             patch.object(self.portaal, '_radius_ritten', return_value=[]) as radius:
+            self.portaal.haal_ritten(['99-XXX-9'], date(2026, 10, 27), date(2026, 10, 27))
+        radius.assert_called_once()

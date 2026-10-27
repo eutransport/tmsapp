@@ -564,3 +564,29 @@ def _process_date(date_str, process_date, driver_lookup, plate_lookup):
         'errors': errors,
         'users_with_new_entries': users_with_new_entries,
     }
+
+
+@shared_task
+def sync_navixy_journeys(dagen=2):
+    """Haal de Navixy-ritgeschiedenis op en bouw het archief.
+
+    Navixy bewaart zelf maar een beperkte periode, afhankelijk van het
+    abonnement. We halen standaard de laatste paar dagen opnieuw op, omdat
+    Navixy een rit kan herberekenen zodra late punten binnenkomen.
+
+    Draait zowel elke vijf minuten met een korte terugblik als 's nachts.
+    Zonder actieve koppeling doet de taak niets en wordt er niets opgevraagd.
+    """
+    from apps.tracking.models import NavixyTracker
+    from apps.tracking.navixy_archive_service import sync_navixy_journeys as uitvoeren
+
+    if not NavixyTracker.objects.filter(actief=True, koppeling__actief=True).exists():
+        return {'overgeslagen': 'geen actieve Navixy-trackers'}
+
+    overzicht = uitvoeren(dagen=dagen)
+    if overzicht['nieuw'] or overzicht['bijgewerkt']:
+        logger.info(
+            'Navixy-ritten gesynchroniseerd: %s nieuw, %s bijgewerkt over %s tracker(s)',
+            overzicht['nieuw'], overzicht['bijgewerkt'], overzicht['trackers'],
+        )
+    return overzicht

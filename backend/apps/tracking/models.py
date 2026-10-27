@@ -430,3 +430,54 @@ class NavixyTracker(models.Model):
 
     def __str__(self):
         return f'{self.kenteken} (tracker {self.tracker_id})'
+
+
+class NavixyJourney(models.Model):
+    """Een rit uit de Navixy-ritgeschiedenis.
+
+    Navixy bewaart zelf maar een beperkte periode, afhankelijk van het
+    abonnement. Door periodiek te synchroniseren bouwen we hier een archief op
+    dat verder teruggaat dan de API zelf, net zoals bij Radius.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    tracker = models.ForeignKey(
+        NavixyTracker,
+        on_delete=models.CASCADE,
+        related_name='ritten',
+        verbose_name='Tracker',
+    )
+    track_id = models.BigIntegerField(verbose_name='Navixy rit-id')
+    plate_number = models.CharField(max_length=20, blank=True, verbose_name='Kenteken')
+    date = models.DateField(verbose_name='Datum', help_text='Lokale datum waarop de rit begon.')
+    start_time = models.DateTimeField(verbose_name='Starttijd')
+    end_time = models.DateTimeField(null=True, blank=True, verbose_name='Eindtijd')
+    start_address = models.CharField(max_length=255, blank=True, verbose_name='Startadres')
+    end_address = models.CharField(max_length=255, blank=True, verbose_name='Eindadres')
+    start_latitude = models.FloatField(null=True, blank=True, verbose_name='Start breedtegraad')
+    start_longitude = models.FloatField(null=True, blank=True, verbose_name='Start lengtegraad')
+    end_latitude = models.FloatField(null=True, blank=True, verbose_name='Eind breedtegraad')
+    end_longitude = models.FloatField(null=True, blank=True, verbose_name='Eind lengtegraad')
+    distance_km = models.FloatField(default=0, verbose_name='Afstand (km)')
+    duration_seconds = models.PositiveIntegerField(default=0, verbose_name='Duur (s)')
+    max_speed = models.FloatField(default=0, verbose_name='Maximale snelheid (km/u)')
+    avg_speed = models.FloatField(default=0, verbose_name='Gemiddelde snelheid (km/u)')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Navixy Rit'
+        verbose_name_plural = 'Navixy Ritten'
+        ordering = ['-start_time', 'plate_number']
+        # Navixy geeft per rit een eigen id. Samen met de tracker is dat een
+        # stabiele sleutel, zodat dezelfde periode opnieuw ophalen veilig is.
+        unique_together = ['tracker', 'track_id']
+        indexes = [
+            models.Index(fields=['date']),
+            models.Index(fields=['plate_number', 'date']),
+            models.Index(fields=['-start_time']),
+        ]
+
+    def __str__(self):
+        return f'{self.plate_number} {self.start_time:%d-%m-%Y %H:%M} ({self.distance_km:.1f} km)'
+

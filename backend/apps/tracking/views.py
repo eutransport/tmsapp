@@ -1645,6 +1645,38 @@ class VehicleDetailView(APIView):
             )
 
         target_date = dt.strptime(date_str, '%Y-%m-%d').date()
+
+        # Een Navixy-voertuig heeft geen FM-Track-objectnummer; dat heeft een
+        # eigen dagoverzicht uit het opgebouwde rittenarchief.
+        from apps.tracking import navixy_detail
+        if navixy_detail.is_navixy_object(object_id):
+            tracker = navixy_detail.tracker_van_object(object_id)
+            if tracker is None:
+                return Response(
+                    {'error': 'Dit voertuig is niet meer gekoppeld aan Navixy.',
+                     'code': 'navixy_unknown'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            live = None
+            try:
+                from apps.tracking.positions import get_vehicle_locations as alle_posities
+                for positie in alle_posities():
+                    if positie.get('object_id') == object_id:
+                        live = positie
+                        break
+            except Exception:
+                logger.warning('Navixy: live positie niet beschikbaar voor %s', object_id)
+            try:
+                return Response(navixy_detail.dagdetail(tracker, target_date, live))
+            except Exception:
+                logger.exception('Navixy-dagdetail mislukt (object_id=%s, date=%s)',
+                                 object_id, date_str)
+                return Response(
+                    {'error': 'Voertuiggegevens konden niet worden geladen.',
+                     'code': 'navixy_internal_error'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
         local_start = dt(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=NL_TZ)
         local_end = dt(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=NL_TZ)
         date_from = local_start.astimezone(UTC_TZ)
