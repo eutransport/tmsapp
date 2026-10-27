@@ -541,8 +541,46 @@ class UserViewSet(viewsets.ModelViewSet):
 
         if antwoord.status_code == status.HTTP_201_CREATED:
             self._azure_automatisch(antwoord, request)
+            self._chauffeur_automatisch(antwoord)
 
         return antwoord
+
+    def _chauffeur_automatisch(self, antwoord):
+        """
+        Maakt meteen een chauffeursprofiel bij een gebruiker met rol chauffeur.
+
+        Het id van dat profiel gaat mee terug, zodat het beheerscherm precies
+        deze chauffeur kan openen en niet op naam hoeft te raden. Mislukt dit,
+        dan blijft de gebruiker gewoon bestaan; de chauffeur kan dan handmatig
+        worden toegevoegd.
+        """
+        from apps.drivers.models import Driver
+
+        gebruiker = getattr(self, '_nieuwe_gebruiker', None)
+        if gebruiker is None or gebruiker.rol != 'chauffeur':
+            return
+
+        bestaand = Driver.objects.filter(gekoppelde_gebruiker=gebruiker).first()
+        if bestaand is not None:
+            antwoord.data['chauffeur'] = {'id': str(bestaand.id), 'nieuw': False}
+            return
+
+        try:
+            chauffeur = Driver.objects.create(
+                naam=gebruiker.full_name or gebruiker.email,
+                telefoon=gebruiker.telefoon or '',
+                gekoppelde_gebruiker=gebruiker,
+            )
+        except Exception as fout:  # noqa: BLE001 - de gebruiker blijft bestaan
+            logging.getLogger('accounts').warning(
+                'Chauffeursprofiel aanmaken voor %s mislukte: %s',
+                gebruiker.email,
+                fout,
+            )
+            antwoord.data['chauffeur'] = {'id': None, 'fout': str(fout)}
+            return
+
+        antwoord.data['chauffeur'] = {'id': str(chauffeur.id), 'nieuw': True}
 
     def perform_create(self, serializer):
         """Onthoudt de zojuist aangemaakte gebruiker voor de Azure-stap."""

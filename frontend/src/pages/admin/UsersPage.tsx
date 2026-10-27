@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { 
   MagnifyingGlassIcon, 
   PlusIcon, 
@@ -671,6 +672,15 @@ export default function UsersPage() {
   // Startwachtwoorden worden alleen in het geheugen gehouden en verdwijnen
   // zodra het venster gesloten wordt; ze staan nergens opgeslagen.
   const [azureWachtwoorden, setAzureWachtwoorden] = useState<Record<string, string> | null>(null)
+  // Chauffeur die zojuist bij een nieuwe gebruiker is aangemaakt; daar gaan we
+  // meteen naartoe, maar pas nadat een eventueel startwachtwoord is gelezen.
+  const [chauffeurNaAanmaken, setChauffeurNaAanmaken] = useState<string | null>(null)
+  const navigate = useNavigate()
+
+  const gaNaarChauffeur = useCallback((chauffeurId: string) => {
+    setChauffeurNaAanmaken(null)
+    navigate(`/drivers?bewerk=${chauffeurId}`)
+  }, [navigate])
 
   // Fetch users
   const fetchUsers = useCallback(async () => {
@@ -744,15 +754,24 @@ export default function UsersPage() {
     try {
       const nieuw: any = await createUser(data as UserCreate)
       setShowCreateModal(false)
+      const chauffeurId: string | null = nieuw?.chauffeur?.id ?? null
+      if (nieuw?.chauffeur && !chauffeurId) {
+        setError('Gebruiker aangemaakt, maar het chauffeursprofiel niet. Maak de chauffeur handmatig aan.')
+      }
       // Bij automatisch aanmaken in Azure komt het startwachtwoord mee; dat
       // is de enige keer dat het te zien is.
       if (nieuw?.azure?.wachtwoord) {
         setAzureWachtwoorden({ [(data as UserCreate).email]: nieuw.azure.wachtwoord })
+        // Eerst het wachtwoord laten lezen; daarna pas doorgaan naar de chauffeur.
+        setChauffeurNaAanmaken(chauffeurId)
       } else if (nieuw?.azure?.status === 'mislukt') {
         setError(`Gebruiker aangemaakt, maar het Microsoft-account niet: ${nieuw.azure.reden}`)
       }
       showSuccess(t('users.userCreated'))
       fetchUsers()
+      if (chauffeurId && !nieuw?.azure?.wachtwoord) {
+        gaNaarChauffeur(chauffeurId)
+      }
     } catch (err: any) {
       setError(getErrorMessage(err, t('errors.saveFailed')))
     } finally {
@@ -1553,7 +1572,10 @@ export default function UsersPage() {
       {/* Azure: startwachtwoord van één gebruiker, eenmalig */}
       <Modal
         isOpen={azureWachtwoorden !== null}
-        onClose={() => setAzureWachtwoorden(null)}
+        onClose={() => {
+          setAzureWachtwoorden(null)
+          if (chauffeurNaAanmaken) gaNaarChauffeur(chauffeurNaAanmaken)
+        }}
         title="Microsoft-account aangemaakt"
         size="md"
       >

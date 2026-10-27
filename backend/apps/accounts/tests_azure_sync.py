@@ -860,3 +860,89 @@ class HerkansingBijVerbodenTests(TestCase):
                     with self.assertRaises(graph.GraphFout):
                         graph._verzoek('GET', '/users/x')
         self.assertEqual(verzoek.call_count, 2)
+
+class ChauffeurBijGebruikerTests(TestCase):
+    """Een nieuwe gebruiker met rol chauffeur krijgt meteen een profiel."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            email='baas@moveo-bv.nl', password='Geheim!123', voornaam='De',
+            achternaam='Baas', rol='admin', is_staff=True, is_superuser=True,
+        )
+        self.client.force_authenticate(user=self.admin)
+        self.limiet = patch(
+            'apps.licensing.services.check_user_limit',
+            return_value={'allowed': True, 'message': ''},
+        )
+        self.limiet.start()
+        self.addCleanup(self.limiet.stop)
+
+    def _maak(self, rol):
+        return self.client.post('/api/auth/users/', {
+            'email': f'{rol}@moveo-bv.nl',
+            'username': f'{rol}gebruiker',
+            'voornaam': 'Nieuwe',
+            'achternaam': 'Persoon',
+            'telefoon': '0612345678',
+            'rol': rol,
+            'password': 'Geheim!12345',
+            'password_confirm': 'Geheim!12345',
+        }, format='json')
+
+    def test_chauffeur_krijgt_profiel_en_id_komt_terug(self):
+        from apps.drivers.models import Driver
+
+        antwoord = self._maak('chauffeur')
+        self.assertEqual(antwoord.status_code, 201, antwoord.data)
+        self.assertIn('chauffeur', antwoord.data)
+        chauffeur_id = antwoord.data['chauffeur']['id']
+        self.assertTrue(antwoord.data['chauffeur']['nieuw'])
+
+        chauffeur = Driver.objects.get(id=chauffeur_id)
+        gebruiker = User.objects.get(email='chauffeur@moveo-bv.nl')
+        # De koppeling moet naar precies deze nieuwe gebruiker wijzen.
+        self.assertEqual(chauffeur.gekoppelde_gebruiker_id, gebruiker.id)
+        self.assertEqual(chauffeur.naam, gebruiker.full_name)
+        self.assertEqual(chauffeur.telefoon, '0612345678')
+
+    def test_andere_rol_krijgt_geen_profiel(self):
+        from apps.drivers.models import Driver
+
+        antwoord = self._maak('gebruiker')
+        if antwoord.status_code != 201:
+            self.skipTest(f'rol gebruiker niet toegestaan: {antwoord.data}')
+        self.assertNotIn('chauffeur', antwoord.data)
+        self.assertEqual(Driver.objects.count(), 0)
+
+    def test_tweede_chauffeur_krijgt_eigen_profiel(self):
+        from apps.drivers.models import Driver
+
+        eerste = self._maak('chauffeur')
+        tweede = self.client.post('/api/auth/users/', {
+            'email': 'chauffeur2@moveo-bv.nl',
+            'username': 'chauffeur2',
+            'voornaam': 'Tweede',
+            'achternaam': 'Persoon',
+            'rol': 'chauffeur',
+            'password': 'Geheim!12345',
+            'password_confirm': 'Geheim!12345',
+        }, format='json')
+        self.assertEqual(tweede.status_code, 201, tweede.data)
+        self.assertNotEqual(
+            eerste.data['chauffeur']['id'], tweede.data['chauffeur']['id']
+        )
+        self.assertEqual(Driver.objects.count(), 2)
+        gebruiker2 = User.objects.get(email='chauffeur2@moveo-bv.nl')
+        chauffeur2 = Driver.objects.get(id=tweede.data['chauffeur']['id'])
+        self.assertEqual(chauffeur2.gekoppelde_gebruiker_id, gebruiker2.id)
+
+    def test_gebruiker_blijft_bestaan_als_profiel_mislukt(self):
+        with patch(
+            'apps.drivers.models.Driver.objects.create',
+            side_effect=Exception('database weg'),
+        ):
+            antwoord = self._maak('chauffeur')
+        self.assertEqual(antwoord.status_code, 201, antwoord.data)
+        self.assertIsNone(antwoord.data['chauffeur']['id'])
+        self.assertTrue(User.objects.filter(email='chauffeur@moveo-bv.nl').exists())

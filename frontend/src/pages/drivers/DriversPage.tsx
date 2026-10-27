@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { 
   MagnifyingGlassIcon, 
   PlusIcon, 
@@ -16,6 +17,7 @@ import {
 import { Driver, Company, User, Vehicle } from '@/types'
 import { 
   getDrivers, 
+  getDriver,
   createDriver, 
   updateDriver, 
   deleteDriver,
@@ -560,6 +562,34 @@ export default function DriversPage() {
   useEffect(() => {
     fetchDrivers()
   }, [fetchDrivers])
+
+  // Komt er een ?bewerk=<id> binnen (bijvoorbeeld na het aanmaken van een
+  // gebruiker met rol chauffeur), dan openen we precies die chauffeur. We
+  // halen hem apart op zodat sortering of paginering er niet toe doet.
+  const [zoekparameters, setZoekparameters] = useSearchParams()
+  const teBewerken = zoekparameters.get('bewerk')
+  useEffect(() => {
+    if (!teBewerken) return
+    let afgebroken = false
+    const openen = async () => {
+      try {
+        const chauffeur = await getDriver(teBewerken)
+        if (afgebroken) return
+        setSelectedDriver(chauffeur)
+        setShowEditModal(true)
+      } catch (err) {
+        if (!afgebroken) setError(t('common.error'))
+        console.error(err)
+      } finally {
+        if (!afgebroken) {
+          // Weghalen zodat een verversing de modal niet opnieuw opent.
+          setZoekparameters({}, { replace: true })
+        }
+      }
+    }
+    openen()
+    return () => { afgebroken = true }
+  }, [teBewerken, setZoekparameters, t])
 
   // Show success message temporarily
   const showSuccess = (message: string) => {
