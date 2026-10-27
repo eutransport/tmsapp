@@ -65,7 +65,7 @@ def _basis_queryset():
     return (
         Opdracht.objects
         .select_related('bedrijf', 'chauffeur', 'aangemaakt_door')
-        .prefetch_related('bijlagen')
+        .prefetch_related('bijlagen', 'regels')
     )
 
 

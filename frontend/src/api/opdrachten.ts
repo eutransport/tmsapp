@@ -7,6 +7,24 @@ export type OpdrachtStatus =
   | 'niet_geleverd'
   | 'ingetrokken'
 
+export type OpdrachtFase =
+  | 'onderweg'
+  | 'aangekomen'
+  | 'wachten_op_klant'
+  | 'bezig_laden'
+  | 'bezig_lossen'
+
+export type Werksoort = 'laden' | 'lossen' | 'beide' | 'geen'
+
+export interface OpdrachtRegel {
+  id?: string
+  ordernummer: string
+  omschrijving: string
+  aantal_pallets: number | null
+  soort: '' | 'laden' | 'lossen'
+  volgorde?: number
+}
+
 export interface OpdrachtBijlage {
   id: string
   bestandsnaam: string
@@ -35,6 +53,18 @@ export interface Opdracht {
   volgorde: number
   status: OpdrachtStatus
   status_label: string
+  werk_laden: boolean
+  werk_lossen: boolean
+  werksoort: Werksoort
+  werk_omschrijving: string
+  fase: OpdrachtFase
+  fase_label: string
+  aangekomen_op: string | null
+  aangekomen_automatisch: boolean
+  wachten_sinds: string | null
+  laden_gestart_op: string | null
+  lossen_gestart_op: string | null
+  regels: OpdrachtRegel[]
   gestart_op: string | null
   afgeleverd_op: string | null
   ingetrokken_op: string | null
@@ -69,6 +99,9 @@ export interface OpdrachtInvoer {
   telefoon?: string
   notitie?: string
   geopend_tot?: string | null
+  werk_laden?: boolean
+  werk_lossen?: boolean
+  regels?: OpdrachtRegel[]
 }
 
 export interface ChauffeurKeuze {
@@ -307,6 +340,18 @@ export interface MijnOpdracht {
   volgorde: number
   status: OpdrachtStatus
   status_label: string
+  werk_laden: boolean
+  werk_lossen: boolean
+  werksoort: Werksoort
+  werk_omschrijving: string
+  fase: OpdrachtFase
+  fase_label: string
+  aangekomen_op: string | null
+  aangekomen_automatisch: boolean
+  wachten_sinds: string | null
+  laden_gestart_op: string | null
+  lossen_gestart_op: string | null
+  regels: OpdrachtRegel[]
   gestart_op: string | null
   afgeleverd_op: string | null
   niet_geleverd_op: string | null
@@ -346,6 +391,27 @@ export const mijnOpdrachten = {
   },
   starten: async (id: string): Promise<MijnOpdracht> => {
     const response = await api.post(`/opdrachten/mijn/${id}/starten/`)
+    return response.data
+  },
+  aangekomen: async (
+    id: string,
+    data?: { tijdstip?: string; chauffeur_reactie?: string }
+  ): Promise<MijnOpdracht> => {
+    const response = await api.post(`/opdrachten/mijn/${id}/aangekomen/`, data || {})
+    return response.data
+  },
+  wachtenOpKlant: async (
+    id: string,
+    data?: { tijdstip?: string; chauffeur_reactie?: string }
+  ): Promise<MijnOpdracht> => {
+    const response = await api.post(`/opdrachten/mijn/${id}/wachten-op-klant/`, data || {})
+    return response.data
+  },
+  begonnen: async (
+    id: string,
+    data: { soort?: 'laden' | 'lossen'; tijdstip?: string; chauffeur_reactie?: string }
+  ): Promise<MijnOpdracht> => {
+    const response = await api.post(`/opdrachten/mijn/${id}/begonnen/`, data)
     return response.data
   },
   afmelden: async (

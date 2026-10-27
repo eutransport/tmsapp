@@ -20,6 +20,25 @@ class OpdrachtStatus(models.TextChoices):
     INGETROKKEN = 'ingetrokken', 'Ingetrokken'
 
 
+class OpdrachtFase(models.TextChoices):
+    """Voortgang binnen een lopende rit.
+
+    Staat los van `status`: die blijft 'gestart' tot de opdracht echt is
+    afgehandeld, zodat alle bestaande filters, mail en archief blijven werken.
+    """
+
+    ONDERWEG = 'onderweg', 'Onderweg'
+    AANGEKOMEN = 'aangekomen', 'Aangekomen bij klant'
+    WACHTEN = 'wachten_op_klant', 'Wachten op klant'
+    BEZIG_LADEN = 'bezig_laden', 'Bezig met laden'
+    BEZIG_LOSSEN = 'bezig_lossen', 'Bezig met lossen'
+
+
+class RegelSoort(models.TextChoices):
+    LADEN = 'laden', 'Laden'
+    LOSSEN = 'lossen', 'Lossen'
+
+
 RITNUMMER_PREFIX = 'DHO-'
 RITNUMMER_START = 10000001
 
@@ -81,6 +100,27 @@ class Opdracht(models.Model):
     )
 
     gestart_op = models.DateTimeField(null=True, blank=True, verbose_name='Gestart op')
+
+    # Wat de chauffeur op dit adres moet doen. Bestaande opdrachten waren altijd
+    # bezorgingen, vandaar dat lossen standaard aan staat.
+    werk_laden = models.BooleanField(default=False, verbose_name='Laden/ophalen')
+    werk_lossen = models.BooleanField(default=True, verbose_name='Lossen/bezorgen')
+
+    fase = models.CharField(
+        max_length=20, choices=OpdrachtFase.choices,
+        default=OpdrachtFase.ONDERWEG, verbose_name='Fase'
+    )
+    aangekomen_op = models.DateTimeField(null=True, blank=True, verbose_name='Aangekomen op')
+    aangekomen_automatisch = models.BooleanField(
+        default=False, verbose_name='Aankomst automatisch vastgesteld'
+    )
+    wachten_sinds = models.DateTimeField(null=True, blank=True, verbose_name='Wacht op klant sinds')
+    laden_gestart_op = models.DateTimeField(
+        null=True, blank=True, verbose_name='Begonnen met laden op'
+    )
+    lossen_gestart_op = models.DateTimeField(
+        null=True, blank=True, verbose_name='Begonnen met lossen op'
+    )
     afgeleverd_op = models.DateTimeField(null=True, blank=True, verbose_name='Afgeleverd op')
     ingetrokken_op = models.DateTimeField(null=True, blank=True, verbose_name='Ingetrokken op')
     niet_geleverd_op = models.DateTimeField(
@@ -146,6 +186,70 @@ class Opdracht(models.Model):
     @property
     def is_afgehandeld(self):
         return self.status in (OpdrachtStatus.AFGELEVERD, OpdrachtStatus.NIET_GELEVERD)
+
+    @property
+    def werksoort(self):
+        """'laden', 'lossen', 'beide' of 'geen'."""
+        if self.werk_laden and self.werk_lossen:
+            return 'beide'
+        if self.werk_laden:
+            return 'laden'
+        if self.werk_lossen:
+            return 'lossen'
+        return 'geen'
+
+    @property
+    def werk_omschrijving(self):
+        return {
+            'laden': 'Laden',
+            'lossen': 'Lossen',
+            'beide': 'Laden en lossen',
+            'geen': 'Lossen',
+        }[self.werksoort]
+
+    @property
+    def is_ter_plaatse(self):
+        return self.fase in (
+            OpdrachtFase.AANGEKOMEN,
+            OpdrachtFase.WACHTEN,
+            OpdrachtFase.BEZIG_LADEN,
+            OpdrachtFase.BEZIG_LOSSEN,
+        )
+
+    @property
+    def is_bezig(self):
+        return self.fase in (OpdrachtFase.BEZIG_LADEN, OpdrachtFase.BEZIG_LOSSEN)
+
+
+class OpdrachtRegel(models.Model):
+    """Eén regel werk bij een opdracht, bijvoorbeeld 'HMMU6426781 - PEAR 999 BOX - 9 PLT'."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    opdracht = models.ForeignKey(
+        Opdracht, on_delete=models.CASCADE,
+        related_name='regels', verbose_name='Opdracht'
+    )
+    ordernummer = models.CharField(max_length=60, blank=True, verbose_name='Ordernummer')
+    omschrijving = models.CharField(max_length=255, blank=True, verbose_name='Detail')
+    aantal_pallets = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Aantal pallets'
+    )
+    # Leeg mag: niet elke opdrachtgever splitst zijn regels naar laden en lossen.
+    soort = models.CharField(
+        max_length=10, choices=RegelSoort.choices, blank=True, verbose_name='Soort'
+    )
+    volgorde = models.PositiveIntegerField(default=0, verbose_name='Volgorde')
+
+    class Meta:
+        verbose_name = 'Opdrachtregel'
+        verbose_name_plural = 'Opdrachtregels'
+        ordering = ['volgorde', 'ordernummer']
+
+    def __str__(self):
+        delen = [self.ordernummer, self.omschrijving]
+        if self.aantal_pallets is not None:
+            delen.append(f'{self.aantal_pallets} PLT')
+        return ' - '.join(d for d in delen if d)
 
 
 class OpdrachtBijlage(models.Model):

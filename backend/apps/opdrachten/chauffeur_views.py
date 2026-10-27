@@ -14,10 +14,12 @@ from . import mail
 from . import push
 from .chauffeur_serializers import (
     AfmeldSerializer,
+    BegonnenSerializer,
     ChauffeurOpdrachtSerializer,
+    FaseNotitieSerializer,
     NietGeleverdSerializer,
 )
-from .models import Opdracht, OpdrachtStatus
+from .models import Opdracht, OpdrachtFase, OpdrachtStatus
 from .serializers import OpdrachtBijlageSerializer
 from .views import _bijlage_opslaan, _eta_regel
 from . import eta as eta_module
@@ -42,7 +44,7 @@ class MijnOpdrachtenViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = (
             Opdracht.objects
             .select_related('bedrijf', 'chauffeur')
-            .prefetch_related('bijlagen')
+            .prefetch_related('bijlagen', 'regels')
             .filter(chauffeur=self._chauffeur())
         )
         # Standaard alleen het werk van nu; ingetrokken opdrachten verdwijnen meteen.
@@ -82,13 +84,110 @@ class MijnOpdrachtenViewSet(viewsets.ReadOnlyModelViewSet):
         opdracht.gestart_op = timezone.now()
         opdracht.kenteken = getattr(chauffeur.voertuig, 'kenteken', '') or ''
         opdracht.eta_start_minuten = None
+        opdracht.fase = OpdrachtFase.ONDERWEG
+        opdracht.aangekomen_op = None
+        opdracht.aangekomen_automatisch = False
+        opdracht.wachten_sinds = None
+        opdracht.laden_gestart_op = None
+        opdracht.lossen_gestart_op = None
         opdracht.save(update_fields=[
-            'status', 'gestart_op', 'kenteken', 'eta_start_minuten', 'updated_at'
+            'status', 'gestart_op', 'kenteken', 'eta_start_minuten',
+            'fase', 'aangekomen_op', 'aangekomen_automatisch', 'wachten_sinds',
+            'laden_gestart_op', 'lossen_gestart_op', 'updated_at'
         ])
 
         eta_module.ververs([opdracht], geforceerd=True)
         mail.meld_gestart(opdracht)
         push.meld_gestart(opdracht)
+        return Response(self.get_serializer(opdracht).data)
+
+    def _notitie_bijwerken(self, opdracht, serializer, velden):
+        """Een tussenstap mag altijd een notitie meesturen, net als bij afmelden."""
+        reactie = serializer.validated_data.get('chauffeur_reactie')
+        if reactie:
+            bestaand = (opdracht.chauffeur_reactie or '').strip()
+            opdracht.chauffeur_reactie = f'{bestaand}\n{reactie}'.strip() if bestaand else reactie
+            velden.append('chauffeur_reactie')
+
+    @action(detail=True, methods=['post'])
+    def aangekomen(self, request, pk=None):
+        """De chauffeur meldt zelf dat hij bij de klant is."""
+        opdracht = self.get_object()
+        if opdracht.status != OpdrachtStatus.GESTART:
+            raise ValidationError('Deze opdracht is niet onderweg.')
+        if opdracht.is_ter_plaatse:
+            raise ValidationError('U bent al aangekomen gemeld.')
+
+        serializer = FaseNotitieSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        velden = ['fase', 'aangekomen_op', 'aangekomen_automatisch', 'updated_at']
+        opdracht.fase = OpdrachtFase.AANGEKOMEN
+        opdracht.aangekomen_op = serializer.validated_data.get('tijdstip') or timezone.now()
+        opdracht.aangekomen_automatisch = False
+        self._notitie_bijwerken(opdracht, serializer, velden)
+        opdracht.save(update_fields=velden)
+
+        push.meld_aangekomen(opdracht)
+        return Response(self.get_serializer(opdracht).data)
+
+    @action(detail=True, methods=['post'], url_path='wachten-op-klant')
+    def wachten_op_klant(self, request, pk=None):
+        opdracht = self.get_object()
+        if opdracht.status != OpdrachtStatus.GESTART:
+            raise ValidationError('Deze opdracht is niet onderweg.')
+        if not opdracht.is_ter_plaatse:
+            raise ValidationError('Meld eerst dat u bij de klant bent.')
+        if opdracht.fase == OpdrachtFase.WACHTEN:
+            raise ValidationError('U staat al als wachtend genoteerd.')
+
+        serializer = FaseNotitieSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        velden = ['fase', 'wachten_sinds', 'updated_at']
+        opdracht.fase = OpdrachtFase.WACHTEN
+        opdracht.wachten_sinds = serializer.validated_data.get('tijdstip') or timezone.now()
+        self._notitie_bijwerken(opdracht, serializer, velden)
+        opdracht.save(update_fields=velden)
+
+        push.meld_wachten(opdracht)
+        return Response(self.get_serializer(opdracht).data)
+
+    @action(detail=True, methods=['post'])
+    def begonnen(self, request, pk=None):
+        """Begonnen met laden of lossen; de soort moet bij het werk van de opdracht passen."""
+        opdracht = self.get_object()
+        if opdracht.status != OpdrachtStatus.GESTART:
+            raise ValidationError('Deze opdracht is niet onderweg.')
+        if not opdracht.is_ter_plaatse:
+            raise ValidationError('Meld eerst dat u bij de klant bent.')
+
+        serializer = BegonnenSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        soort = serializer.validated_data.get('soort')
+        if soort is None:
+            # Bij maar één werksoort hoeft de chauffeur niets te kiezen.
+            soort = 'laden' if opdracht.werk_laden and not opdracht.werk_lossen else 'lossen'
+        if soort == 'laden' and not opdracht.werk_laden:
+            raise ValidationError('Bij deze opdracht hoeft niet geladen te worden.')
+        if soort == 'lossen' and not opdracht.werk_lossen:
+            raise ValidationError('Bij deze opdracht hoeft niet gelost te worden.')
+
+        nu = serializer.validated_data.get('tijdstip') or timezone.now()
+        velden = ['fase', 'updated_at']
+        if soort == 'laden':
+            opdracht.fase = OpdrachtFase.BEZIG_LADEN
+            opdracht.laden_gestart_op = nu
+            velden.append('laden_gestart_op')
+        else:
+            opdracht.fase = OpdrachtFase.BEZIG_LOSSEN
+            opdracht.lossen_gestart_op = nu
+            velden.append('lossen_gestart_op')
+        self._notitie_bijwerken(opdracht, serializer, velden)
+        opdracht.save(update_fields=velden)
+
+        push.meld_begonnen(opdracht, soort)
         return Response(self.get_serializer(opdracht).data)
 
     @action(detail=False, methods=['get'])
@@ -106,6 +205,13 @@ class MijnOpdrachtenViewSet(viewsets.ReadOnlyModelViewSet):
         opdracht = self.get_object()
         if opdracht.status not in (OpdrachtStatus.NIEUW, OpdrachtStatus.GESTART):
             raise ValidationError('Deze opdracht is al afgehandeld.')
+        if not opdracht.is_bezig:
+            werk = {'laden': 'laden', 'lossen': 'lossen'}.get(
+                opdracht.werksoort, 'laden of lossen'
+            )
+            raise ValidationError(
+                f'Meld eerst dat u bent aangekomen en begonnen bent met {werk}.'
+            )
 
         serializer = AfmeldSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

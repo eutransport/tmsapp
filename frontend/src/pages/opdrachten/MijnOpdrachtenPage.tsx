@@ -4,9 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   ArrowDownTrayIcon,
+  ArrowUpTrayIcon,
   CheckCircleIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  ClockIcon,
   MapPinIcon,
   MagnifyingGlassIcon,
   NoSymbolIcon,
@@ -74,6 +76,35 @@ export default function MijnOpdrachtenPage({ archief = false }: Props) {
     onError: () => toast.error(t('common.error', 'Er ging iets mis')),
   })
 
+  const foutMelden = (fout: unknown) => {
+    const bericht = (fout as { response?: { data?: unknown } })?.response?.data
+    const tekst = Array.isArray(bericht)
+      ? String(bericht[0])
+      : typeof bericht === 'string'
+        ? bericht
+        : ''
+    toast.error(tekst || t('common.error', 'Er ging iets mis'))
+  }
+
+  const aangekomen = useMutation({
+    mutationFn: (id: string) => mijnOpdrachten.aangekomen(id),
+    onSuccess: () => { toast.success(t('myOrders.arrivedDone', 'Aangekomen gemeld')); ververs() },
+    onError: foutMelden,
+  })
+
+  const wachten = useMutation({
+    mutationFn: (id: string) => mijnOpdrachten.wachtenOpKlant(id),
+    onSuccess: () => { toast.success(t('myOrders.waitingDone', 'Wachten doorgegeven')); ververs() },
+    onError: foutMelden,
+  })
+
+  const begonnen = useMutation({
+    mutationFn: ({ id, soort }: { id: string; soort: 'laden' | 'lossen' }) =>
+      mijnOpdrachten.begonnen(id, { soort }),
+    onSuccess: () => { toast.success(t('myOrders.startedWork', 'Doorgegeven')); ververs() },
+    onError: foutMelden,
+  })
+
   const bijlage = useMutation({
     mutationFn: ({ id, bestand }: { id: string; bestand: File }) =>
       mijnOpdrachten.bijlageToevoegen(id, bestand),
@@ -88,6 +119,24 @@ export default function MijnOpdrachtenPage({ archief = false }: Props) {
 
   const tijd = (waarde: string | null) =>
     waarde ? new Date(waarde).toLocaleString(i18n.language, { dateStyle: 'short', timeStyle: 'short' }) : ''
+
+  const terPlaatse = (o: MijnOpdracht) =>
+    ['aangekomen', 'wachten_op_klant', 'bezig_laden', 'bezig_lossen'].includes(o.fase)
+
+  const bezig = (o: MijnOpdracht) => o.fase === 'bezig_laden' || o.fase === 'bezig_lossen'
+
+  // Bij een laadopdracht heet afronden 'geladen', bij bezorgen 'afgeleverd'.
+  const klaarLabel = (o: MijnOpdracht) =>
+    o.werksoort === 'laden'
+      ? t('myOrders.loaded', 'Geladen melden')
+      : o.werksoort === 'beide'
+        ? t('myOrders.done', 'Klaar melden')
+        : t('myOrders.deliver', 'Afgeleverd melden')
+
+  const nietGeluktLabel = (o: MijnOpdracht) =>
+    o.werksoort === 'laden'
+      ? t('myOrders.notLoaded', 'Niet geladen')
+      : t('myOrders.notDelivered', 'Niet geleverd')
 
   return (
     <div className="space-y-3">
@@ -134,6 +183,14 @@ export default function MijnOpdrachtenPage({ archief = false }: Props) {
                       )}
                       <span className="truncate font-semibold text-gray-900">{o.klant_naam}</span>
                       <OpdrachtStatusBadge status={o.status} label={o.status_label} />
+                      <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                        {o.werk_omschrijving}
+                      </span>
+                      {o.status === 'gestart' && o.fase !== 'onderweg' && (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                          {o.fase_label}
+                        </span>
+                      )}
                     </span>
                     <span className="mt-0.5 block truncate text-sm text-gray-600">
                       {[o.adres, o.postcode, o.plaats].filter(Boolean).join(', ')}
@@ -165,6 +222,46 @@ export default function MijnOpdrachtenPage({ archief = false }: Props) {
                     )}
                     {o.notitie && (
                       <p className="rounded bg-gray-50 px-2 py-1.5 text-sm text-gray-700">{o.notitie}</p>
+                    )}
+                    {o.regels.length > 0 && (
+                      <div className="rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between border-b border-gray-100 px-2 py-1.5">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            {t('orders.sectionLines', 'Orderregels')}
+                          </span>
+                          <span className="text-xs font-semibold text-gray-700">
+                            {t('orders.totalPallets', '{{aantal}} pallets', {
+                              aantal: o.regels.reduce((s, r) => s + (r.aantal_pallets || 0), 0),
+                            })}
+                          </span>
+                        </div>
+                        <ul className="divide-y divide-gray-100">
+                          {o.regels.map((r, i) => (
+                            <li key={r.id || i} className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
+                              <span className="min-w-0">
+                                <span className="block truncate font-mono text-xs text-gray-600">
+                                  {r.ordernummer || '-'}
+                                </span>
+                                <span className="block truncate text-gray-800">{r.omschrijving}</span>
+                              </span>
+                              <span className="shrink-0 text-right">
+                                {r.aantal_pallets !== null && (
+                                  <span className="block text-sm font-semibold text-gray-900">
+                                    {r.aantal_pallets} PLT
+                                  </span>
+                                )}
+                                {r.soort && (
+                                  <span className="block text-xs text-gray-500">
+                                    {r.soort === 'laden'
+                                      ? t('orders.load', 'Laden')
+                                      : t('orders.unload', 'Lossen')}
+                                  </span>
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
                     {o.niet_geleverd_reden && (
                       <p className="rounded bg-warning-50 px-2 py-1.5 text-sm text-warning-700">
@@ -222,22 +319,66 @@ export default function MijnOpdrachtenPage({ archief = false }: Props) {
                     )}
 
                     {!archief && (
-                      <div className="flex flex-col gap-2 sm:flex-row">
+                      <div className="space-y-2">
                         {o.status === 'nieuw' && (
                           <button onClick={() => starten.mutate(o.id)} disabled={starten.isPending}
-                            className="btn-primary flex-1">
+                            className="btn-primary w-full">
                             <PlayIcon className="h-5 w-5" />
                             {t('myOrders.start', 'Opdracht starten')}
                           </button>
                         )}
-                        <button onClick={() => setAfmelden(o)} className="btn-success flex-1">
-                          <CheckCircleIcon className="h-5 w-5" />
-                          {t('myOrders.deliver', 'Afgeleverd melden')}
-                        </button>
-                        <button onClick={() => setNietGeleverd(o)} className="btn-warning flex-1">
-                          <NoSymbolIcon className="h-5 w-5" />
-                          {t('myOrders.notDelivered', 'Niet geleverd')}
-                        </button>
+
+                        {o.status === 'gestart' && o.fase === 'onderweg' && (
+                          <button onClick={() => aangekomen.mutate(o.id)} disabled={aangekomen.isPending}
+                            className="btn-primary w-full">
+                            <MapPinIcon className="h-5 w-5" />
+                            {t('myOrders.arrived', 'Aangekomen bij klant')}
+                          </button>
+                        )}
+
+                        {o.status === 'gestart' && terPlaatse(o) && (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            {o.fase !== 'wachten_op_klant' && !bezig(o) && (
+                              <button onClick={() => wachten.mutate(o.id)} disabled={wachten.isPending}
+                                className="btn-secondary flex-1">
+                                <ClockIcon className="h-5 w-5" />
+                                {t('myOrders.waitForCustomer', 'Wachten op klant')}
+                              </button>
+                            )}
+                            {o.werk_laden && o.fase !== 'bezig_laden' && (
+                              <button onClick={() => begonnen.mutate({ id: o.id, soort: 'laden' })}
+                                disabled={begonnen.isPending} className="btn-primary flex-1">
+                                <ArrowUpTrayIcon className="h-5 w-5" />
+                                {t('myOrders.startLoading', 'Begonnen met laden')}
+                              </button>
+                            )}
+                            {o.werk_lossen && o.fase !== 'bezig_lossen' && (
+                              <button onClick={() => begonnen.mutate({ id: o.id, soort: 'lossen' })}
+                                disabled={begonnen.isPending} className="btn-primary flex-1">
+                                <ArrowDownTrayIcon className="h-5 w-5" />
+                                {t('myOrders.startUnloading', 'Begonnen met lossen')}
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {bezig(o) ? (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <button onClick={() => setAfmelden(o)} className="btn-success flex-1">
+                              <CheckCircleIcon className="h-5 w-5" />
+                              {klaarLabel(o)}
+                            </button>
+                            <button onClick={() => setNietGeleverd(o)} className="btn-warning flex-1">
+                              <NoSymbolIcon className="h-5 w-5" />
+                              {nietGeluktLabel(o)}
+                            </button>
+                          </div>
+                        ) : terPlaatse(o) ? (
+                          <button onClick={() => setNietGeleverd(o)} className="btn-warning w-full">
+                            <NoSymbolIcon className="h-5 w-5" />
+                            {nietGeluktLabel(o)}
+                          </button>
+                        ) : null}
                       </div>
                     )}
                   </div>

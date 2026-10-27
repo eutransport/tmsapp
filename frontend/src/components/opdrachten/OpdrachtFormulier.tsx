@@ -15,6 +15,7 @@ import {
   Opdracht,
   OpdrachtInvoer,
   OpdrachtKlant,
+  OpdrachtRegel,
   portaalKlanten,
   portaalOpdrachten,
 } from '@/api/opdrachten'
@@ -52,10 +53,32 @@ export default function OpdrachtFormulier({ opdracht, chauffeurs, bezig, onSluit
     telefoon: opdracht?.telefoon || '',
     notitie: opdracht?.notitie || '',
     geopend_tot: opdracht?.geopend_tot?.slice(0, 5) || '',
+    werk_laden: opdracht?.werk_laden ?? false,
+    werk_lossen: opdracht?.werk_lossen ?? true,
   })
+  const [regels, setRegels] = useState<OpdrachtRegel[]>(opdracht?.regels?.length
+    ? opdracht.regels.map(r => ({ ...r }))
+    : [])
 
   const zet = (sleutel: keyof OpdrachtInvoer, waarde: string) =>
     setWaarden(vorig => ({ ...vorig, [sleutel]: waarde }))
+
+  const zetWerk = (sleutel: 'werk_laden' | 'werk_lossen', waarde: boolean) =>
+    setWaarden(vorig => ({ ...vorig, [sleutel]: waarde }))
+
+  const regelWijzigen = (index: number, wijziging: Partial<OpdrachtRegel>) =>
+    setRegels(vorig => vorig.map((r, i) => (i === index ? { ...r, ...wijziging } : r)))
+
+  const regelToevoegen = () =>
+    setRegels(vorig => [
+      ...vorig,
+      { ordernummer: '', omschrijving: '', aantal_pallets: null, soort: '' },
+    ])
+
+  const regelVerwijderen = (index: number) =>
+    setRegels(vorig => vorig.filter((_, i) => i !== index))
+
+  const totaalPallets = regels.reduce((som, r) => som + (r.aantal_pallets || 0), 0)
 
   useEffect(() => {
     if (opdracht) return
@@ -114,6 +137,9 @@ export default function OpdrachtFormulier({ opdracht, chauffeurs, bezig, onSluit
     if (!waarden.chauffeur) nieuw.chauffeur = t('errors.required', 'Verplicht')
     if (!waarden.klant_naam.trim()) nieuw.klant_naam = t('errors.required', 'Verplicht')
     if (!waarden.adres.trim()) nieuw.adres = t('errors.required', 'Verplicht')
+    if (!waarden.werk_laden && !waarden.werk_lossen) {
+      nieuw.werk = t('orders.chooseWork', 'Kies minstens laden of lossen.')
+    }
     setFouten(nieuw)
     if (Object.keys(nieuw).length) return
 
@@ -139,7 +165,20 @@ export default function OpdrachtFormulier({ opdracht, chauffeurs, bezig, onSluit
       }
     }
 
-    onOpslaan({ ...waarden, geopend_tot: waarden.geopend_tot || null }, bijlagen)
+    // Lege regels nooit meesturen: de server weigert die terecht.
+    const bruikbareRegels = regels
+      .map((r, index) => ({
+        ...r,
+        ordernummer: (r.ordernummer || '').trim(),
+        omschrijving: (r.omschrijving || '').trim(),
+        volgorde: index,
+      }))
+      .filter(r => r.ordernummer || r.omschrijving || r.aantal_pallets !== null)
+
+    onOpslaan(
+      { ...waarden, geopend_tot: waarden.geopend_tot || null, regels: bruikbareRegels },
+      bijlagen
+    )
   }
 
   const veld = 'input-field'
@@ -211,6 +250,114 @@ export default function OpdrachtFormulier({ opdracht, chauffeurs, bezig, onSluit
               </div>
             </div>
           </div>
+
+          <div className="mt-4 border-t border-gray-100 pt-3">
+            <label className="label">{t('orders.work', 'Wat moet er gebeuren?')}</label>
+            <div className="flex flex-wrap gap-3">
+              <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${waarden.werk_laden ? 'border-primary-500 bg-primary-50 text-primary-800' : 'border-gray-200 bg-white text-gray-700'}`}>
+                <input
+                  type="checkbox"
+                  checked={!!waarden.werk_laden}
+                  onChange={e => zetWerk('werk_laden', e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                />
+                {t('orders.workLoad', 'Laden / ophalen')}
+              </label>
+              <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${waarden.werk_lossen ? 'border-primary-500 bg-primary-50 text-primary-800' : 'border-gray-200 bg-white text-gray-700'}`}>
+                <input
+                  type="checkbox"
+                  checked={!!waarden.werk_lossen}
+                  onChange={e => zetWerk('werk_lossen', e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                />
+                {t('orders.workUnload', 'Lossen / bezorgen')}
+              </label>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              {t('orders.workHint', 'Beide mag: de chauffeur laadt en lost dan op hetzelfde adres.')}
+            </p>
+            {fouten.werk && <span className={fout}>{fouten.werk}</span>}
+          </div>
+          </section>
+
+          <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <ClipboardDocumentListIcon className="h-4 w-4 text-primary-600" />
+                {t('orders.sectionLines', 'Orderregels')}
+                <span className="font-normal normal-case tracking-normal text-gray-400">
+                  {t('common.optional', 'optioneel')}
+                </span>
+              </p>
+              {totaalPallets > 0 && (
+                <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">
+                  {t('orders.totalPallets', '{{aantal}} pallets', { aantal: totaalPallets })}
+                </span>
+              )}
+            </div>
+
+            {regels.length > 0 && (
+              <div className="space-y-2">
+                {regels.map((regel, index) => (
+                  <div key={index} className="grid grid-cols-1 gap-2 sm:grid-cols-12">
+                    <input
+                      value={regel.ordernummer}
+                      onChange={e => regelWijzigen(index, { ordernummer: e.target.value })}
+                      placeholder={t('orders.lineNumber', 'Ordernummer')}
+                      className={`${veld} sm:col-span-4`}
+                    />
+                    <input
+                      value={regel.omschrijving}
+                      onChange={e => regelWijzigen(index, { omschrijving: e.target.value })}
+                      placeholder={t('orders.lineDetail', 'Detail')}
+                      className={`${veld} sm:col-span-4`}
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      value={regel.aantal_pallets ?? ''}
+                      onChange={e => regelWijzigen(index, {
+                        aantal_pallets: e.target.value === '' ? null : Number(e.target.value),
+                      })}
+                      placeholder={t('orders.linePallets', 'Pallets')}
+                      className={`${veld} sm:col-span-2`}
+                    />
+                    <div className="flex items-center gap-1 sm:col-span-2">
+                      <select
+                        value={regel.soort}
+                        onChange={e => regelWijzigen(index, {
+                          soort: e.target.value as OpdrachtRegel['soort'],
+                        })}
+                        className={veld}
+                      >
+                        <option value="">{t('orders.lineKindAny', '-')}</option>
+                        <option value="laden">{t('orders.load', 'Laden')}</option>
+                        <option value="lossen">{t('orders.unload', 'Lossen')}</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => regelVerwijderen(index)}
+                        title={t('common.delete', 'Verwijderen')}
+                        className="btn btn-secondary btn-icon shrink-0"
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={regelToevoegen}
+              className="btn btn-secondary mt-3 text-sm"
+            >
+              {t('orders.addLine', 'Regel toevoegen')}
+            </button>
+            <p className="mt-2 text-xs text-gray-500">
+              {t('orders.lineHint', 'Bijvoorbeeld: HMMU6426781 - PEAR 999 BOX - 9 pallets')}
+            </p>
           </section>
 
           <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">

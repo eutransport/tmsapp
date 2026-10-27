@@ -5,17 +5,63 @@ routeplanner (OSRM), die geen sleutel of abonnement nodig hebben.
 """
 import logging
 from datetime import timedelta
+from math import asin, cos, radians, sin, sqrt
 
+from django.conf import settings
 from django.utils import timezone
 
 from apps.loadlist.services.geocoding import geocode
 from apps.loadlist.services.osrm import road_matrix
 
-from .models import OpdrachtStatus
+from .models import OpdrachtFase, OpdrachtStatus
 
 logger = logging.getLogger(__name__)
 
 VERVERS_NA_MINUTEN = 10
+
+# Hemelsbreed, niet over de weg: een vrachtwagen die het terrein op rijdt is er,
+# ook als de routeplanner nog een stuk eenrichtingsverkeer telt.
+AANKOMST_STRAAL_METER = getattr(settings, 'OPDRACHT_AANKOMST_STRAAL_METER', 300)
+
+
+def _afstand_meter(punt_a, punt_b):
+    """Hemelsbrede afstand tussen twee (lat, lng)-punten."""
+    straal = 6371000.0
+    lat1, lng1 = radians(punt_a[0]), radians(punt_a[1])
+    lat2, lng2 = radians(punt_b[0]), radians(punt_b[1])
+    deel = sin((lat2 - lat1) / 2) ** 2 + cos(lat1) * cos(lat2) * sin((lng2 - lng1) / 2) ** 2
+    return 2 * straal * asin(sqrt(deel))
+
+
+def _aankomst_bijwerken(opdracht, positie, bestemming):
+    """Zet de fase op 'aangekomen' zodra de wagen dicht genoeg bij het adres staat.
+
+    Alleen vooruit: een chauffeur die al wacht of laadt wordt nooit teruggezet.
+    """
+    if opdracht.fase != OpdrachtFase.ONDERWEG:
+        return False
+    try:
+        afstand = _afstand_meter(
+            (float(positie['latitude']), float(positie['longitude'])), bestemming
+        )
+    except (TypeError, ValueError, KeyError):
+        return False
+    if afstand > AANKOMST_STRAAL_METER:
+        return False
+
+    opdracht.fase = OpdrachtFase.AANGEKOMEN
+    opdracht.aangekomen_op = timezone.now()
+    opdracht.aangekomen_automatisch = True
+    opdracht.save(update_fields=[
+        'fase', 'aangekomen_op', 'aangekomen_automatisch', 'updated_at'
+    ])
+    try:
+        from . import push
+
+        push.meld_aangekomen(opdracht)
+    except Exception:
+        logger.exception('Aankomstmelding kon niet verstuurd worden')
+    return True
 
 
 def _normaliseer(kenteken):
@@ -96,6 +142,8 @@ def ververs(opdrachten, geforceerd=False):
         if bestemming is None:
             _bewaar(opdracht, eta_fout='adres_onbekend')
             continue
+
+        _aankomst_bijwerken(opdracht, positie, bestemming)
 
         punten = [(float(positie['latitude']), float(positie['longitude'])), bestemming]
         try:

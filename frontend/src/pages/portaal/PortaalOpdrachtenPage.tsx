@@ -289,6 +289,24 @@ export default function PortaalOpdrachtenPage() {
                       <div className="text-xs text-gray-500">
                         {[o.adres, o.postcode, o.plaats].filter(Boolean).join(', ') || '-'}
                       </div>
+                      <div className="mt-1">
+                        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                          {o.werk_omschrijving}
+                        </span>
+                      </div>
+                      {o.regels.length > 0 && (
+                        <ul className="mt-1 space-y-0.5">
+                          {o.regels.map((r, i) => (
+                            <li key={r.id || i} className="text-xs text-gray-600">
+                              <span className="font-mono">{r.ordernummer || '-'}</span>
+                              {r.omschrijving && ` - ${r.omschrijving}`}
+                              {r.aantal_pallets !== null && (
+                                <span className="font-semibold text-gray-800"> - {r.aantal_pallets} PLT</span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                       {o.geopend_tot && (
                         <div className="text-xs text-gray-400">
                           {t('orders.openUntil', 'Geopend tot')} {o.geopend_tot.slice(0, 5)}
@@ -333,7 +351,14 @@ export default function PortaalOpdrachtenPage() {
 
                     <td className="whitespace-nowrap px-4 py-3">
                       <OpdrachtStatusBadge status={o.status} label={o.status_label} />
-                      {o.status === 'gestart' && (
+                      {o.status === 'gestart' && o.fase !== 'onderweg' && (
+                        <div className="mt-1">
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                            {o.fase_label}
+                          </span>
+                        </div>
+                      )}
+                      {o.status === 'gestart' && o.fase === 'onderweg' && (
                         <div className="mt-1.5"><EtaBalk eta={etaPer[o.id]} compact /></div>
                       )}
                     </td>

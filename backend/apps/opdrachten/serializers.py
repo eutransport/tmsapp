@@ -3,7 +3,33 @@ from rest_framework import serializers
 from apps.core.file_signing import sign_file_field
 from apps.drivers.models import Driver
 
-from .models import Opdracht, OpdrachtBijlage, OpdrachtKlant, OpdrachtMailInstelling, OpdrachtStatus
+from .models import (
+    Opdracht,
+    OpdrachtBijlage,
+    OpdrachtKlant,
+    OpdrachtMailInstelling,
+    OpdrachtRegel,
+    OpdrachtStatus,
+)
+
+
+class OpdrachtRegelSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(required=False)
+
+    class Meta:
+        model = OpdrachtRegel
+        fields = ['id', 'ordernummer', 'omschrijving', 'aantal_pallets', 'soort', 'volgorde']
+
+    def validate(self, data):
+        gevuld = any([
+            (data.get('ordernummer') or '').strip(),
+            (data.get('omschrijving') or '').strip(),
+            data.get('aantal_pallets') is not None,
+        ])
+        if not gevuld:
+            raise serializers.ValidationError('Een lege regel kan niet bewaard worden.')
+        return data
+
 
 
 class OpdrachtBijlageSerializer(serializers.ModelSerializer):
@@ -32,6 +58,10 @@ class OpdrachtSerializer(serializers.ModelSerializer):
         source='aangemaakt_door.full_name', read_only=True
     )
     status_label = serializers.CharField(source='get_status_display', read_only=True)
+    fase_label = serializers.CharField(source='get_fase_display', read_only=True)
+    werksoort = serializers.CharField(read_only=True)
+    werk_omschrijving = serializers.CharField(read_only=True)
+    regels = OpdrachtRegelSerializer(many=True, required=False)
 
     class Meta:
         model = Opdracht
@@ -42,6 +72,10 @@ class OpdrachtSerializer(serializers.ModelSerializer):
             'klant_naam', 'adres', 'postcode', 'plaats', 'contactpersoon',
             'telefoon', 'notitie', 'geopend_tot',
             'volgorde', 'status', 'status_label',
+            'werk_laden', 'werk_lossen', 'werksoort', 'werk_omschrijving',
+            'fase', 'fase_label', 'aangekomen_op', 'aangekomen_automatisch',
+            'wachten_sinds', 'laden_gestart_op', 'lossen_gestart_op',
+            'regels',
             'gestart_op', 'afgeleverd_op', 'ingetrokken_op',
             'niet_geleverd_op', 'niet_geleverd_reden', 'laatste_mail_fout',
             'chauffeur_reactie', 'kenteken', 'bijlagen',
@@ -54,10 +88,52 @@ class OpdrachtSerializer(serializers.ModelSerializer):
             'afgeleverd_op', 'ingetrokken_op', 'niet_geleverd_op',
             'niet_geleverd_reden', 'laatste_mail_fout',
             'chauffeur_reactie', 'kenteken',
+            'fase', 'aangekomen_op', 'aangekomen_automatisch',
+            'wachten_sinds', 'laden_gestart_op', 'lossen_gestart_op',
             'eta_aankomst', 'eta_minuten', 'eta_start_minuten',
             'eta_afstand_km', 'eta_bijgewerkt_op', 'eta_fout',
             'created_at', 'updated_at',
         ]
+
+    def validate(self, data):
+        """Een opdracht zonder werk heeft geen betekenis voor de chauffeur."""
+        laden = data.get('werk_laden', getattr(self.instance, 'werk_laden', False))
+        lossen = data.get('werk_lossen', getattr(self.instance, 'werk_lossen', True))
+        if not laden and not lossen:
+            raise serializers.ValidationError(
+                {'werk_laden': 'Kies minstens laden of lossen.'}
+            )
+        return data
+
+    def create(self, validated_data):
+        regels = validated_data.pop('regels', None)
+        opdracht = super().create(validated_data)
+        self._regels_bewaren(opdracht, regels)
+        return opdracht
+
+    def update(self, instance, validated_data):
+        regels = validated_data.pop('regels', None)
+        opdracht = super().update(instance, validated_data)
+        self._regels_bewaren(opdracht, regels)
+        return opdracht
+
+    @staticmethod
+    def _regels_bewaren(opdracht, regels):
+        """Niet meegestuurd betekent ongewijzigd; een lege lijst wist de regels."""
+        if regels is None:
+            return
+        opdracht.regels.all().delete()
+        OpdrachtRegel.objects.bulk_create([
+            OpdrachtRegel(
+                opdracht=opdracht,
+                ordernummer=(regel.get('ordernummer') or '').strip(),
+                omschrijving=(regel.get('omschrijving') or '').strip(),
+                aantal_pallets=regel.get('aantal_pallets'),
+                soort=regel.get('soort') or '',
+                volgorde=regel.get('volgorde') or index,
+            )
+            for index, regel in enumerate(regels)
+        ])
 
     def validate_ritnummer(self, waarde):
         """Leeg betekent: laat het model zelf een nummer uitdelen."""

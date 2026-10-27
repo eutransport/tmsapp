@@ -23,6 +23,14 @@ TEKSTEN = {
         'ingetrokken_body': '%(klant)s, %(adres)s is vervallen',
         'overgezet_titel': 'Opdracht overgedragen',
         'overgezet_body': '%(klant)s, %(adres)s staat nu bij een andere chauffeur',
+        'aangekomen_titel': 'Aangekomen bij klant',
+        'aangekomen_body': '%(chauffeur)s is aangekomen bij %(klant)s',
+        'wachten_titel': 'Wacht op klant',
+        'wachten_body': '%(chauffeur)s wacht bij %(klant)s',
+        'laden_titel': 'Begonnen met laden',
+        'laden_body': '%(chauffeur)s is begonnen met laden bij %(klant)s',
+        'lossen_titel': 'Begonnen met lossen',
+        'lossen_body': '%(chauffeur)s is begonnen met lossen bij %(klant)s',
         'eta': 'Verwacht over %(minuten)s minuten',
     },
     'en': {
@@ -38,6 +46,14 @@ TEKSTEN = {
         'ingetrokken_body': '%(klant)s, %(adres)s has been cancelled',
         'overgezet_titel': 'Order reassigned',
         'overgezet_body': '%(klant)s, %(adres)s has been given to another driver',
+        'aangekomen_titel': 'Arrived at customer',
+        'aangekomen_body': '%(chauffeur)s has arrived at %(klant)s',
+        'wachten_titel': 'Waiting for customer',
+        'wachten_body': '%(chauffeur)s is waiting at %(klant)s',
+        'laden_titel': 'Loading started',
+        'laden_body': '%(chauffeur)s started loading at %(klant)s',
+        'lossen_titel': 'Unloading started',
+        'lossen_body': '%(chauffeur)s started unloading at %(klant)s',
         'eta': 'Expected in %(minuten)s minutes',
     },
     'tr': {
@@ -53,6 +69,14 @@ TEKSTEN = {
         'ingetrokken_body': '%(klant)s, %(adres)s iptal edildi',
         'overgezet_titel': 'Sipariş devredildi',
         'overgezet_body': '%(klant)s, %(adres)s artık başka bir şoförde',
+        'aangekomen_titel': 'Müşteriye varıldı',
+        'aangekomen_body': '%(chauffeur)s %(klant)s adresine vardı',
+        'wachten_titel': 'Müşteri bekleniyor',
+        'wachten_body': '%(chauffeur)s %(klant)s adresinde bekliyor',
+        'laden_titel': 'Yükleme başladı',
+        'laden_body': '%(chauffeur)s %(klant)s adresinde yüklemeye başladı',
+        'lossen_titel': 'Boşaltma başladı',
+        'lossen_body': '%(chauffeur)s %(klant)s adresinde boşaltmaya başladı',
         'eta': 'Tahmini %(minuten)s dakika',
     },
 }
@@ -152,6 +176,30 @@ def meld_gestart(opdracht):
     if opdracht.eta_start_minuten:
         body = f"{body} · {T['eta'] % {'minuten': opdracht.eta_start_minuten}}"
     return _stuur(_portaalgebruikers(opdracht), T['gestart_titel'], body, '/portaal/opdrachten')
+
+
+def _meld_voortgang(opdracht, sleutel):
+    T = TEKSTEN[_taal(opdracht)]
+    return _stuur(
+        _portaalgebruikers(opdracht),
+        T[f'{sleutel}_titel'],
+        T[f'{sleutel}_body'] % {
+            'chauffeur': _chauffeur_naam(opdracht), 'klant': opdracht.klant_naam
+        },
+        '/portaal/opdrachten',
+    )
+
+
+def meld_aangekomen(opdracht):
+    return _meld_voortgang(opdracht, 'aangekomen')
+
+
+def meld_wachten(opdracht):
+    return _meld_voortgang(opdracht, 'wachten')
+
+
+def meld_begonnen(opdracht, soort):
+    return _meld_voortgang(opdracht, 'laden' if soort == 'laden' else 'lossen')
 
 
 def meld_afgeleverd(opdracht):
