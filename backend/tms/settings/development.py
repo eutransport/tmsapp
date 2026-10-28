@@ -7,6 +7,10 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
 
+# Tijdens ontwikkelen is de adminsite gewoon beschikbaar; hij draait hier toch
+# alleen op de eigen machine.
+DJANGO_ADMIN_ENABLED = config('DJANGO_ADMIN_ENABLED', default=True, cast=bool)
+
 # Database
 DATABASES = {
     'default': {

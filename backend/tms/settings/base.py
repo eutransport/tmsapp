@@ -14,6 +14,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # No default value - app will crash if SECRET_KEY is not set in environment
 SECRET_KEY = config('SECRET_KEY')
 
+# De Django-adminsite is een beheerdersingang die naast de gewone app staat:
+# daar gelden de rollen en controles van het TMS niet. Hij staat daarom uit,
+# tenzij hij bewust wordt aangezet. Lokaal ontwikkelen zet hem aan in
+# development.py; op productie is hij alleen bedoeld voor noodgevallen via een
+# SSH-tunnel, nooit via het open internet.
+DJANGO_ADMIN_ENABLED = config('DJANGO_ADMIN_ENABLED', default=False, cast=bool)
+
 # Application definition
 DJANGO_APPS = [
     'django.contrib.admin',

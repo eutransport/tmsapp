@@ -32,10 +32,7 @@ def serve_media(request, path, document_root=None):
 urlpatterns = [
     # Health check (for Docker/load balancers)
     path('api/health/', health_check, name='health-check'),
-    
-    # Admin (only for developers)
-    path('admin/', admin.site.urls),
-    
+
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
@@ -71,6 +68,13 @@ urlpatterns = [
     # Signed media files (HMAC-protected, valid in dev and prod)
     re_path(r'^files/(?P<path>.+)$', serve_signed_media, name='signed-media'),
 ]
+
+# De adminsite staat standaard uit. Zonder deze regel bestaat /admin/ niet in
+# Django en levert het een nette 404 op, ook als een proxy het pad toch
+# doorstuurt. Zo valt /admin/* vrij voor de SPA, die daar zijn eigen
+# gebruikersbeheer heeft.
+if settings.DJANGO_ADMIN_ENABLED:
+    urlpatterns.insert(1, path('admin/', admin.site.urls))
 
 # Serve media files in development
 if settings.DEBUG:

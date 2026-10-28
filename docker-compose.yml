@@ -102,6 +102,10 @@ services:
       - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7}
       - MAXMIND_ACCOUNT_ID=${MAXMIND_ACCOUNT_ID:-}
       - MAXMIND_LICENSE_KEY=${MAXMIND_LICENSE_KEY:-}
+      # De Django-adminsite staat uit: hij omzeilt de rollen van het TMS en
+      # het pad /admin is van de app zelf. Alleen aanzetten voor noodgevallen,
+      # en dan uitsluitend via een SSH-tunnel, nooit via het open internet.
+      - DJANGO_ADMIN_ENABLED=${DJANGO_ADMIN_ENABLED:-false}
       # Microsoft Entra External ID. Zolang ENTRA_CLIENT_ID leeg is, staat de
       # koppeling uit en verandert er niets aan het inloggen.
       - ENTRA_TENANT_TYPE=${ENTRA_TENANT_TYPE:-workforce}
