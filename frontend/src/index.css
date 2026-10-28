@@ -468,6 +468,39 @@
     border-color: rgba(125, 211, 252, 0.55);
   }
 
+  /* Microsoft-balk: staat in dezelfde grid en beslaat alle kolommen, zodat hij
+     altijd exact zo breed is als de tegels erboven. */
+  .auth-ms-bar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    width: 100%;
+    min-height: 2.85rem;
+    padding: 0.6rem 0.9rem;
+    border-radius: 0.95rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(7, 16, 30, 0.18);
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    color: rgba(233, 246, 255, 0.96);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 12px 24px -18px rgba(15, 23, 42, 0.95);
+    transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  }
+  .auth-ms-bar:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: rgba(125, 211, 252, 0.5);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 18px 30px -18px rgba(56, 189, 248, 0.55);
+  }
+  .auth-ms-bar:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
   .auth-square-icon {
     width: 1.6rem;
     height: 1.6rem;

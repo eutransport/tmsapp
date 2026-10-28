@@ -77,7 +77,8 @@ export default function LoginPage() {
       // opnieuw geladen.
       if (!heeftMicrosoftAntwoord()) return
 
-      setShowLogin(true)
+      // Blijf op het startscherm: daar staat de Microsoft-balk die tijdens
+      // het afronden "Bezig met Microsoft..." toont.
       setEntraBezig(true)
       try {
         const idToken = await voltooiMicrosoftAanmelding(config)
@@ -250,6 +251,18 @@ export default function LoginPage() {
             <AppleLogo className="auth-square-icon auth-square-icon-apple" />
             <span>iPhone</span>
           </Link>
+
+          {entraConfig.enabled && (
+            <button
+              type="button"
+              onClick={onMicrosoftLogin}
+              disabled={entraBezig}
+              className="auth-ms-bar"
+            >
+              <MicrosoftLogo className="h-4 w-4" />
+              {entraBezig ? 'Bezig met Microsoft...' : 'Inloggen met Microsoft'}
+            </button>
+          )}
         </div>
       </div>
     )
@@ -313,27 +326,7 @@ export default function LoginPage() {
           {isLoading ? t('auth.loggingIn') : t('auth.loginButton')}
         </button>
 
-        {entraConfig.enabled && (
-          <div className="auth-reveal" style={stagger(4)}>
-            <div className="flex items-center gap-3 my-4">
-              <span className="h-px flex-1 bg-white/20" />
-              <span className="text-xs uppercase tracking-wide text-sky-100/70">of</span>
-              <span className="h-px flex-1 bg-white/20" />
-            </div>
-
-            <button
-              type="button"
-              onClick={onMicrosoftLogin}
-              disabled={isLoading || entraBezig}
-              className="w-full flex items-center justify-center gap-3 rounded-lg border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/20 disabled:opacity-60"
-            >
-              <MicrosoftLogo className="h-4 w-4" />
-              {entraBezig ? 'Bezig met Microsoft...' : 'Inloggen met Microsoft'}
-            </button>
-          </div>
-        )}
-
-        <div className="auth-actions-inline auth-reveal" style={stagger(5)}>
+        <div className="auth-actions-inline auth-reveal" style={stagger(4)}>
           <button type="button" className="auth-link-button" onClick={() => setShowLogin(false)}>
             Terug
           </button>
