@@ -165,6 +165,7 @@ export default function SettingsPage() {
         radius_start_datum: data.radius_start_datum || '',
         // Azure-koppeling; het geheim komt bewust nooit terug van de server
         entra_sync_enabled: data.entra_sync_enabled ?? false,
+        entra_sync_tenant_id: data.entra_sync_tenant_id || '',
         entra_sync_client_id: data.entra_sync_client_id || '',
         entra_sync_client_secret: '',
         entra_sync_secret_expires_on: data.entra_sync_secret_expires_on || '',
@@ -1387,6 +1388,22 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Tenant ID
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.entra_sync_tenant_id || ''}
+                      onChange={(e) => handleInputChange('entra_sync_tenant_id', e.target.value)}
+                      placeholder="00000000-0000-0000-0000-000000000000"
+                      className="input"
+                      autoComplete="off"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      De directory-ID van je tenant, te vinden in Azure onder het overzicht van de app-registratie.
+                    </p>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Client ID (sync-app)

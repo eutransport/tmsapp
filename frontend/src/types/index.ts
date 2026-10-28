@@ -125,6 +125,7 @@ export interface AppSettingsAdmin extends AppSettings {
   radius_start_datum?: string | null
   // Azure-koppeling voor het aanmaken van Microsoft-accounts
   entra_sync_enabled?: boolean
+  entra_sync_tenant_id?: string
   entra_sync_client_id?: string
   entra_sync_client_secret?: string // Write-only
   has_entra_sync_secret?: boolean // Read-only

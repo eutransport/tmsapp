@@ -147,7 +147,8 @@ class AppSettingsAdminSerializer(serializers.ModelSerializer):
             'has_radius_api_token',
             'radius_start_datum',
             # Azure-koppeling voor het aanmaken van accounts
-            'entra_sync_enabled', 'entra_sync_client_id', 'entra_sync_client_secret',
+            'entra_sync_enabled', 'entra_sync_tenant_id', 'entra_sync_client_id',
+            'entra_sync_client_secret',
             'entra_sync_secret_expires_on', 'entra_sync_domain', 'entra_sync_auto_create',
             'has_entra_sync_secret', 'entra_sync_secret_dagen',
             'created_at', 'updated_at'

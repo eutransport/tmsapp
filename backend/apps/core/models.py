@@ -640,6 +640,12 @@ class AppSettings(models.Model):
         verbose_name='Synchronisatie met Entra ID aan',
         help_text='Uit betekent: geen enkel contact met Azure.'
     )
+    entra_sync_tenant_id = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='Tenant-ID',
+        help_text='De directory-ID van de tenant. Leeg laten gebruikt ENTRA_TENANT_ID uit de serverinstellingen.'
+    )
     entra_sync_client_id = models.CharField(
         max_length=100,
         blank=True,

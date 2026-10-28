@@ -56,9 +56,17 @@ def is_ingeschakeld() -> bool:
 
 
 def _tenant_id() -> str:
+    """
+    De tenant uit de instellingen, met terugval op de serveromgeving.
+
+    Het scherm heeft voorrang: zo kan de koppeling ingericht worden zonder
+    dat er iemand bij de omgevingsvariabelen van de server hoeft te komen.
+    """
     from django.conf import settings as django_settings
 
-    tenant = getattr(django_settings, 'ENTRA_TENANT_ID', '')
+    tenant = (_instellingen().entra_sync_tenant_id or '').strip()
+    if not tenant:
+        tenant = (getattr(django_settings, 'ENTRA_TENANT_ID', '') or '').strip()
     if not tenant:
         raise GraphNietIngesteld(
             'Er is geen tenant ingesteld. Vul eerst de Entra-instellingen in.'

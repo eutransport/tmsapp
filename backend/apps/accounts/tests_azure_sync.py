@@ -116,6 +116,43 @@ class GraphBasisTests(TestCase):
             graph.stel_inlognaam_voor(self.gebruiker, '')
 
 
+class GraphTenantTests(TestCase):
+    """De tenant mag uit het scherm komen, niet alleen uit de serveromgeving."""
+
+    def setUp(self):
+        cache.clear()
+        _zet_koppeling_aan()
+
+    @override_settings(ENTRA_TENANT_ID='')
+    def test_tenant_uit_de_instellingen_zonder_omgevingsvariabele(self):
+        s = AppSettings.get_settings()
+        s.entra_sync_tenant_id = 'tenant-uit-scherm'
+        s.save()
+        self.assertEqual(graph._tenant_id(), 'tenant-uit-scherm')
+
+    @override_settings(ENTRA_TENANT_ID='tenant-uit-omgeving')
+    def test_instellingen_gaan_voor_op_de_omgevingsvariabele(self):
+        s = AppSettings.get_settings()
+        s.entra_sync_tenant_id = 'tenant-uit-scherm'
+        s.save()
+        self.assertEqual(graph._tenant_id(), 'tenant-uit-scherm')
+
+    @override_settings(ENTRA_TENANT_ID='tenant-uit-omgeving')
+    def test_omgevingsvariabele_blijft_werken_als_het_veld_leeg_is(self):
+        s = AppSettings.get_settings()
+        s.entra_sync_tenant_id = ''
+        s.save()
+        self.assertEqual(graph._tenant_id(), 'tenant-uit-omgeving')
+
+    @override_settings(ENTRA_TENANT_ID='   ')
+    def test_alleen_spaties_telt_als_leeg(self):
+        s = AppSettings.get_settings()
+        s.entra_sync_tenant_id = '  '
+        s.save()
+        with self.assertRaises(graph.GraphNietIngesteld):
+            graph._tenant_id()
+
+
 @override_settings(ENTRA_TENANT_ID='tenant-abc')
 class GraphVerkeerTests(TestCase):
     def setUp(self):
