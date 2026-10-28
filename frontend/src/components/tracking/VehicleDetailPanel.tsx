@@ -401,7 +401,10 @@ function TripRow({ trip, index }: { trip: VehicleDetailTrip; index: number }) {
       {/* Speed + km stand + fuel */}
       <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200/50">
         <div className="flex items-center gap-3 text-xs text-gray-500">
-          <span>📍 {trip.start_km.toLocaleString('nl-NL')} → {trip.end_km.toLocaleString('nl-NL')} km</span>
+          {/* Niet elke bron houdt een kilometerstand bij; dan tonen we er geen. */}
+          {trip.end_km > 0 && (
+            <span>📍 {trip.start_km.toLocaleString('nl-NL')} → {trip.end_km.toLocaleString('nl-NL')} km</span>
+          )}
           {trip.fuel_used_liters != null && trip.fuel_used_liters > 0 && (
             <span>⛽ -{trip.fuel_used_liters} L</span>
           )}

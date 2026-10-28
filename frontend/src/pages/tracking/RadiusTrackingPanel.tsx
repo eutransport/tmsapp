@@ -16,6 +16,7 @@ import {
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getRadiusVehicles, type RadiusVehicle } from '@/api/radius'
+import VehicleDetailPanel from '@/components/tracking/VehicleDetailPanel'
 
 /** Marker met de kleur afhankelijk van contact aan/uit. */
 function maakMarkerIcoon(rijdt: boolean, contactAan: boolean) {
@@ -157,6 +158,7 @@ export default function RadiusTrackingPanel() {
   const [fout, setFout] = useState<string | null>(null)
   const [zoekterm, setZoekterm] = useState('')
   const [focusKenteken, setFocusKenteken] = useState<string | null>(null)
+  const [geselecteerd, setGeselecteerd] = useState<RadiusVehicle | null>(null)
   const [ververstOp, setVerverstOp] = useState<Date | null>(null)
   const [intervalMs, setIntervalMs] = useState(60000)
 
@@ -272,7 +274,10 @@ export default function RadiusTrackingPanel() {
                 <button
                   key={voertuig.plate_number || voertuig.device_id}
                   type="button"
-                  onClick={() => setFocusKenteken(voertuig.plate_number)}
+                  onClick={() => {
+                    setFocusKenteken(voertuig.plate_number)
+                    setGeselecteerd(voertuig)
+                  }}
                   className={`flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-gray-50 ${
                     focusKenteken === voertuig.plate_number ? 'bg-primary-50' : ''
                   }`}
@@ -305,6 +310,15 @@ export default function RadiusTrackingPanel() {
           </div>
         </div>
       </div>
+
+      {/* Dagoverzicht van het gekozen voertuig, net als bij Linqo. */}
+      {geselecteerd && (
+        <VehicleDetailPanel
+          objectId={`radius:${geselecteerd.service_id}`}
+          platNumber={geselecteerd.plate_number}
+          onClose={() => setGeselecteerd(null)}
+        />
+      )}
     </div>
   )
 }

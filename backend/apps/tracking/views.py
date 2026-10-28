@@ -1688,6 +1688,43 @@ class VehicleDetailView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
+        # Een Radius-voertuig heeft geen FM-Track-objectnummer; dat haalt zijn
+        # ritten uit het Radius-archief of rechtstreeks bij Radius.
+        from apps.tracking import radius_detail
+        if radius_detail.is_radius_object(object_id):
+            service_id = radius_detail.service_id_van_object(object_id)
+            if not service_id:
+                return Response(
+                    {'error': 'Onbekend Radius-voertuig.', 'code': 'radius_unknown'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            live = None
+            kenteken = ''
+            try:
+                from apps.tracking import radius_service
+                from apps.tracking.radius_archive_service import bepaal_klant_id
+                koppeling = radius_service.actieve_koppeling('telematics')
+                voertuigen = radius_service.get_vehicles(
+                    bepaal_klant_id(connection=koppeling), connection=koppeling)
+                for voertuig in voertuigen['vehicles']:
+                    if voertuig.get('service_id') == service_id:
+                        live = voertuig
+                        kenteken = voertuig.get('plate_number') or ''
+                        break
+            except Exception:
+                logger.warning('Radius: live positie niet beschikbaar voor %s', object_id)
+            try:
+                return Response(radius_detail.dagdetail(
+                    service_id, target_date, live, kenteken))
+            except Exception:
+                logger.exception('Radius-dagdetail mislukt (object_id=%s, date=%s)',
+                                 object_id, date_str)
+                return Response(
+                    {'error': 'Voertuiggegevens konden niet worden geladen.',
+                     'code': 'radius_internal_error'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
         local_start = dt(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=NL_TZ)
         local_end = dt(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=NL_TZ)
         date_from = local_start.astimezone(UTC_TZ)
