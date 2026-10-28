@@ -19,7 +19,8 @@ from apps.companies.models import Company
 
 LIVE_URL = '/api/tracking/live/'
 HISTORY_URL = '/api/tracking/history/'
-TACHO_URL = '/api/tracking/tachograph/vehicles/'
+TACHO_URL = '/api/tracking/tachograph/'
+TACHO_KENTEKENS_URL = '/api/tracking/tachograph/vehicles/'
 
 
 def maak_gebruiker(email, rol, rechten=None, bedrijf=None):
@@ -138,12 +139,34 @@ class TachograafToegangTests(TestCase):
 
         self.assertEqual(self.client.get(TACHO_URL).status_code, 403)
 
-    @patch('apps.tracking.tachograph_service.get_objects')
-    def test_gebruiker_met_tachograafrecht_mag_erbij(self, mock_objects):
-        mock_objects.return_value = []
+    @patch('apps.tracking.tachograph_archive_service.fetch_live_tachograph_data')
+    def test_gebruiker_met_tachograafrecht_mag_erbij(self, mock_data):
+        mock_data.return_value = []
         gebruiker = maak_gebruiker(
             'rijtijden@example.com', 'gebruiker', rechten=['view_tachograph'],
         )
         self.client.force_authenticate(user=gebruiker)
 
         self.assertEqual(self.client.get(TACHO_URL).status_code, 200)
+
+
+class TachograafKentekenlijstTests(TestCase):
+    """
+    De kentekenlijst vult de keuzelijst in het chauffeursformulier en valt
+    daarom bewust niet onder `view_tachograph`. Zonder deze uitzondering
+    raakt het tacho-kenteken onbereikbaar voor wie chauffeurs beheert, en
+    wel stilzwijgend: de aanroep heeft een lege catch.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+
+    @patch('apps.tracking.tachograph_service.get_objects')
+    def test_chauffeurbeheerder_houdt_de_kentekenlijst(self, mock_objects):
+        mock_objects.return_value = []
+        gebruiker = maak_gebruiker(
+            'beheer@example.com', 'gebruiker', rechten=['view_drivers'],
+        )
+        self.client.force_authenticate(user=gebruiker)
+
+        self.assertEqual(self.client.get(TACHO_KENTEKENS_URL).status_code, 200)

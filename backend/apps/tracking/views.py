@@ -20,7 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.permissions import KanVoertuigenVolgen, KanTachograafZien
+from apps.core.permissions import IsAdminOrManager, KanVoertuigenVolgen, KanTachograafZien
 from .models import TrackingSession, LocationPoint
 from .serializers import (
     TrackingSessionCreateSerializer,
@@ -689,7 +689,10 @@ class TachographVehiclesListView(APIView):
     Returns a list of all FM-Track vehicle plate numbers.
     Used for the tacho_kenteken dropdown in driver settings.
     """
-    permission_classes = [KanTachograafZien]
+    # Bewust niet achter `view_tachograph`: dit is een kentekenlijst, geen
+    # rijtijdendata, en hij vult de keuzelijst in het chauffeursformulier.
+    # Wie chauffeurs beheert, heeft hem nodig zonder recht op de tachograaf.
+    permission_classes = [IsAdminOrManager]
 
     def get(self, request):
         from apps.tracking.tachograph_service import get_objects, FMTrackError
