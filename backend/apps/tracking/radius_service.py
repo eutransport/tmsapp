@@ -13,7 +13,7 @@ import json
 import logging
 import re
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 
 import requests
@@ -44,6 +44,15 @@ JOURNEYS_MAX_PAGES = 50
 # Radius bewaart ongeveer 30 dagen ritgeschiedenis. Ruimere periodes leveren
 # niet meer op, dus we begrenzen het verzoek.
 JOURNEYS_MAX_DAGEN = 31
+
+# Periode waarover we terugkijken om te bepalen welke tracker een voertuig
+# daadwerkelijk volgt. Ruim genoeg om een wagen die een week stilstaat niet
+# meteen als spooktracker te bestempelen.
+RIJDENDE_TRACKER_TERUGBLIK_DAGEN = 30
+# De uitkomst verandert hooguit een paar keer per jaar, terwijl de live-kaart
+# zichzelf om de paar seconden ververst. Even cachen scheelt databasewerk.
+_RIJDENDE_TRACKERS_CACHE_KEY = 'radius_rijdende_trackers'
+_RIJDENDE_TRACKERS_TTL = 600
 
 # Cachesleutel voor het access token.
 _ACCESS_TOKEN_CACHE_KEY = 'radius_access_token'
@@ -403,14 +412,62 @@ def get_devices(customer_id, connection=None):
     }
 
 
+def rijdende_trackers(dagen=RIJDENDE_TRACKER_TERUGBLIK_DAGEN):
+    """
+    De trackers die de afgelopen periode echt kilometers hebben gemaakt.
+
+    Radius levert voor deze vloot elk kenteken twee keer aan: de tracker die
+    in het voertuig zit, en een tweede registratie die nooit een meter rijdt
+    maar wel een positie blijft melden (steevast hetzelfde bedrijventerrein).
+    Die tweede meldt zich geregeld later op de dag, dus "de nieuwste melding
+    wint" koos stelselmatig de verkeerde en zette wagens op een plek waar ze
+    niet stonden.
+
+    De ritgeschiedenis maakt het onderscheid wel hard: alleen de echte tracker
+    legt afstand af. Die staat al in ons eigen archief, dus dit kost geen
+    extra API-aanroep. We koppelen op ``service_id`` en niet op kenteken,
+    omdat Radius hetzelfde voertuig soms anders spelt (31-BLN-8 tegenover
+    31-BNL-8).
+
+    Geeft een set service_id's terug, of een lege set als het archief nog niet
+    gevuld is. Bij een lege set blijft het oude gedrag gelden.
+    """
+    gecacht = cache.get(_RIJDENDE_TRACKERS_CACHE_KEY)
+    if gecacht is not None:
+        return gecacht
+
+    try:
+        from apps.tracking.models import RadiusJourney
+        grens = timezone.localtime().date() - timedelta(days=dagen)
+        ids = set(
+            RadiusJourney.objects
+            .filter(date__gte=grens, distance_km__gt=0)
+            .values_list('service_id', flat=True)
+            .distinct()
+        )
+        ids.discard('')
+        ids.discard(None)
+    except Exception:
+        # Het archief is een hulpmiddel, geen voorwaarde: liever de oude
+        # keuze dan een kaart die helemaal niets laat zien.
+        logger.exception('Kon de rijdende Radius-trackers niet bepalen')
+        return set()
+
+    cache.set(_RIJDENDE_TRACKERS_CACHE_KEY, ids, _RIJDENDE_TRACKERS_TTL)
+    return ids
+
+
 def get_vehicles(customer_id, connection=None):
     """
     Geef één regel per voertuig (kenteken) met de meest recente positie.
 
     Een voertuig kan meerdere trackers hebben; die worden onder ``devices``
-    meegegeven zodat er geen gegevens verloren gaan.
+    meegegeven zodat er geen gegevens verloren gaan. Trackers die echt rijden
+    krijgen voorrang boven trackers die alleen een positie melden, ongeacht
+    welke zich het laatst meldde. Zie ``rijdende_trackers``.
     """
     ruw = get_devices(customer_id, connection=connection)
+    echte_trackers = rijdende_trackers()
 
     per_kenteken = {}
     zonder_kenteken = []
@@ -423,16 +480,26 @@ def get_vehicles(customer_id, connection=None):
 
     voertuigen = []
     for kenteken, apparaten in per_kenteken.items():
-        apparaten.sort(key=lambda d: d['timestamp'] or 0, reverse=True)
+        apparaten.sort(
+            key=lambda d: (
+                d['service_id'] in echte_trackers,
+                d['timestamp'] or 0,
+            ),
+            reverse=True,
+        )
         nieuwste = dict(apparaten[0])
         nieuwste['devices'] = apparaten
         nieuwste['device_count'] = len(apparaten)
+        # Zichtbaar maken waar de getoonde positie op gebaseerd is, zodat een
+        # afwijkende locatie navolgbaar blijft.
+        nieuwste['is_rijdende_tracker'] = nieuwste['service_id'] in echte_trackers
         voertuigen.append(nieuwste)
 
     for apparaat in zonder_kenteken:
         los = dict(apparaat)
         los['devices'] = [apparaat]
         los['device_count'] = 1
+        los['is_rijdende_tracker'] = apparaat['service_id'] in echte_trackers
         voertuigen.append(los)
 
     voertuigen.sort(key=lambda v: (v['plate_number'] == '', v['plate_number']))
