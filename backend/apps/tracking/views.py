@@ -20,7 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.permissions import IsAdminOrManager
+from apps.core.permissions import KanVoertuigenVolgen, KanTachograafZien
 from .models import TrackingSession, LocationPoint
 from .serializers import (
     TrackingSessionCreateSerializer,
@@ -222,8 +222,10 @@ class LiveTrackingView(APIView):
     - Role-based data filtering
     - Minimal data exposure (no IP, user agent, etc.)
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [KanVoertuigenVolgen]
     throttle_classes = [TrackingReadThrottle]
+    # Het queryset hieronder wordt voor een chauffeur op zijn eigen sessie gefilterd.
+    chauffeur_ziet_eigen_data = True
 
     def get(self, request):
         """Get all active vehicle positions."""
@@ -279,8 +281,10 @@ class RouteHistoryView(APIView):
     Admin/manager: access all sessions
     Chauffeur: access only own sessions
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [KanVoertuigenVolgen]
     throttle_classes = [TrackingReadThrottle]
+    # Zowel het detail als de lijst worden voor een chauffeur op zijn eigen sessies gefilterd.
+    chauffeur_ziet_eigen_data = True
 
     def get(self, request, session_id=None):
         """Get route history for a session."""
@@ -345,8 +349,11 @@ class TrackingVehiclesView(APIView):
     Get list of vehicles available for tracking assignment.
     Used in the vehicle monitor dropdown.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [KanVoertuigenVolgen]
     throttle_classes = [TrackingReadThrottle]
+    # Kentekenlijst voor de keuzelijst waarmee een chauffeur zijn rit start;
+    # bevat geen posities.
+    chauffeur_ziet_eigen_data = True
 
     def get(self, request):
         """Get vehicles for tracking assignment."""
@@ -401,7 +408,7 @@ class TachographOverviewView(APIView):
     GET /api/tracking/tachograph/?date=YYYY-MM-DD
     Returns tachograph trip data for all vehicles on the given date.
     """
-    permission_classes = [IsAdminOrManager]
+    permission_classes = [KanTachograafZien]
 
     def get(self, request):
         from .tachograph_archive_service import fetch_live_tachograph_data
@@ -538,7 +545,7 @@ class TachographOvertimeWriteView(APIView):
         "fm_driver_name": "Jan Scherpenisse"
     }
     """
-    permission_classes = [IsAdminOrManager]
+    permission_classes = [KanTachograafZien]
 
     def post(self, request):
         from apps.drivers.models import Driver
@@ -588,7 +595,7 @@ class TachographOvertimeListView(APIView):
     GET /api/tracking/tachograph/overtime/?driver_id=...&date_from=...&date_till=...
     List tachograph overtime records.
     """
-    permission_classes = [IsAdminOrManager]
+    permission_classes = [KanTachograafZien]
 
     def get(self, request):
         from apps.tracking.models import TachographOvertime
@@ -629,7 +636,7 @@ class FMTrackPositionsView(APIView):
     Returns last known positions of all FM-Track vehicles.
     Matches FM-Track plate_number to TMS Vehicle kenteken for linking.
     """
-    permission_classes = [IsAdminOrManager]
+    permission_classes = [KanVoertuigenVolgen]
 
     def get(self, request):
         from apps.tracking.positions import get_vehicle_locations
@@ -682,7 +689,7 @@ class TachographVehiclesListView(APIView):
     Returns a list of all FM-Track vehicle plate numbers.
     Used for the tacho_kenteken dropdown in driver settings.
     """
-    permission_classes = [IsAdminOrManager]
+    permission_classes = [KanTachograafZien]
 
     def get(self, request):
         from apps.tracking.tachograph_service import get_objects, FMTrackError
@@ -715,7 +722,7 @@ class TachographManualSyncView(APIView):
 
     Pass {"force": true} to clear existing sync data and re-sync everything.
     """
-    permission_classes = [IsAdminOrManager]
+    permission_classes = [KanTachograafZien]
 
     def get(self, request):
         from datetime import date, timedelta
@@ -780,7 +787,7 @@ class TachographArchiveListView(APIView):
     GET /api/tracking/tachograph/archive/?date=YYYY-MM-DD
     Returns stored tachograph archive data from local database.
     """
-    permission_classes = [IsAdminOrManager]
+    permission_classes = [KanTachograafZien]
 
     def perform_content_negotiation(self, request, force=False):
         """
@@ -1014,7 +1021,7 @@ class TachographArchiveSyncView(APIView):
     POST /api/tracking/tachograph/archive/sync/
     Body: {"date": "YYYY-MM-DD"}
     """
-    permission_classes = [IsAdminOrManager]
+    permission_classes = [KanTachograafZien]
 
     def post(self, request):
         from .tachograph_archive_service import upsert_tachograph_archive_for_date
@@ -1055,7 +1062,7 @@ class TachographComparisonView(APIView):
     Fetches tachograph data live from FM-Track API per relevant plate.
     Optional: &format=xlsx to download as Excel.
     """
-    permission_classes = [IsAdminOrManager]
+    permission_classes = [KanTachograafZien]
 
     def _build_rows(self, request):
         """Build comparison rows and return (rows, date_from_str, date_till_str) or Response on error."""
@@ -1623,7 +1630,7 @@ class VehicleDetailView(APIView):
     Returns detailed trip history for a specific FM-Track vehicle on a given date.
     Includes: current position, odometer, speed, trips with addresses, max speed per trip.
     """
-    permission_classes = [IsAdminOrManager]
+    permission_classes = [KanVoertuigenVolgen]
 
     def get(self, request, object_id):
         from datetime import datetime as dt, date as date_type

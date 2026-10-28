@@ -169,6 +169,64 @@ class IsOpdrachtgever(BasePermission):
         )
 
 
+class KanVoertuigenVolgen(BasePermission):
+    """
+    Track & trace: live posities en rithistorie van voertuigen.
+
+    Een opdrachtgever hoort hier nooit: die ziet zijn eigen ritten via het
+    klantportaal en mag niet bij de hele vloot. Overige rollen hebben het
+    recht ``view_track_trace`` nodig.
+
+    Een chauffeur wordt standaard geweigerd. Views die hun resultaat zelf op
+    de ingelogde chauffeur filteren zetten ``chauffeur_ziet_eigen_data = True``
+    om hem alsnog toe te laten. Dat is bewust omgekeerd: een view die die
+    filtering niet heeft, lekt zo nooit per ongeluk de hele vloot.
+    """
+
+    message = 'Je hebt geen toegang tot track & trace.'
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+
+        if user.is_superuser or user.rol == 'admin':
+            return True
+
+        if user.rol == 'opdrachtgever':
+            return False
+
+        if user.rol == 'chauffeur':
+            return getattr(view, 'chauffeur_ziet_eigen_data', False)
+
+        return user.has_module_permission('view_track_trace')
+
+
+class KanTachograafZien(BasePermission):
+    """
+    Tachograaf en rijtijden.
+
+    Dit is herleidbare rijtijdendata van individuele chauffeurs en staat
+    daarom los van track & trace: wie wagens mag volgen, hoeft nog niet bij
+    de rijtijden te kunnen. Vereist het recht ``view_tachograph``.
+    """
+
+    message = 'Je hebt geen toegang tot de tachograafgegevens.'
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+
+        if user.is_superuser or user.rol == 'admin':
+            return True
+
+        if user.rol in ('chauffeur', 'opdrachtgever'):
+            return False
+
+        return user.has_module_permission('view_tachograph')
+
+
 class PlanningPermission(BasePermission):
     """
     Planning permission:

@@ -12,7 +12,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.permissions import IsAdminOrManagerStrict
+from apps.core.permissions import IsAdminOrManagerStrict, KanVoertuigenVolgen
 
 from .radius_archive_service import (
     STANDAARD_TERUGBLIK_DAGEN,
@@ -130,7 +130,7 @@ class RadiusVehiclesView(APIView):
     Geeft alle telematics-voertuigen met hun laatst bekende positie.
     Zonder ``customer`` wordt de eerste Telematics-klant gebruikt.
     """
-    permission_classes = [IsAdminOrManagerStrict]
+    permission_classes = [KanVoertuigenVolgen]
     throttle_classes = [TrackingReadThrottle]
 
     def get(self, request):
@@ -165,7 +165,7 @@ class RadiusJourneysView(APIView):
     Geeft de losse ritten uit de Radius ritgeschiedenis. Radius bewaart
     ongeveer 30 dagen; oudere gegevens komen uit ons eigen archief.
     """
-    permission_classes = [IsAdminOrManagerStrict]
+    permission_classes = [KanVoertuigenVolgen]
     throttle_classes = [TrackingReadThrottle]
 
     def get(self, request):
@@ -194,7 +194,7 @@ class RadiusArchiveView(APIView):
     en voertuig. Anders dan de Radius API zelf gaat dit verder terug dan
     30 dagen. Met ``format=csv|xlsx|pdf`` wordt het als bestand gedownload.
     """
-    permission_classes = [IsAdminOrManagerStrict]
+    permission_classes = [KanVoertuigenVolgen]
 
     def get_throttles(self):
         """Exports zijn duurder dan een gewone uitlezing, dus strenger begrensd."""
@@ -415,7 +415,7 @@ class RadiusJourneySummaryView(APIView):
     Geeft per voertuig het totaal aantal ritten, kilometers en rijtijd,
     zoals het overzicht in het Radius-portaal.
     """
-    permission_classes = [IsAdminOrManagerStrict]
+    permission_classes = [KanVoertuigenVolgen]
     throttle_classes = [TrackingReadThrottle]
 
     def get(self, request):

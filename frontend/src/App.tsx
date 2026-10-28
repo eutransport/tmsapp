@@ -395,11 +395,11 @@ function App() {
         <Route path="/maintenance/settings" element={<AdminRoute><MaintenanceSettingsPage /></AdminRoute>} />
         
         {/* Track & Trace */}
-        <Route path="/track-trace" element={<AdminRoute><TrackTracePage /></AdminRoute>} />
+        <Route path="/track-trace" element={<PermissionRoute permission="view_track_trace"><TrackTracePage /></PermissionRoute>} />
 
         {/* Tachograph */}
-        <Route path="/tachograph" element={<AdminRoute><TachographTabsPage /></AdminRoute>} />
-        <Route path="/tachograph/comparison" element={<AdminRoute><TachographComparisonPage /></AdminRoute>} />
+        <Route path="/tachograph" element={<PermissionRoute permission="view_tachograph"><TachographTabsPage /></PermissionRoute>} />
+        <Route path="/tachograph/comparison" element={<PermissionRoute permission="view_tachograph"><TachographComparisonPage /></PermissionRoute>} />
         
         {/* Time tracking */}
         <Route path="/time-entries" element={<TimeEntriesPage />} />

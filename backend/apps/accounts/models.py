@@ -48,6 +48,8 @@ AVAILABLE_MODULE_PERMISSIONS = [
     ('manage_loadlist', 'Laadlijst beheren'),
     ('view_tolling', 'Tolheffing (alleen lezen)'),
     ('manage_tolling', 'Tolheffing beheren'),
+    ('view_track_trace', 'Track & Trace (voertuigen volgen)'),
+    ('view_tachograph', 'Tachograaf en rijtijden'),
 ]
 
 # Dependencies: enabling a permission also requires these permissions
