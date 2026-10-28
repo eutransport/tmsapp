@@ -1,9 +1,8 @@
 """Ritten voor het opdrachtgeversportaal, uit de bron die de wagen werkelijk volgt.
 
-Linqo levert de GPS-ritten. Navixy levert ze voor de wagens die daar een eigen
-tracker hebben. Radius dient alleen als terugval voor wagens die in geen van
-beide staan; die gegevens komen daar uit de tolregistratie en geven een grover
-beeld.
+Elke wagen heeft één bron, en die moet dezelfde zijn als in track & trace.
+Linqo volgt alleen nog 41-BRR-3. Navixy levert de ritten voor de wagens die
+daar een eigen tracker hebben. Alle overige wagens komen uit Radius.
 """
 import logging
 from datetime import datetime, time, timedelta
@@ -19,9 +18,26 @@ logger = logging.getLogger(__name__)
 OBJECTEN_CACHE_SLEUTEL = 'portaal:linqo-objecten'
 OBJECTEN_CACHE_SECONDEN = 300
 
+# Linqo kent elf kentekens, maar maar één wagen wordt daar werkelijk nog
+# bijgehouden; de overige staan er alleen uit een oude situatie in. Voor die
+# wagens is Radius de bron. Zonder deze afbakening haalt het portaal zijn
+# ritten uit Linqo terwijl track & trace Radius gebruikt, en ziet de
+# opdrachtgever andere cijfers dan wij voor dezelfde dag.
+LINQO_KENTEKENS = {'41BRR3'}
+
 
 def normaliseer(kenteken):
     return (kenteken or '').upper().replace('-', '').replace(' ', '')
+
+
+def _linqo_kentekens():
+    """Welke wagens uit Linqo komen; aanpasbaar zonder de code te wijzigen."""
+    from django.conf import settings
+
+    ingesteld = getattr(settings, 'PORTAAL_LINQO_KENTEKENS', None)
+    if ingesteld is None:
+        return LINQO_KENTEKENS
+    return {normaliseer(k) for k in ingesteld}
 
 
 def linqo_objecten():
@@ -42,11 +58,12 @@ def linqo_objecten():
         return {}
 
     kaart = {}
+    toegestaan = _linqo_kentekens()
     for obj in objecten:
         params = obj.get('vehicle_params') or {}
         plaat = params.get('plate_number') or obj.get('name') or ''
         sleutel = normaliseer(plaat)
-        if sleutel and obj.get('id'):
+        if sleutel in toegestaan and obj.get('id'):
             kaart[sleutel] = {'object_id': obj['id'], 'kenteken': plaat}
 
     cache.set(OBJECTEN_CACHE_SLEUTEL, kaart, OBJECTEN_CACHE_SECONDEN)
@@ -182,7 +199,8 @@ def navixy_kentekens():
 def haal_ritten(kentekens, vanaf, tot):
     """Per wagen de ritten uit de bron die hem werkelijk volgt.
 
-    Linqo gaat voor, dan Navixy, en Radius vangt op wat overblijft.
+    Linqo gaat voor, maar kent alleen 41-BRR-3; daarna Navixy, en Radius
+    levert de rest.
     """
     objecten = linqo_objecten()
     met_navixy = navixy_kentekens()
