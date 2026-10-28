@@ -1639,7 +1639,8 @@ class VehicleDetailView(APIView):
         from datetime import datetime as dt, date as date_type
         from apps.tracking.tachograph_service import (
             get_trips, get_raw_data, get_objects, get_vehicle_locations, FMTrackError,
-            _format_address, _format_duration,
+            _format_address, _format_duration, filter_ritten_op_dag, is_stilstand,
+            rit_afstand_meter,
         )
 
         date_str = request.query_params.get('date')
@@ -1696,12 +1697,9 @@ class VehicleDetailView(APIView):
             # Fetch trips for this vehicle on this date
             trips_raw = get_trips(object_id, date_from, date_till)
 
-            # Filter to target date
-            trips_filtered = []
-            for trip in trips_raw:
-                trip_start_dt = trip.get('trip_start', {}).get('datetime', '')
-                if trip_start_dt and trip_start_dt[:10] == date_str:
-                    trips_filtered.append(trip)
+            # Filter op de Nederlandse kalenderdag, niet op de UTC-datum: een
+            # rit die hier om 00:30 begint staat in UTC nog op de vorige dag.
+            trips_filtered = filter_ritten_op_dag(trips_raw, target_date)
 
             # Get current live position for this vehicle
             current_position = None
@@ -1738,20 +1736,28 @@ class VehicleDetailView(APIView):
             # Build trip details
             trip_details = []
             fuel_chart_data = []
-            total_distance = 0
-            total_duration_seconds = 0
+            # In meters optellen en pas aan het eind afronden: anders verdwijnen
+            # korte ritjes doordat elke rit los op 0,1 km wordt afgerond.
+            total_distance_meters = 0
+            total_duration_seconds = 0   # alleen daadwerkelijk rijden
+            idle_duration_seconds = 0    # motor aan, geen meter gereden
             max_speed_overall = 0
 
             for trip in trips_filtered:
                 start_info = trip.get('trip_start', {})
                 end_info = trip.get('trip_end', {})
-                duration = trip.get('trip_duration', 0)
-                total_duration_seconds += duration
+                duration = trip.get('trip_duration', 0) or 0
+                stilstand = is_stilstand(trip)
+                if stilstand:
+                    idle_duration_seconds += duration
+                else:
+                    total_duration_seconds += duration
 
                 start_mileage = start_info.get('mileage', 0)
                 end_mileage = end_info.get('mileage', 0)
-                distance_km = round(trip.get('mileage', 0) / 1000, 1)
-                total_distance += distance_km
+                afstand_meter = rit_afstand_meter(trip)
+                total_distance_meters += afstand_meter
+                distance_km = round(afstand_meter / 1000, 1)
 
                 # FM-Track provides max_speed in trip data (m/s or km/h depending on API version)
                 trip_max_speed = trip.get('max_speed', 0)
@@ -1784,6 +1790,7 @@ class VehicleDetailView(APIView):
                     'distance_km': distance_km,
                     'duration_seconds': duration,
                     'duration_display': _format_duration(duration),
+                    'is_idle': stilstand,
                     'max_speed': round(trip_max_speed),
                     'is_speeding': is_speeding,
                     'start_fuel_level': round(start_fuel),
@@ -1806,6 +1813,12 @@ class VehicleDetailView(APIView):
                         'fuel_liters': end_fuel_liters,
                         'event': 'trip_end',
                     })
+
+            # Afstand pas hier afronden, zodat korte ritjes niet wegvallen.
+            total_distance = total_distance_meters / 1000
+            # Brandstof wordt ook stilstaand verbruikt, dus verbruik per uur
+            # rekent over de totale motortijd en niet alleen over de rijtijd.
+            engine_duration_seconds = total_duration_seconds + idle_duration_seconds
 
             # Current odometer from last trip or position
             current_km = 0
@@ -1833,10 +1846,10 @@ class VehicleDetailView(APIView):
                         avg_fuel_consumption_pct = round(fuel_diff_pct / total_distance * 100, 1)
                         if fuel_tank_capacity > 0 and total_fuel_used_liters:
                             avg_fuel_consumption = round(total_fuel_used_liters / total_distance * 100, 1)
-                    if total_duration_seconds > 0 and fuel_diff_pct > 0:
-                        fuel_per_hour_pct = round(fuel_diff_pct / (total_duration_seconds / 3600), 1)
+                    if engine_duration_seconds > 0 and fuel_diff_pct > 0:
+                        fuel_per_hour_pct = round(fuel_diff_pct / (engine_duration_seconds / 3600), 1)
                         if fuel_tank_capacity > 0 and total_fuel_used_liters:
-                            fuel_per_hour = round(total_fuel_used_liters / (total_duration_seconds / 3600), 1)
+                            fuel_per_hour = round(total_fuel_used_liters / (engine_duration_seconds / 3600), 1)
 
             # Remaining driving time (EU 561/2006: max 9h daily)
             max_daily_drive_seconds = 9 * 3600
@@ -1923,6 +1936,10 @@ class VehicleDetailView(APIView):
                 'total_distance_km': round(total_distance, 1),
                 'total_duration_seconds': total_duration_seconds,
                 'total_duration_display': _format_duration(total_duration_seconds),
+                'idle_duration_seconds': idle_duration_seconds,
+                'idle_duration_display': _format_duration(idle_duration_seconds),
+                'engine_duration_seconds': engine_duration_seconds,
+                'engine_duration_display': _format_duration(engine_duration_seconds),
                 'max_speed': round(max_speed_overall),
                 'trip_count': len(trip_details),
                 'trips': trip_details,

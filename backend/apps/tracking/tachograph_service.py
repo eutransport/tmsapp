@@ -26,6 +26,50 @@ class FMTrackError(Exception):
     pass
 
 
+def rit_lokale_datum(trip):
+    """
+    De Nederlandse kalenderdatum waarop een rit begint.
+
+    FM-Track levert tijden in UTC ('2026-10-24T22:30:00.000Z'). Die datum
+    rechtstreeks met een Nederlandse dag vergelijken gaat mis rond
+    middernacht: een rit die hier om 00:30 begint staat in UTC nog op de
+    vorige dag en valt dan uit het dagoverzicht.
+    """
+    tekst = (trip.get('trip_start') or {}).get('datetime') or ''
+    if not tekst:
+        return None
+    try:
+        moment = datetime.fromisoformat(tekst.replace('Z', '+00:00'))
+    except ValueError:
+        logger.warning('FM-Track: onleesbare starttijd op rit: %r', tekst)
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=ZoneInfo('UTC'))
+    return moment.astimezone(NL_TZ).date()
+
+
+def filter_ritten_op_dag(trips, datum):
+    """Houd alleen de ritten over die op deze Nederlandse kalenderdag beginnen."""
+    return [rit for rit in trips if rit_lokale_datum(rit) == datum]
+
+
+def rit_afstand_meter(trip):
+    """Afgelegde afstand van een rit in meters. FM-Track kan None teruggeven."""
+    return trip.get('mileage') or 0
+
+
+def is_stilstand(trip):
+    """
+    Een rit zonder afgelegde afstand is stilstand met draaiende motor.
+
+    De tracker begint een rit bij het contact, niet bij beweging. Stilstaand
+    draaien (standkachel, koeling, warmdraaien) levert daardoor ritten op van
+    soms een half uur met nul meter en een onveranderde kilometerstand. Dat is
+    geen rijtijd en telt dus ook niet mee voor de EU-rijtijd van 9 uur.
+    """
+    return rit_afstand_meter(trip) <= 0
+
+
 def _get_api_key():
     """Get the Linqo API key from AppSettings."""
     from apps.core.models import AppSettings
@@ -199,13 +243,7 @@ def get_tachograph_overview(date_str):
     def _fetch_trips(obj):
         try:
             trips = get_trips(obj['id'], date_from, date_till)
-            # Filter trips to only include those on the target date
-            filtered = []
-            for trip in trips:
-                trip_start_dt = trip.get('trip_start', {}).get('datetime', '')
-                if trip_start_dt and trip_start_dt[:10] == date_str:
-                    filtered.append(trip)
-            return obj, filtered
+            return obj, filter_ritten_op_dag(trips, target_date)
         except FMTrackError:
             return obj, []
 

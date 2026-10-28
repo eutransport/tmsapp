@@ -92,6 +92,12 @@ export default function VehicleDetailPanel({ objectId, platNumber, onClose, onRo
   const pos = detail?.current_position
   const statusInfo = pos ? statusLabels[pos.vehicle_status] || statusLabels.parked : null
 
+  // Ritten waarin daadwerkelijk gereden is, gescheiden van stilstand met
+  // draaiende motor. Bronnen die is_idle niet leveren gelden als gereden.
+  const alleTrips = detail?.trips ?? []
+  const stilstanden = alleTrips.filter(t => t.is_idle)
+  const ritten = alleTrips.filter(t => !t.is_idle)
+
   return (
     <div className="card overflow-hidden">
       {/* Header */}
@@ -216,9 +222,26 @@ export default function VehicleDetailPanel({ objectId, platNumber, onClose, onRo
               <p className="text-lg font-bold text-gray-900">
                 {detail.total_duration_display || '00:00'}
               </p>
-              <p className="text-xs text-gray-400">{detail.trip_count} rit(ten)</p>
+              <p className="text-xs text-gray-400">{ritten.length} rit(ten)</p>
             </div>
           </div>
+
+          {/* Stilstand met draaiende motor. De tracker begint een rit op het
+              contact, dus stationair draaien levert ritten op van nul meter.
+              Die tellen niet als rijtijd, maar je wilt ze wel zien. */}
+          {detail.idle_duration_seconds > 0 && (
+            <div className="px-4 py-2 bg-amber-50 border-t border-amber-100">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-amber-800">
+                  Stilstand met draaiende motor
+                  <span className="text-amber-600"> · {stilstanden.length}x</span>
+                </span>
+                <span className="text-xs font-bold text-amber-800">
+                  {detail.idle_duration_display}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Remaining drive time bar (EU 561/2006) */}
           {detail.total_duration_seconds > 0 && (
@@ -316,16 +339,16 @@ export default function VehicleDetailPanel({ objectId, platNumber, onClose, onRo
           <div className="p-4">
             <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <ClockIcon className="h-4 w-4 text-gray-500" />
-              Ritten ({detail.trip_count})
+              Ritten ({ritten.length})
             </h4>
 
-            {detail.trips.length === 0 ? (
+            {alleTrips.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-4">
                 Geen ritten op deze dag
               </p>
             ) : (
               <div className="space-y-2">
-                {detail.trips.map((trip: VehicleDetailTrip, idx: number) => (
+                {alleTrips.map((trip: VehicleDetailTrip, idx: number) => (
                   <TripRow key={idx} trip={trip} index={idx + 1} />
                 ))}
               </div>
@@ -339,13 +362,22 @@ export default function VehicleDetailPanel({ objectId, platNumber, onClose, onRo
 
 function TripRow({ trip, index }: { trip: VehicleDetailTrip; index: number }) {
   return (
-    <div className={`rounded-lg border p-3 ${trip.is_speeding ? 'border-red-200 bg-red-50/50' : 'border-gray-100 bg-gray-50'}`}>
+    <div className={`rounded-lg border p-3 ${
+      trip.is_speeding ? 'border-red-200 bg-red-50/50'
+      : trip.is_idle ? 'border-amber-100 bg-amber-50/40'
+      : 'border-gray-100 bg-gray-50'
+    }`}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs font-bold text-gray-400 shrink-0">#{index}</span>
           <span className="text-xs text-gray-500">
             {formatTime(trip.start_time)} → {formatTime(trip.end_time)}
           </span>
+          {trip.is_idle && (
+            <span className="text-[10px] font-medium text-amber-700 bg-amber-100 rounded px-1.5 py-0.5 shrink-0">
+              Stilstand
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-xs text-gray-500">{trip.duration_display}</span>

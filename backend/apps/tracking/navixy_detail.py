@@ -56,11 +56,20 @@ def dagdetail(tracker, datum, live_positie=None):
     details = []
     totaal_km = 0.0
     totaal_seconden = 0
+    stilstand_seconden = 0
     hoogste_snelheid = 0.0
 
     for rit in ritten:
-        totaal_km += rit.distance_km or 0
-        totaal_seconden += rit.duration_seconds or 0
+        afstand = rit.distance_km or 0
+        duur = rit.duration_seconds or 0
+        # Geen afstand betekent dat de motor draaide zonder te rijden; dat is
+        # geen rijtijd en telt niet mee voor de EU-rijtijd van 9 uur.
+        stilstand = afstand <= 0
+        totaal_km += afstand
+        if stilstand:
+            stilstand_seconden += duur
+        else:
+            totaal_seconden += duur
         hoogste_snelheid = max(hoogste_snelheid, rit.max_speed or 0)
 
         details.append({
@@ -79,6 +88,7 @@ def dagdetail(tracker, datum, live_positie=None):
             'distance_km': round(rit.distance_km or 0, 1),
             'duration_seconds': rit.duration_seconds or 0,
             'duration_display': _duur_tekst(rit.duration_seconds),
+            'is_idle': stilstand,
             'max_speed': round(rit.max_speed or 0),
             'is_speeding': (rit.max_speed or 0) > 130,
             'start_fuel_level': 0,
@@ -127,6 +137,10 @@ def dagdetail(tracker, datum, live_positie=None):
         'total_distance_km': round(totaal_km, 1),
         'total_duration_seconds': totaal_seconden,
         'total_duration_display': _duur_tekst(totaal_seconden),
+        'idle_duration_seconds': stilstand_seconden,
+        'idle_duration_display': _duur_tekst(stilstand_seconden),
+        'engine_duration_seconds': totaal_seconden + stilstand_seconden,
+        'engine_duration_display': _duur_tekst(totaal_seconden + stilstand_seconden),
         'max_speed': round(hoogste_snelheid),
         'trip_count': len(details),
         'trips': details,

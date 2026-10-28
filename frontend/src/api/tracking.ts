@@ -118,6 +118,8 @@ export interface VehicleDetailTrip {
   distance_km: number
   duration_seconds: number
   duration_display: string
+  /** Motor aan zonder afgelegde afstand: stilstand, geen rit. */
+  is_idle: boolean
   max_speed: number
   is_speeding: boolean
   start_fuel_level: number
@@ -157,6 +159,12 @@ export interface VehicleDetail {
   total_distance_km: number
   total_duration_seconds: number
   total_duration_display: string
+  /** Tijd met draaiende motor zonder dat er een meter is gereden. */
+  idle_duration_seconds: number
+  idle_duration_display: string
+  /** Rijtijd plus stilstand: de totale tijd dat de motor aan stond. */
+  engine_duration_seconds: number
+  engine_duration_display: string
   max_speed: number
   trip_count: number
   trips: VehicleDetailTrip[]
