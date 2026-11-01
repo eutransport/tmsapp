@@ -1,4 +1,4 @@
-{
+﻿{
   "appInstall": {
     "androidButton": "Android uygulamasını indir",
     "androidHint": "Sürüm {{version}}",
@@ -2272,6 +2272,7 @@
     "later": "Daha sonra"
   },
   "themes": {
+    "glass": "Cam (Kraliyet Mavisi)",
     "default": "Standart (Mavi)",
     "emerald": "Zümrüt (Yeşil)",
     "violet": "Menekşe (Mor)",

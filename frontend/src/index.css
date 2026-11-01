@@ -1,4 +1,4 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -10,34 +10,58 @@
    for radii, shadows and spacing so the whole app can share them.
 ------------------------------------------------------------------ */
 :root {
+  /* Brand palette */
+  --brand-charcoal: #21232E;
+  --brand-royal: #105BFF;
+  --brand-tangerine: #FE8500;
+
   /* Legacy color tokens (themeStore overwrites primary/sidebar at runtime). */
-  --color-primary: #4f46e5;
-  --color-primary-hover: #4338ca;
-  --color-primary-light: #eef2ff;
-  --color-primary-50:  #eef2ff;
-  --color-primary-500: #6366f1;
-  --color-primary-600: #4f46e5;
-  --color-primary-700: #4338ca;
-  --color-background: #f5f6fb;
-  --color-background-secondary: #ffffff;
-  --color-sidebar: #1e1b4b;
-  --color-sidebar-text: #c7d2fe;
-  --color-sidebar-hover: #312e81;
-  --color-card: #ffffff;
-  --color-card-border: #ecebf5;
-  --color-text: #0f172a;
-  --color-text-secondary: #64748b;
-  --color-accent: #6366f1;
+  --color-primary: #105BFF;
+  --color-primary-hover: #0A47CC;
+  --color-primary-light: #e8f0ff;
+  --color-primary-50:  #e8f0ff;
+  --color-primary-500: #105BFF;
+  --color-primary-600: #0A47CC;
+  --color-primary-700: #0836a0;
+  --color-background: #dbe3f3;
+  --color-background-secondary: #e8eefb;
+  --color-sidebar: #0C3DBF;
+  --color-sidebar-text: #dbe7ff;
+  --color-sidebar-hover: #1551D6;
+  --color-card: #edf2fd;
+  --color-card-border: #cbd8ef;
+  --color-text: #21232E;
+  --color-text-secondary: #55607a;
+  --color-accent: #FE8500;
+
+  /* ----------------------------------------------------------------
+     Glassmorphism tokens.
+     themeStore.ts recalculates these per theme (light vs dark card
+     colour) so every theme keeps readable contrast.
+  ---------------------------------------------------------------- */
+  --glass-blur: 18px;
+  --glass-saturate: 150%;
+  /* Tinted porcelain surfaces — never pure white, always a hint of the
+     theme's primary so content, topbar and sidebar form one palette. */
+  --glass-bg:        color-mix(in srgb, var(--color-primary) 11%, rgba(255, 255, 255, 0.56));
+  --glass-bg-strong: color-mix(in srgb, var(--color-primary) 10%, rgba(255, 255, 255, 0.80));
+  --glass-bg-soft:   color-mix(in srgb, var(--color-primary) 13%, rgba(255, 255, 255, 0.30));
+  --glass-border:    color-mix(in srgb, var(--color-primary) 16%, rgba(255, 255, 255, 0.55));
+  --glass-border-strong: color-mix(in srgb, var(--color-primary) 22%, rgba(33, 35, 46, 0.10));
+  --glass-highlight: rgba(255, 255, 255, 0.55);
+  --glass-sidebar:   color-mix(in srgb, #0C3DBF 82%, transparent);
+  --glass-topbar:    color-mix(in srgb, var(--color-primary) 7%, rgba(255, 255, 255, 0.62));
 
   /* New shared tokens */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
 
-  --shadow-card:       0 1px 2px 0 rgb(15 23 42 / 0.05), 0 2px 6px -2px rgb(15 23 42 / 0.06);
-  --shadow-card-hover: 0 4px 12px -2px rgb(15 23 42 / 0.10), 0 2px 6px -2px rgb(15 23 42 / 0.06);
-  --shadow-pop:        0 20px 40px -12px rgb(15 23 42 / 0.20), 0 6px 12px -6px rgb(15 23 42 / 0.08);
+  /* Floating depth â€” everything reads as a pane hovering over the page. */
+  --shadow-card:       0 8px 24px -10px rgb(33 35 46 / 0.28), 0 2px 8px -4px rgb(33 35 46 / 0.16), inset 0 1px 0 var(--glass-highlight);
+  --shadow-card-hover: 0 22px 48px -18px rgb(33 35 46 / 0.38), 0 8px 18px -10px color-mix(in srgb, var(--color-primary) 30%, transparent), inset 0 1px 0 var(--glass-highlight);
+  --shadow-pop:        0 36px 80px -24px rgb(33 35 46 / 0.50), 0 12px 28px -14px color-mix(in srgb, var(--color-primary) 32%, transparent), inset 0 1px 0 var(--glass-highlight);
   --focus-ring:        0 0 0 3px color-mix(in srgb, var(--color-primary) 35%, transparent);
 
   --page-padding-x: 1rem;
@@ -75,6 +99,26 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Ambient brand backdrop - gives the frosted panes something to refract.
+     Fixed + behind everything, so it never interferes with scrolling content. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: -10%;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(48rem 36rem at 4% -8%,  color-mix(in srgb, var(--color-primary) 26%, transparent), transparent 66%),
+      radial-gradient(42rem 34rem at 100% 2%, color-mix(in srgb, var(--brand-tangerine) 14%, transparent), transparent 64%),
+      radial-gradient(44rem 34rem at 88% 72%, color-mix(in srgb, var(--color-primary) 20%, transparent), transparent 68%),
+      radial-gradient(56rem 42rem at 26% 114%, color-mix(in srgb, var(--brand-charcoal) 30%, transparent), transparent 70%),
+      linear-gradient(165deg,
+        color-mix(in srgb, var(--color-primary) 12%, transparent) 0%,
+        transparent 48%,
+        color-mix(in srgb, var(--brand-charcoal) 14%, transparent) 100%);
+    filter: blur(0.5px);
+  }
+
   #root { @apply h-full; }
 
   /* Consistent, fluid heading defaults. Pages can still override with
@@ -85,7 +129,7 @@
   h3 { font-size: 1rem; line-height: 1.4;  font-weight: 600; color: var(--color-text); }
   h4 { font-size: 0.9375rem; line-height: 1.4; font-weight: 600; color: var(--color-text); }
 
-  /* Form controls ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â softer border, better focus */
+  /* Form controls - softer border, better focus */
   input[type="text"],
   input[type="email"],
   input[type="password"],
@@ -99,9 +143,12 @@
   select,
   textarea {
     @apply border rounded-md;
-    border-color: color-mix(in srgb, var(--color-primary) 22%, #cbd5e1);
-    background-color: var(--color-card);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    border-color: var(--glass-border-strong);
+    background-color: var(--glass-bg-strong);
+    -webkit-backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+    backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+    color: var(--color-text);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
   }
 
   input[type="text"]:focus,
@@ -118,6 +165,7 @@
   textarea:focus {
     border-color: var(--color-primary);
     outline: none;
+    background-color: var(--glass-bg-strong);
     box-shadow: var(--focus-ring);
   }
 
@@ -126,7 +174,7 @@
 
   /* Subtle row-hover on any table body row - harmless if the page has none. */
   tbody tr { transition: background-color 0.12s ease; }
-  tbody tr:hover { background-color: color-mix(in srgb, var(--color-primary) 4%, #ffffff); }
+  tbody tr:hover { background-color: color-mix(in srgb, var(--color-primary) 7%, transparent); }
 }
 
 /* ------------------------------------------------------------------
@@ -134,24 +182,37 @@
 ------------------------------------------------------------------ */
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-md border border-transparent transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-transparent transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed select-none;
     min-height: 40px;
   }
+  .btn:not(:disabled):active { transform: translateY(1px); }
 
   .btn-primary {
-    @apply btn text-white shadow-sm;
-    background-color: var(--color-primary);
+    @apply btn text-white;
+    background-image: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 72%, var(--brand-charcoal)));
+    box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--color-primary) 85%, transparent), inset 0 1px 0 rgba(255,255,255,0.28);
   }
-  .btn-primary:hover:not(:disabled) { background-color: var(--color-primary-hover); }
+  .btn-primary:hover:not(:disabled) {
+    background-image: linear-gradient(135deg, var(--color-primary-hover), color-mix(in srgb, var(--color-primary) 85%, var(--brand-charcoal)));
+    box-shadow: 0 16px 30px -14px color-mix(in srgb, var(--color-primary) 95%, transparent), inset 0 1px 0 rgba(255,255,255,0.32);
+    transform: translateY(-1px);
+  }
   .btn-primary:focus-visible        { box-shadow: var(--focus-ring); }
 
   .btn-secondary {
-    @apply btn shadow-sm;
-    background-color: var(--color-card);
+    @apply btn;
+    background-color: var(--glass-bg-strong);
+    -webkit-backdrop-filter: blur(10px) saturate(var(--glass-saturate));
+    backdrop-filter: blur(10px) saturate(var(--glass-saturate));
     color: var(--color-text);
-    border-color: var(--color-card-border);
+    border-color: var(--glass-border-strong);
+    box-shadow: 0 6px 16px -10px rgb(33 35 46 / 0.45), inset 0 1px 0 var(--glass-highlight);
   }
-  .btn-secondary:hover:not(:disabled) { background-color: #f8fafc; border-color: #cbd5e1; }
+  .btn-secondary:hover:not(:disabled) {
+    background-color: var(--glass-bg);
+    border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+    transform: translateY(-1px);
+  }
   .btn-secondary:focus-visible        { box-shadow: var(--focus-ring); }
 
   .btn-danger {
@@ -163,26 +224,42 @@
   }
 
   .btn-warning {
-    @apply btn text-white shadow-sm bg-warning-500 hover:bg-warning-600 focus-visible:ring-warning-500;
+    @apply btn text-white shadow-sm focus-visible:ring-tangerine-500;
+    background-image: linear-gradient(135deg, var(--brand-tangerine), #d96f00);
+    box-shadow: 0 10px 22px -12px rgb(254 133 0 / 0.75), inset 0 1px 0 rgba(255,255,255,0.3);
   }
+  .btn-warning:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.05); }
+
+  /* Accent action â€” tangerine, for highlight CTAs next to the royal blue primary. */
+  .btn-accent {
+    @apply btn text-white;
+    background-image: linear-gradient(135deg, var(--brand-tangerine), #d96f00);
+    box-shadow: 0 10px 22px -12px rgb(254 133 0 / 0.75), inset 0 1px 0 rgba(255,255,255,0.3);
+  }
+  .btn-accent:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.05); }
 
   .btn-ghost {
-    @apply btn text-gray-700 hover:bg-gray-100;
+    @apply btn;
+    color: var(--color-text);
     background-color: transparent;
   }
+  .btn-ghost:hover:not(:disabled) { background-color: var(--glass-bg-soft); }
 
   .btn-sm { @apply px-3 py-1.5 text-xs; min-height: 32px; }
   .btn-icon { @apply px-2; min-width: 40px; }
 
-  /* Inputs (utility variants ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â the base styles already cover raw <input>) */
+  /* Inputs (utility variants - the base styles already cover raw <input>) */
   .input,
   .input-field {
-    @apply block w-full rounded-md px-3 py-2 text-sm shadow-sm;
+    @apply block w-full rounded-lg px-3 py-2 text-sm;
     min-height: 40px;
-    border: 1px solid color-mix(in srgb, var(--color-primary) 22%, #cbd5e1);
-    background-color: var(--color-card);
+    border: 1px solid var(--glass-border-strong);
+    background-color: var(--glass-bg-strong);
+    -webkit-backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+    backdrop-filter: blur(8px) saturate(var(--glass-saturate));
     color: var(--color-text);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
   }
   .input:focus,
   .input-field:focus {
@@ -200,57 +277,140 @@
      Note: base .card is intentionally NOT lifted on hover. Only
      .card-hover / .card-interactive (used on links/buttons) reacts. */
   .card {
-    @apply rounded-xl overflow-hidden;
-    background-color: var(--color-card);
-    border: 1px solid var(--color-card-border);
+    @apply rounded-xl overflow-hidden relative;
+    background-color: var(--glass-bg);
+    background-image: linear-gradient(145deg, var(--glass-highlight), transparent 42%);
+    border: 1px solid var(--glass-border);
     box-shadow: var(--shadow-card);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease, background-color 0.25s ease;
+  }
+  .card:hover {
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-2px);
   }
   .card-hover,
   a.card,
   button.card {
-    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
   }
   .card-hover:hover,
   a.card:hover,
   button.card:hover {
     box-shadow: var(--shadow-card-hover);
-    border-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-card-border));
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--color-primary) 35%, var(--glass-border));
   }
   .card-interactive {
     @apply card cursor-pointer;
   }
   .card-interactive:hover {
     box-shadow: var(--shadow-card-hover);
-    transform: translateY(-1px);
-    border-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-card-border));
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--color-primary) 35%, var(--glass-border));
   }
-  .card-interactive:active { transform: translateY(0); }
+  .card-interactive:active { transform: translateY(-1px); }
 
-  /* Chips / pills ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â used all over the app for filters and statuses */
+  /* Chips / pills - used all over the app for filters and statuses */
   .chip {
-    @apply inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium;
-    background-color: #f1f5f9;
-    color: #334155;
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
+    background-color: color-mix(in srgb, var(--brand-charcoal) 8%, transparent);
+    border: 1px solid var(--glass-border-strong);
+    color: var(--color-text);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
   }
-  .chip-primary { background-color: var(--color-primary-50); color: var(--color-primary-700); }
-  .chip-success { background-color: #dcfce7; color: #15803d; }
-  .chip-warning { background-color: #fef3c7; color: #b45309; }
-  .chip-danger  { background-color: #fee2e2; color: #b91c1c; }
+  .chip-primary { background-color: color-mix(in srgb, var(--color-primary) 14%, transparent); color: var(--color-primary-700); border-color: color-mix(in srgb, var(--color-primary) 30%, transparent); }
+  .chip-success { background-color: rgb(34 197 94 / 0.16); color: #14532d; border-color: rgb(34 197 94 / 0.35); }
+  .chip-warning { background-color: rgb(254 133 0 / 0.18); color: #7a3f00; border-color: rgb(254 133 0 / 0.40); }
+  .chip-danger  { background-color: rgb(239 68 68 / 0.16); color: #7f1d1d; border-color: rgb(239 68 68 / 0.35); }
+  .chip-accent  { background-color: rgb(254 133 0 / 0.18); color: #7a3f00; border-color: rgb(254 133 0 / 0.40); }
 
   /* Modal panel - unified look for dialogs across the app */
   .modal-overlay {
     @apply fixed inset-0 z-50 flex items-center justify-center p-4;
-    background-color: rgb(15 23 42 / 0.55);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    background-color: color-mix(in srgb, var(--brand-charcoal) 55%, transparent);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    backdrop-filter: blur(10px) saturate(120%);
   }
   .modal-panel {
-    @apply relative rounded-xl overflow-hidden;
-    background-color: var(--color-card);
-    border: 1px solid var(--color-card-border);
+    @apply relative rounded-2xl overflow-hidden;
+    background-color: var(--glass-bg-strong);
+    background-image: linear-gradient(145deg, var(--glass-highlight), transparent 38%);
+    border: 1px solid var(--glass-border);
     box-shadow: var(--shadow-pop);
-    animation: scale-in 0.15s ease-out;
+    -webkit-backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+    backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+    animation: glass-float-in 0.3s cubic-bezier(0.25, 1, 0.5, 1) both;
   }
+
+  @keyframes glass-float-in {
+    0%   { opacity: 0; transform: translateY(14px) scale(0.985); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* ----------------------------------------------------------------
+     Reusable glass surfaces â€” use on any custom panel so it matches
+     the cards/modals without repeating the recipe.
+  ---------------------------------------------------------------- */
+  .glass {
+    background-color: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-card);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  }
+  .glass-strong {
+    background-color: var(--glass-bg-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-pop);
+    -webkit-backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+    backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+  }
+  .glass-soft {
+    background-color: var(--glass-bg-soft);
+    border: 1px solid var(--glass-border);
+    -webkit-backdrop-filter: blur(12px) saturate(var(--glass-saturate));
+    backdrop-filter: blur(12px) saturate(var(--glass-saturate));
+  }
+
+  /* Floating behaviour helpers */
+  .float-panel { box-shadow: var(--shadow-card); transition: transform 0.25s ease, box-shadow 0.25s ease; }
+  .float-panel:hover { transform: translateY(-3px); box-shadow: var(--shadow-card-hover); }
+  .float-in { animation: glass-float-in 0.35s cubic-bezier(0.25, 1, 0.5, 1) both; }
+
+  /* Glass topbar + sidebar (DashboardLayout) */
+  .glass-topbar {
+    background-color: var(--glass-topbar);
+    border-bottom: 1px solid var(--glass-border);
+    box-shadow: 0 10px 30px -22px rgb(33 35 46 / 0.75);
+    -webkit-backdrop-filter: blur(20px) saturate(var(--glass-saturate));
+    backdrop-filter: blur(20px) saturate(var(--glass-saturate));
+  }
+  /* Tri-colour glow: royal blue top, tangerine accent, charcoal depth.
+     Painted as the element's own background instead of an absolutely
+     positioned ::after layer: the sidebar is a scroll container, where an
+     inset-0 layer only covers one viewport height and scrolls away with
+     the content (which cut the gradient off mid-list). */
+  .glass-sidebar {
+    background-color: var(--glass-sidebar);
+    background-image:
+      radial-gradient(24rem 18rem at 0% -4%, color-mix(in srgb, var(--color-primary) 60%, transparent), transparent 62%),
+      radial-gradient(20rem 15rem at 110% 38%, color-mix(in srgb, var(--brand-tangerine) 30%, transparent), transparent 64%),
+      radial-gradient(26rem 22rem at 20% 104%, color-mix(in srgb, var(--brand-charcoal) 55%, transparent), transparent 66%),
+      linear-gradient(170deg,
+        color-mix(in srgb, var(--color-primary) 45%, transparent) 0%,
+        transparent 48%,
+        color-mix(in srgb, var(--brand-charcoal) 50%, transparent) 100%);
+    background-attachment: scroll;
+    background-repeat: no-repeat;
+    border-right: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 18px 0 48px -32px rgb(33 35 46 / 0.9);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    backdrop-filter: blur(22px) saturate(140%);
+  }
+  .glass-sidebar > * { position: relative; z-index: 1; }
 
   /* Page layout helpers */
   .page-container {
@@ -283,11 +443,11 @@
   .text-muted { color: var(--color-text-secondary); }
 
   /* Divider */
-  .divider { @apply my-6 border-t border-gray-200; }
+  .divider { @apply my-6; border-top: 1px solid var(--glass-border-strong); }
 
   /* Touch / responsive helpers (kept from previous version) */
   .touch-target { @apply min-w-[44px] min-h-[44px]; }
-  .mobile-card  { @apply sm:hidden bg-white rounded-lg shadow-sm border border-gray-200 p-4; }
+  .mobile-card  { @apply sm:hidden glass rounded-xl p-4; }
   .desktop-table { @apply hidden sm:block overflow-x-auto; }
   .mobile-only   { @apply sm:hidden; }
   .desktop-only  { @apply hidden sm:block; }
@@ -354,7 +514,7 @@
   .animate-pulse-subtle { animation: pulse-subtle 2s ease-in-out infinite; }
 
   /* ----------------------------------------------------------------
-     Auth (login) shell — floating logo + springy card
+     Auth (login) shell â€” floating logo + springy card
   ---------------------------------------------------------------- */
   .auth-shell {
     position: relative;
@@ -449,8 +609,8 @@
     border-radius: 0.95rem;
     border: 1px solid rgba(255, 255, 255, 0.18);
     background: rgba(7, 16, 30, 0.18);
-    backdrop-filter: blur(12px) saturate(120%);
     -webkit-backdrop-filter: blur(12px) saturate(120%);
+    backdrop-filter: blur(12px) saturate(120%);
     color: rgba(233, 246, 255, 0.96);
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 12px 24px -18px rgba(15, 23, 42, 0.95);
     transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
@@ -482,8 +642,8 @@
     border-radius: 0.95rem;
     border: 1px solid rgba(255, 255, 255, 0.18);
     background: rgba(7, 16, 30, 0.18);
-    backdrop-filter: blur(12px) saturate(120%);
     -webkit-backdrop-filter: blur(12px) saturate(120%);
+    backdrop-filter: blur(12px) saturate(120%);
     color: rgba(233, 246, 255, 0.96);
     font-size: 0.78rem;
     font-weight: 700;
@@ -578,8 +738,8 @@
       0 0 0 1px rgba(255, 255, 255, 0.04) inset,
       0 1px 0 rgba(255, 255, 255, 0.2) inset,
       0 0 20px rgba(59, 130, 246, 0.14);
-    backdrop-filter: blur(18px) saturate(140%);
     -webkit-backdrop-filter: blur(18px) saturate(140%);
+    backdrop-filter: blur(18px) saturate(140%);
   }
 
   .auth-card-form {
@@ -759,5 +919,85 @@
   @media (prefers-reduced-motion: reduce) {
     .auth-logo-wrap, .auth-card-wrap,
     .auth-blob-a, .auth-blob-b, .auth-blob-c { animation: none !important; }
+  }
+}
+
+/* ------------------------------------------------------------------
+   Glass mapping for existing Tailwind utility usage
+   ------------------------------------------------------------------
+   Pages across the app use plain `bg-white`, grey fills and grey
+   borders. Instead of touching hundreds of files, those utilities are
+   re-mapped to the frosted glass tokens. Scoped to `html.glass-light`
+   (set by themeStore for light themes) so the dark theme keeps its
+   own opaque surfaces and stays readable.
+------------------------------------------------------------------ */
+html.glass-light .bg-white {
+  background-color: var(--glass-bg-strong) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* Floating layers (menus, popovers, tooltips, listboxes) need a denser
+   fill so text never competes with the content scrolling underneath. */
+html.glass-light [role="menu"].bg-white,
+html.glass-light [role="listbox"].bg-white,
+html.glass-light [role="dialog"] .bg-white,
+html.glass-light .shadow-pop.bg-white,
+html.glass-light .shadow-lg.bg-white,
+html.glass-light .shadow-xl.bg-white {
+  background-color: color-mix(in srgb, var(--color-primary) 7%, rgba(255, 255, 255, 0.92)) !important;
+  box-shadow: var(--shadow-pop);
+  border-radius: 0.9rem;
+}
+
+html.glass-light .bg-gray-50,
+html.glass-light .bg-slate-50 { background-color: color-mix(in srgb, var(--color-primary) 7%, rgba(255, 255, 255, 0.38)) !important; }
+html.glass-light .bg-gray-100,
+html.glass-light .bg-slate-100 { background-color: color-mix(in srgb, var(--color-primary) 10%, rgba(33, 35, 46, 0.05)) !important; }
+
+html.glass-light .border-gray-100,
+html.glass-light .border-gray-200,
+html.glass-light .border-slate-200 { border-color: var(--glass-border-strong) !important; }
+html.glass-light .border-gray-300 { border-color: color-mix(in srgb, var(--color-primary) 30%, rgba(33, 35, 46, 0.16)) !important; }
+
+/* Brand-aligned text tones; contrast stays AA on the tinted glass. */
+html.glass-light .text-gray-900 { color: var(--brand-charcoal) !important; }
+html.glass-light .text-gray-500,
+html.glass-light .text-gray-400 { color: var(--color-text-secondary) !important; }
+
+/* Tables inside glass panes: tinted header, transparent body so the blur shows through. */
+html.glass-light table thead.bg-gray-50 th,
+html.glass-light thead.bg-gray-50 { background-color: color-mix(in srgb, var(--color-primary) 12%, transparent) !important; backdrop-filter: none; }
+html.glass-light .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--glass-border-strong) !important; }
+
+/* Main content floats in on route change. */
+.page-container > * { animation: glass-float-in 0.35s cubic-bezier(0.25, 1, 0.5, 1) both; }
+
+/* Leaflet / charts stay fully opaque - blurring map tiles hurts legibility. */
+html.glass-light .leaflet-container,
+html.glass-light .leaflet-container .bg-white,
+html.glass-light .recharts-wrapper .bg-white {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-container > *,
+  .float-in,
+  .modal-panel { animation: none !important; }
+  .card:hover,
+  .card-hover:hover,
+  .card-interactive:hover,
+  .float-panel:hover,
+  .btn-primary:hover:not(:disabled),
+  .btn-secondary:hover:not(:disabled) { transform: none; }
+}
+
+/* Older browsers without backdrop-filter get solid, readable surfaces. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --glass-bg: color-mix(in srgb, var(--color-primary) 9%, rgba(255, 255, 255, 0.94));
+    --glass-bg-strong: color-mix(in srgb, var(--color-primary) 7%, rgba(255, 255, 255, 0.97));
+    --glass-bg-soft: color-mix(in srgb, var(--color-primary) 12%, rgba(255, 255, 255, 0.88));
   }
 }

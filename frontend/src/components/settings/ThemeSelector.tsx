@@ -47,7 +47,7 @@ function ThemeCard({ theme, isSelected, onSelect }: ThemeCardProps) {
       className={`
         relative p-4 rounded-lg border-2 transition-all text-left
         ${isSelected 
-          ? 'border-blue-500 ring-2 ring-blue-200' 
+          ? 'border-royal-500 ring-2 ring-royal-200' 
           : 'border-gray-200 hover:border-gray-300'
         }
       `}
@@ -56,7 +56,7 @@ function ThemeCard({ theme, isSelected, onSelect }: ThemeCardProps) {
       {/* Selected indicator */}
       {isSelected && (
         <div className="absolute top-2 right-2">
-          <CheckCircleIcon className="h-5 w-5 text-blue-500" />
+          <CheckCircleIcon className="h-5 w-5 text-royal-500" />
         </div>
       )}
 

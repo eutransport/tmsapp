@@ -4,6 +4,13 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // Glass design-system classes that are available for use anywhere
+  // (including from dynamic/string class names) must never be purged.
+  safelist: [
+    'glass', 'glass-strong', 'glass-soft', 'glass-topbar', 'glass-sidebar',
+    'float-panel', 'float-in',
+    'btn-accent', 'chip-accent',
+  ],
   theme: {
     extend: {
       screens: {
@@ -37,6 +44,44 @@ export default {
           800: '#1e293b',
           900: '#0f172a',
         },
+        /* Brand palette — charcoal / royal blue / tangerine */
+        charcoal: {
+          50:  '#f4f5f7',
+          100: '#e6e7ec',
+          200: '#c8cad4',
+          300: '#a3a7b7',
+          400: '#6f7489',
+          500: '#4a4f63',
+          600: '#343848',
+          700: '#2a2d3a',
+          800: '#21232e',
+          900: '#171822',
+          950: '#0e0f16',
+        },
+        royal: {
+          50:  '#e8f0ff',
+          100: '#d1e1ff',
+          200: '#a3c3ff',
+          300: '#6fa0ff',
+          400: '#3b7dff',
+          500: '#105bff',
+          600: '#0a47cc',
+          700: '#0836a0',
+          800: '#062774',
+          900: '#041a4d',
+        },
+        tangerine: {
+          50:  '#fff5e8',
+          100: '#ffe8cc',
+          200: '#ffd099',
+          300: '#ffb866',
+          400: '#ff9f33',
+          500: '#fe8500',
+          600: '#d96f00',
+          700: '#a85600',
+          800: '#7a3f00',
+          900: '#4d2800',
+        },
         success: { 50:'#f0fdf4', 100:'#dcfce7', 500:'#22c55e', 600:'#16a34a', 700:'#15803d' },
         warning: { 50:'#fffbeb', 100:'#fef3c7', 500:'#f59e0b', 600:'#d97706', 700:'#b45309' },
         danger:  { 50:'#fef2f2', 100:'#fee2e2', 500:'#ef4444', 600:'#dc2626', 700:'#b91c1c' },
@@ -66,7 +111,14 @@ export default {
         'card':       '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)',
         'card-hover': '0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06)',
         'pop':        '0 10px 25px -5px rgb(15 23 42 / 0.12), 0 4px 6px -2px rgb(15 23 42 / 0.06)',
-        'focus':      '0 0 0 3px rgb(59 130 246 / 0.35)',
+        'focus':      '0 0 0 3px rgb(16 91 255 / 0.35)',
+        /* Glassmorphism / floating depth */
+        'glass':       '0 8px 24px -10px rgb(33 35 46 / 0.28), 0 2px 8px -4px rgb(33 35 46 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.55)',
+        'glass-float': '0 22px 48px -18px rgb(33 35 46 / 0.38), 0 8px 18px -10px rgb(16 91 255 / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.65)',
+        'glass-pop':   '0 36px 80px -24px rgb(33 35 46 / 0.50), 0 12px 28px -14px rgb(16 91 255 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.7)',
+      },
+      backdropBlur: {
+        glass: '18px',
       },
       transitionTimingFunction: {
         'out-quart': 'cubic-bezier(0.25, 1, 0.5, 1)',
@@ -74,10 +126,14 @@ export default {
       keyframes: {
         'fade-in':   { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
         'scale-in':  { '0%': { opacity: '0', transform: 'scale(0.96)' }, '100%': { opacity: '1', transform: 'scale(1)' } },
+        'float-in':  { '0%': { opacity: '0', transform: 'translateY(14px) scale(0.985)' }, '100%': { opacity: '1', transform: 'translateY(0) scale(1)' } },
+        'float-idle':{ '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-4px)' } },
       },
       animation: {
         'fade-in':  'fade-in 0.2s ease-out',
         'scale-in': 'scale-in 0.15s cubic-bezier(0.25, 1, 0.5, 1)',
+        'float-in': 'float-in 0.35s cubic-bezier(0.25, 1, 0.5, 1) both',
+        'float-idle': 'float-idle 6s ease-in-out infinite',
       },
     },
   },

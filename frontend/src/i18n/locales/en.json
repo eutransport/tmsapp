@@ -1,4 +1,4 @@
-{
+﻿{
   "appInstall": {
     "androidButton": "Download the Android app",
     "androidHint": "Version {{version}}",
@@ -2272,6 +2272,7 @@
     "later": "Later"
   },
   "themes": {
+    "glass": "Glass (Royal Blue)",
     "default": "Default (Blue)",
     "emerald": "Emerald (Green)",
     "violet": "Violet (Purple)",

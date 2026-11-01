@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+﻿import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 export interface Theme {
@@ -23,6 +23,25 @@ export interface Theme {
 
 // Predefined themes
 export const themes: Theme[] = [
+  {
+    id: 'glass',
+    nameKey: 'themes.glass',
+    colors: {
+      primary: '#105BFF',
+      primaryHover: '#0A47CC',
+      primaryLight: '#e8f0ff',
+      background: '#dbe3f3',
+      backgroundSecondary: '#e8eefb',
+      sidebar: '#0C3DBF',
+      sidebarText: '#dbe7ff',
+      sidebarHover: '#1551D6',
+      card: '#edf2fd',
+      cardBorder: '#cbd8ef',
+      text: '#21232E',
+      textSecondary: '#55607a',
+      accent: '#FE8500',
+    },
+  },
   {
     id: 'default',
     nameKey: 'themes.default',
@@ -221,6 +240,53 @@ interface ThemeState {
   applyTheme: (theme: Theme) => void
 }
 
+// Relative luminance of a hex colour (0 = black, 1 = white).
+const luminance = (hex: string): number => {
+  const clean = hex.replace('#', '')
+  const full = clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean
+  const r = parseInt(full.slice(0, 2), 16) / 255
+  const g = parseInt(full.slice(2, 4), 16) / 255
+  const b = parseInt(full.slice(4, 6), 16) / 255
+  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+// Derive the glassmorphism tokens from the theme so every theme keeps
+// readable contrast: light themes get frosted white panes, dark themes
+// get frosted charcoal panes with light borders.
+const applyGlassTokens = (theme: Theme) => {
+  const root = document.documentElement
+  const isDark = luminance(theme.colors.card) < 0.4
+
+  if (isDark) {
+    root.classList.remove('glass-light')
+    root.style.setProperty('--glass-bg', 'rgba(23, 24, 34, 0.58)')
+    root.style.setProperty('--glass-bg-strong', 'rgba(23, 24, 34, 0.86)')
+    root.style.setProperty('--glass-bg-soft', 'rgba(23, 24, 34, 0.36)')
+    root.style.setProperty('--glass-border', 'rgba(255, 255, 255, 0.14)')
+    root.style.setProperty('--glass-border-strong', 'rgba(255, 255, 255, 0.20)')
+    root.style.setProperty('--glass-highlight', 'rgba(255, 255, 255, 0.10)')
+    root.style.setProperty('--glass-topbar', 'rgba(23, 24, 34, 0.62)')
+  } else {
+    root.classList.add('glass-light')
+    // Tinted porcelain rather than pure white: a touch of the theme's
+    // primary keeps content, topbar and sidebar in one calm palette.
+    root.style.setProperty('--glass-bg', 'color-mix(in srgb, var(--color-primary) 11%, rgba(255, 255, 255, 0.56))')
+    root.style.setProperty('--glass-bg-strong', 'color-mix(in srgb, var(--color-primary) 10%, rgba(255, 255, 255, 0.80))')
+    root.style.setProperty('--glass-bg-soft', 'color-mix(in srgb, var(--color-primary) 13%, rgba(255, 255, 255, 0.30))')
+    root.style.setProperty('--glass-border', 'color-mix(in srgb, var(--color-primary) 20%, rgba(255, 255, 255, 0.50))')
+    root.style.setProperty('--glass-border-strong', 'color-mix(in srgb, var(--color-primary) 26%, rgba(33, 35, 46, 0.10))')
+    root.style.setProperty('--glass-highlight', 'rgba(255, 255, 255, 0.50)')
+    root.style.setProperty('--glass-topbar', 'color-mix(in srgb, var(--color-primary) 11%, rgba(255, 255, 255, 0.58))')
+  }
+
+  // Sidebar glass is always a tinted version of the theme's sidebar colour.
+  root.style.setProperty(
+    '--glass-sidebar',
+    `color-mix(in srgb, ${theme.colors.sidebar} 82%, transparent)`
+  )
+}
+
 // Apply theme to CSS variables
 const applyThemeToDOM = (theme: Theme) => {
   const root = document.documentElement
@@ -244,6 +310,8 @@ const applyThemeToDOM = (theme: Theme) => {
   root.style.setProperty('--color-primary-500', theme.colors.primary)
   root.style.setProperty('--color-primary-600', theme.colors.primary)
   root.style.setProperty('--color-primary-700', theme.colors.primaryHover)
+
+  applyGlassTokens(theme)
 }
 
 export const useThemeStore = create<ThemeState>()(
@@ -262,7 +330,7 @@ export const useThemeStore = create<ThemeState>()(
       },
     }),
     {
-      name: 'tms-theme-v2',
+      name: 'tms-theme-v3',
       onRehydrateStorage: () => (state) => {
         // Migration: if the stored theme id no longer exists (older builds),
         // fall back to the current default so users get the refreshed palette

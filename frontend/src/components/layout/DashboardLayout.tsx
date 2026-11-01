@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, Fragment, useMemo } from 'react'
+﻿import { useEffect, useState, useCallback, Fragment, useMemo } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { Dialog, Transition, Menu } from '@headlessui/react'
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid'
@@ -292,7 +292,7 @@ export default function DashboardLayout() {
             leave="transition-opacity ease-linear duration-300"
             leaveFrom="opacity-100" leaveTo="opacity-0"
           >
-            <div className="fixed inset-0 bg-gray-900/80" />
+            <div className="fixed inset-0 backdrop-blur-sm" style={{ backgroundColor: 'rgba(33, 35, 46, 0.72)' }} />
           </Transition.Child>
 
           <div className="fixed inset-0 flex">
@@ -357,7 +357,7 @@ export default function DashboardLayout() {
       >
         {/* Top bar */}
         <div
-          className="topbar-safe sticky top-0 z-40 flex shrink-0 items-center gap-x-2 sm:gap-x-4 border-b border-gray-200/80 bg-white/85 backdrop-blur"
+          className="topbar-safe glass-topbar sticky top-0 z-40 flex shrink-0 items-center gap-x-2 sm:gap-x-4"
           style={{ isolation: 'isolate' }}
         >
           <button
@@ -516,10 +516,13 @@ function SidebarContent({
           }
           style={({ isActive }) => ({
             backgroundColor: isActive
-              ? 'color-mix(in srgb, var(--color-primary) 28%, var(--color-sidebar-hover))'
+              ? 'rgba(255, 255, 255, 0.18)'
               : 'transparent',
             color: isActive ? 'white' : 'var(--color-sidebar-text)',
-            boxShadow: isActive ? 'inset 4px 0 0 0 var(--color-primary)' : 'none',
+            boxShadow: isActive
+              ? 'inset 4px 0 0 0 var(--brand-tangerine), 0 8px 18px -12px rgba(2, 10, 40, 0.9)'
+              : 'none',
+            backdropFilter: isActive ? 'blur(6px)' : undefined,
           })}
         >
           <item.icon className="h-5 w-5 shrink-0" />
@@ -533,7 +536,7 @@ function SidebarContent({
             title={isFav ? t('nav.removeFavorite') : t('nav.addFavorite')}
             className={clsx(
               'absolute right-1 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-opacity',
-              isFav ? 'opacity-100 text-yellow-300' : 'opacity-0 group-hover/item:opacity-100 text-white/50 hover:text-yellow-300'
+              isFav ? 'opacity-100 text-tangerine-300' : 'opacity-0 group-hover/item:opacity-100 text-white/70 hover:text-tangerine-300'
             )}
           >
             {isFav ? <StarSolidIcon className="h-4 w-4" /> : <StarIcon className="h-4 w-4" />}
@@ -546,11 +549,10 @@ function SidebarContent({
   return (
     <div
       className={clsx(
-        'flex grow flex-col overflow-y-auto scrollbar-thin',
+        'glass-sidebar relative flex grow flex-col overflow-y-auto scrollbar-thin',
         collapsed ? 'px-2' : 'px-4'
       )}
       style={{
-        backgroundColor: 'var(--color-sidebar)',
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
@@ -569,7 +571,7 @@ function SidebarContent({
           <button
             type="button"
             onClick={onToggleCollapsed}
-            className="p-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+            className="p-1.5 rounded-md text-white/75 hover:text-white hover:bg-white/10 transition-colors"
             aria-label={t('nav.collapseSidebar', 'Zijbalk inklappen')}
             title={t('nav.collapseSidebar', 'Zijbalk inklappen')}
           >
@@ -582,7 +584,7 @@ function SidebarContent({
         <button
           type="button"
           onClick={onToggleCollapsed}
-          className="mx-auto mb-2 p-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+          className="mx-auto mb-2 p-1.5 rounded-md text-white/75 hover:text-white hover:bg-white/10 transition-colors"
           aria-label={t('nav.expandSidebar', 'Zijbalk uitklappen')}
           title={t('nav.expandSidebar', 'Zijbalk uitklappen')}
         >
@@ -596,14 +598,14 @@ function SidebarContent({
           {favoriteItems.length > 0 && (
             <li>
               {!collapsed && (
-                <div className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                <div className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-white/65">
                   {t('nav.favorites')}
                 </div>
               )}
               <ul role="list" className="-mx-1 space-y-0.5">
                 {favoriteItems.map(item => renderItem(item, 'fav'))}
               </ul>
-              {!collapsed && <div className="mt-3 mx-2 border-t border-white/10" />}
+              {!collapsed && <div className="mt-3 mx-2 border-t border-white/20" />}
             </li>
           )}
 
@@ -617,7 +619,7 @@ function SidebarContent({
                   <button
                     type="button"
                     onClick={() => onToggleGroup(group.id)}
-                    className="flex w-full items-center justify-between px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40 hover:text-white/70 transition-colors"
+                    className="flex w-full items-center justify-between px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-white/65 hover:text-white/90 transition-colors"
                   >
                     <span className="truncate">{label}</span>
                     <ChevronRightIcon
@@ -628,7 +630,7 @@ function SidebarContent({
                     />
                   </button>
                 ) : (
-                  <div className="mx-2 my-2 border-t border-white/10" />
+                  <div className="mx-2 my-2 border-t border-white/20" />
                 )}
                 {(collapsed || open) && (
                   <ul role="list" className="-mx-1 space-y-0.5">
@@ -643,7 +645,7 @@ function SidebarContent({
           {ungrouped.length > 0 && (
             <li>
               {!collapsed && (
-                <div className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                <div className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-white/65">
                   {t('nav.group.other', 'Overig')}
                 </div>
               )}

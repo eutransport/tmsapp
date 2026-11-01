@@ -1,4 +1,4 @@
-{
+﻿{
   "appInstall": {
     "androidButton": "App voor Android downloaden",
     "androidHint": "Versie {{version}}",
@@ -2272,6 +2272,7 @@
     "later": "Later"
   },
   "themes": {
+    "glass": "Glas (Royal Blue)",
     "default": "Standaard (Blauw)",
     "emerald": "Smaragd (Groen)",
     "violet": "Violet (Paars)",

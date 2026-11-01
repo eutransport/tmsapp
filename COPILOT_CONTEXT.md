@@ -153,6 +153,14 @@ frontend/src/
 - **Responsive**: Desktop tabel + mobiele kaartweergave (`hidden md:block` / `md:hidden`)
 - **CSS klassen**: `page-header`, `page-title`, `btn-primary`, `card`, `input` (Tailwind @apply in index.css)
 
+### Design system: glassmorphism (index.css + tailwind.config.js)
+
+- **Merkkleuren**: charcoal `#21232E` (`--brand-charcoal`), royal blue `#105BFF` (`--brand-royal`, tevens primary), tangerine `#FE8500` (`--brand-tangerine`, accent). Tailwind-schalen: `charcoal-*`, `royal-*`, `tangerine-*`.
+- **Glas-tokens**: `--glass-bg`, `--glass-bg-strong`, `--glass-bg-soft`, `--glass-border`, `--glass-border-strong`, `--glass-highlight`, `--glass-blur`, `--glass-topbar`, `--glass-sidebar`. Deze worden per thema herberekend in `themeStore.ts` (`applyGlassTokens`), zodat donkere thema's donker glas krijgen en licht blijft leesbaar.
+- **Zweef-diepte**: `--shadow-card` / `--shadow-card-hover` / `--shadow-pop`; kaarten en modals liften bij hover en komen binnen met `glass-float-in`.
+- **Herbruikbaar**: `.glass`, `.glass-strong`, `.glass-soft`, `.float-panel`, `.float-in`, `.glass-topbar`, `.glass-sidebar`, `.btn-accent`, `.chip-accent` (staan op de Tailwind `safelist`).
+- **Leesbaarheid**: op `html.glass-light` worden bestaande utilities (`bg-white`, `bg-gray-50/100`, `border-gray-*`, `text-gray-*`) naar glas-tokens gemapt; zwevende lagen (menu's, dialogen) krijgen een dichtere vulling, en zonder `backdrop-filter`-support vallen alle vlakken terug op dekkend wit.
+
 ### Sidebar Navigatie (DashboardLayout.tsx)
 
 ```typescript
