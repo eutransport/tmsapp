@@ -335,6 +335,11 @@ def analyseer_groep(regels, werktijd_van: time, werktijd_tot: time) -> dict:
     passages = sum(v['aantal'] for v in vakken.values())
     koppeling = ('gekoppeld' if all(r.koppeling == 'gekoppeld' for r in regels)
                  else eerste.koppeling)
+    # De koppeling is een momentopname van het inlezen. Staat de wagen wel in
+    # de planning op deze rit, dan is de rit alsnog gekoppeld: anders meldt het
+    # overzicht 'Geen wagen' terwijl de tol er gewoon bij staat.
+    if koppeling != 'gekoppeld' and gereden:
+        koppeling = 'gekoppeld'
 
     def som(veld: str) -> Decimal:
         return sum((Decimal(getattr(r, veld) or 0) for r in regels), Decimal('0'))
@@ -442,7 +447,12 @@ def lege_analyse() -> dict:
 
 
 def _kentekenweergave(genormaliseerd) -> dict:
-    """Zet genormaliseerde kentekens om naar de schrijfwijze uit de vloot."""
+    """Zet genormaliseerde kentekens om naar de gebruikelijke schrijfwijze.
+
+    De vloot is de beste bron, maar een wagen die inmiddels verkocht is staat
+    daar niet meer in. Dan valt dit terug op de schrijfwijze die op de bonnen
+    staat, zodat er geen kenteken zonder streepjes op het scherm komt.
+    """
     genormaliseerd = {k for k in genormaliseerd if k}
     if not genormaliseerd:
         return {}
@@ -450,10 +460,21 @@ def _kentekenweergave(genormaliseerd) -> dict:
     from apps.fleet.models import Vehicle
 
     weergave = {}
+    ontbreekt = set(genormaliseerd)
     for wagen in Vehicle.objects.exclude(kenteken='').only('kenteken'):
         norm = normalize_plate(wagen.kenteken)
-        if norm in genormaliseerd:
+        if norm in ontbreekt:
             weergave[norm] = wagen.kenteken
+            ontbreekt.discard(norm)
+    if ontbreekt:
+        from .models import TolAfrekeningRegel
+
+        for kenteken in (TolAfrekeningRegel.objects.exclude(kenteken='')
+                         .values_list('kenteken', flat=True).distinct()):
+            norm = normalize_plate(kenteken)
+            if norm in ontbreekt:
+                weergave[norm] = kenteken
+                ontbreekt.discard(norm)
     return weergave
 
 
