@@ -1,13 +1,25 @@
 """
 Tolregels lezen uit de Radius fuel-API.
 
-De twee tankkaartaccounts leveren hun kenteken niet op dezelfde plek aan:
-Almen zet het in ``card_embossed_detail_1``, E&U in ``card_embossed_detail_2``.
-Daarom kijken we naar alle embossed-velden en nemen we de eerste waarde die
-een kenteken kan zijn. Het veld ``registration`` wordt bewust genegeerd: bij
-E&U staat daar een andere waarde dan op de kaart gegraveerd is.
+Het kenteken komt uit ``registration``. Dat veld draagt het voertuig van de
+passage zelf en is als enige per transactie verschillend.
+
+De graveervelden (``card_embossed_detail_*``) zijn een eigenschap van de
+*kaart*, niet van de rit. Dat gaat goed zolang elke wagen een eigen kaart
+heeft, maar E&U boekt de hele vloot op één verzamelkaart (54593) waarop
+``51-BXN-5`` gegraveerd staat. Wie op die velden vertrouwt, schrijft de tol
+van vijftien wagens op één kenteken. Daarom:
+
+* ``registration`` is leidend;
+* de graveervelden zijn alleen terugval, en nooit voor een kaart waarop
+  meerdere kentekens blijken te rijden (zie :func:`verzamelkaarten`).
+
+Levert dat niets op, dan laten we het kenteken liever leeg: de transactie
+komt dan als overgeslagen in het verslag te staan in plaats van stilletjes op
+de verkeerde wagen.
 """
 import re
+from collections import defaultdict
 
 from .models import normalize_plate
 
@@ -33,14 +45,43 @@ def _is_kenteken(waarde) -> bool:
     return sum(c.isalpha() for c in kaal) >= 2 and sum(c.isdigit() for c in kaal) >= 2
 
 
-def kenteken_uit_transactie(transactie: dict, kaarten: dict | None = None) -> str:
+def verzamelkaarten(transacties) -> set:
+    """Kaartnummers waarop meer dan één kenteken rijdt.
+
+    Zo'n kaart draagt de tol van een hele vloot; het gegraveerde kenteken is
+    dan niet meer dan een etiket en mag nooit als terugval dienen.
+    """
+    per_kaart = defaultdict(set)
+    for transactie in transacties:
+        kenteken = _registratie(transactie)
+        if kenteken:
+            per_kaart[transactie.get('card_no')].add(kenteken)
+    return {kaart for kaart, kentekens in per_kaart.items() if len(kentekens) > 1}
+
+
+def _registratie(transactie: dict) -> str:
+    """Het kenteken van de transactie zelf, genormaliseerd."""
+    waarde = transactie.get('registration')
+    return normalize_plate(str(waarde)) if _is_kenteken(waarde) else ''
+
+
+def kenteken_uit_transactie(transactie: dict, kaarten: dict | None = None,
+                            gedeelde_kaarten=()) -> str:
     """
     Geef het kenteken van een transactie, genormaliseerd.
 
     ``kaarten`` is optioneel een map van kaartnummer naar de kaartgegevens uit
     ``/fuel/cards/``; die wordt gebruikt als de transactie zelf geen bruikbaar
-    kenteken bevat.
+    kenteken bevat. ``gedeelde_kaarten`` bevat de kaartnummers waarop meerdere
+    wagens rijden; daarvoor slaan we de graveervelden over.
     """
+    kenteken = _registratie(transactie)
+    if kenteken:
+        return kenteken
+
+    if transactie.get('card_no') in set(gedeelde_kaarten):
+        return ''
+
     for veld in EMBOSSED_VELDEN:
         waarde = transactie.get(veld)
         if _is_kenteken(waarde):

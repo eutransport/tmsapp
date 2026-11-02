@@ -19,7 +19,8 @@ from apps.tracking.models import RadiusConnection
 from apps.tracking.radius_service import RadiusError, api_get
 
 from .radius_factuur_parser import Factuur, FactuurRegel
-from .radius_fuel import is_tolregel, kaart_index, kenteken_uit_transactie, land_uit_transactie
+from .radius_fuel import (is_tolregel, kaart_index, kenteken_uit_transactie,
+                          land_uit_transactie, verzamelkaarten)
 
 logger = logging.getLogger(__name__)
 
@@ -42,12 +43,21 @@ def _bedrag(waarde) -> Decimal:
         return Decimal('0')
 
 
-def _lokaal_tijdstip(waarde):
-    """``tran_date`` draagt een Z-suffix maar is plaatselijke tijd.
+def _lokaal_tijdstip(waarde, land=''):
+    """Zet ``tran_date`` om naar onze tijdzone.
 
-    Gecontroleerd tegen de Radius-factuur: passage B220 Emmerich van
-    BB-625-L komt binnen als ``2026-09-21T07:49:00Z`` en staat op de factuur
-    als 07:49. Omrekenen vanuit UTC zette alles twee uur vooruit.
+    Radius mengt twee tijdbasissen in één stroom, te herkennen aan het land:
+
+    * **NL** - de vrachtwagenheffing komt in plaatselijke tijd binnen. Het
+      Z-suffix is dan onjuist; omrekenen zou alles twee uur vooruit zetten.
+    * **overig** - de buitenlandse EETS-tol komt echt in UTC binnen.
+
+    Bewezen op de passages van oktober 2026: alle 160 buitenlandse regels
+    (148x DE, 12x BE) staan precies twee uur vóór dezelfde passage in het
+    OBU-bestand van de wagen zelf, terwijl alle 1.223 NL-regels op de minuut
+    gelijk liepen. Een eerdere controle tegen de Radius-factuur leek het
+    tegendeel te bewijzen, maar die factuur drukt de buitenlandse tol zelf ook
+    in UTC af - twee keer dezelfde klok vergelijken bewijst niets.
     """
     tekst = str(waarde or '').strip()
     if not tekst:
@@ -56,13 +66,16 @@ def _lokaal_tijdstip(waarde):
         moment = datetime.fromisoformat(tekst.replace('Z', '+00:00'))
     except ValueError:
         return None
-    return timezone.make_aware(moment.replace(tzinfo=None),
-                               timezone.get_current_timezone())
+    if str(land or '').strip().upper() == 'NL':
+        return timezone.make_aware(moment.replace(tzinfo=None),
+                                   timezone.get_current_timezone())
+    return moment.astimezone(timezone.get_current_timezone())
 
 
-def _naar_regel(transactie, kaarten) -> FactuurRegel | None:
-    moment = _lokaal_tijdstip(transactie.get('tran_date'))
-    kenteken = kenteken_uit_transactie(transactie, kaarten)
+def _naar_regel(transactie, kaarten, gedeelde_kaarten=()) -> FactuurRegel | None:
+    land = land_uit_transactie(transactie)
+    moment = _lokaal_tijdstip(transactie.get('tran_date'), land)
+    kenteken = kenteken_uit_transactie(transactie, kaarten, gedeelde_kaarten)
     if moment is None or not kenteken:
         return None
 
@@ -81,7 +94,7 @@ def _naar_regel(transactie, kaarten) -> FactuurRegel | None:
         btw_bedrag=_bedrag(transactie.get('vat_amount')),
         bruto=bruto,
         kaartnummer=str(transactie.get('card_no') or ''),
-        land=land_uit_transactie(transactie),
+        land=land,
     )
 
 
@@ -121,15 +134,15 @@ def haal_tolregels(van=None, tot=None, connection=None):
             continue
 
         aantal = 0
-        for transactie in transacties:
-            if not is_tolregel(transactie):
-                continue
+        tolregels = [t for t in transacties if is_tolregel(t)]
+        gedeelde_kaarten = verzamelkaarten(tolregels)
+        for transactie in tolregels:
             sleutel = _sleutel(transactie)
             if sleutel in gezien:
                 continue
             gezien.add(sleutel)
 
-            regel = _naar_regel(transactie, kaarten)
+            regel = _naar_regel(transactie, kaarten, gedeelde_kaarten)
             if regel is None:
                 overgeslagen.append({
                     'koppeling': koppeling.naam,
@@ -147,7 +160,8 @@ def haal_tolregels(van=None, tot=None, connection=None):
             aantal += 1
 
         verslag.append({'connection': koppeling.naam, 'tolregels': aantal,
-                        'transacties': len(transacties)})
+                        'transacties': len(transacties),
+                        'gedeelde_kaarten': sorted(str(k) for k in gedeelde_kaarten)})
 
     regels.sort(key=lambda r: (r.tijdstempel, r.kenteken))
     return regels, overgeslagen, verslag

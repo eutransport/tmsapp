@@ -6,7 +6,7 @@ import io
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from xml.sax.saxutils import escape
 
@@ -181,6 +181,13 @@ def filter_reeds_aanwezig(events: list) -> tuple[list, int]:
     vaste passageduur, een OBU-bestand levert het kastnummer en een echte
     eindtijd. Dezelfde passage uit twee bronnen zou daardoor twee keer worden
     opgeslagen. Kenteken, starttijd en bedrag zijn wel in elke bron gelijk.
+
+    Op de seconde na, althans: de fuel-API en de factuur noemen alleen het uur
+    en de minuut, terwijl het OBU-bestand ``07:25:33`` meldt. Vergelijken op de
+    seconde liet daardoor 1.171 passages van oktober 2026 dubbel binnenkomen.
+    Daarom vergelijken we ook op de minuut, maar alleen wanneer een van beide
+    kanten op de minuut rond is - anders zouden twee echte passages van dezelfde
+    wagen binnen dezelfde minuut ten onrechte samenvallen.
     """
     if not events:
         return events, 0
@@ -188,23 +195,41 @@ def filter_reeds_aanwezig(events: list) -> tuple[list, int]:
     def sleutel(kenteken, start, bedrag):
         return (kenteken, start, Decimal(bedrag).quantize(Decimal('0.01')))
 
+    def op_de_minuut(s):
+        return (s[0], s[1].replace(second=0, microsecond=0), s[2])
+
+    def is_rond(start):
+        return start.second == 0 and start.microsecond == 0
+
     kentekens = {e.license_plate_normalized for e in events}
     starts = [e.start_at for e in events]
-    bestaand = set(
-        TollingEvent.objects.filter(
-            license_plate_normalized__in=kentekens,
-            start_at__gte=min(starts),
-            start_at__lte=max(starts),
-        ).values_list('license_plate_normalized', 'start_at', 'amount')
-    )
-    bestaand = {sleutel(*rij) for rij in bestaand}
+    rijen = TollingEvent.objects.filter(
+        license_plate_normalized__in=kentekens,
+        # Een rond opgegeven passage kan tot 59 seconden vóór de nauwkeurige
+        # tegenhanger liggen, dus zoeken we net iets ruimer.
+        start_at__gte=min(starts) - timedelta(minutes=1),
+        start_at__lte=max(starts) + timedelta(minutes=1),
+    ).values_list('license_plate_normalized', 'start_at', 'amount')
 
-    overblijvend, gezien = [], set()
+    bestaand = set()
+    # Minuutsleutels houden we apart: alleen de ronde kant mag vervagen.
+    bestaand_minuut = set()
+    for rij in rijen:
+        s = sleutel(*rij)
+        bestaand.add(s)
+        bestaand_minuut.add(op_de_minuut(s))
+
+    overblijvend, gezien, gezien_minuut = [], set(), set()
     for event in events:
         s = sleutel(event.license_plate_normalized, event.start_at, event.amount)
+        m = op_de_minuut(s)
         if s in bestaand or s in gezien:
             continue
+        if is_rond(event.start_at) and (m in bestaand_minuut or m in gezien_minuut):
+            continue
         gezien.add(s)
+        if is_rond(event.start_at):
+            gezien_minuut.add(m)
         overblijvend.append(event)
     return overblijvend, len(events) - len(overblijvend)
 
