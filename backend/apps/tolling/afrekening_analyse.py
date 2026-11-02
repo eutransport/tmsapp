@@ -181,11 +181,50 @@ def perioden_van_groep(regels) -> list[tuple]:
     return perioden
 
 
+def _dagen_in(perioden) -> set:
+    """Alle losse kalenderdagen binnen een reeks perioden."""
+    dagen = set()
+    for van, tot in perioden:
+        dag = van
+        while dag <= tot:
+            dagen.add(dag)
+            dag += timedelta(days=1)
+    return dagen
+
+
+def plan_eigenaren(regels, perioden) -> dict:
+    """Per dag de wagen die de planning op dit ritnummer zet.
+
+    De planning is leidend, net als bij de export per bedrijf: reed er die dag
+    een andere wagen op deze rit, dan hoort diens tol bij deze afrekening en
+    die van de vaste wagen niet.
+    """
+    route = ''
+    for regel in regels:
+        route = (regel.ritnummer or '').strip()
+        if route:
+            break
+    if not route or not perioden:
+        return {}
+
+    from .planning_koppeling import route_eigenaren
+
+    return {dag: kenteken
+            for (dag, rit), kenteken in route_eigenaren(_dagen_in(perioden)).items()
+            if rit == route and kenteken}
+
+
 def events_van_groep(regels, perioden=None):
     """De tolpassages die horen bij de afrekeningsregels van één wagen.
 
     Zonder ``perioden`` worden de perioden van de bonnen zelf gebruikt.
+
+    Staat er voor een dag een wagen in de planning op dit ritnummer, dan telt
+    alleen die wagen voor die dag mee. Voor dagen zonder planning blijft het
+    kenteken van de bon leidend.
     """
+    from .planning_koppeling import planning_datum
+
     if perioden is None:
         perioden = perioden_van_groep(regels)
     kentekens: list[str] = []
@@ -196,7 +235,27 @@ def events_van_groep(regels, perioden=None):
                 kentekens.append(kenteken)
         if regel.vehicle_id and regel.vehicle_id not in vehicle_ids:
             vehicle_ids.append(regel.vehicle_id)
-    return events_voor(kentekens, vehicle_ids, perioden)
+
+    eigenaren = plan_eigenaren(regels, perioden)
+    if not eigenaren:
+        return events_voor(kentekens, vehicle_ids, perioden)
+
+    eigen = set(kentekens)
+    extra = set(eigenaren.values()) - eigen
+    basis = events_voor(sorted(eigen | extra), vehicle_ids, perioden)
+
+    toegestaan = []
+    for event_id, kenteken, start_at in basis.values_list(
+            'id', 'license_plate_normalized', 'start_at'):
+        eigenaar = eigenaren.get(planning_datum(start_at))
+        if eigenaar:
+            # De planning wijst deze dag toe aan één wagen.
+            if kenteken == eigenaar:
+                toegestaan.append(event_id)
+        elif kenteken not in extra:
+            # Geen planning voor deze dag: het kenteken van de bon telt.
+            toegestaan.append(event_id)
+    return TollingEvent.objects.filter(id__in=toegestaan)
 
 
 def _signaal(koppeling: str, ontvangen: Decimal, betaald: Decimal, passages: int) -> str:
@@ -234,8 +293,10 @@ def analyseer_groep(regels, werktijd_van: time, werktijd_tot: time) -> dict:
     bedrijven = {r.bon_bedrijf_id for r in regels if getattr(r, 'bon_bedrijf_id', None)}
 
     velden = ('start_at', 'amount', 'distance_km', 'is_private', 'invoiced_at',
-              'bedrijf_id')
-    for start_at, bedrag, km, is_prive, gefactureerd_op, bedrijf_id in (
+              'bedrijf_id', 'license_plate_normalized')
+    gereden: set[str] = set()
+    for (start_at, bedrag, km, is_prive, gefactureerd_op, bedrijf_id,
+         kenteken) in (
         events_van_groep(regels, perioden).values_list(*velden)
     ):
         bedrag = Decimal(bedrag or 0)
@@ -260,6 +321,8 @@ def analyseer_groep(regels, werktijd_van: time, werktijd_tot: time) -> dict:
         vakken[vak]['aantal'] += 1
         vakken[vak]['bedrag'] += bedrag
         vakken[vak]['km'] += km
+        if kenteken:
+            gereden.add(kenteken)
         if gefactureerd_op:
             gefactureerd_bedrag += bedrag
         elif vak == BINNEN:
@@ -283,6 +346,8 @@ def analyseer_groep(regels, werktijd_van: time, werktijd_tot: time) -> dict:
         'voertuig_label': eerste.voertuig_label,
         'kenteken': eerste.kenteken,
         'kentekens': sorted({k for r in regels for k in (r.kentekens or [])}),
+        # De wagens die volgens de tolpassages werkelijk op deze rit reden.
+        'kentekens_gereden': sorted(gereden),
         'koppeling': koppeling,
         'vehicle_id': str(eerste.vehicle_id) if eerste.vehicle_id else None,
         'afrekeningen': len(regels),
@@ -376,6 +441,22 @@ def lege_analyse() -> dict:
     }
 
 
+def _kentekenweergave(genormaliseerd) -> dict:
+    """Zet genormaliseerde kentekens om naar de schrijfwijze uit de vloot."""
+    genormaliseerd = {k for k in genormaliseerd if k}
+    if not genormaliseerd:
+        return {}
+
+    from apps.fleet.models import Vehicle
+
+    weergave = {}
+    for wagen in Vehicle.objects.exclude(kenteken='').only('kenteken'):
+        norm = normalize_plate(wagen.kenteken)
+        if norm in genormaliseerd:
+            weergave[norm] = wagen.kenteken
+    return weergave
+
+
 def analyseer_selectie(afrekeningen: list) -> dict:
     """Het overzicht over een of meer afrekeningen samen.
 
@@ -403,12 +484,16 @@ def analyseer_selectie(afrekeningen: list) -> dict:
     # vloot daarna gewijzigd, dan moet dat opvallen in plaats van stil tot een
     # verkeerde vergelijking te leiden.
     huidige_vloot = ritnummer_index(max(a.periode_tot for a in op_datum))
+    weergave = _kentekenweergave(
+        {k for rij in regels for k in rij['kentekens_gereden']})
     verouderd = 0
     for rij in regels:
         wagens = huidige_vloot.get((rij['ritnummer'] or '').lower(), [])
         rij['huidig_kenteken'] = ' / '.join(w.kenteken for w in wagens)
         nu = sorted({normalize_plate(w.kenteken) for w in wagens if w.kenteken})
         rij['koppeling_verouderd'] = bool(nu) and nu != rij['kentekens']
+        rij['kentekens_gereden'] = [weergave.get(k, k)
+                                    for k in rij['kentekens_gereden']]
         if rij['koppeling_verouderd']:
             verouderd += 1
 

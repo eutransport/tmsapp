@@ -32,6 +32,8 @@ export interface AfrekeningRegel {
   voertuig_label: string
   kenteken: string
   kentekens: string[]
+  /** De wagens die volgens de tolpassages werkelijk op deze rit reden. */
+  kentekens_gereden: string[]
   /** Kenteken(s) waar dit ritnummer nu in de vloot op staat. */
   huidig_kenteken: string
   /** De koppeling is verouderd doordat de vloot daarna gewijzigd is. */

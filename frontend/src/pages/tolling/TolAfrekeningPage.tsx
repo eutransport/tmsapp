@@ -598,7 +598,9 @@ export default function TolAfrekeningPage() {
     const groep: PassageGroep = {
       ritnummer: regel.ritnummer,
       voertuig_label: regel.voertuig_label,
-      kenteken: regel.kenteken,
+      kenteken: regel.kentekens_gereden?.length
+        ? regel.kentekens_gereden.join(' / ')
+        : regel.kenteken,
       periode_van: regel.periode_van,
       periode_tot: regel.periode_tot,
       passages: rijen,
@@ -1238,7 +1240,23 @@ export default function TolAfrekeningPage() {
                             </span>
                           </td>
                           <td className="px-3 py-2 font-mono text-xs text-gray-700">
-                            {regel.kenteken || '—'}
+                            {regel.kentekens_gereden?.length
+                              ? (
+                                <span className="flex flex-col gap-0.5">
+                                  {regel.kentekens_gereden.map((plaat) => (
+                                    <span key={plaat}>{plaat}</span>
+                                  ))}
+                                </span>
+                              )
+                              : (regel.kenteken || '—')}
+                            {regel.kentekens_gereden?.length > 1 && (
+                              <span
+                                title="Op deze rit reed volgens de planning meer dan één wagen"
+                                className="mt-0.5 inline-block rounded bg-blue-100 px-1 text-blue-800"
+                              >
+                                wisselwagen
+                              </span>
+                            )}
                             {regel.koppeling_verouderd && (
                               <span
                                 title={`Staat in de vloot nu op ${regel.huidig_kenteken}`}
