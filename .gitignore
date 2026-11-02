@@ -155,3 +155,8 @@ start-local.bat
 license_private_key.pem
 *.pem
 !requirements/*.pem
+
+# Database dumps / backups (bevatten productiedata - NOOIT committen!)
+backups/
+*.sql
+*.sql.gz
