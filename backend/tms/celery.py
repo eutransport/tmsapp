@@ -22,10 +22,6 @@ app.autodiscover_tasks()
 
 # Beat schedule: periodic tasks
 app.conf.beat_schedule = {
-    'send-driver-expiry-reminders': {
-        'task': 'apps.drivers.tasks.send_driver_expiry_reminders',
-        'schedule': crontab(hour=8, minute=0),
-    },
     'send-leave-reminders': {
         'task': 'apps.leave.tasks.send_leave_reminders',
         'schedule': crontab(hour=8, minute=15),
@@ -39,6 +35,27 @@ app.conf.beat_schedule = {
         # bereikt is; de taak verstuurt maximaal één keer per dag.
         'task': 'apps.maintenance.tasks.send_adr_reminders',
         'schedule': crontab(minute='*/15'),
+    },
+    'send-apk-reminders': {
+        # Zelfde opzet als ADR: de taak bewaakt zelf de verzendtijd en
+        # verstuurt maximaal één keer per dag.
+        'task': 'apps.maintenance.tasks.send_apk_reminders',
+        'schedule': crontab(minute='*/15'),
+    },
+    'send-fire-extinguisher-reminders': {
+        # Idem voor de brandblussers; elke blusser heeft een eigen vervaldatum.
+        'task': 'apps.maintenance.tasks.send_fire_extinguisher_reminders',
+        'schedule': crontab(minute='*/15'),
+    },
+    'process-scheduled-notifications': {
+        # De geplande pushmeldingen kijken per minuut of hun verzendtijd er is.
+        'task': 'apps.notifications.tasks.process_scheduled_notifications',
+        'schedule': crontab(minute='*'),
+    },
+    'update-notification-next-send-times': {
+        # Houdt 'volgende verzending' in het overzicht actueel.
+        'task': 'apps.notifications.tasks.update_next_send_times',
+        'schedule': crontab(hour=0, minute=30),
     },
     'pakmiddelen-scheduled-check': {
         'task': 'apps.pakmiddelen.tasks.run_scheduled_check',
