@@ -256,6 +256,17 @@ else
 fi
 
 # =========================================
+# 7b. Reverse proxy herladen
+# =========================================
+# Containers krijgen na een rebuild vaak een nieuw IP; de proxy houdt het
+# oude vast en geeft dan 502 op /api terwijl alles "healthy" lijkt.
+if [ -f "$TMS_DIR/proxy-reload.sh" ]; then
+    bash "$TMS_DIR/proxy-reload.sh" || log_warning "Proxy-reload mislukte — app mogelijk publiek onbereikbaar"
+else
+    log_warning "proxy-reload.sh niet gevonden — reload de proxy handmatig"
+fi
+
+# =========================================
 # 8. Oude Docker images opruimen
 # =========================================
 log_info "Ongebruikte Docker images opruimen..."
