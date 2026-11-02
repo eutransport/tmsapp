@@ -29,6 +29,7 @@ from .buitenland import filter_op_land
 from .dagritnummers import (als_label, ritnummers_per_dag,
                             ritvensters as ritvensters_uit_uren)
 from .land_bepaling import LANDNAMEN
+from .planning_koppeling import BRON_PLANNING, planning_datum, route_eigenaren
 from .models import (PrivateTollRegistration, RitnummerCorrectie, TollingEvent,
                      TollingImportBatch, normalize_plate)
 from .serializers import (
@@ -2506,13 +2507,22 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         events = events.values_list(
             'license_plate_normalized', 'license_plate_raw',
             'start_at', 'distance_km', 'amount', 'ritnummer',
-            'bedrijf_id', 'bedrijf__naam',
+            'bedrijf_id', 'bedrijf__naam', 'rit_bron',
         )
+        events = list(events)
 
         vehicle_map = build_vehicle_lookup()
 
+        # De planning is leidend voor wie er die dag op een route zit. Staat
+        # een route op naam van een andere wagen, dan mag een niet-ingeplande
+        # wagen daar niet via zijn vaste ritnummer alsnog bij komen.
+        eigenaren = route_eigenaren(
+            {planning_datum(e[2]) for e in events}
+        )
+
         agg: dict[tuple, dict] = {}
-        for norm, raw, start_at, km, amount, ritnummer, bedrijf_id, bedrijf_naam in events:
+        for (norm, raw, start_at, km, amount, ritnummer,
+             bedrijf_id, bedrijf_naam, rit_bron) in events:
             local_dt = start_at.astimezone(tz) if timezone.is_aware(start_at) else start_at
             if exclude_weekend and local_dt.isoweekday() >= 6:
                 continue
@@ -2524,6 +2534,13 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             route = (ritnummer or '').strip() or (
                 (getattr(vehicle, 'ritnummer', '') or '') if vehicle else ''
             )
+            # Is de route niet door de planning bevestigd, dan geldt de
+            # planning: hoort de route die dag bij een andere wagen, dan laten
+            # we het routenummer los in plaats van dubbel te tellen.
+            if route and rit_bron != BRON_PLANNING:
+                eigenaar = eigenaren.get((planning_datum(start_at), route))
+                if eigenaar and eigenaar != norm:
+                    route = ''
             # Bedrijf eveneens uit de momentopname; alleen terugvallen op de
             # vloot als het event nog geen bedrijf had bij de import.
             if not bedrijf_id and vehicle is not None and vehicle.bedrijf_id:

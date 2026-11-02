@@ -103,6 +103,52 @@ def rit_van_regel(regel) -> str:
     return regel.ritnummer or regel.vehicle_ritnummer or ''
 
 
+def route_eigenaren(datums) -> dict:
+    """Geef per (dag, routenummer) het kenteken dat de planning erop zet.
+
+    De planning is leidend: staat een wagen op een route, dan is die route
+    voor die dag bezet. Een andere wagen mag er dan niet via zijn vaste
+    ritnummer uit de vloot alsnog op belanden.
+
+    De waarde is ``None`` als meerdere wagens dezelfde route op dezelfde dag
+    claimen; dan is er geen duidelijke eigenaar en blijft alles zoals het is.
+    """
+    from apps.planning.models import DAG_NUMMERS, PlanningEntry
+
+    datums = {d for d in datums if d}
+    if not datums:
+        return {}
+
+    weken = {d.isocalendar()[:2] for d in datums}
+    dagcode_per_nummer = {nummer: code for code, nummer in DAG_NUMMERS.items()}
+    dagcodes = {dagcode_per_nummer.get(d.isocalendar()[2]) for d in datums}
+    dagcodes.discard(None)
+    if not dagcodes:
+        return {}
+
+    regels = (PlanningEntry.objects
+              .filter(planning__jaar__in={j for j, _ in weken},
+                      planning__weeknummer__in={w for _, w in weken},
+                      dag__in=dagcodes)
+              .select_related('planning', 'vehicle', 'vervangend_voertuig'))
+
+    eigenaren: dict = {}
+    for regel in regels:
+        datum = regel.planningsdatum()
+        if datum not in datums:
+            continue
+        route = (rit_van_regel(regel) or '').strip()
+        kenteken = normalize_plate(regel.werkelijk_kenteken())
+        if not route or not kenteken:
+            continue
+        sleutel = (datum, route)
+        if sleutel in eigenaren and eigenaren[sleutel] != kenteken:
+            eigenaren[sleutel] = None
+            continue
+        eigenaren[sleutel] = kenteken
+    return eigenaren
+
+
 def koppel_events(events, index=None) -> dict:
     """Zet ritnummer en bedrijf op tolregels aan de hand van de planning.
 
