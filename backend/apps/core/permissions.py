@@ -134,7 +134,7 @@ class IsAdminOnly(BasePermission):
 
 class NietVoorChauffeur(BasePermission):
     """
-    Interne kantoormodules: chauffeurs en opdrachtgevers horen hier niet.
+    Interne kantoormodules: chauffeurs en externe gebruikers horen hier niet.
     """
 
     message = 'Deze module is niet beschikbaar voor jouw rol.'
@@ -146,7 +146,7 @@ class NietVoorChauffeur(BasePermission):
         if request.user.is_superuser:
             return True
 
-        return request.user.rol not in ('chauffeur', 'opdrachtgever')
+        return request.user.rol not in ('chauffeur', 'opdrachtgever', 'charter')
 
 
 class IsOpdrachtgever(BasePermission):
@@ -166,6 +166,26 @@ class IsOpdrachtgever(BasePermission):
         return bool(
             getattr(request.user, 'is_opdrachtgever', False)
             and request.user.opdrachtgever_bedrijf_id
+        )
+
+
+class IsCharter(BasePermission):
+    """
+    Alleen externe charters met een gekoppelde charter.
+
+    Net als bij de opdrachtgever is de koppeling verplicht: zonder charter
+    valt er niets te filteren.
+    """
+
+    message = 'Alleen beschikbaar voor charters met een gekoppelde charter.'
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        return bool(
+            getattr(request.user, 'is_charter', False)
+            and request.user.charter_id
         )
 
 
@@ -193,7 +213,7 @@ class KanVoertuigenVolgen(BasePermission):
         if user.is_superuser or user.rol == 'admin':
             return True
 
-        if user.rol == 'opdrachtgever':
+        if user.rol in ('opdrachtgever', 'charter'):
             return False
 
         if user.rol == 'chauffeur':
@@ -221,7 +241,7 @@ class KanTachograafZien(BasePermission):
         if user.is_superuser or user.rol == 'admin':
             return True
 
-        if user.rol in ('chauffeur', 'opdrachtgever'):
+        if user.rol in ('chauffeur', 'opdrachtgever', 'charter'):
             return False
 
         return user.has_module_permission('view_tachograph')

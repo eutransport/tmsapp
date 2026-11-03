@@ -1,4 +1,5 @@
 import api from './client'
+import { portaalBasis } from './portaalBasis'
 
 export interface PortaalVoertuig {
   id: string
@@ -82,19 +83,19 @@ export const portaalTracking = {
     return response.data
   },
   voertuigen: async (): Promise<PortaalVoertuig[]> => {
-    const response = await api.get('/portaal/voertuigen/')
+    const response = await api.get(`${portaalBasis()}/voertuigen/`)
     return response.data
   },
   posities: async (): Promise<{ positions: PortaalPositie[]; count: number }> => {
-    const response = await api.get('/portaal/posities/')
+    const response = await api.get(`${portaalBasis()}/posities/`)
     return response.data
   },
   ritten: async (params?: { kenteken?: string; dagen?: number }): Promise<PortaalRit[]> => {
-    const response = await api.get('/portaal/ritten/', { params })
+    const response = await api.get(`${portaalBasis()}/ritten/`, { params })
     return response.data
   },
   voertuigDag: async (kenteken: string, datum?: string): Promise<PortaalVoertuigDag> => {
-    const response = await api.get(`/portaal/voertuigen/${encodeURIComponent(kenteken)}/dag/`, {
+    const response = await api.get(`${portaalBasis()}/voertuigen/${encodeURIComponent(kenteken)}/dag/`, {
       params: datum ? { datum } : undefined,
     })
     return response.data

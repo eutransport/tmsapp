@@ -251,7 +251,8 @@
     "portaalUren": "Hours",
     "portaalTol": "Toll",
     "portaalFacturen": "Invoices",
-    "geoBlocking": "Geo-blocking"
+    "geoBlocking": "Geo-blocking",
+    "charters": "Charters"
   },
   "invoicePortal": {
     "title": "Invoices",
@@ -688,7 +689,9 @@
     "selectTachoPlate": "Select plate from tachograph...",
     "tachoPlateHelp": "Link a plate number from the tachograph list to this driver.",
     "defaultStartTime": "Default start time",
-    "defaultStartTimeHelp": "If set, this time will always be used as start time for auto-created hours instead of the tachograph start time."
+    "defaultStartTimeHelp": "If set, this time will always be used as start time for auto-created hours instead of the tachograph start time.",
+    "charter": "Charter",
+    "charterHelp": "The charter sees this driver's hours and tolls while linked. A first link applies retroactively."
   },
   "fleet": {
     "title": "Fleet",
@@ -1419,7 +1422,9 @@
     "disable2FA": "Disable 2FA",
     "form": {
       "passwordPlaceholder": "Leave empty to keep current password"
-    }
+    },
+    "charter": "Charter",
+    "charterCompany": "Charter"
   },
   "settings": {
     "title": "Settings",
@@ -3158,7 +3163,8 @@
     "moment": "Moment",
     "country": "Country",
     "amount": "Amount",
-    "weekTotal": "Week total"
+    "weekTotal": "Week total",
+    "subtitleCharter": "Tolls of the vehicles your drivers drove according to the timesheets."
   },
   "eta": {
     "arrivesAt": "Arrival approx.",
@@ -3253,5 +3259,35 @@
     "wachten_op_klant": "Waiting for customer",
     "bezig_laden": "Loading in progress",
     "bezig_lossen": "Unloading in progress"
+  },
+  "charters": {
+    "title": "Charters",
+    "subtitle": "A charter only sees the hours and tolls of its own drivers, and the vehicles you link here on the map.",
+    "new": "New charter",
+    "edit": "Edit charter",
+    "empty": "No charters yet",
+    "name": "Name",
+    "kvk": "Chamber of Commerce no.",
+    "contact": "Contact person",
+    "email": "Email",
+    "phone": "Phone",
+    "drivers": "Drivers",
+    "vehicles": "Vehicles on map",
+    "vehiclesHelp": "The charter only sees these vehicles on the map. Tolls and hours follow from its drivers.",
+    "saved": "Charter saved",
+    "saveError": "Saving failed",
+    "deleteTitle": "Delete charter?",
+    "deleteMessage": "Are you sure you want to delete \"{{naam}}\"?",
+    "deleteError": "Deleting failed",
+    "periodsTitle": "Periods of {{naam}}",
+    "periodsHelp": "The charter only sees hours and tolls within these periods. Link a driver on the drivers page; an empty \"from\" means from the start.",
+    "noPeriods": "No drivers linked yet.",
+    "driver": "Driver",
+    "from": "From",
+    "until": "Until (incl.)",
+    "fromStart": "start",
+    "ongoing": "ongoing",
+    "periodSaved": "Period saved",
+    "periodDeleteConfirm": "Delete this period? The charter will no longer see hours from this period."
   }
 }

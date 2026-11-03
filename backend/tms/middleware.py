@@ -70,10 +70,28 @@ OPDRACHTGEVER_TOEGESTANE_PADEN = (
     '/media/',
 )
 
+# Een charter ziet nog minder: alleen zijn eigen uren, tol en kaart.
+CHARTER_TOEGESTANE_PADEN = (
+    '/api/auth/',
+    '/api/charter/',
+    '/api/core/settings/',
+    '/api/core/fonts/css/',
+    '/api/core/app/android/',
+    '/api/licensing/',
+    '/media/',
+)
+
+# Externe rollen en de paden die ze mogen benaderen.
+EXTERNE_ROLLEN = {
+    'opdrachtgever': OPDRACHTGEVER_TOEGESTANE_PADEN,
+    'charter': CHARTER_TOEGESTANE_PADEN,
+}
+
 
 class OpdrachtgeverScopeMiddleware:
     """
-    Sluit het hele interne systeem af voor de rol opdrachtgever.
+    Sluit het hele interne systeem af voor de externe rollen opdrachtgever
+    en charter.
 
     De bestaande views gaan er allemaal van uit dat elke ingelogde gebruiker
     intern is; een flink deel vraagt alleen om IsAuthenticated. In plaats van
@@ -86,18 +104,17 @@ class OpdrachtgeverScopeMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if self._is_opdrachtgever(request) and not request.path.startswith(
-            OPDRACHTGEVER_TOEGESTANE_PADEN
-        ):
+        toegestaan = EXTERNE_ROLLEN.get(self._rol(request))
+        if toegestaan is not None and not request.path.startswith(toegestaan):
             return JsonResponse(
                 {'detail': 'Geen toegang tot dit onderdeel.'}, status=403
             )
         return self.get_response(request)
 
-    def _is_opdrachtgever(self, request) -> bool:
+    def _rol(self, request) -> str:
         gebruiker_id = self._gebruiker_uit_token(request)
         if not gebruiker_id:
-            return False
+            return ''
 
         cache_key = f'rol_{gebruiker_id}'
         rol = cache.get(cache_key)
@@ -107,7 +124,7 @@ class OpdrachtgeverScopeMiddleware:
                 'rol', flat=True
             ).first() or ''
             cache.set(cache_key, rol, 300)
-        return rol == 'opdrachtgever'
+        return rol
 
     @staticmethod
     def _gebruiker_uit_token(request):

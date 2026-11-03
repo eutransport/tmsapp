@@ -37,6 +37,7 @@ ROLE_CHOICES = [
     ('gebruiker', 'Gebruiker'),
     ('chauffeur', 'Chauffeur'),
     ('opdrachtgever', 'Opdrachtgever'),
+    ('charter', 'Charter'),
 ]
 
 COUNTRY_ANY = '*'

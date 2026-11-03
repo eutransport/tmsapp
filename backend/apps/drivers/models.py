@@ -4,6 +4,40 @@ from django.db import models
 from django.conf import settings
 
 
+class Charter(models.Model):
+    """Ingehuurde vervoerder die chauffeurs (en soms wagens) levert.
+
+    Staat bewust los van ``companies.Company``: het bedrijf op een chauffeur of
+    wagen blijft de opdrachtgever waarvoor hij rijdt. Een charter krijgt een
+    eigen, zeer beperkte inzage (uren, tol en kaart) via ``/api/charter/``.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    naam = models.CharField(max_length=200, verbose_name='Naam')
+    kvk = models.CharField(max_length=20, blank=True, verbose_name='KVK Nummer')
+    contactpersoon = models.CharField(max_length=200, blank=True, verbose_name='Contactpersoon')
+    email = models.EmailField(blank=True, verbose_name='E-mail')
+    telefoon = models.CharField(max_length=20, blank=True, verbose_name='Telefoon')
+
+    # Alleen beheerders vullen dit; bepaalt wat de charter op de kaart ziet.
+    voertuigen = models.ManyToManyField(
+        'fleet.Vehicle',
+        blank=True,
+        related_name='volgbaar_voor_charters',
+        verbose_name='Volgbare voertuigen'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Charter'
+        verbose_name_plural = 'Charters'
+        ordering = ['naam']
+
+    def __str__(self):
+        return self.naam
+
+
 class Driver(models.Model):
     """Chauffeur model."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -32,6 +66,15 @@ class Driver(models.Model):
         blank=True,
         related_name='chauffeurs',
         verbose_name='Voertuig (Ritnummer)'
+    )
+    charter = models.ForeignKey(
+        Charter,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='chauffeurs',
+        verbose_name='Charter',
+        help_text='Leeg voor eigen personeel. Bepaalt welke charter de uren mag inzien.'
     )
     adr = models.BooleanField(default=False, verbose_name='ADR Gecertificeerd')
     minimum_uren_per_week = models.DecimalField(
@@ -109,3 +152,37 @@ class DriverBedrijfPeriode(models.Model):
     def __str__(self):
         return f'{self.driver} @ {self.bedrijf} ({self.vanaf} - {self.tot or "heden"})'
 
+
+
+class DriverCharterPeriode(models.Model):
+    """In welke periode een chauffeur via welke charter reed.
+
+    Alleen uren en tol binnen een periode zijn zichtbaar voor die charter.
+    Een lege ``vanaf`` betekent 'vanaf het begin', zodat een charter bij de
+    eerste koppeling met terugwerkende kracht alle weken ziet. Wordt de
+    chauffeur eigen personeel, dan sluit de periode en ziet de charter niets
+    meer van daarna.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    driver = models.ForeignKey(
+        Driver, on_delete=models.CASCADE, related_name='charter_periodes'
+    )
+    charter = models.ForeignKey(
+        Charter, on_delete=models.CASCADE, related_name='chauffeur_periodes'
+    )
+    vanaf = models.DateField(
+        null=True, blank=True, verbose_name='Vanaf',
+        help_text='Leeg betekent vanaf het begin.'
+    )
+    tot = models.DateField(null=True, blank=True, verbose_name='Tot en met')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Chauffeursperiode bij charter'
+        verbose_name_plural = 'Chauffeursperiodes bij charter'
+        ordering = ['driver__naam', models.F('vanaf').desc(nulls_last=True)]
+
+    def __str__(self):
+        return f'{self.driver} @ {self.charter} ({self.vanaf or "begin"} - {self.tot or "heden"})'

@@ -64,12 +64,16 @@ class PortaalBasisView(APIView):
     def bedrijf_id(self):
         return self.request.user.opdrachtgever_bedrijf_id
 
+    def toegestane_voertuigen(self):
+        """De wagens die deze gebruiker op de kaart mag volgen."""
+        return _toegestane_voertuigen(self.bedrijf_id)
+
 
 class PortaalVoertuigenView(PortaalBasisView):
     """GET /api/portaal/voertuigen/ — de wagens die dit bedrijf mag volgen."""
 
     def get(self, request):
-        voertuigen = _toegestane_voertuigen(self.bedrijf_id)
+        voertuigen = self.toegestane_voertuigen()
         return Response([
             {'id': str(v.id), 'kenteken': v.kenteken, 'type_wagen': v.type_wagen}
             for v in voertuigen
@@ -80,7 +84,7 @@ class PortaalPositiesView(PortaalBasisView):
     """GET /api/portaal/posities/ — laatst bekende positie per vrijgegeven wagen."""
 
     def get(self, request):
-        voertuigen = _toegestane_voertuigen(self.bedrijf_id)
+        voertuigen = self.toegestane_voertuigen()
         if not voertuigen:
             return Response({'positions': [], 'count': 0})
 
@@ -130,7 +134,7 @@ class PortaalRittenView(PortaalBasisView):
     """GET /api/portaal/ritten/ — waar de wagen is geweest en hoe laat."""
 
     def get(self, request):
-        voertuigen = _toegestane_voertuigen(self.bedrijf_id)
+        voertuigen = self.toegestane_voertuigen()
         if not voertuigen:
             return Response([])
 
@@ -162,7 +166,7 @@ class PortaalVoertuigDagView(PortaalBasisView):
     def get(self, request, kenteken):
         toegestaan = {
             _normaliseer(v.kenteken): v.kenteken
-            for v in _toegestane_voertuigen(self.bedrijf_id) if v.kenteken
+            for v in self.toegestane_voertuigen() if v.kenteken
         }
         echt = toegestaan.get(_normaliseer(kenteken))
         if echt is None:
@@ -286,9 +290,12 @@ def _uren_queryset(bedrijf_id):
 class PortaalUrenView(PortaalBasisView):
     """GET /api/portaal/uren/ — geregistreerde uren per week, alleen lezen."""
 
+    def uren_queryset(self):
+        return _uren_queryset(self.bedrijf_id)
+
     def get(self, request):
         zoek = (request.query_params.get('search') or '').strip()
-        regels = _uren_queryset(self.bedrijf_id)
+        regels = self.uren_queryset()
         if zoek:
             regels = regels.filter(
                 Q(ritnummer__icontains=zoek)
@@ -353,15 +360,23 @@ class PortaalUrenView(PortaalBasisView):
 class PortaalTolView(PortaalBasisView):
     """GET /api/portaal/tol/ — tolpassages per week en kenteken, alleen lezen."""
 
-    def get(self, request):
-        voertuigen = _toegestane_voertuigen(self.bedrijf_id)
+    def tol_bron(self):
+        """Passages die deze gebruiker mag zien, plus het kenteken om te tonen."""
+        voertuigen = self.toegestane_voertuigen()
         toegestaan = {_normaliseer(v.kenteken): v.kenteken for v in voertuigen if v.kenteken}
+        passages = TollingEvent.objects.filter(license_plate_normalized__in=list(toegestaan))
+        return passages, toegestaan
+
+    def passage_toegestaan(self, passage, lokaal):
+        """Laatste controle per passage; het portaal laat alles van de wagen toe."""
+        return True
+
+    def get(self, request):
+        passages, toegestaan = self.tol_bron()
         if not toegestaan:
             return Response({'count': 0, 'results': [], 'totaal_bedrag': 0, 'totaal_km': 0})
 
-        passages = TollingEvent.objects.filter(
-            license_plate_normalized__in=list(toegestaan)
-        ).only('license_plate_normalized', 'start_at', 'amount', 'distance_km', 'land', 'ritnummer')
+        passages = passages.only('license_plate_normalized', 'start_at', 'amount', 'distance_km', 'land', 'ritnummer')
 
         kenteken = (request.query_params.get('kenteken') or '').strip()
         if kenteken:
@@ -373,6 +388,8 @@ class PortaalTolView(PortaalBasisView):
         weken = {}
         for passage in passages.order_by('start_at'):
             lokaal = timezone.localtime(passage.start_at)
+            if not self.passage_toegestaan(passage, lokaal):
+                continue
             jaar, weeknummer, _ = lokaal.date().isocalendar()
             plaat = toegestaan[passage.license_plate_normalized]
             blok = weken.setdefault((plaat, jaar, weeknummer), {
@@ -410,4 +427,6 @@ class PortaalTolView(PortaalBasisView):
             'results': pagina,
             'totaal_bedrag': round(sum(w['totaal_bedrag'] for w in resultaat), 2),
             'totaal_km': round(sum(w['totaal_km'] for w in resultaat), 1),
+            # Voor de kentekenkeuze; bij een charter zijn dat de wagens uit de uren.
+            'kentekens': sorted(set(toegestaan.values())),
         })

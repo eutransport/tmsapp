@@ -39,6 +39,7 @@ import {
   AzureSyncAllesResultaat,
 } from '@/api/users'
 import { getAllCompanies } from '@/api/companies'
+import { Charter, chartersApi } from '@/api/charters'
 import Pagination, { PageSize } from '@/components/common/Pagination'
 
 // Role labels and colors
@@ -47,6 +48,7 @@ const roleConfig: Record<string, { key: string; color: string }> = {
   gebruiker: { key: 'users.user', color: 'bg-blue-100 text-blue-800' },
   chauffeur: { key: 'users.driver', color: 'bg-green-100 text-green-800' },
   opdrachtgever: { key: 'users.client', color: 'bg-amber-100 text-amber-800' },
+  charter: { key: 'users.charter', color: 'bg-teal-100 text-teal-800' },
 }
 
 // Modal component
@@ -159,6 +161,7 @@ function UserForm({
 }) {
   const { t } = useTranslation()
   const [companies, setCompanies] = useState<Company[]>([])
+  const [charters, setCharters] = useState<Charter[]>([])
   const [availablePermissions, setAvailablePermissions] = useState<AvailablePermission[]>([])
   const [dependencies, setDependencies] = useState<Record<string, string[]>>({})
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>(user?.module_permissions || [])
@@ -171,6 +174,7 @@ function UserForm({
     bedrijf: user?.bedrijf || '',
     rol: user?.rol || 'gebruiker',
     opdrachtgever_bedrijf: user?.opdrachtgever_bedrijf || '',
+    charter: user?.charter || '',
     is_active: user?.is_active ?? true,
     mfa_required: user?.mfa_required ?? false,
     password: '',
@@ -180,6 +184,7 @@ function UserForm({
 
   useEffect(() => {
     getAllCompanies().then(setCompanies).catch(console.error)
+    chartersApi.lijst().then(setCharters).catch(console.error)
     getAvailablePermissions().then(data => {
       setAvailablePermissions(data.permissions)
       setDependencies(data.dependencies)
@@ -205,6 +210,9 @@ function UserForm({
 
     if (formData.rol === 'opdrachtgever' && !formData.opdrachtgever_bedrijf) {
       newErrors.opdrachtgever_bedrijf = t('errors.required')
+    }
+    if (formData.rol === 'charter' && !formData.charter) {
+      newErrors.charter = t('errors.required')
     }
     
     if (!user) {
@@ -263,13 +271,15 @@ function UserForm({
     e.preventDefault()
     if (!validate()) return
 
-    // De backend eist dat het bedrijf leeg is zodra de rol geen opdrachtgever is.
+    // De backend eist dat bedrijf en charter leeg zijn zodra de rol er niet bij hoort.
     const isOpdrachtgever = formData.rol === 'opdrachtgever'
+    const isCharter = formData.rol === 'charter'
     const basis = {
       ...formData,
       opdrachtgever_bedrijf: isOpdrachtgever ? formData.opdrachtgever_bedrijf : null,
+      charter: isCharter ? formData.charter : null,
     }
-    const rechten = isOpdrachtgever ? [] : selectedPermissions
+    const rechten = isOpdrachtgever || isCharter ? [] : selectedPermissions
 
     if (user) {
       // Update - don't send password
@@ -416,6 +426,7 @@ function UserForm({
             <option value="gebruiker">{t('users.user')}</option>
             <option value="chauffeur">{t('users.driver')}</option>
             <option value="opdrachtgever">{t('users.client', 'Opdrachtgever')}</option>
+            <option value="charter">{t('users.charter', 'Charter')}</option>
             <option value="admin">{t('users.admin')}</option>
           </select>
         </div>
@@ -437,6 +448,27 @@ function UserForm({
             </select>
             {errors.opdrachtgever_bedrijf && (
               <p className="mt-1 text-sm text-red-600">{errors.opdrachtgever_bedrijf}</p>
+            )}
+          </div>
+        )}
+        {formData.rol === 'charter' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('users.charterCompany', 'Charter')} *
+            </label>
+            <select
+              name="charter"
+              value={formData.charter}
+              onChange={handleChange}
+              className="input min-h-[44px]"
+            >
+              <option value="">{t('common.select', 'Selecteer...')}</option>
+              {charters.map(c => (
+                <option key={c.id} value={c.id}>{c.naam}</option>
+              ))}
+            </select>
+            {errors.charter && (
+              <p className="mt-1 text-sm text-red-600">{errors.charter}</p>
             )}
           </div>
         )}
@@ -467,7 +499,7 @@ function UserForm({
       </div>
 
       {/* Module Permissions */}
-      {availablePermissions.length > 0 && formData.rol !== 'opdrachtgever' && (
+      {availablePermissions.length > 0 && formData.rol !== 'opdrachtgever' && formData.rol !== 'charter' && (
         <div className="pt-4 border-t">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-semibold text-gray-900">{t('users.modulePermissions')}</h4>
@@ -1074,6 +1106,7 @@ export default function UsersPage() {
                   <option value="gebruiker">{t('users.user')}</option>
                   <option value="chauffeur">{t('users.driver')}</option>
                   <option value="opdrachtgever">{t('users.client', 'Opdrachtgever')}</option>
+                  <option value="charter">{t('users.charter', 'Charter')}</option>
                 </select>
               </div>
 

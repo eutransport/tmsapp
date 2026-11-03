@@ -12,6 +12,7 @@ class UserRole(models.TextChoices):
     GEBRUIKER = 'gebruiker', 'Gebruiker'
     CHAUFFEUR = 'chauffeur', 'Chauffeur'
     OPDRACHTGEVER = 'opdrachtgever', 'Opdrachtgever'
+    CHARTER = 'charter', 'Charter'
 
 
 # Available module permissions that can be granted to individual users
@@ -130,6 +131,16 @@ class User(AbstractBaseUser, PermissionsMixin):
         related_name='portaal_gebruikers',
         verbose_name='Bedrijf opdrachtgever'
     )
+
+    # Bepaalt voor een charter van welke chauffeurs hij uren en tol ziet.
+    charter = models.ForeignKey(
+        'drivers.Charter',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='portaal_gebruikers',
+        verbose_name='Charter'
+    )
     
     # 2FA/MFA
     mfa_enabled = models.BooleanField(default=False, verbose_name='2FA Ingeschakeld')
@@ -229,12 +240,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     def is_opdrachtgever(self):
         return self.rol == UserRole.OPDRACHTGEVER and not self.is_superuser
 
+    @property
+    def is_charter(self):
+        return self.rol == UserRole.CHARTER and not self.is_superuser
+
     def has_module_permission(self, permission: str) -> bool:
         """Check if this user has a specific module permission."""
         # Admins have all permissions implicitly
         if self.is_admin:
             return True
-        # Opdrachtgevers zijn externe gebruikers en krijgen nooit interne modules.
-        if self.is_opdrachtgever:
+        # Opdrachtgevers en charters zijn extern en krijgen nooit interne modules.
+        if self.is_opdrachtgever or self.is_charter:
             return False
         return permission in (self.module_permissions or [])

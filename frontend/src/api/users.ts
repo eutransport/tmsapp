@@ -14,6 +14,7 @@ export interface UserUpdate {
   bedrijf?: string
   rol?: UserRole
   opdrachtgever_bedrijf?: string | null
+  charter?: string | null
   is_active?: boolean
   module_permissions?: string[]
   wachtwoord_login_uitgeschakeld?: boolean

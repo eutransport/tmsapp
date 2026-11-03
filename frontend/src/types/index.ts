@@ -1,5 +1,5 @@
 // User types
-export type UserRole = 'admin' | 'gebruiker' | 'chauffeur' | 'opdrachtgever'
+export type UserRole = 'admin' | 'gebruiker' | 'chauffeur' | 'opdrachtgever' | 'charter'
 
 export interface User {
   id: string
@@ -13,6 +13,8 @@ export interface User {
   rol: UserRole
   opdrachtgever_bedrijf?: string | null
   opdrachtgever_bedrijf_naam?: string | null
+  charter?: string | null
+  charter_naam?: string | null
   mfa_enabled: boolean
   mfa_required: boolean
   module_permissions: string[]
@@ -38,6 +40,7 @@ export interface UserCreate {
   bedrijf?: string
   rol: UserRole
   opdrachtgever_bedrijf?: string | null
+  charter?: string | null
   is_active?: boolean
 }
 
@@ -193,6 +196,8 @@ export interface Driver {
   voertuig: string | null
   voertuig_ritnummer: string | null
   voertuig_kenteken: string | null
+  charter?: string | null
+  charter_naam?: string | null
   adr: boolean
   minimum_uren_per_week: number | null
   standaard_pauze: number

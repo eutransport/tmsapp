@@ -36,6 +36,7 @@ const ActivityPage = React.lazy(() => import('@/pages/activity/ActivityPage'))
 
 // Admin / settings
 const UsersPage = React.lazy(() => import('@/pages/admin/UsersPage'))
+const ChartersPage = React.lazy(() => import('@/pages/admin/ChartersPage'))
 const SettingsPage = React.lazy(() => import('@/pages/settings/SettingsPage'))
 const FontManagementPage = React.lazy(() => import('@/pages/settings/FontManagementPage'))
 const GeoBlockingPage = React.lazy(() => import('@/pages/settings/GeoBlockingPage'))
@@ -242,11 +243,22 @@ function OpdrachtgeverRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Alleen externe charters; ieder ander gaat terug naar het dashboard.
+function CharterRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuthStore()
+
+  if (user?.rol !== 'charter') {
+    return <Navigate to="/" replace />
+  }
+
+  return <>{children}</>
+}
+
 // Modules die een chauffeur niet hoort te zien.
 function GeenChauffeurRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore()
 
-  if (user?.rol === 'chauffeur' || user?.rol === 'opdrachtgever') {
+  if (user?.rol === 'chauffeur' || user?.rol === 'opdrachtgever' || user?.rol === 'charter') {
     return <Navigate to="/" replace />
   }
 
@@ -259,6 +271,9 @@ function HomeRoute() {
 
   if (user?.rol === 'opdrachtgever') {
     return <Navigate to="/portaal" replace />
+  }
+  if (user?.rol === 'charter') {
+    return <Navigate to="/charter/uren" replace />
   }
 
   return <DashboardPage />
@@ -371,11 +386,18 @@ function App() {
         <Route path="/portaal/uren" element={<OpdrachtgeverRoute><PortaalUrenPage /></OpdrachtgeverRoute>} />
         <Route path="/portaal/tol" element={<OpdrachtgeverRoute><PortaalTolPage /></OpdrachtgeverRoute>} />
         <Route path="/portaal/facturen" element={<OpdrachtgeverRoute><PortaalFacturenPage /></OpdrachtgeverRoute>} />
+
+        {/* Charterportaal: dezelfde schermen, eigen afgeschermde endpoints */}
+        <Route path="/charter" element={<CharterRoute><Navigate to="/charter/uren" replace /></CharterRoute>} />
+        <Route path="/charter/uren" element={<CharterRoute><PortaalUrenPage /></CharterRoute>} />
+        <Route path="/charter/tol" element={<CharterRoute><PortaalTolPage /></CharterRoute>} />
+        <Route path="/charter/kaart" element={<CharterRoute><PortaalKaartPage /></CharterRoute>} />
         <Route path="/opdrachten" element={<OpdrachtenBeheerPage />} />
         <Route path="/mijn-opdrachten" element={<MijnOpdrachtenPage />} />
             <Route path="/mijn-opdrachten/voltooid" element={<MijnOpdrachtenPage archief />} />
         {/* Admin routes */}
         <Route path="/admin/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
+        <Route path="/admin/charters" element={<AdminRoute><ChartersPage /></AdminRoute>} />
         <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
         <Route path="/settings/fonts" element={<AdminRoute><FontManagementPage /></AdminRoute>} />
         <Route path="/settings/geo-blocking" element={<AdminRoute><GeoBlockingPage /></AdminRoute>} />

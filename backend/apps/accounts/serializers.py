@@ -32,6 +32,7 @@ class UserSerializer(serializers.ModelSerializer):
     opdrachtgever_bedrijf_naam = serializers.CharField(
         source='opdrachtgever_bedrijf.naam', read_only=True, default=None
     )
+    charter_naam = serializers.CharField(source='charter.naam', read_only=True, default=None)
     # Het object-ID zelf hoeft de browser niet te kennen; of er een koppeling
     # is, is voldoende om de knop wel of niet aan te bieden.
     azure_gekoppeld = serializers.SerializerMethodField()
@@ -45,6 +46,7 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'email', 'username', 'voornaam', 'achternaam',
             'full_name', 'telefoon', 'bedrijf', 'rol',
             'opdrachtgever_bedrijf', 'opdrachtgever_bedrijf_naam',
+            'charter', 'charter_naam',
             'module_permissions', 'nav_favorites',
             'mfa_enabled', 'mfa_required', 'is_active', 'date_joined', 'last_login',
             'azure_gekoppeld', 'entra_upn', 'entra_synced_at',
@@ -62,6 +64,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
     opdrachtgever_bedrijf_naam = serializers.CharField(
         source='opdrachtgever_bedrijf.naam', read_only=True, default=None
     )
+    charter_naam = serializers.CharField(source='charter.naam', read_only=True, default=None)
     
     class Meta:
         model = User
@@ -69,11 +72,12 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'id', 'email', 'username', 'voornaam', 'achternaam',
             'full_name', 'telefoon', 'bedrijf', 'rol',
             'opdrachtgever_bedrijf', 'opdrachtgever_bedrijf_naam',
+            'charter', 'charter_naam',
             'module_permissions', 'nav_favorites',
             'mfa_enabled', 'mfa_required', 'is_active', 'date_joined', 'last_login'
         ]
         read_only_fields = [
-            'id', 'email', 'rol', 'opdrachtgever_bedrijf', 'is_active',
+            'id', 'email', 'rol', 'opdrachtgever_bedrijf', 'charter', 'is_active',
             'date_joined', 'last_login'
         ]
 
@@ -90,6 +94,19 @@ def _controleer_opdrachtgever_bedrijf(rol, bedrijf):
         })
 
 
+def _controleer_charter(rol, charter, attrs):
+    """Een charter zonder koppeling ziet niets; een ander mag er geen hebben."""
+    if rol == UserRole.CHARTER and not charter:
+        raise serializers.ValidationError({'charter': 'Kies een charter voor deze gebruiker.'})
+    if rol != UserRole.CHARTER and charter:
+        raise serializers.ValidationError({
+            'charter': 'Alleen een gebruiker met de rol charter kan aan een charter gekoppeld worden.'
+        })
+    if rol == UserRole.CHARTER:
+        # Interne rechten horen niet bij een externe partij, ook niet per ongeluk.
+        attrs['module_permissions'] = []
+
+
 class UserCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating new users (admin only)."""
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
@@ -100,7 +117,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         fields = [
             'email', 'username', 'password', 'password_confirm',
             'voornaam', 'achternaam', 'telefoon', 'bedrijf', 'rol', 'is_active',
-            'opdrachtgever_bedrijf', 'module_permissions',
+            'opdrachtgever_bedrijf', 'charter', 'module_permissions',
         ]
     
     def validate_module_permissions(self, value):
@@ -116,6 +133,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError({'password_confirm': 'Wachtwoorden komen niet overeen.'})
+        _controleer_charter(attrs.get('rol', UserRole.GEBRUIKER), attrs.get('charter'), attrs)
         return attrs
     
     def create(self, validated_data):
@@ -137,7 +155,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'email', 'username', 'voornaam', 'achternaam',
             'telefoon', 'bedrijf', 'rol', 'is_active', 'mfa_required',
-            'opdrachtgever_bedrijf', 'module_permissions',
+            'opdrachtgever_bedrijf', 'charter', 'module_permissions',
             'wachtwoord_login_uitgeschakeld',
         ]
 
@@ -174,6 +192,8 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             self.instance.opdrachtgever_bedrijf if self.instance else None,
         )
         _controleer_opdrachtgever_bedrijf(rol, bedrijf)
+        charter = attrs.get('charter', self.instance.charter if self.instance else None)
+        _controleer_charter(rol, charter, attrs)
         return attrs
 
     def update(self, instance, validated_data):

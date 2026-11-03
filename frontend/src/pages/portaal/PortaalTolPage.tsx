@@ -11,11 +11,13 @@ import {
 import Pagination, { PageSize } from '@/components/common/Pagination'
 import { portaalTol, TolWeek } from '@/api/opdrachten'
 import { portaalTracking } from '@/api/portaalTracking'
+import { useAuthStore } from '@/stores/authStore'
 
 const PER_PAGINA = 10 as PageSize
 
 export default function PortaalTolPage() {
   const { t } = useTranslation()
+  const isCharter = useAuthStore(s => s.user?.rol === 'charter')
   const [kenteken, setKenteken] = useState('')
   const [week, setWeek] = useState('')
   const [weekInvoer, setWeekInvoer] = useState('')
@@ -48,7 +50,9 @@ export default function PortaalTolPage() {
         <div>
           <h1 className="page-title">{t('tollPortal.title', 'Tolheffing')}</h1>
           <p className="text-sm text-muted">
-            {t('tollPortal.subtitle', 'De tol die is gemaakt met de wagens die u mag volgen.')}
+            {isCharter
+              ? t('tollPortal.subtitleCharter', 'De tol van de wagens waarin uw chauffeurs volgens de urenregistratie reden.')
+              : t('tollPortal.subtitle', 'De tol die is gemaakt met de wagens die u mag volgen.')}
           </p>
         </div>
       </div>
@@ -86,7 +90,7 @@ export default function PortaalTolPage() {
           className="input-field"
         >
           <option value="">{t('tollPortal.allPlates', 'Alle kentekens')}</option>
-          {voertuigen.map(v => <option key={v.id} value={v.kenteken}>{v.kenteken}</option>)}
+          {(data?.kentekens ?? voertuigen.map(v => v.kenteken)).map(k => <option key={k} value={k}>{k}</option>)}
         </select>
         <input
           type="number"

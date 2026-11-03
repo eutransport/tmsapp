@@ -24,7 +24,7 @@ from apps.geoblocking.models import (
 # Rollen die bij een ingelogde medewerker of klant horen. Verkeer van deze
 # rollen dat geweigerd zou worden, is vrijwel altijd een eigen gebruiker die
 # je per ongeluk buitensluit - en dus een reden om nog niet om te zetten.
-EIGEN_ROLLEN = {'admin', 'gebruiker', 'chauffeur', 'opdrachtgever'}
+EIGEN_ROLLEN = {'admin', 'gebruiker', 'chauffeur', 'opdrachtgever', 'charter'}
 
 # Onder dit aantal verzoeken is "geen bezwaren gevonden" geen bewijs, maar
 # gewoon een stille periode. Een weekendavond mag geen groen licht geven.

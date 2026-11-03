@@ -9,6 +9,7 @@ export interface DriverCreate {
   naam: string
   telefoon?: string
   bedrijf?: string | null
+  charter?: string | null
   gekoppelde_gebruiker?: string | null
   voertuig?: string | null
   adr?: boolean
@@ -32,6 +33,7 @@ export interface DriversResponse {
 export interface DriverFilters {
   search?: string
   bedrijf?: string
+  charter?: string
   adr?: string
   page?: number
   page_size?: number

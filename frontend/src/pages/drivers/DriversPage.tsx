@@ -26,6 +26,8 @@ import {
   DriverUpdate,
 } from '@/api/drivers'
 import { getAllCompanies } from '@/api/companies'
+import { Charter, chartersApi } from '@/api/charters'
+import { useAuthStore } from '@/stores/authStore'
 import { getUsers } from '@/api/users'
 import { getAllVehicles } from '@/api/fleet'
 import { getTachographVehicles, TachoVehicle } from '@/api/tachograph'
@@ -154,8 +156,15 @@ function DriverForm({
     tacho_kenteken: driver?.tacho_kenteken || '',
     standaard_begintijd: driver?.standaard_begintijd || '',
     uren_per_dag: driver?.uren_per_dag?.toString() || '',
+    charter: driver?.charter || '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // Alleen een admin mag een chauffeur aan een charter koppelen (backend dwingt dit ook af).
+  const isAdmin = useAuthStore(s => s.user?.rol === 'admin')
+  const [charters, setCharters] = useState<Charter[]>([])
+  useEffect(() => {
+    if (isAdmin) chartersApi.lijst().then(setCharters).catch(console.error)
+  }, [isAdmin])
   const [tachoVehicles, setTachoVehicles] = useState<TachoVehicle[]>([])
   const [tachoLoading, setTachoLoading] = useState(false)
 
@@ -205,6 +214,7 @@ function DriverForm({
       tacho_kenteken: formData.auto_uren ? formData.tacho_kenteken : '',
       standaard_begintijd: formData.auto_uren && formData.standaard_begintijd ? formData.standaard_begintijd : null,
       uren_per_dag: formData.uren_per_dag ? parseFloat(formData.uren_per_dag) : null,
+      ...(isAdmin ? { charter: formData.charter || null } : {}),
     }
     onSave(saveData)
   }
@@ -256,6 +266,26 @@ function DriverForm({
           ))}
         </select>
       </div>
+
+      {isAdmin && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {t('drivers.charter')}
+          </label>
+          <select
+            name="charter"
+            value={formData.charter}
+            onChange={handleChange}
+            className="input"
+          >
+            <option value="">{t('common.none')}</option>
+            {charters.map(c => (
+              <option key={c.id} value={c.id}>{c.naam}</option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">{t('drivers.charterHelp')}</p>
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -843,6 +873,9 @@ export default function DriversPage() {
                   <tr key={driver.id} className="hover:bg-gray-50">
                     <td className="px-2 py-1.5">
                       <div className="font-medium text-gray-900">{driver.naam}</div>
+                      {driver.charter_naam && (
+                        <div className="text-xs text-teal-700">{t('drivers.charter')}: {driver.charter_naam}</div>
+                      )}
                     </td>
                     <td className="px-2 py-1.5 text-gray-600">{driver.telefoon || '-'}</td>
                     <td className="px-2 py-1.5 text-gray-600">{getCompanyName(driver)}</td>

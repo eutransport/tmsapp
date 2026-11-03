@@ -1,4 +1,5 @@
 import api from './client'
+import { portaalBasis } from './portaalBasis'
 
 export type OpdrachtStatus =
   | 'nieuw'
@@ -230,7 +231,7 @@ export interface UrenWeek {
 export const portaalUren = {
   lijst: async (params?: { search?: string; page?: number; page_size?: number }):
     Promise<{ count: number; results: UrenWeek[]; totaal_uren: number; totaal_km: number }> => {
-    const response = await api.get('/portaal/uren/', { params: schoon(params) })
+    const response = await api.get(`${portaalBasis()}/uren/`, { params: schoon(params) })
     return response.data
   },
 }
@@ -257,8 +258,8 @@ export interface TolWeek {
 
 export const portaalTol = {
   lijst: async (params?: { kenteken?: string; week?: string; page?: number; page_size?: number }):
-    Promise<{ count: number; results: TolWeek[]; totaal_bedrag: number; totaal_km: number }> => {
-    const response = await api.get('/portaal/tol/', { params: schoon(params) })
+    Promise<{ count: number; results: TolWeek[]; totaal_bedrag: number; totaal_km: number; kentekens?: string[] }> => {
+    const response = await api.get(`${portaalBasis()}/tol/`, { params: schoon(params) })
     return response.data
   },
 }

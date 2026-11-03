@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState, useCallback, Fragment, useMemo } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Dialog, Transition, Menu } from '@headlessui/react'
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid'
 import {
@@ -62,7 +62,7 @@ interface NavItem {
   name: string
   href: string
   icon: React.ComponentType<{ className?: string }>
-  roles?: ('admin' | 'gebruiker' | 'chauffeur' | 'opdrachtgever')[]
+  roles?: ('admin' | 'gebruiker' | 'chauffeur' | 'opdrachtgever' | 'charter')[]
   permission?: string
 }
 
@@ -76,6 +76,16 @@ const opdrachtgeverNavigation: NavItem[] = [
   { name: 'nav.portaalFacturen', href: '/portaal/facturen', icon: DocumentTextIcon, roles: ['opdrachtgever'] },
   { name: 'nav.portaalKaart', href: '/portaal/kaart', icon: MapPinIcon, roles: ['opdrachtgever'] },
 ]
+
+// De charter ziet nog minder: alleen de uren, tol en kaart van zijn eigen chauffeurs.
+const charterNavigation: NavItem[] = [
+  { name: 'nav.portaalUren', href: '/charter/uren', icon: ClockIcon, roles: ['charter'] },
+  { name: 'nav.portaalTol', href: '/charter/tol', icon: BanknotesIcon, roles: ['charter'] },
+  { name: 'nav.portaalKaart', href: '/charter/kaart', icon: MapPinIcon, roles: ['charter'] },
+]
+
+// Paden die een charter mag openen; al het andere stuurt de layout terug.
+const CHARTER_PADEN = ['/charter', '/profile']
 
 const navigation: NavItem[] = [
   { name: 'nav.dashboard', href: '/', icon: HomeIcon, roles: ['admin', 'gebruiker'], permission: 'view_dashboard' },
@@ -126,6 +136,7 @@ const navigation: NavItem[] = [
 
 const adminNavigation: NavItem[] = [
   { name: 'nav.users', href: '/admin/users', icon: UsersIcon, roles: ['admin'] },
+  { name: 'nav.charters', href: '/admin/charters', icon: TruckIcon, roles: ['admin'] },
   { name: 'nav.settings', href: '/settings', icon: Cog6ToothIcon, roles: ['admin'] },
   { name: 'nav.geoBlocking', href: '/settings/geo-blocking', icon: ShieldCheckIcon, roles: ['admin'] },
 ]
@@ -144,8 +155,8 @@ const navGroups: NavGroupDef[] = [
   { id: 'registration', labelKey: 'nav.group.registration', fallback: 'Registraties',           hrefs: ['/toll', '/toll/admin', '/kilometerheffing', '/track-trace', '/tachograph', '/tachograph/comparison', '/laadlijst', '/tolheffing', '/tolheffing/sync', '/tolheffing/buiten-uren', '/tolheffing/afrekening', '/tolheffing/doorbelasting'] },
   { id: 'invoicing',    labelKey: 'nav.group.invoicing',    fallback: 'Facturatie',             hrefs: ['/invoices', '/factuurwizard', '/factuurwizard/beheer', '/invoices/templates', '/imports', '/revenue'] },
   { id: 'documents',    labelKey: 'nav.group.documents',    fallback: 'Documenten & rapporten', hrefs: ['/documents', '/bestanden', '/tasks', '/reports', '/spreadsheets', '/spreadsheets/templates', '/maintenance'] },
-  { id: 'admin',        labelKey: 'nav.group.admin',        fallback: 'Beheer',                 hrefs: ['/admin/users', '/settings'] },
-  { id: 'portaal',      labelKey: 'nav.group.portaal',      fallback: 'Portaal',                hrefs: ['/portaal', '/portaal/opdrachten', '/portaal/klanten', '/portaal/uren', '/portaal/tol', '/portaal/facturen', '/portaal/kaart'] },
+  { id: 'admin',        labelKey: 'nav.group.admin',        fallback: 'Beheer',                 hrefs: ['/admin/users', '/admin/charters', '/settings'] },
+  { id: 'portaal',      labelKey: 'nav.group.portaal',      fallback: 'Portaal',                hrefs: ['/portaal', '/portaal/opdrachten', '/portaal/klanten', '/portaal/uren', '/portaal/tol', '/portaal/facturen', '/portaal/kaart', '/charter/uren', '/charter/tol', '/charter/kaart'] },
 ]
 
 const COLLAPSE_KEY = 'tms.sidebar.collapsed'
@@ -185,11 +196,15 @@ export default function DashboardLayout() {
   const userRole = user?.rol || 'chauffeur'
   const userPermissions = user?.module_permissions || []
   const isOpdrachtgever = userRole === 'opdrachtgever'
+  const isCharter = userRole === 'charter'
+  const isExtern = isOpdrachtgever || isCharter
+  const location = useLocation()
 
   const filterByRole = (items: NavItem[]) =>
     items.filter(item => {
       // Externe gebruikers krijgen niets tenzij het item hen expliciet noemt.
       if (isOpdrachtgever) return item.roles?.includes('opdrachtgever') ?? false
+      if (isCharter) return item.roles?.includes('charter') ?? false
       if (userRole === 'admin') {
         if (!item.roles) return true
         return item.roles.includes('admin')
@@ -200,8 +215,10 @@ export default function DashboardLayout() {
       return true
     })
 
-  const filteredNavigation = filterByRole(isOpdrachtgever ? opdrachtgeverNavigation : navigation)
-  const filteredAdminNavigation = isOpdrachtgever ? [] : filterByRole(adminNavigation)
+  const filteredNavigation = filterByRole(
+    isOpdrachtgever ? opdrachtgeverNavigation : isCharter ? charterNavigation : navigation
+  )
+  const filteredAdminNavigation = isExtern ? [] : filterByRole(adminNavigation)
   const allNavigation = useMemo(
     () => [...filteredNavigation, ...filteredAdminNavigation],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -279,6 +296,11 @@ export default function DashboardLayout() {
       window.removeEventListener('touchcancel', onEnd)
     }
   }, [sidebarOpen, setSidebarOpen])
+
+  // Een charter hoort nergens anders te komen, ook niet via een getypte URL.
+  if (isCharter && !CHARTER_PADEN.some(pad => location.pathname.startsWith(pad))) {
+    return <Navigate to="/charter/uren" replace />
+  }
 
   return (
     <div className="h-full flex">
@@ -383,7 +405,7 @@ export default function DashboardLayout() {
                 className={clsx('h-6 w-6 pointer-events-none', verversen && 'animate-spin')}
               />
             </button>
-            {!isOpdrachtgever && <NotificationBell />}
+            {!isExtern && <NotificationBell />}
 
             <Menu as="div" className="relative">
               <Menu.Button className="flex items-center gap-2 p-1.5 hover:bg-gray-100 rounded-lg touch-target transition-colors touch-manipulation">
@@ -442,7 +464,7 @@ export default function DashboardLayout() {
           </div>
         </div>
 
-        {!isOpdrachtgever && <LicenseExpiryBanner />}
+        {!isExtern && <LicenseExpiryBanner />}
 
         <main className="flex-1 overflow-auto min-w-0">
           <div className="page-container min-w-0">
@@ -452,7 +474,7 @@ export default function DashboardLayout() {
       </div>
 
       <PushNotificationPrompt delay={3000} />
-      {!isOpdrachtgever && <ActiveTasksPopup />}
+      {!isExtern && <ActiveTasksPopup />}
     </div>
   )
 }

@@ -251,7 +251,8 @@
     "portaalUren": "Urenregistratie",
     "portaalTol": "Tolheffing",
     "portaalFacturen": "Facturen",
-    "geoBlocking": "Geo-blokkering"
+    "geoBlocking": "Geo-blokkering",
+    "charters": "Charters"
   },
   "invoicePortal": {
     "title": "Facturen",
@@ -688,7 +689,9 @@
     "selectTachoPlate": "Selecteer kenteken uit tachograaf...",
     "tachoPlateHelp": "Koppel een kenteken uit de tachograaf lijst aan deze chauffeur.",
     "defaultStartTime": "Standaard begintijd",
-    "defaultStartTimeHelp": "Indien ingesteld wordt deze tijd altijd als aanvangstijd gebruikt bij automatische uren in plaats van de tachograaf starttijd."
+    "defaultStartTimeHelp": "Indien ingesteld wordt deze tijd altijd als aanvangstijd gebruikt bij automatische uren in plaats van de tachograaf starttijd.",
+    "charter": "Charter",
+    "charterHelp": "De charter ziet de uren en tol van deze chauffeur zolang hij gekoppeld is. Een eerste koppeling geldt met terugwerkende kracht."
   },
   "fleet": {
     "title": "Vloot",
@@ -1419,7 +1422,9 @@
     "disable2FA": "2FA uitschakelen",
     "form": {
       "passwordPlaceholder": "Laat leeg om huidig wachtwoord te behouden"
-    }
+    },
+    "charter": "Charter",
+    "charterCompany": "Charter"
   },
   "settings": {
     "title": "Instellingen",
@@ -3158,7 +3163,8 @@
     "moment": "Moment",
     "country": "Land",
     "amount": "Bedrag",
-    "weekTotal": "Totaal week"
+    "weekTotal": "Totaal week",
+    "subtitleCharter": "De tol van de wagens waarin uw chauffeurs volgens de urenregistratie reden."
   },
   "eta": {
     "arrivesAt": "Aankomst ca.",
@@ -3253,5 +3259,35 @@
     "wachten_op_klant": "Wacht op klant",
     "bezig_laden": "Bezig met laden",
     "bezig_lossen": "Bezig met lossen"
+  },
+  "charters": {
+    "title": "Charters",
+    "subtitle": "Een charter ziet alleen de uren en tol van zijn eigen chauffeurs en de wagens die u hier koppelt op de kaart.",
+    "new": "Nieuwe charter",
+    "edit": "Charter bewerken",
+    "empty": "Nog geen charters aangemaakt",
+    "name": "Naam",
+    "kvk": "KvK-nummer",
+    "contact": "Contactpersoon",
+    "email": "E-mail",
+    "phone": "Telefoon",
+    "drivers": "Chauffeurs",
+    "vehicles": "Wagens op kaart",
+    "vehiclesHelp": "Alleen deze wagens ziet de charter op de kaart. Tol en uren volgen uit zijn chauffeurs.",
+    "saved": "Charter opgeslagen",
+    "saveError": "Opslaan mislukt",
+    "deleteTitle": "Charter verwijderen?",
+    "deleteMessage": "Weet u zeker dat u \"{{naam}}\" wilt verwijderen?",
+    "deleteError": "Verwijderen mislukt",
+    "periodsTitle": "Periodes van {{naam}}",
+    "periodsHelp": "De charter ziet alleen uren en tol binnen deze periodes. Koppel een chauffeur via het chauffeursscherm; een lege \"vanaf\" betekent vanaf het begin.",
+    "noPeriods": "Nog geen chauffeurs gekoppeld.",
+    "driver": "Chauffeur",
+    "from": "Vanaf",
+    "until": "Tot en met",
+    "fromStart": "begin",
+    "ongoing": "lopend",
+    "periodSaved": "Periode opgeslagen",
+    "periodDeleteConfirm": "Deze periode verwijderen? De charter ziet de uren uit deze periode dan niet meer."
   }
 }
