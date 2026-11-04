@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback, Fragment, useMemo } from 'react'
+import { useEffect, useState, useCallback, Fragment, useMemo } from 'react'
 import { Outlet, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Dialog, Transition, Menu } from '@headlessui/react'
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid'
@@ -135,8 +135,8 @@ const navigation: NavItem[] = [
 ]
 
 const adminNavigation: NavItem[] = [
-  { name: 'nav.users', href: '/admin/users', icon: UsersIcon, roles: ['admin'] },
-  { name: 'nav.charters', href: '/admin/charters', icon: TruckIcon, roles: ['admin'] },
+  { name: 'nav.users', href: '/beheer/gebruikers', icon: UsersIcon, roles: ['admin'] },
+  { name: 'nav.charters', href: '/beheer/charters', icon: TruckIcon, roles: ['admin'] },
   { name: 'nav.settings', href: '/settings', icon: Cog6ToothIcon, roles: ['admin'] },
   { name: 'nav.geoBlocking', href: '/settings/geo-blocking', icon: ShieldCheckIcon, roles: ['admin'] },
 ]
@@ -155,7 +155,7 @@ const navGroups: NavGroupDef[] = [
   { id: 'registration', labelKey: 'nav.group.registration', fallback: 'Registraties',           hrefs: ['/toll', '/toll/admin', '/kilometerheffing', '/track-trace', '/tachograph', '/tachograph/comparison', '/laadlijst', '/tolheffing', '/tolheffing/sync', '/tolheffing/buiten-uren', '/tolheffing/afrekening', '/tolheffing/doorbelasting'] },
   { id: 'invoicing',    labelKey: 'nav.group.invoicing',    fallback: 'Facturatie',             hrefs: ['/invoices', '/factuurwizard', '/factuurwizard/beheer', '/invoices/templates', '/imports', '/revenue'] },
   { id: 'documents',    labelKey: 'nav.group.documents',    fallback: 'Documenten & rapporten', hrefs: ['/documents', '/bestanden', '/tasks', '/reports', '/spreadsheets', '/spreadsheets/templates', '/maintenance'] },
-  { id: 'admin',        labelKey: 'nav.group.admin',        fallback: 'Beheer',                 hrefs: ['/admin/users', '/admin/charters', '/settings'] },
+  { id: 'admin',        labelKey: 'nav.group.admin',        fallback: 'Beheer',                 hrefs: ['/beheer/gebruikers', '/beheer/charters', '/settings'] },
   { id: 'portaal',      labelKey: 'nav.group.portaal',      fallback: 'Portaal',                hrefs: ['/portaal', '/portaal/opdrachten', '/portaal/klanten', '/portaal/uren', '/portaal/tol', '/portaal/facturen', '/portaal/kaart', '/charter/uren', '/charter/tol', '/charter/kaart'] },
 ]
 

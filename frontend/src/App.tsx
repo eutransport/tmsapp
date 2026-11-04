@@ -396,8 +396,11 @@ function App() {
         <Route path="/mijn-opdrachten" element={<MijnOpdrachtenPage />} />
             <Route path="/mijn-opdrachten/voltooid" element={<MijnOpdrachtenPage archief />} />
         {/* Admin routes */}
-        <Route path="/admin/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
-        <Route path="/admin/charters" element={<AdminRoute><ChartersPage /></AdminRoute>} />
+        {/* /admin/* gaat op productie naar de Django-admin; daarom /beheer/*. */}
+        <Route path="/beheer/gebruikers" element={<AdminRoute><UsersPage /></AdminRoute>} />
+        <Route path="/admin/users" element={<Navigate to="/beheer/gebruikers" replace />} />
+        <Route path="/beheer/charters" element={<AdminRoute><ChartersPage /></AdminRoute>} />
+        <Route path="/admin/charters" element={<Navigate to="/beheer/charters" replace />} />
         <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
         <Route path="/settings/fonts" element={<AdminRoute><FontManagementPage /></AdminRoute>} />
         <Route path="/settings/geo-blocking" element={<AdminRoute><GeoBlockingPage /></AdminRoute>} />

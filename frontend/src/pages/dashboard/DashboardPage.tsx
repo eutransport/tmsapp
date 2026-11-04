@@ -358,7 +358,7 @@ function AdminDashboard({ user }: { user: any }) {
       name: t('nav.users'), 
       value: stats?.users ?? '-', 
       icon: UsersIcon, 
-      href: '/admin/users',
+      href: '/beheer/gebruikers',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
     },
