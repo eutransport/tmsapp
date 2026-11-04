@@ -217,6 +217,11 @@ class BeheerTests(CharterBasis):
         licentie.start()
         self.addCleanup(licentie.stop)
 
+    def test_chauffeurslijst_blijft_bereikbaar(self):
+        antwoord = self.admin_client.get('/api/drivers/')
+        self.assertEqual(antwoord.status_code, 200)
+        self.assertIn('results', antwoord.json())
+
     def test_charterrol_vereist_een_charter(self):
         antwoord = self.admin_client.post('/api/auth/users/', {
             'email': 'nieuw@test.nl', 'username': 'nieuw', 'password': 'Zeer-Geheim-123!',
