@@ -1,4 +1,4 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -342,7 +342,7 @@
     box-shadow: var(--shadow-pop);
     -webkit-backdrop-filter: blur(24px) saturate(var(--glass-saturate));
     backdrop-filter: blur(24px) saturate(var(--glass-saturate));
-    animation: glass-float-in 0.3s cubic-bezier(0.25, 1, 0.5, 1) both;
+    animation: glass-float-in 0.3s cubic-bezier(0.25, 1, 0.5, 1) backwards;
   }
 
   @keyframes glass-float-in {
@@ -378,7 +378,7 @@
   /* Floating behaviour helpers */
   .float-panel { box-shadow: var(--shadow-card); transition: transform 0.25s ease, box-shadow 0.25s ease; }
   .float-panel:hover { transform: translateY(-3px); box-shadow: var(--shadow-card-hover); }
-  .float-in { animation: glass-float-in 0.35s cubic-bezier(0.25, 1, 0.5, 1) both; }
+  .float-in { animation: glass-float-in 0.35s cubic-bezier(0.25, 1, 0.5, 1) backwards; }
 
   /* Glass topbar + sidebar (DashboardLayout) */
   .glass-topbar {
@@ -970,8 +970,10 @@ html.glass-light table thead.bg-gray-50 th,
 html.glass-light thead.bg-gray-50 { background-color: color-mix(in srgb, var(--color-primary) 12%, transparent) !important; backdrop-filter: none; }
 html.glass-light .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--glass-border-strong) !important; }
 
-/* Main content floats in on route change. */
-.page-container > * { animation: glass-float-in 0.35s cubic-bezier(0.25, 1, 0.5, 1) both; }
+/* Main content floats in on route change. Fill-mode 'backwards', not 'both':
+   a retained transform would make the page the containing block of every
+   position:fixed modal inside it, pushing them off-centre. */
+.page-container > * { animation: glass-float-in 0.35s cubic-bezier(0.25, 1, 0.5, 1) backwards; }
 
 /* Leaflet / charts stay fully opaque - blurring map tiles hurts legibility. */
 html.glass-light .leaflet-container,
