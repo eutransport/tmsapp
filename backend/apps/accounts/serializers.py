@@ -76,9 +76,12 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'module_permissions', 'nav_favorites',
             'mfa_enabled', 'mfa_required', 'is_active', 'date_joined', 'last_login'
         ]
+        # Via het eigen profiel mag alleen persoonlijke info wijzigen. Rechten,
+        # rol, koppelingen en 2FA lopen via beheer of de eigen 2FA-flow; anders
+        # kan een gebruiker zichzelf modules of een ander bedrijf toekennen.
         read_only_fields = [
-            'id', 'email', 'rol', 'opdrachtgever_bedrijf', 'charter', 'is_active',
-            'date_joined', 'last_login'
+            f for f in fields
+            if f not in ('username', 'voornaam', 'achternaam', 'telefoon', 'nav_favorites')
         ]
 
 

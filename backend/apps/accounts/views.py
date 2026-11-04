@@ -18,7 +18,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
-from apps.core.throttling import RegistrationRateThrottle
 from apps.core.permissions import IsAdminOnly, IsAdminOrLeaveManagerReadOnly
 from .azure_sync import (
     controleer_koppeling,
@@ -39,7 +38,6 @@ from .serializers import (
     MFASetupSerializer,
     MFAVerifySerializer,
     MFADisableSerializer,
-    RegisterSerializer,
 )
 
 User = get_user_model()
@@ -273,33 +271,6 @@ class MFAVerifyView(APIView):
             'access': str(refresh.access_token),
             'user': UserSerializer(user).data,
         })
-
-
-class RegisterView(APIView):
-    """User self-registration."""
-    permission_classes = [AllowAny]
-    throttle_classes = [RegistrationRateThrottle]
-    
-    def post(self, request):
-        # Check license user limit
-        from apps.licensing.services import check_user_limit
-        limit_check = check_user_limit()
-        if not limit_check['allowed']:
-            return Response(
-                {'error': limit_check['message']},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        serializer = RegisterSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            refresh = RefreshToken.for_user(user)
-            return Response({
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-                'user': UserSerializer(user).data,
-            }, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ProfileView(APIView):

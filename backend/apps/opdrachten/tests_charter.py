@@ -222,6 +222,31 @@ class BeheerTests(CharterBasis):
         self.assertEqual(antwoord.status_code, 200)
         self.assertIn('results', antwoord.json())
 
+    def test_profiel_kan_geen_rechten_of_koppelingen_zetten(self):
+        gebruiker = maak_gebruiker('g@test.nl', UserRole.GEBRUIKER, mfa_required=True)
+        client = client_voor(gebruiker)
+        antwoord = client.patch('/api/auth/profile/', {
+            'module_permissions': ['view_drivers'], 'mfa_required': False,
+            'mfa_enabled': True, 'rol': 'admin', 'charter': self.charter.pk,
+            'nav_favorites': ['/planning'], 'voornaam': 'Nieuw',
+        }, format='json')
+        self.assertEqual(antwoord.status_code, 200)
+        gebruiker.refresh_from_db()
+        self.assertEqual(gebruiker.module_permissions, [])
+        self.assertTrue(gebruiker.mfa_required)
+        self.assertFalse(gebruiker.mfa_enabled)
+        self.assertEqual(gebruiker.rol, UserRole.GEBRUIKER)
+        self.assertIsNone(gebruiker.charter_id)
+        self.assertEqual(gebruiker.nav_favorites, ['/planning'])
+        self.assertEqual(gebruiker.voornaam, 'Nieuw')
+        self.assertEqual(client.get('/api/drivers/').status_code, 403)
+
+    def test_zelfregistratie_bestaat_niet(self):
+        antwoord = APIClient().post('/api/auth/register/', {
+            'email': 'x@example.com', 'password': 'Zeer-Geheim-123!',
+        }, format='json')
+        self.assertEqual(antwoord.status_code, 404)
+
     def test_charterrol_vereist_een_charter(self):
         antwoord = self.admin_client.post('/api/auth/users/', {
             'email': 'nieuw@test.nl', 'username': 'nieuw', 'password': 'Zeer-Geheim-123!',

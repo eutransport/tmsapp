@@ -10,7 +10,6 @@ from .views import (
     EntraConfigView,
     EntraLoginView,
     MFAVerifyView,
-    RegisterView,
     ProfileView,
     PasswordChangeView,
     MFASetupView,
@@ -32,8 +31,7 @@ urlpatterns = [
     path('entra/config/', EntraConfigView.as_view(), name='entra_config'),
     path('entra/login/', EntraLoginView.as_view(), name='entra_login'),
     
-    # Registration
-    path('register/', RegisterView.as_view(), name='register'),
+    # Zelfregistratie is bewust uitgeschakeld: accounts maakt alleen een admin aan.
     
     # Current user profile
     path('profile/', ProfileView.as_view(), name='profile'),
