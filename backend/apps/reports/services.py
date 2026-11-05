@@ -737,6 +737,55 @@ def _execute_vehicle_trips_by_date(params):
     return columns, rows, f'Ritnummers per dag – {label}'
 
 
+def _execute_driver_daily_averages(params):
+    """Gemiddelde uren en kilometers per gewerkte dag, per chauffeur.
+
+    Een dag met meerdere urenregels telt als één werkdag; de uren en
+    kilometers van die regels worden opgeteld.
+    """
+    from collections import defaultdict
+    from datetime import timedelta
+
+    from apps.timetracking.models import TimeEntry
+
+    date_from = params.get('date_from')
+    date_to = params.get('date_to')
+    if not date_from or not date_to:
+        raise ValueError('Geef een periode op: datum van en datum t/m.')
+    if str(date_to) < str(date_from):
+        raise ValueError('Datum t/m ligt voor datum van.')
+
+    qs = TimeEntry.objects.select_related('user').filter(datum__gte=date_from, datum__lte=date_to)
+    if params.get('user_id'):
+        qs = qs.filter(user_id=params['user_id'])
+
+    per = defaultdict(lambda: {'naam': '', 'dagen': set(), 'uren': timedelta(), 'km': 0})
+    for entry in qs:
+        rij = per[entry.user_id]
+        rij['naam'] = entry.user.get_full_name() if hasattr(entry.user, 'get_full_name') else str(entry.user)
+        rij['dagen'].add(entry.datum)
+        rij['uren'] += entry.totaal_uren or timedelta()
+        rij['km'] += entry.totaal_km or 0
+
+    columns = ['Chauffeur', 'Gewerkte dagen', 'Totaal uren', 'Gem. uren per dag',
+               'Totaal KM', 'Gem. KM per dag']
+    rows = []
+    for rij in sorted(per.values(), key=lambda r: r['naam'].lower()):
+        dagen = len(rij['dagen'])
+        rows.append([
+            rij['naam'],
+            dagen,
+            _format_duration(rij['uren']),
+            _format_duration(rij['uren'] / dagen),
+            rij['km'],
+            round(rij['km'] / dagen),
+        ])
+
+    van = date.fromisoformat(str(date_from)[:10]).strftime('%d-%m-%Y')
+    tot = date.fromisoformat(str(date_to)[:10]).strftime('%d-%m-%Y')
+    return columns, rows, f'Gemiddelde uren en KM per dag per chauffeur ({van} t/m {tot})'
+
+
 # ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
@@ -766,6 +815,7 @@ EXECUTOR_MAP = {
     'banking_transactions': _execute_banking_transactions,
     'spreadsheet_overview': _execute_spreadsheet_overview,
     'vehicle_trips_by_date': _execute_vehicle_trips_by_date,
+    'driver_daily_averages': _execute_driver_daily_averages,
 }
 
 

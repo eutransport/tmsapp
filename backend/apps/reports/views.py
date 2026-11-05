@@ -312,6 +312,19 @@ REPORT_TYPE_METADATA = [
             },
         ],
     },
+    {
+        'value': ReportType.DRIVER_DAILY_AVERAGES,
+        'label': 'Gemiddelde uren en KM per dag per chauffeur',
+        'description': (
+            'Per chauffeur het aantal gewerkte dagen in de gekozen periode, met '
+            'totaal en gemiddeld aantal uren en kilometers per gewerkte dag.'
+        ),
+        'parameters': [
+            {'name': 'date_from', 'label': 'Datum van', 'type': 'date', 'required': True},
+            {'name': 'date_to', 'label': 'Datum t/m', 'type': 'date', 'required': True},
+            {'name': 'user_id', 'label': 'Chauffeur (leeg = alle)', 'type': 'user', 'required': False},
+        ],
+    },
 ]
 
 
