@@ -10,6 +10,7 @@ from .doorbelasting_views import TolDoorbelastingViewSet
 from .factuur_detail_views import TollingFactuurDetailViewSet
 from .import_voorbeeld_views import TolImportVoorbeeldViewSet
 from .koppel_views import TolKoppelingViewSet
+from .kosten_views import TolKostenViewSet
 from .radius_factuur_views import RadiusFactuurViewSet
 from .sync_views import TollingSyncViewSet
 from .station_views import TolStationViewSet
@@ -42,6 +43,7 @@ router.register(r'tariefbronnen', TariefBronViewSet, basename='tolling-tariefbro
 router.register(r'stations', TolStationViewSet, basename='tolling-stations')
 router.register(r'koppeling', TolKoppelingViewSet, basename='tolling-koppeling')
 router.register(r'buitenland', TolBuitenlandViewSet, basename='tolling-buitenland')
+router.register(r'kosten-per-kenteken', TolKostenViewSet, basename='tolling-kosten')
 router.register(r'doorbelasting', TolDoorbelastingViewSet,
                 basename='tolling-doorbelasting')
 router.register(r'afsluitingen', TolAfsluitingViewSet,

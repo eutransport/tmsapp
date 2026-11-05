@@ -662,6 +662,27 @@ export const tollingApi = {
     return data
   },
 
+  /** Totaal per kenteken voor een week of maand (offset 0 = huidige). */
+  kostenPerKenteken: async (params: { period: 'week' | 'month'; offset: number }): Promise<{
+    periode: string
+    rijen: { kenteken: string; passages: number; km: number; bedrag: number }[]
+    totaal: number
+  }> => {
+    const { data } = await api.get('/tolling/kosten-per-kenteken/', { params })
+    return data
+  },
+
+  downloadKostenPerKenteken: async (
+    params: { period: 'week' | 'month'; offset: number },
+    formaat: 'xlsx' | 'pdf' = 'xlsx',
+  ): Promise<Blob> => {
+    const { data } = await api.get('/tolling/kosten-per-kenteken/export/', {
+      params: { ...params, export_format: formaat },
+      responseType: 'blob',
+    })
+    return data
+  },
+
   downloadBuitenlandExport: async (params: BuitenlandParams): Promise<Blob> => {
     const { data } = await api.get('/tolling/buitenland/export/', {
       params,

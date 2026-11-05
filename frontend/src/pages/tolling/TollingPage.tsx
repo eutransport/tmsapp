@@ -52,6 +52,7 @@ import RitnummerCorrectieDialog from '@/components/tolling/RitnummerCorrectieDia
 import TolImportVoorbeeldModal from '@/components/tolling/TolImportVoorbeeldModal'
 import TolKoppelingModal from '@/components/tolling/TolKoppelingModal'
 import TolBuitenlandModal from '@/components/tolling/TolBuitenlandModal'
+import TolKostenModal from '@/components/tolling/TolKostenModal'
 import TolAfsluitingModal from '@/components/tolling/TolAfsluitingModal'
 import TolMarkeerModal from '@/components/tolling/TolMarkeerModal'
 import RadiusSyncPaneel from '@/components/tolling/RadiusSyncPaneel'
@@ -158,6 +159,7 @@ export default function TollingPage() {
   const [invoicesRefresh, setInvoicesRefresh] = useState(0)
   const [dachserOpen, setDachserOpen] = useState(false)
   const [buitenlandOpen, setBuitenlandOpen] = useState(false)
+  const [kostenOpen, setKostenOpen] = useState(false)
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
   const [deletingPlate, setDeletingPlate] = useState<string | null>(null)
   const [deletingAll, setDeletingAll] = useState(false)
@@ -513,6 +515,15 @@ export default function TollingPage() {
           </button>
           <button
             type="button"
+            className="inline-flex items-center rounded-md bg-[#002060] px-3 py-2 text-sm font-medium text-white hover:bg-[#00184a]"
+            onClick={() => setKostenOpen(true)}
+            title="Exporteer per kenteken het totaal aan tolheffing voor een week of maand"
+          >
+            <TableCellsIcon className="h-4 w-4 mr-1.5" />
+            Exporteer kosten per kenteken
+          </button>
+          <button
+            type="button"
             className="inline-flex items-center px-3 py-2 rounded-md text-sm font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
             onClick={() => setKoppelingOpen(true)}
             title="Controleer of de tolregels op het juiste ritnummer en bedrijf staan"
@@ -567,6 +578,8 @@ export default function TollingPage() {
         isOpen={buitenlandOpen}
         onClose={() => setBuitenlandOpen(false)}
       />
+
+      <TolKostenModal isOpen={kostenOpen} onClose={() => setKostenOpen(false)} />
 
       <TolAfsluitingModal
         isOpen={afsluitingOpen}
