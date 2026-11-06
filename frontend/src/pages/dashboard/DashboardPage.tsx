@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import DashboardTegels from './DashboardTegels'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
-import { settingsApi, DashboardStats, OnlineUser, RecentLogin, ActivityItem, AdministratieFinancials, AdministratieCompanyOutstanding } from '@/api/settings'
+import { settingsApi, DashboardStats, OnlineUser, RecentLogin, ActivityItem } from '@/api/settings'
 import { getLeaveCalendar, CalendarLeaveEntry } from '@/api/leave'
 import {
   UsersIcon,
@@ -17,15 +18,8 @@ import {
   ArrowRightOnRectangleIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  BanknotesIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-  CheckCircleIcon,
 } from '@heroicons/react/24/outline'
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(value)
-}
 
 // Chauffeur-specific dashboard
 function ChauffeurDashboard({ user }: { user: any }) {
@@ -110,121 +104,6 @@ function ChauffeurDashboard({ user }: { user: any }) {
 }
 
 // Per-administration financial breakdown component
-function AdministratieFinancialsSection({ year }: { year?: number }) {
-  const { t } = useTranslation()
-  const [data, setData] = useState<AdministratieFinancials[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    settingsApi
-      .getDashboardStatsPerAdministratie()
-      .then((d) => { if (!cancelled) setData(d) })
-      .catch((err) => console.error('Failed to load per-administratie stats:', err))
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [])
-
-  if (loading) {
-    return (
-      <div className="card p-6 text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
-      </div>
-    )
-  }
-
-  if (data.length === 0) {
-    return null
-  }
-
-  return (
-    <div>
-      <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">
-        {t('dashboard.financialPerAdministration')} {year}
-      </h2>
-      <div className="space-y-3">
-        {data.map((adm) => (
-          <div key={adm.id} className="card overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
-              <h3 className="text-sm font-semibold text-gray-900">{adm.naam}</h3>
-              <Link
-                to={`/invoices?administratie=${adm.id}`}
-                className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
-              >
-                {t('dashboard.openInvoices')}: {adm.open_invoices}
-                <ArrowRightIcon className="h-3 w-3" />
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 gap-px bg-gray-100 sm:grid-cols-3 lg:grid-cols-5">
-              <div className="bg-white px-3 py-2.5">
-                <p className="text-[10px] sm:text-xs text-gray-500">{t('dashboard.totalIncome')}</p>
-                <p className="text-sm font-bold text-green-600 truncate">{formatCurrency(adm.income)}</p>
-              </div>
-              <div className="bg-white px-3 py-2.5">
-                <p className="text-[10px] sm:text-xs text-gray-500">{t('dashboard.totalExpenses')}</p>
-                <p className="text-sm font-bold text-red-600 truncate">{formatCurrency(adm.expenses)}</p>
-              </div>
-              <div className="bg-white px-3 py-2.5">
-                <p className="text-[10px] sm:text-xs text-gray-500">{t('dashboard.profit')}</p>
-                <p className={`text-sm font-bold truncate ${adm.profit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                  {formatCurrency(adm.profit)}
-                </p>
-              </div>
-              <div className="bg-white px-3 py-2.5">
-                <p className="text-[10px] sm:text-xs text-gray-500">{t('dashboard.totalCollected')}</p>
-                <p className="text-sm font-bold text-emerald-600 truncate">{formatCurrency(adm.collected)}</p>
-              </div>
-              <div className="bg-white px-3 py-2.5 col-span-2 sm:col-span-1">
-                <p className="text-[10px] sm:text-xs text-gray-500">{t('dashboard.totalOutstanding')}</p>
-                <p className="text-sm font-bold text-purple-600 truncate">{formatCurrency(adm.outstanding)}</p>
-              </div>
-            </div>
-
-            {/* Outstanding amount per invoiced company for this administration */}
-            {adm.companies && adm.companies.length > 0 && (
-              <div className="border-t border-gray-100">
-                <p className="px-3 sm:px-4 pt-2 pb-1 text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                  {t('dashboard.outstandingPerCompany')}
-                </p>
-                <div className="overflow-x-auto"><table className="w-full text-xs table-fixed"><colgroup><col /><col className="w-12 sm:w-20" /><col className="w-24 sm:w-32" /></colgroup>
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="px-4 py-1.5 text-left font-medium text-gray-500">{t('dashboard.company')}</th>
-                      <th className="px-2 sm:px-3 py-1.5 text-right font-medium text-gray-500"><span className="sm:hidden">#</span><span className="hidden sm:inline">{t('dashboard.openInvoices')}</span></th>
-                      <th className="px-2 sm:px-3 py-1.5 text-right font-medium text-gray-500">{t('dashboard.totalOutstanding')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adm.companies.map((c: AdministratieCompanyOutstanding) => (
-                      <tr key={c.bedrijf_id ?? c.bedrijf_naam} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                        <td className="px-3 sm:px-4 py-1.5 text-gray-700 font-medium truncate">
-                          {c.bedrijf_id ? (
-                            <Link
-                              to={`/invoices?administratie=${adm.id}&bedrijf=${c.bedrijf_id}`}
-                              className="text-primary-600 hover:text-primary-700"
-                            >
-                              {c.bedrijf_naam || '—'}
-                            </Link>
-                          ) : (
-                            <span>{c.bedrijf_naam || '—'}</span>
-                          )}
-                        </td>
-                        <td className="px-2 sm:px-3 py-1.5 text-right text-gray-500 tabular-nums whitespace-nowrap">{c.invoice_count}</td>
-                        <td className="px-2 sm:px-3 py-1.5 text-right text-gray-900 font-semibold tabular-nums whitespace-nowrap">{formatCurrency(c.outstanding)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table></div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// Admin/Gebruiker dashboard
 function AdminDashboard({ user }: { user: any }) {
   const { t } = useTranslation()
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -396,50 +275,6 @@ function AdminDashboard({ user }: { user: any }) {
     },
   ]
 
-  const fin = stats?.financial
-  const financialCards = [
-    {
-      name: t('dashboard.totalIncome'),
-      value: fin ? formatCurrency(fin.income) : '-',
-      icon: ArrowTrendingUpIcon,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-      borderColor: 'border-green-200',
-    },
-    {
-      name: t('dashboard.totalExpenses'),
-      value: fin ? formatCurrency(fin.expenses) : '-',
-      icon: ArrowTrendingDownIcon,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      borderColor: 'border-red-200',
-    },
-    {
-      name: t('dashboard.profit'),
-      value: fin ? formatCurrency(fin.profit) : '-',
-      icon: BanknotesIcon,
-      color: fin && fin.profit >= 0 ? 'text-blue-600' : 'text-red-600',
-      bgColor: fin && fin.profit >= 0 ? 'bg-blue-50' : 'bg-red-50',
-      borderColor: fin && fin.profit >= 0 ? 'border-blue-200' : 'border-red-200',
-    },
-    {
-      name: t('dashboard.totalCollected'),
-      value: fin ? formatCurrency(fin.collected) : '-',
-      icon: CheckCircleIcon,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50',
-      borderColor: 'border-emerald-200',
-    },
-    {
-      name: t('dashboard.totalOutstanding'),
-      value: fin ? formatCurrency(fin.outstanding) : '-',
-      icon: ClockIcon,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      borderColor: 'border-purple-200',
-    },
-  ]
-  
   return (
     <div className="space-y-6">
       {/* Welcome message */}
@@ -479,38 +314,9 @@ function AdminDashboard({ user }: { user: any }) {
         ))}
       </div>
 
-      {/* Financial cards — 2 cols mobile, 3 md, 5 xl */}
-      <div>
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">{t('dashboard.financialOverview')} {stats?.year}</h2>
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-5">
-          {financialCards.map((card) => (
-            <div
-              key={card.name}
-              className={`rounded-xl border p-3 sm:p-4 ${card.bgColor} ${card.borderColor}`}
-            >
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className={`flex-shrink-0 p-1.5 sm:p-2 rounded-lg ${card.bgColor}`}>
-                  <card.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${card.color}`} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] sm:text-xs font-medium opacity-70 truncate">{card.name}</p>
-                  <p className={`text-sm sm:text-lg font-bold ${card.color} truncate`}>
-                    {loading ? (
-                      <span className="inline-block w-16 h-5 bg-gray-200/50 rounded animate-pulse" />
-                    ) : (
-                      card.value
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Navigatietegels */}
+      <DashboardTegels user={user} />
 
-      {/* Per-administration financial breakdown */}
-      <AdministratieFinancialsSection year={stats?.year} />
-      
       {/* Quick actions — 2 cols mobile, 3 md, 5 lg */}
       <div>
         <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">{t('dashboard.quickActions')}</h2>
@@ -890,50 +696,6 @@ function FinancialDashboard({ user }: { user: any }) {
     }
   }, [])
 
-  const fin = stats?.financial
-  const financialCards = [
-    {
-      name: t('dashboard.totalIncome'),
-      value: fin ? formatCurrency(fin.income) : '-',
-      icon: ArrowTrendingUpIcon,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-      borderColor: 'border-green-200',
-    },
-    {
-      name: t('dashboard.totalExpenses'),
-      value: fin ? formatCurrency(fin.expenses) : '-',
-      icon: ArrowTrendingDownIcon,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      borderColor: 'border-red-200',
-    },
-    {
-      name: t('dashboard.profit'),
-      value: fin ? formatCurrency(fin.profit) : '-',
-      icon: BanknotesIcon,
-      color: fin && fin.profit >= 0 ? 'text-blue-600' : 'text-red-600',
-      bgColor: fin && fin.profit >= 0 ? 'bg-blue-50' : 'bg-red-50',
-      borderColor: fin && fin.profit >= 0 ? 'border-blue-200' : 'border-red-200',
-    },
-    {
-      name: t('dashboard.totalCollected'),
-      value: fin ? formatCurrency(fin.collected) : '-',
-      icon: CheckCircleIcon,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50',
-      borderColor: 'border-emerald-200',
-    },
-    {
-      name: t('dashboard.totalOutstanding'),
-      value: fin ? formatCurrency(fin.outstanding) : '-',
-      icon: ClockIcon,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      borderColor: 'border-purple-200',
-    },
-  ]
-
   return (
     <div className="space-y-6">
       {/* Welcome message */}
@@ -972,39 +734,7 @@ function FinancialDashboard({ user }: { user: any }) {
         </Link>
       </div>
 
-      {/* Financial cards */}
-      <div>
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">
-          {t('dashboard.financialOverview')} {stats?.year}
-        </h2>
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-5">
-          {financialCards.map((card) => (
-            <div
-              key={card.name}
-              className={`rounded-xl border p-3 sm:p-4 ${card.bgColor} ${card.borderColor}`}
-            >
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className={`flex-shrink-0 p-1.5 sm:p-2 rounded-lg ${card.bgColor}`}>
-                  <card.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${card.color}`} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] sm:text-xs font-medium opacity-70 truncate">{card.name}</p>
-                  <p className={`text-sm sm:text-lg font-bold ${card.color} truncate`}>
-                    {loading ? (
-                      <span className="inline-block w-16 h-5 bg-gray-200/50 rounded animate-pulse" />
-                    ) : (
-                      card.value
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Per-administration financial breakdown */}
-      <AdministratieFinancialsSection year={stats?.year} />
+      <DashboardTegels user={user} />
 
       {/* Quick actions */}
       <div>
