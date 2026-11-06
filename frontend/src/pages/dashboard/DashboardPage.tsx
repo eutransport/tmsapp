@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import DashboardTegels from './DashboardTegels'
-import VerlofCarousel from './VerlofCarousel'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
@@ -345,11 +344,6 @@ function AdminDashboard({ user }: { user: any }) {
         <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
           <CalendarDaysIcon className="h-5 w-5 text-orange-500" />
           {t('dashboard.leaveThisMonth')}
-          {leaveEntries.length > 0 && (
-            <span className="rounded-full bg-[#FE8500] px-2.5 py-0.5 text-xs font-semibold text-white">
-              {new Set(leaveEntries.map(e => e.user_id)).size} {new Set(leaveEntries.map(e => e.user_id)).size === 1 ? 'persoon' : 'personen'}
-            </span>
-          )}
         </h2>
         <div className="card overflow-hidden">
           {leaveLoading ? (
@@ -361,7 +355,29 @@ function AdminDashboard({ user }: { user: any }) {
               {t('dashboard.noLeaveThisMonth')}
             </div>
           ) : (
-            <VerlofCarousel entries={leaveEntries} />
+            <div className="divide-y divide-gray-100">
+              {leaveEntries.map((entry) => (
+                <div key={entry.id} className="flex flex-col sm:flex-row sm:items-center justify-between px-4 py-3 gap-1 sm:gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex-shrink-0 p-1.5 rounded-lg bg-orange-50">
+                      <CalendarDaysIcon className="h-4 w-4 text-orange-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{entry.user_naam}</p>
+                      <p className="text-xs text-gray-500 truncate">{entry.leave_type_display}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-gray-600 sm:flex-shrink-0 pl-10 sm:pl-0">
+                    <span>
+                      {new Date(entry.start_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+                      {' – '}
+                      {new Date(entry.end_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+                    </span>
+                    <span className="font-medium text-gray-900">{entry.hours} {t('dashboard.leaveHours')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
           <div className="px-4 py-3 border-t border-gray-100 bg-gray-50">
             <Link
