@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import DashboardTegels from './DashboardTegels'
+import DashboardKaart from './DashboardKaart'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/authStore'
@@ -314,28 +315,33 @@ function AdminDashboard({ user }: { user: any }) {
         ))}
       </div>
 
-      {/* Navigatietegels */}
-      <DashboardTegels user={user} />
-
-      {/* Quick actions — 2 cols mobile, 3 md, 5 lg */}
-      <div>
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">{t('dashboard.quickActions')}</h2>
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
-          <Link to="/time-entries" className="btn-primary text-center text-xs sm:text-sm py-2 sm:py-2.5">
-            + {t('dashboard.registerHoursAction')}
-          </Link>
-          <Link to="/leave" className="btn-secondary text-center text-xs sm:text-sm py-2 sm:py-2.5">
-            {t('dashboard.requestLeaveAction')}
-          </Link>
-          <Link to="/planning" className="btn-secondary text-center text-xs sm:text-sm py-2 sm:py-2.5">
-            + {t('dashboard.newPlanningAction')}
-          </Link>
-          <Link to="/invoices/new" className="btn-secondary text-center text-xs sm:text-sm py-2 sm:py-2.5">
-            + {t('dashboard.createInvoiceAction')}
-          </Link>
-          <Link to="/companies" className="btn-secondary text-center text-xs sm:text-sm py-2 sm:py-2.5 col-span-2 md:col-span-1">
-            + {t('companies.addCompany')}
-          </Link>
+      {/* Tegels + snelle acties links, kaart rechts */}
+      <div className="grid gap-6 lg:grid-cols-5">
+        <div className="space-y-6 lg:col-span-2">
+          <DashboardTegels user={user} />
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">{t('dashboard.quickActions')}</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <Link to="/time-entries" className="btn-primary text-center text-sm py-3.5">
+                + {t('dashboard.registerHoursAction')}
+              </Link>
+              <Link to="/leave" className="btn-secondary text-center text-sm py-3.5">
+                {t('dashboard.requestLeaveAction')}
+              </Link>
+              <Link to="/planning" className="btn-secondary text-center text-sm py-3.5">
+                + {t('dashboard.newPlanningAction')}
+              </Link>
+              <Link to="/invoices/new" className="btn-secondary text-center text-sm py-3.5">
+                + {t('dashboard.createInvoiceAction')}
+              </Link>
+              <Link to="/companies" className="btn-secondary text-center text-sm py-3.5 col-span-2">
+                + {t('companies.addCompany')}
+              </Link>
+            </div>
+          </div>
+        </div>
+        <div className="lg:col-span-3">
+          <DashboardKaart user={user} />
         </div>
       </div>
 

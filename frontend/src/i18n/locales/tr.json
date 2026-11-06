@@ -1080,13 +1080,13 @@
     "createRequest": "Talep oluştur",
     "noSearchResults": "Arama sonucu yok",
     "overlap": {
-      "countLabel": "Sayı etiketi",
-      "infoBody": "Bilgi içeriği",
-      "noneBody": "Yok içeriği",
-      "noneTitle": "Yok başlığı",
-      "title": "Başlık",
-      "warningBody": "Uyarı içeriği",
-      "warningTitle": "Uyarı başlığı"
+      "countLabel": "{{count}} meslekta?",
+      "infoBody": "Bu meslekta?lar da bu d?nemde izinli.",
+      "noneBody": "Bu d?nemde ba?ka kimse izinli de?il.",
+      "noneTitle": "Meslekta?larla ?ak??ma yok",
+      "title": "Bu d?nemde izinli meslekta?lar",
+      "warningBody": "Zaten {{count}} meslekta? izinli (en fazla {{max}}). Talebiniz reddedilebilir.",
+      "warningTitle": "Dikkat: ?ok say?da meslekta? izinli"
     },
     "searchEmployee": "Personel ara",
     "selectEmployee": "Personel seç"

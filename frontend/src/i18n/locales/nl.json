@@ -1080,13 +1080,13 @@
     "createRequest": "Create request",
     "noSearchResults": "Geen zoeken results",
     "overlap": {
-      "countLabel": "Count label",
-      "infoBody": "Info body",
-      "noneBody": "Geen ne body",
-      "noneTitle": "Geen ne titel",
-      "title": "Titel",
-      "warningBody": "Warning body",
-      "warningTitle": "Warning titel"
+      "countLabel": "{{count}} collega('s)",
+      "infoBody": "Deze collega's hebben in dezelfde periode ook verlof.",
+      "noneBody": "Er heeft in deze periode nog niemand anders verlof.",
+      "noneTitle": "Geen overlap met collega's",
+      "title": "Collega's met verlof in deze periode",
+      "warningBody": "Er hebben al {{count}} collega's verlof (maximum {{max}}). Je aanvraag kan worden afgewezen.",
+      "warningTitle": "Let op: veel collega's met verlof"
     },
     "searchEmployee": "Zoeken employee",
     "selectEmployee": "Employee selecteren"

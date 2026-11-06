@@ -1080,13 +1080,13 @@
     "createRequest": "Create request",
     "noSearchResults": "No search results",
     "overlap": {
-      "countLabel": "Count label",
-      "infoBody": "Info body",
-      "noneBody": "None body",
-      "noneTitle": "None title",
-      "title": "Title",
-      "warningBody": "Warning body",
-      "warningTitle": "Warning title"
+      "countLabel": "{{count}} colleague(s)",
+      "infoBody": "These colleagues also have leave in this period.",
+      "noneBody": "Nobody else has leave in this period yet.",
+      "noneTitle": "No overlap with colleagues",
+      "title": "Colleagues on leave in this period",
+      "warningBody": "{{count}} colleagues already have leave (maximum {{max}}). Your request may be declined.",
+      "warningTitle": "Note: many colleagues on leave"
     },
     "searchEmployee": "Search employee",
     "selectEmployee": "Select employee"

@@ -46,21 +46,21 @@ export default function DashboardTegels({ user }: { user: any }) {
   if (!zichtbaar.length) return null
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3">
       {zichtbaar.map(t => (
         <Link
           key={t.href}
           to={t.href}
-          className="card card-interactive group relative flex items-center gap-5 p-6 sm:p-7"
+          className="card card-interactive group relative flex flex-col items-start gap-3 p-4"
         >
-          <div className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${t.kleur} shadow-lg ring-1 ring-white/30 transition-transform duration-300 group-hover:scale-110`}>
-            <t.icoon className="h-7 w-7 text-white" />
+          <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${t.kleur} shadow-md ring-1 ring-white/30 transition-transform duration-300 group-hover:scale-110`}>
+            <t.icoon className="h-5 w-5 text-white" />
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-lg font-semibold text-gray-900">{t.titel}</p>
-            <p className="mt-0.5 text-sm text-gray-500">{t.omschrijving}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900">{t.titel}</p>
+            <p className="mt-0.5 hidden text-xs text-gray-500 sm:block">{t.omschrijving}</p>
           </div>
-          <ArrowUpRightIcon className="h-5 w-5 flex-shrink-0 text-gray-400 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#105BFF]" />
+          <ArrowUpRightIcon className="absolute right-3 top-3 h-4 w-4 text-gray-400 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#105BFF]" />
         </Link>
       ))}
     </div>
