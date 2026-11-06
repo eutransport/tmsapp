@@ -400,8 +400,8 @@ function AdminDashboard({ user }: { user: any }) {
       {/* Tabbed section: Online Users | Recent Logins | Recent Activity */}
       <div>
         {/* Tab headers — scrollable on mobile */}
-        <div className="border-b border-gray-200 mb-0 overflow-x-auto">
-          <nav className="-mb-px flex space-x-4 sm:space-x-6 min-w-max">
+        <div className="border-b border-gray-200 mb-0 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <nav className="flex space-x-4 sm:space-x-6 min-w-max">
             <button
               onClick={() => setActiveTab('online')}
               className={`flex items-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-1 border-b-2 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
@@ -715,6 +715,7 @@ function FinancialDashboard({ user }: { user: any }) {
       </div>
 
       {/* Open invoices stat */}
+      {(user?.rol === 'admin' || (user?.module_permissions || []).includes('view_invoices')) && (
       <div className="grid grid-cols-1 gap-2 sm:gap-3 sm:grid-cols-2 md:grid-cols-3">
         <Link
           to="/invoices"
@@ -739,6 +740,7 @@ function FinancialDashboard({ user }: { user: any }) {
           </div>
         </Link>
       </div>
+      )}
 
       <DashboardTegels user={user} />
 

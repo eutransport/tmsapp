@@ -677,14 +677,21 @@ class DashboardStatsView(APIView):
         )).aggregate(total=Sum('totaal'))
         total_outstanding = float(outstanding_agg['total'] or 0)
         
-        return Response({
+        is_admin = request.user.is_superuser or request.user.rol == 'admin'
+        mag_facturen = is_admin or request.user.has_module_permission('view_invoices')
+        data = {
             'users': user_count,
             'companies': company_count,
             'vehicles': vehicle_count,
             'hours_this_week': round(total_hours, 1),
-            'open_invoices': open_invoice_count,
+            'open_invoices': open_invoice_count if mag_facturen else None,
             'week_number': week_number,
             'year': year,
+        }
+        if not is_admin:
+            return Response(data)
+        return Response({
+            **data,
             'financial': {
                 'income': round(total_income, 2),
                 'expenses': round(total_expenses, 2),
@@ -703,7 +710,7 @@ class DashboardStatsPerAdministratieView(APIView):
     Other users (manager/gebruiker) see only the administrations they are
     listed in ``allowed_users`` for.
     """
-    permission_classes = [IsAuthenticated, IsAdminOrManagerStrict]
+    permission_classes = [IsAuthenticated, IsAdminOnly]
 
     def get(self, request):
         from apps.invoicing.models import Invoice, InvoiceType, InvoiceStatus
@@ -813,7 +820,7 @@ class OnlineUsersView(APIView):
     Polled every 2 minutes by the frontend.
     Only admin and manager roles can see all online users.
     """
-    permission_classes = [IsAuthenticated, IsAdminOrManagerStrict]
+    permission_classes = [IsAuthenticated, IsAdminOnly]
 
     def get(self, request):
         from apps.accounts.models import User
@@ -850,7 +857,7 @@ class RecentLoginsView(APIView):
     Ordered by last_login descending.
     Only admin and manager roles can see login history.
     """
-    permission_classes = [IsAuthenticated, IsAdminOrManagerStrict]
+    permission_classes = [IsAuthenticated, IsAdminOnly]
 
     def get(self, request):
         from apps.accounts.models import User
