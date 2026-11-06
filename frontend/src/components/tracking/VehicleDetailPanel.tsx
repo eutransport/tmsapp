@@ -3,6 +3,7 @@
  * Displayed below the map when a vehicle is selected on the Track & Trace page.
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
+import LocatieBlok from './LocatieBlok'
 import {
   ArrowPathIcon,
   ChevronLeftIcon,
@@ -328,10 +329,9 @@ export default function VehicleDetailPanel({ objectId, platNumber, onClose, onRo
           )}
 
           {/* Current location (only on today) */}
-          {isToday && pos && pos.address && (
-            <div className="px-4 py-2 flex items-center gap-2 text-sm text-gray-600 bg-gray-50">
-              <MapPinIcon className="h-4 w-4 shrink-0 text-gray-400" />
-              <span className="truncate">{pos.address}</span>
+          {isToday && pos && (pos.locatie || pos.address) && (
+            <div className="px-4 py-2">
+              <LocatieBlok locatie={pos.locatie} fallback={pos.address} />
             </div>
           )}
 

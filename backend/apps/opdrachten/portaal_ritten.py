@@ -253,7 +253,7 @@ def _live_positie(object_id=None, kenteken=None):
 
 def dagoverzicht(kenteken, datum):
     """Wat de wagen die dag heeft gedaan, plus of hij nu rijdt of stilstaat."""
-    from apps.tracking.positions import adres_van
+    from apps.tracking.positions import adres_van, locatie_van
     ritten = haal_ritten([kenteken], datum, datum)
     op_volgorde = sorted(ritten, key=lambda r: r['start_tijd'])
 
@@ -290,6 +290,7 @@ def dagoverzicht(kenteken, datum):
         'rijdt': toestand == 'driving',
         'toestand': toestand,
         'positie_adres': adres_van(positie),
+        'positie_locatie': locatie_van(positie),
         'positie_moment': (positie or {}).get('timestamp'),
         'latitude': (positie or {}).get('latitude'),
         'longitude': (positie or {}).get('longitude'),

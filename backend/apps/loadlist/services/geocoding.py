@@ -115,6 +115,71 @@ def reverse_geocode(lat: float, lng: float) -> Optional[str]:
     return kort
 
 
+# Wegtypes waarop een wagen onderweg is; daar hoort geen postcode bij.
+WEG_TYPES = {
+    'motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link',
+    'secondary', 'secondary_link', 'tertiary', 'tertiary_link',
+}
+
+
+def reverse_geocode_detail(lat: float, lng: float) -> Optional[dict]:
+    """Volledig adres bij exacte coordinaten.
+
+    Anders dan ``reverse_geocode`` wordt hier niet op honderd meter afgerond:
+    het adres moet precies bij de positie horen. Staat de wagen op een
+    doorgaande weg, dan is ``op_weg`` waar en blijven postcode en huisnummer
+    leeg; een postcode langs een snelweg zou maar een gok zijn.
+    """
+    try:
+        lat_f = float(lat)
+        lng_f = float(lng)
+    except (TypeError, ValueError):
+        return None
+    if not (-90 <= lat_f <= 90 and -180 <= lng_f <= 180):
+        return None
+
+    cache_key = f'geo:reverse-detail:{round(lat_f, 5)}:{round(lng_f, 5)}'
+    hit = cache.get(cache_key)
+    if hit is not None:
+        return None if hit == '__none__' else hit
+
+    _throttle()
+    try:
+        resp = requests.get(
+            NOMINATIM_REVERSE_URL,
+            params={'lat': lat_f, 'lon': lng_f, 'format': 'jsonv2', 'zoom': 18, 'addressdetails': 1},
+            headers={'User-Agent': USER_AGENT, 'Accept-Language': 'nl,en'},
+            timeout=15,
+        )
+        data = resp.json() if resp.status_code == 200 else None
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning('Reverse geocode (detail) mislukt voor %s,%s: %s', lat_f, lng_f, exc)
+        return None
+    if not data or 'address' not in data:
+        cache.set(cache_key, '__none__', 60 * 60)
+        return None
+
+    adres = data['address']
+    op_weg = data.get('category') == 'highway' and data.get('type') in WEG_TYPES \
+        and not adres.get('house_number')
+    straat = adres.get('road') or adres.get('pedestrian') or adres.get('industrial') or ''
+    plaats = (adres.get('city') or adres.get('town') or adres.get('village')
+              or adres.get('municipality') or adres.get('hamlet') or '')
+    huisnummer = '' if op_weg else (adres.get('house_number') or '')
+    resultaat = {
+        'op_weg': op_weg,
+        'straat': straat,
+        'huisnummer': huisnummer,
+        # Zonder huisnummer is een postcode maar een benadering van de straat.
+        'postcode': (adres.get('postcode') or '') if huisnummer else '',
+        'plaats': plaats,
+        'land': adres.get('country') or '',
+        'landcode': (adres.get('country_code') or '').upper(),
+    }
+    cache.set(cache_key, resultaat, CACHE_TTL)
+    return resultaat
+
+
 def geocode(address: str, country_hint: str = '') -> Optional[GeocodeResult]:
     """Return best-guess coordinates for an address, or None."""
     query = (address or '').strip()

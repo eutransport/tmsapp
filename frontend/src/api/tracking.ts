@@ -30,6 +30,20 @@ export interface LocationPoint {
   recorded_at: string
 }
 
+/** Exacte locatie van een wagen; postcode en huisnummer ontbreken op de weg. */
+export interface VoertuigLocatie {
+  op_weg: boolean
+  straat?: string
+  huisnummer?: string
+  postcode?: string
+  plaats?: string
+  land?: string
+  landcode?: string
+  latitude: number
+  longitude: number
+  google_maps_url: string
+}
+
 export interface LiveVehicle {
   session_id: string
   user_name: string
@@ -154,6 +168,7 @@ export interface VehicleDetail {
     fuel_remaining_km: number | null
     heading: number | null
     timestamp: string
+    locatie?: VoertuigLocatie | null
   } | null
   odometer_km: number
   total_distance_km: number

@@ -1,4 +1,5 @@
 import api from './client'
+import type { VoertuigLocatie } from './tracking'
 import { portaalBasis } from './portaalBasis'
 
 export interface PortaalVoertuig {
@@ -53,6 +54,7 @@ export interface PortaalVoertuigDag {
   rijdt: boolean
   toestand: string
   positie_adres: string
+  positie_locatie: VoertuigLocatie | null
   positie_moment: string | null
   latitude: number | null
   longitude: number | null

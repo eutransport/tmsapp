@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { MapPinIcon } from '@heroicons/react/24/outline'
+import LocatieBlok from '@/components/tracking/LocatieBlok'
 import { PortaalVoertuigDag } from '@/api/portaalTracking'
 
 export default function PortaalWagenStatus({ dag }: { dag: PortaalVoertuigDag }) {
@@ -22,13 +22,9 @@ export default function PortaalWagenStatus({ dag }: { dag: PortaalVoertuigDag })
         </div>
       </div>
 
-      <p className="mt-3 flex items-start gap-2 rounded-xl bg-primary-50/60 px-3 py-2 text-sm text-gray-900">
-        <MapPinIcon className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary-600" />
-        <span>
-          <span className="font-medium">{dag.positie_adres || t('portaalMap.noAddress', 'Adres onbekend')}</span>
-          <span className="text-muted"> &middot; {tijd(dag.positie_moment)}</span>
-        </span>
-      </p>
+      <div className="mt-3">
+        <LocatieBlok locatie={dag.positie_locatie} fallback={dag.positie_adres || undefined} tijd={tijd(dag.positie_moment)} />
+      </div>
 
       <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
         <div>

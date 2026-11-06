@@ -34,6 +34,30 @@ def adres_van(positie):
         return ''
 
 
+def locatie_van(positie):
+    """Adresdetails plus een Google Maps-link op de exacte coordinaten.
+
+    De link gebruikt altijd de coordinaten zelf, niet het adres: zo opent
+    Google Maps precies op de plek waar de wagen staat.
+    """
+    if not positie or positie.get('latitude') is None or positie.get('longitude') is None:
+        return None
+    lat, lng = float(positie['latitude']), float(positie['longitude'])
+    from apps.loadlist.services.geocoding import reverse_geocode_detail
+    try:
+        detail = reverse_geocode_detail(lat, lng) or {}
+    except Exception:
+        logger.exception('Adresdetail opzoeken mislukt voor %s', positie.get('plate_number'))
+        detail = {}
+    return {
+        **detail,
+        'op_weg': bool(detail.get('op_weg')),
+        'latitude': round(lat, 6),
+        'longitude': round(lng, 6),
+        'google_maps_url': f'https://www.google.com/maps/search/?api=1&query={lat:.6f},{lng:.6f}',
+    }
+
+
 def get_vehicle_locations():
     """Posities uit alle bronnen samen, in het formaat van FM-Track."""
     from .navixy_service import NavixyError

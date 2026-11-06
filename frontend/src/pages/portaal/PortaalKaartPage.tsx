@@ -7,6 +7,7 @@ import { portaalTracking } from '@/api/portaalTracking'
 import PortaalRittenPerDag from '@/components/portaal/PortaalRittenPerDag'
 import PortaalWagenStatus from '@/components/portaal/PortaalWagenStatus'
 import PortaalWagenLijst from '@/components/portaal/PortaalWagenLijst'
+import { locatieRegels } from '@/components/tracking/LocatieBlok'
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
@@ -112,8 +113,16 @@ export default function PortaalKaartPage() {
     if (!wagenDag || wagenDag.kenteken !== kenteken) return
     const marker = markers.current.get(kenteken)
     if (!marker) return
-    const adres = wagenDag.positie_adres || t('portaalMap.noAddress', 'Adres onbekend')
-    marker.bindPopup(`<strong>${kenteken}</strong><br>${adres}`).openPopup()
+    const l = wagenDag.positie_locatie
+    const esc = (v: string) => v.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
+    const regels = l ? locatieRegels(l) : null
+    const adres = regels
+      ? [regels.regel1, regels.regel2].filter(Boolean).map(esc).join('<br>')
+      : esc(wagenDag.positie_adres || t('portaalMap.noAddress', 'Adres onbekend'))
+    const link = l
+      ? `<br><a href="${esc(l.google_maps_url)}" target="_blank" rel="noopener noreferrer">Open in Google Maps &#8599;</a>`
+      : ''
+    marker.bindPopup(`<strong>${esc(kenteken)}</strong><br>${adres}${link}`).openPopup()
   }, [wagenDag, kenteken, zichtbaar, t])
 
   const totaalKm = useMemo(() => ritten.reduce((som, rit) => som + (rit.afstand_km || 0), 0), [ritten])

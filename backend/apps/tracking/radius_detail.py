@@ -14,7 +14,7 @@ anders spelt (31-BLN-8 tegenover 31-BNL-8).
 """
 import logging
 
-from apps.tracking.positions import adres_van
+from apps.tracking.positions import adres_van, locatie_van
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -200,6 +200,7 @@ def dagdetail(service_id, datum, live_positie=None, kenteken=''):
             'speed': live_positie.get('speed') or 0,
             'speed_source': 'live',
             'address': adres_van(live_positie),
+            'locatie': locatie_van(live_positie),
             'vehicle_status': 'driving' if (live_positie.get('speed') or 0) > 3 else 'parked',
             'fuel_level': 0,
             'fuel_remaining_km': None,

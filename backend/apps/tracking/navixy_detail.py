@@ -7,7 +7,7 @@ getal verzinnen.
 """
 import logging
 
-from apps.tracking.positions import adres_van
+from apps.tracking.positions import adres_van, locatie_van
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -115,6 +115,7 @@ def dagdetail(tracker, datum, live_positie=None):
             'speed': live_positie.get('speed', 0),
             'speed_source': 'live',
             'address': adres_van(live_positie),
+            'locatie': locatie_van(live_positie),
             'vehicle_status': live_positie.get('vehicle_status', 'parked'),
             'fuel_level': 0,
             'fuel_remaining_km': None,
