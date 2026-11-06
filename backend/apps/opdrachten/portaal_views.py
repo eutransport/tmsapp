@@ -90,7 +90,7 @@ class PortaalPositiesView(PortaalBasisView):
 
         toegestaan = {_normaliseer(v.kenteken): v for v in voertuigen if v.kenteken}
 
-        from apps.tracking.positions import get_vehicle_locations
+        from apps.tracking.positions import adres_van, get_vehicle_locations
         from apps.tracking.tachograph_service import FMTrackError
 
         try:
@@ -123,7 +123,7 @@ class PortaalPositiesView(PortaalBasisView):
                 'speed': positie.get('speed'),
                 'direction': positie.get('direction'),
                 'timestamp': positie.get('timestamp') or positie.get('datetime'),
-                'address': positie.get('address', ''),
+                'address': adres_van(positie),
                 'status': positie.get('vehicle_status') or '',
             })
 
