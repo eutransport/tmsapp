@@ -14,6 +14,26 @@ import logging
 logger = logging.getLogger('tracking')
 
 
+def adres_van(positie):
+    """Het adres van een positie; ontbreekt het, dan zoeken we het op.
+
+    De lijsten met alle posities slaan rijdende wagens bewust over om de
+    adresdienst te sparen. Wie één wagen aanklikt, wil wel weten waar hij is.
+    """
+    if not positie:
+        return ''
+    if positie.get('address'):
+        return positie['address']
+    if positie.get('latitude') is None or positie.get('longitude') is None:
+        return ''
+    from apps.loadlist.services.geocoding import reverse_geocode
+    try:
+        return reverse_geocode(positie['latitude'], positie['longitude']) or ''
+    except Exception:
+        logger.exception('Adres opzoeken mislukt voor %s', positie.get('plate_number'))
+        return ''
+
+
 def get_vehicle_locations():
     """Posities uit alle bronnen samen, in het formaat van FM-Track."""
     from .navixy_service import NavixyError

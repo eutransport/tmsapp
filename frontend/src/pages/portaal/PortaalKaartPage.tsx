@@ -107,6 +107,15 @@ export default function PortaalKaartPage() {
     }
   }, [zichtbaar])
 
+  // Het adres wordt pas bij het aanklikken opgezocht; zet het daarna in de popup.
+  useEffect(() => {
+    if (!wagenDag || wagenDag.kenteken !== kenteken) return
+    const marker = markers.current.get(kenteken)
+    if (!marker) return
+    const adres = wagenDag.positie_adres || t('portaalMap.noAddress', 'Adres onbekend')
+    marker.bindPopup(`<strong>${kenteken}</strong><br>${adres}`).openPopup()
+  }, [wagenDag, kenteken, zichtbaar, t])
+
   const totaalKm = useMemo(() => ritten.reduce((som, rit) => som + (rit.afstand_km || 0), 0), [ritten])
 
   return (

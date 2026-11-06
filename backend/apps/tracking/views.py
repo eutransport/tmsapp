@@ -11,6 +11,8 @@ Security architecture:
 - Audit logging for session start/stop
 """
 import logging
+
+from apps.tracking.positions import adres_van
 from zoneinfo import ZoneInfo
 from django.utils import timezone
 from django.db.models import Prefetch, Subquery, OuterRef
@@ -1956,7 +1958,7 @@ class VehicleDetailView(APIView):
                     'longitude': current_position.get('longitude'),
                     'speed': live_speed,
                     'speed_source': speed_source,
-                    'address': current_position.get('address', ''),
+                    'address': adres_van(current_position),
                     'vehicle_status': vehicle_status,
                     'fuel_level': current_position.get('fuel_level', 0),
                     'fuel_remaining_km': current_position.get('fuel_remaining_km'),

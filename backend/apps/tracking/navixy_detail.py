@@ -6,6 +6,8 @@ Navixy levert die niet, dus die velden blijven leeg in plaats van dat we een
 getal verzinnen.
 """
 import logging
+
+from apps.tracking.positions import adres_van
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -112,7 +114,7 @@ def dagdetail(tracker, datum, live_positie=None):
             'longitude': live_positie.get('longitude'),
             'speed': live_positie.get('speed', 0),
             'speed_source': 'live',
-            'address': live_positie.get('address', ''),
+            'address': adres_van(live_positie),
             'vehicle_status': live_positie.get('vehicle_status', 'parked'),
             'fuel_level': 0,
             'fuel_remaining_km': None,
