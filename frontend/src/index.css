@@ -1003,3 +1003,7 @@ html.glass-light .recharts-wrapper .bg-white {
     --glass-bg-soft: color-mix(in srgb, var(--color-primary) 12%, rgba(255, 255, 255, 0.88));
   }
 }
+/* Verlofcarrousel: scrollbalk verbergen */
+.verlof-carousel { scrollbar-width: none; }
+.verlof-carousel::-webkit-scrollbar { display: none; }
+
