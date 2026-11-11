@@ -2519,6 +2519,10 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
         eigenaren = route_eigenaren(
             {planning_datum(e[2]) for e in events}
         )
+        # Heeft de ingeplande wagen die dag zelf geen tol, dan reed hij de
+        # route kennelijk niet; dan houdt de wagen die er wel tol op heeft
+        # het routenummer, anders valt de dag uit de export.
+        met_tol = {(planning_datum(e[2]), e[0]) for e in events}
 
         agg: dict[tuple, dict] = {}
         for (norm, raw, start_at, km, amount, ritnummer,
@@ -2538,8 +2542,9 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
             # planning: hoort de route die dag bij een andere wagen, dan laten
             # we het routenummer los in plaats van dubbel te tellen.
             if route and rit_bron != BRON_PLANNING:
-                eigenaar = eigenaren.get((planning_datum(start_at), route))
-                if eigenaar and eigenaar != norm:
+                dag = planning_datum(start_at)
+                eigenaar = eigenaren.get((dag, route))
+                if eigenaar and eigenaar != norm and (dag, eigenaar) in met_tol:
                     route = ''
             # Bedrijf eveneens uit de momentopname; alleen terugvallen op de
             # vloot als het event nog geen bedrijf had bij de import.
