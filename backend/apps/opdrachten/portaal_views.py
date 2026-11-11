@@ -94,7 +94,7 @@ class PortaalPositiesView(PortaalBasisView):
         from apps.tracking.tachograph_service import FMTrackError
 
         try:
-            posities = get_vehicle_locations()
+            posities = get_vehicle_locations(met_radius=True)
         except FMTrackError as fout:
             logger.warning('Portaal: GPS-posities niet beschikbaar: %s', fout)
             return Response(

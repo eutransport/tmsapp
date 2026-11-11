@@ -106,7 +106,7 @@ def _posities_per_kenteken():
     from apps.tracking.positions import get_vehicle_locations
 
     gevonden = {}
-    for positie in get_vehicle_locations():
+    for positie in get_vehicle_locations(met_radius=True):
         sleutel = _normaliseer(positie.get('plate_number'))
         if sleutel and positie.get('latitude') is not None:
             gevonden[sleutel] = positie

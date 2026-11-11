@@ -58,8 +58,12 @@ def locatie_van(positie):
     }
 
 
-def get_vehicle_locations():
-    """Posities uit alle bronnen samen, in het formaat van FM-Track."""
+def get_vehicle_locations(met_radius=False):
+    """Posities uit alle bronnen samen, in het formaat van FM-Track.
+
+    Radius alleen op verzoek: de beheerkaart haalt Radius zelf apart op en zou
+    die wagens anders dubbel tonen. Het klantportaal heeft alles hier nodig.
+    """
     from .navixy_service import NavixyError
     from .navixy_service import get_vehicle_locations as navixy_posities
     from .tachograph_service import FMTrackError
@@ -96,7 +100,71 @@ def get_vehicle_locations():
     except Exception:
         logger.exception('Onverwachte fout bij het ophalen van Navixy-posities')
 
+    if met_radius:
+        bekende_kentekens = {
+            (p.get('plate_number') or '').upper().replace('-', '').replace(' ', '')
+            for p in posities
+        }
+        for positie in _radius_posities():
+            sleutel = (positie.get('plate_number') or '').upper().replace('-', '').replace(' ', '')
+            if sleutel and sleutel not in bekende_kentekens:
+                posities.append(positie)
+                bekende_kentekens.add(sleutel)
+
     if fmtrack_fout is not None and not posities:
         raise fmtrack_fout
 
     return posities
+
+
+def _radius_posities():
+    """Radius-posities in hetzelfde formaat als FM-Track; bij storing leeg."""
+    from datetime import datetime, timezone as dt_timezone
+
+    from . import radius_service
+    from .radius_archive_service import bepaal_klant_id
+    from .radius_detail import VOORVOEGSEL
+
+    try:
+        koppeling = radius_service.actieve_koppeling('telematics')
+        if koppeling is None:
+            return []
+        voertuigen = radius_service.get_vehicles(
+            bepaal_klant_id(connection=koppeling), connection=koppeling)['vehicles']
+    except Exception:
+        logger.warning('Radius-posities niet beschikbaar', exc_info=True)
+        return []
+
+    resultaat = []
+    for v in voertuigen:
+        if not v.get('plate_number') or v.get('latitude') is None or v.get('longitude') is None:
+            continue
+        tijdstip = v.get('timestamp')
+        if tijdstip:
+            # Radius levert epoch-tijd, soms in milliseconden.
+            seconden = tijdstip / 1000 if tijdstip > 10**11 else tijdstip
+            tijdstip = datetime.fromtimestamp(seconden, tz=dt_timezone.utc).isoformat()
+        snelheid = v.get('speed') or 0
+        if snelheid > 3:
+            toestand = 'driving'
+        elif v.get('ignition'):
+            toestand = 'idle'
+        else:
+            toestand = 'parked'
+        resultaat.append({
+            'object_id': f"{VOORVOEGSEL}{v.get('service_id') or ''}",
+            'bron': 'radius',
+            'vehicle_name': v['plate_number'],
+            'plate_number': v['plate_number'],
+            'latitude': v['latitude'],
+            'longitude': v['longitude'],
+            'address': v.get('address') or '',
+            'timestamp': tijdstip or '',
+            'speed': snelheid,
+            'heading': v.get('heading') or 0,
+            'ignition': v.get('ignition'),
+            'vehicle_status': toestand,
+            'fuel_level': 0,
+            'fuel_remaining_km': None,
+        })
+    return resultaat

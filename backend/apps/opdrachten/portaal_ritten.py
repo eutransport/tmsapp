@@ -236,7 +236,7 @@ def _live_positie(object_id=None, kenteken=None):
     from apps.tracking.positions import get_vehicle_locations
 
     try:
-        posities = get_vehicle_locations()
+        posities = get_vehicle_locations(met_radius=True)
     except Exception:
         logger.warning('Portaal: live positie niet beschikbaar voor %s',
                        object_id or kenteken)
