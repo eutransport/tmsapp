@@ -29,7 +29,9 @@ from .buitenland import filter_op_land
 from .dagritnummers import (als_label, ritnummers_per_dag,
                             ritvensters as ritvensters_uit_uren)
 from .land_bepaling import LANDNAMEN
-from .planning_koppeling import BRON_PLANNING, planning_datum, route_eigenaren
+from .planning_koppeling import (
+    BRON_PLANNING, geplande_routedagen, planning_datum, route_eigenaren,
+)
 from .models import (PrivateTollRegistration, RitnummerCorrectie, TollingEvent,
                      TollingImportBatch, normalize_plate)
 from .serializers import (
@@ -2564,10 +2566,50 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 'total_km': Decimal('0'),
                 'amount': Decimal('0'),
                 'events_count': 0,
+                'opmerking': '',
             })
             bucket['total_km'] += km or Decimal('0')
             bucket['amount'] += amount or Decimal('0')
             bucket['events_count'] += 1
+
+        # Geplande routes zonder tol toch tonen, met de reden erbij: een wagen
+        # die op "Stil" staat heeft niet gereden, en een inhuurwagen rijdt wel
+        # maar levert geen eigen tol aan. Alleen voor binnenlandse tol; een
+        # buitenland-export gaat over passages die er wel zijn.
+        if not land or str(land).upper() == 'NL':
+            met_route = {(r['date'], r['route']) for r in agg.values() if r['route']}
+            for gepland in geplande_routedagen(date_from, date_to):
+                dag = gepland['datum']
+                if exclude_weekend and dag.isoweekday() >= 6:
+                    continue
+                if (dag, gepland['route']) in met_route:
+                    continue
+                norm = gepland['kenteken_normalized']
+                vehicle = vehicle_map.get(norm)
+                if gepland['stil']:
+                    opmerking = 'Niet gereden'
+                elif vehicle is not None and getattr(vehicle, 'inhuur', False):
+                    opmerking = 'Inhuur - geen tol'
+                else:
+                    continue
+                met_route.add((dag, gepland['route']))
+                bedrijf_id = gepland['bedrijf_id']
+                bedrijf_naam = gepland['bedrijf_naam']
+                if vehicle is not None and vehicle.bedrijf_id:
+                    bedrijf_id = str(vehicle.bedrijf_id)
+                    bedrijf_naam = vehicle.bedrijf.naam
+                agg[(gepland['route'], norm, dag)] = {
+                    'route': gepland['route'],
+                    'plate_normalized': norm,
+                    'license_plate': vehicle.kenteken if vehicle else gepland['kenteken'],
+                    'bedrijf_id': bedrijf_id,
+                    'bedrijf_naam': bedrijf_naam,
+                    'date': dag,
+                    'total_km': Decimal('0'),
+                    'amount': Decimal('0'),
+                    'events_count': 0,
+                    'opmerking': opmerking,
+                }
 
         rows = list(agg.values())
         rows.sort(key=lambda r: (r['date'], r['route'] or '\uffff', r['license_plate']))
@@ -2669,6 +2711,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                     'total_km': float(r['total_km']),
                     'amount': float(r['amount']),
                     'events_count': r['events_count'],
+                    'opmerking': r.get('opmerking', ''),
                 }
                 for r in rows
             ],
@@ -2761,6 +2804,7 @@ class TollingInvoicingViewSet(viewsets.ViewSet):
                 'total_km': float(r['total_km']),
                 'amount': float(r['amount']),
                 'date': r['date'],
+                'opmerking': r.get('opmerking', ''),
             }
             for r in rows
         ]

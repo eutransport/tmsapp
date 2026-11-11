@@ -26,6 +26,11 @@ class Vehicle(models.Model):
         verbose_name='Actief',
         help_text='Inactieve voertuigen worden niet getoond in selectielijsten maar hun historische data blijft beschikbaar.'
     )
+    inhuur = models.BooleanField(
+        default=False,
+        verbose_name='Inhuur',
+        help_text='Ingehuurde wagen: rijdt wel, maar levert geen eigen tolregels aan.'
+    )
 
     # ------------------------------------------------------------------
     # Gegevens uit het kentekenregister van de RDW

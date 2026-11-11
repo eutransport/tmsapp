@@ -219,6 +219,8 @@ export interface Vehicle {
   bedrijf_naam: string
   minimum_weken_per_jaar: number | null
   actief: boolean
+  /** Ingehuurde wagen: rijdt wel, maar levert geen eigen tol aan. */
+  inhuur?: boolean
   /** Ritnummers van deze wagen door de tijd heen, oudste eerst. */
   ritnummer_periodes?: {
     id: string

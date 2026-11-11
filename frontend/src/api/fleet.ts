@@ -99,6 +99,7 @@ export interface VehicleCreate {
   bedrijf: string
   minimum_weken_per_jaar?: number | null
   actief?: boolean
+  inhuur?: boolean
   /** Zet de bestaande actieve regel met hetzelfde kenteken op inactief. */
   vervang_actief?: boolean
 }

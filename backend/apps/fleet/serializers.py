@@ -147,7 +147,7 @@ class VehicleSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'kenteken', 'type_wagen', 'ritnummer',
             'bedrijf', 'bedrijf_naam', 'minimum_weken_per_jaar',
-            'actief', 'created_at', 'updated_at', 'vervang_actief',
+            'actief', 'inhuur', 'created_at', 'updated_at', 'vervang_actief',
             'ritnummer_periodes', 'ritnummer_vanaf', 'ritnummer_corrigeren',
             'bedrijf_periodes', 'bedrijf_vanaf', 'bedrijf_corrigeren',
             'rdw_apk_dagen', 'rdw_tachograaf_dagen',

@@ -751,6 +751,7 @@ DACHSER_COLUMNS = [
     ('Total tol kilometers', 'total_km', 24),
     ('Amount EUR.', 'amount', 16),
     ('Date', 'date', 13),
+    ('Opmerking', 'opmerking', 22),
 ]
 
 
@@ -870,6 +871,7 @@ def build_dachser_export_xlsx(rows: list[dict]) -> bytes:
             float(row.get('total_km') or 0),
             float(row.get('amount') or 0),
             row.get('date'),
+            _xlsx_tekst(row.get('opmerking') or ''),
         ]
         for col_idx, value in enumerate(values, start=1):
             cell = ws.cell(row=excel_row, column=col_idx, value=value)

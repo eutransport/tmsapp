@@ -103,6 +103,60 @@ def rit_van_regel(regel) -> str:
     return regel.ritnummer or regel.vehicle_ritnummer or ''
 
 
+STIL = 'stil'
+
+
+def is_stil(regel) -> bool:
+    """Staat de chauffeur op "Stil", dan heeft de wagen die dag niet gereden."""
+    naam = (regel.chauffeur_naam or '').strip()
+    if not naam and regel.chauffeur_id:
+        naam = str(regel.chauffeur or '')
+    return naam.strip().lower() == STIL
+
+
+def geplande_routedagen(date_from, date_to) -> list[dict]:
+    """Alle routes die de planning in de periode op een wagen zet.
+
+    Per regel: datum, route, het werkelijk gereden kenteken (vervangend
+    kenteken gaat voor), of de chauffeur op "Stil" staat en het bedrijf.
+    """
+    from apps.planning.models import PlanningEntry
+
+    datums = set()
+    dag = date_from
+    while dag <= date_to:
+        datums.add(dag)
+        dag += datetime.timedelta(days=1)
+    weken = {d.isocalendar()[:2] for d in datums}
+
+    regels = (PlanningEntry.objects
+              .filter(planning__jaar__in={j for j, _ in weken},
+                      planning__weeknummer__in={w for _, w in weken})
+              .select_related('planning', 'planning__bedrijf', 'vehicle',
+                              'vervangend_voertuig', 'chauffeur'))
+
+    resultaat = []
+    for regel in regels:
+        datum = regel.planningsdatum()
+        if datum not in datums:
+            continue
+        route = (rit_van_regel(regel) or '').strip()
+        kenteken = regel.werkelijk_kenteken() or ''
+        if not route or not kenteken:
+            continue
+        bedrijf = getattr(regel.planning, 'bedrijf', None)
+        resultaat.append({
+            'datum': datum,
+            'route': route,
+            'kenteken': kenteken,
+            'kenteken_normalized': normalize_plate(kenteken),
+            'stil': is_stil(regel),
+            'bedrijf_id': str(bedrijf.id) if bedrijf else '',
+            'bedrijf_naam': bedrijf.naam if bedrijf else '',
+        })
+    return resultaat
+
+
 def route_eigenaren(datums) -> dict:
     """Geef per (dag, routenummer) het kenteken dat de planning erop zet.
 

@@ -197,6 +197,7 @@ export interface DachserPreviewRow {
   total_km: number
   amount: number
   events_count: number
+  opmerking: string     // 'Niet gereden' of 'Inhuur - geen tol', anders leeg
 }
 
 export interface DachserRouteGroup {

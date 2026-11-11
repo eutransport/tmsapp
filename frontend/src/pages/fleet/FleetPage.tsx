@@ -396,6 +396,7 @@ function VehicleForm({
     bedrijf: vehicle?.bedrijf?.toString() || '',
     minimum_weken_per_jaar: vehicle?.minimum_weken_per_jaar?.toString() || '',
     actief: vehicle?.actief ?? true,
+    inhuur: vehicle?.inhuur ?? false,
     // Laat het nieuwe ritnummer pas vanaf deze datum gelden.
     ritnummer_vanaf: '',
     // Overschrijf in plaats daarvan de lopende periode; alleen voor typefouten.
@@ -516,6 +517,7 @@ function VehicleForm({
       bedrijf: formData.bedrijf,
       minimum_weken_per_jaar: formData.minimum_weken_per_jaar ? parseInt(formData.minimum_weken_per_jaar) : null,
       actief: formData.actief,
+      inhuur: formData.inhuur,
     }
     // Alleen meesturen als het ritnummer echt wijzigt; anders zou er een
     // periode ontstaan die niets verandert.
@@ -931,6 +933,23 @@ function VehicleForm({
         </label>
         <span className="ml-2 text-xs text-gray-500">
           ({t('fleet.activeHelp')})
+        </span>
+      </div>
+
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="inhuur"
+          name="inhuur"
+          checked={formData.inhuur}
+          onChange={handleChange}
+          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+        />
+        <label htmlFor="inhuur" className="ml-2 text-sm text-gray-700">
+          {t('fleet.hired')}
+        </label>
+        <span className="ml-2 text-xs text-gray-500">
+          ({t('fleet.hiredHelp')})
         </span>
       </div>
 

@@ -718,7 +718,9 @@
     "activeHelp": "Aktif araçlar planlama ve raporlarda dikkate alınır.",
     "minimumWeeksPerYear": "Yıllık minimum hafta",
     "minimumWeeksPlaceholder": "Örn. 40",
-    "minimumWeeksHelp": "Bu aracın yılda en az kaç hafta çalışması gerektiği. Takip etmemek için boş bırakın."
+    "minimumWeeksHelp": "Bu aracın yılda en az kaç hafta çalışması gerektiği. Takip etmemek için boş bırakın.",
+    "hired": "Kiral?k",
+    "hiredHelp": "s?r?? yapar ama kendi ge?i? ?creti yoktur; ge?i? ?creti d??a aktar?m?nda \"Inhuur - geen tol\" g?r?n?r"
   },
   "timeEntries": {
     "title": "Mesai kaydı",

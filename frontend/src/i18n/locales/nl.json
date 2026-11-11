@@ -718,7 +718,9 @@
     "activeHelp": "Actieve voertuigen worden meegenomen in planning en rapportages.",
     "minimumWeeksPerYear": "Minimum weken per jaar",
     "minimumWeeksPlaceholder": "Bijv. 40",
-    "minimumWeeksHelp": "Aantal weken dat dit voertuig minimaal per jaar moet rijden. Laat leeg om niet te tracken."
+    "minimumWeeksHelp": "Aantal weken dat dit voertuig minimaal per jaar moet rijden. Laat leeg om niet te tracken.",
+    "hired": "Inhuur",
+    "hiredHelp": "rijdt wel, maar heeft geen eigen tol; in de tolexport staat dan \"Inhuur - geen tol\""
   },
   "timeEntries": {
     "title": "Urenregistratie",

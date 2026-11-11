@@ -718,7 +718,9 @@
     "activeHelp": "Active vehicles are included in planning and reporting.",
     "minimumWeeksPerYear": "Minimum weeks per year",
     "minimumWeeksPlaceholder": "E.g. 40",
-    "minimumWeeksHelp": "Number of weeks this vehicle must operate per year minimum. Leave empty to not track."
+    "minimumWeeksHelp": "Number of weeks this vehicle must operate per year minimum. Leave empty to not track.",
+    "hired": "Hired",
+    "hiredHelp": "does drive, but has no own toll; the toll export then shows \"Inhuur - geen tol\""
   },
   "timeEntries": {
     "title": "Time Entries",
