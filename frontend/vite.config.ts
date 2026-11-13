@@ -100,7 +100,7 @@ export default defineConfig({
         runtimeCaching: [
           {
             // Tracking/live API calls - Network only, never cache (real-time data)
-            urlPattern: /^https?:\/\/.*\/api\/(tracking|fm-positions)\/.*/i,
+            urlPattern: /^https?:\/\/.*\/api\/(tracking|fm-positions|core\/update-status)\/.*/i,
             handler: 'NetworkOnly',
           },
           {

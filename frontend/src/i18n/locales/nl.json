@@ -624,7 +624,22 @@
     "reminderInterval": "Om de hoeveel dagen",
     "reminderCount": "Aantal herinneringen",
     "reminderSchedule": "Herinnering op dag {{dagen}} na de vervaldatum.",
-    "reminderNoRecipients": "Let op: er staan geen contacten in de mailinglijst, dus er kan niets verstuurd worden.",
+    "reminderNoRecipients": "Let op: er is geen ontvanger gekozen, dus er kan niets verstuurd worden.",
+    "reminderCompanyEmail": "Bedrijfsadres",
+    "reminderInvalidEmail": "Vul een geldig e-mailadres in",
+    "reminderNoSelection": "Kies minstens één ontvanger",
+    "reminderNoInvoices": "Kies minstens één factuur",
+    "reminderSendConfirm": "Herinnering voor {{aantal}} factuur/facturen nu versturen naar {{ontvangers}}?",
+    "reminderSent": "Herinnering verstuurd voor: {{nummers}}",
+    "reminderSendError": "Versturen mislukt",
+    "reminderRecipients": "Versturen naar",
+    "reminderNoCandidates": "Nog geen e-mailadressen bekend; voeg er hieronder een toe.",
+    "reminderNewEmail": "Nieuw e-mailadres",
+    "reminderSendNowTitle": "Nu een herinnering versturen",
+    "reminderNothingOverdue": "Er staan geen te late facturen open.",
+    "reminderDue": "vervallen {{datum}}",
+    "reminderLast": "laatste herinnering {{datum}}",
+    "reminderSendNow": "Herinnering nu versturen",
     "reminderLoadError": "De instelling kon niet worden geladen.",
     "reminderSaveError": "De instelling kon niet worden opgeslagen.",
     "addContact": "Contact toevoegen",
@@ -3291,5 +3306,12 @@
     "ongoing": "lopend",
     "periodSaved": "Periode opgeslagen",
     "periodDeleteConfirm": "Deze periode verwijderen? De charter ziet de uren uit deze periode dan niet meer."
+  },
+  "appUpdate": {
+    "title": "Er komt een update aan",
+    "text": "Sla je werk op. De app is tijdens de update enkele minuten niet bereikbaar.",
+    "countdown": "tot update",
+    "busyTitle": "De applicatie wordt bijgewerkt",
+    "busyText": "Even geduld; de pagina laadt vanzelf opnieuw zodra de update klaar is."
   }
 }

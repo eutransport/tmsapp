@@ -149,6 +149,21 @@ fi
 # =========================================
 # 4. Docker images herbouwen en herstarten
 # =========================================
+# Gebruikers krijgen eerst een banner en pushmelding; daarna wacht het script
+# tot het aangekondigde moment. UPDATE_WACHT=0 slaat het wachten over.
+UPDATE_WACHT="${UPDATE_WACHT:-60}"
+log_info "Update aankondigen (banner + pushmelding)..."
+set +e
+if docker compose exec -T backend python manage.py kondig_update_aan --seconden "$UPDATE_WACHT"; then
+    if [ "$UPDATE_WACHT" -gt 0 ]; then
+        log_info "Wachten tot het aangekondigde moment (${UPDATE_WACHT}s)..."
+        sleep "$UPDATE_WACHT"
+    fi
+else
+    log_warning "Aankondigen niet gelukt (oude versie of backend niet actief) — update gaat door"
+fi
+set -e
+
 log_info "Containers stoppen..."
 docker compose down --remove-orphans
 
@@ -265,6 +280,10 @@ if [ -f "$TMS_DIR/proxy-reload.sh" ]; then
 else
     log_warning "proxy-reload.sh niet gevonden — reload de proxy handmatig"
 fi
+
+# Banner weghalen; open schermen laden daarna vanzelf de nieuwe versie.
+docker compose exec -T backend python manage.py kondig_update_aan --klaar \
+    || log_warning "Update niet als afgerond gemeld — de banner verdwijnt na 30 minuten vanzelf"
 
 # =========================================
 # 8. Oude Docker images opruimen

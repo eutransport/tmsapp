@@ -624,7 +624,22 @@
     "reminderInterval": "Kaç günde bir",
     "reminderCount": "Hatırlatma sayısı",
     "reminderSchedule": "Son ödeme tarihinden sonraki {{dagen}}. günlerde hatırlatma.",
-    "reminderNoRecipients": "Dikkat: posta listesinde kişi yok, bu yüzden gönderim yapılamaz.",
+    "reminderNoRecipients": "Dikkat: alıcı seçilmedi, bu yüzden gönderim yapılamaz.",
+    "reminderCompanyEmail": "Şirket adresi",
+    "reminderInvalidEmail": "Geçerli bir e-posta adresi girin",
+    "reminderNoSelection": "En az bir alıcı seçin",
+    "reminderNoInvoices": "En az bir fatura seçin",
+    "reminderSendConfirm": "{{aantal}} fatura için hatırlatma şimdi {{ontvangers}} adresine gönderilsin mi?",
+    "reminderSent": "Hatırlatma gönderildi: {{nummers}}",
+    "reminderSendError": "Gönderim başarısız",
+    "reminderRecipients": "Alıcılar",
+    "reminderNoCandidates": "Henüz e-posta adresi yok; aşağıdan ekleyin.",
+    "reminderNewEmail": "Yeni e-posta adresi",
+    "reminderSendNowTitle": "Şimdi hatırlatma gönder",
+    "reminderNothingOverdue": "Gecikmiş fatura yok.",
+    "reminderDue": "vade {{datum}}",
+    "reminderLast": "son hatırlatma {{datum}}",
+    "reminderSendNow": "Hatırlatmayı şimdi gönder",
     "reminderLoadError": "Ayar yüklenemedi.",
     "reminderSaveError": "Ayar kaydedilemedi.",
     "addContact": "İletişim ekle",
@@ -3291,5 +3306,12 @@
     "ongoing": "ongoing",
     "periodSaved": "Period saved",
     "periodDeleteConfirm": "Delete this period? The charter will no longer see hours from this period."
+  },
+  "appUpdate": {
+    "title": "Bir güncelleme geliyor",
+    "text": "Çalışmanızı kaydedin. Güncelleme sırasında uygulama birkaç dakika kullanılamaz.",
+    "countdown": "güncellemeye",
+    "busyTitle": "Uygulama güncelleniyor",
+    "busyText": "Lütfen bekleyin; güncelleme bitince sayfa otomatik olarak yeniden yüklenir."
   }
 }

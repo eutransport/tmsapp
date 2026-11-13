@@ -8,6 +8,7 @@ from .models import Company, HerinneringInstelling, MailingListContact
 from .serializers import (
     CompanySerializer,
     HerinneringInstellingSerializer,
+    HerinneringVersturenSerializer,
     MailingListContactSerializer,
 )
 
@@ -30,6 +31,37 @@ class CompanyViewSet(viewsets.ModelViewSet):
     ordering_fields = ['naam', 'stad', 'created_at']
     ordering = ['naam']
 
+    def _herinnering_data(self, bedrijf, instelling):
+        from apps.invoicing.models import FactuurHerinnering
+        from apps.invoicing.tasks import openstaande_facturen
+
+        data = dict(HerinneringInstellingSerializer(instelling).data)
+        data['mailinglijst'] = [
+            {'naam': c.naam, 'email': c.email}
+            for c in bedrijf.mailing_contacts.filter(is_active=True).exclude(email='')
+        ]
+        data['bedrijf_email'] = bedrijf.email or ''
+
+        facturen = list(openstaande_facturen(bedrijf))
+        laatste = {}
+        for h in (
+            FactuurHerinnering.objects
+            .filter(invoice__in=facturen, gelukt=True)
+            .order_by('verstuurd_op')
+        ):
+            laatste[h.invoice_id] = h.verstuurd_op
+        data['te_laat'] = [
+            {
+                'id': str(f.id),
+                'factuurnummer': f.factuurnummer,
+                'vervaldatum': f.vervaldatum,
+                'totaal': str(f.totaal),
+                'laatste_herinnering': laatste.get(f.id),
+            }
+            for f in facturen
+        ]
+        return data
+
     @action(detail=True, methods=['get', 'patch'], url_path='herinneringen')
     def herinneringen(self, request, pk=None):
         """Instelling voor automatische betalingsherinneringen van dit bedrijf."""
@@ -37,7 +69,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         instelling, _ = HerinneringInstelling.objects.get_or_create(bedrijf=bedrijf)
 
         if request.method == 'GET':
-            return Response(HerinneringInstellingSerializer(instelling).data)
+            return Response(self._herinnering_data(bedrijf, instelling))
 
         serializer = HerinneringInstellingSerializer(
             instelling, data=request.data, partial=True
@@ -47,9 +79,33 @@ class CompanyViewSet(viewsets.ModelViewSet):
         logger.info(
             f"Herinneringen {bedrijf.naam}: actief={instelling.actief} "
             f"interval={instelling.interval_dagen} aantal={instelling.max_herinneringen} "
+            f"ontvangers={instelling.ontvangers} door {request.user.email}"
+        )
+        return Response(self._herinnering_data(bedrijf, instelling))
+
+    @action(detail=True, methods=['post'], url_path='herinneringen/versturen')
+    def herinneringen_versturen(self, request, pk=None):
+        """Direct een betalingsherinnering sturen voor de te late facturen."""
+        from apps.invoicing.tasks import verstuur_handmatig
+
+        bedrijf = self.get_object()
+        invoer = HerinneringVersturenSerializer(data=request.data)
+        invoer.is_valid(raise_exception=True)
+        ontvangers = list(dict.fromkeys(invoer.validated_data['ontvangers']))
+        factuur_ids = invoer.validated_data.get('facturen') or None
+
+        uitkomst = verstuur_handmatig(bedrijf, ontvangers, factuur_ids)
+        logger.info(
+            f"Handmatige herinnering {bedrijf.naam} naar {ontvangers}: "
+            f"verstuurd={uitkomst['verstuurd']} fouten={len(uitkomst['fouten'])} "
             f"door {request.user.email}"
         )
-        return Response(serializer.data)
+        if not uitkomst['verstuurd'] and not uitkomst['fouten']:
+            return Response(
+                {'error': 'Er zijn geen te late facturen om een herinnering voor te sturen.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(uitkomst)
     
     def perform_create(self, serializer):
         company = serializer.save()

@@ -17,6 +17,7 @@ EXEMPT_PATHS = [
     '/api/licensing/',       # License activation & status endpoints
     '/api/health/',          # Health check
     '/api/core/settings/',   # Public settings (branding for the license page)
+    '/api/core/update-status/',  # Updatebanner, ook zonder geldige licentie
     '/admin/',               # Django admin (for emergency access)
     '/api/schema/',          # API docs
     '/api/docs/',            # Swagger

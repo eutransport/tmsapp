@@ -8,7 +8,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import AuthLayout from '@/components/layout/AuthLayout'
 
 // PWA Components
-import { PWAUpdatePrompt, PWAInstallPrompt } from '@/components/pwa'
+import { PWAUpdatePrompt, PWAInstallPrompt, UpdateBanner } from '@/components/pwa'
 
 // Font Components
 import FontLoader from '@/components/fonts/FontLoader'
@@ -330,6 +330,7 @@ function App() {
       {/* PWA Components */}
       <PWAUpdatePrompt />
       <PWAInstallPrompt />
+      {isConfigured && <UpdateBanner />}
       
       {/* Load custom fonts when authenticated and configured */}
       {isConfigured && isAuthenticated && <FontLoader />}

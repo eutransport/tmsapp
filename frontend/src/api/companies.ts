@@ -131,8 +131,18 @@ export interface HerinneringInstelling {
   actief: boolean
   interval_dagen: number
   max_herinneringen: number
+  ontvangers: string[]
   dagen_reeks: number[]
   updated_at: string
+  mailinglijst: { naam: string; email: string }[]
+  bedrijf_email: string
+  te_laat: {
+    id: string
+    factuurnummer: string
+    vervaldatum: string
+    totaal: string
+    laatste_herinnering: string | null
+  }[]
 }
 
 export async function getHerinneringInstelling(bedrijfId: string): Promise<HerinneringInstelling> {
@@ -142,8 +152,20 @@ export async function getHerinneringInstelling(bedrijfId: string): Promise<Herin
 
 export async function saveHerinneringInstelling(
   bedrijfId: string,
-  data: Pick<HerinneringInstelling, 'actief' | 'interval_dagen' | 'max_herinneringen'>
+  data: Pick<HerinneringInstelling, 'actief' | 'interval_dagen' | 'max_herinneringen' | 'ontvangers'>
 ): Promise<HerinneringInstelling> {
   const response = await api.patch(`/companies/${bedrijfId}/herinneringen/`, data)
+  return response.data
+}
+
+export async function verstuurHerinneringNu(
+  bedrijfId: string,
+  ontvangers: string[],
+  facturen?: string[]
+): Promise<{ verstuurd: string[]; fouten: string[] }> {
+  const response = await api.post(`/companies/${bedrijfId}/herinneringen/versturen/`, {
+    ontvangers,
+    facturen,
+  })
   return response.data
 }

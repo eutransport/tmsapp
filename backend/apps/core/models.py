@@ -1102,3 +1102,24 @@ class ActivityLog(models.Model):
             ip_address=ip_address,
             user_agent=user_agent,
         )
+
+
+class UpdateAankondiging(models.Model):
+    """Een aangekondigde update van de applicatie.
+
+    Het updatescript legt vast wanneer de update begint; de webapp toont tot
+    dat moment een aftelbanner en daarna een melding dat er bijgewerkt wordt.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    start_om = models.DateTimeField(verbose_name='Update begint om')
+    afgerond_om = models.DateTimeField(null=True, blank=True, verbose_name='Afgerond om')
+    aangemaakt_op = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Update-aankondiging'
+        verbose_name_plural = 'Update-aankondigingen'
+        ordering = ['-aangemaakt_op']
+
+    def __str__(self):
+        return f'Update {self.start_om:%d-%m-%Y %H:%M}'

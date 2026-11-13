@@ -260,6 +260,25 @@ perform_health_check() {
     fi
 }
 
+# Banner + pushmelding tonen en wachten tot het aangekondigde moment.
+# UPDATE_WACHT=0 slaat het wachten over.
+announce_update() {
+    local wacht="${UPDATE_WACHT:-60}"
+    print_step "Announcing update to users (banner + push notification)..."
+    if docker exec tms-backend python manage.py kondig_update_aan --seconden "$wacht"; then
+        [ "$wacht" -gt 0 ] && sleep "$wacht"
+    else
+        print_warning "Could not announce update - continuing"
+    fi
+    return 0
+}
+
+finish_update_announcement() {
+    docker exec tms-backend python manage.py kondig_update_aan --klaar \
+        || print_warning "Could not clear update banner - it disappears after 30 minutes"
+    return 0
+}
+
 # Main update process
 update() {
     print_header
@@ -324,6 +343,7 @@ update() {
     fi
     
     # Restart containers
+    announce_update
     print_step "Restarting containers..."
     docker compose up -d
     
@@ -355,6 +375,7 @@ update() {
     
     # Reload nginx proxy manager (if using internal nginx)
     docker exec nginx-proxy-manager nginx -s reload 2>/dev/null || true
+    finish_update_announcement
     
     log "Update completed successfully"
     
@@ -393,6 +414,7 @@ update_quick() {
     # Rebuild and restart
     cd "$DOCKER_DIR/tms"
     docker compose build
+    announce_update
     docker compose up -d
     
     # Migrations
@@ -406,6 +428,7 @@ update_quick() {
         rollback "$BACKUP_FILE"
         exit 1
     fi
+    finish_update_announcement
     
     log "Quick update completed"
     echo -e "${GREEN}Update completed successfully${NC}"

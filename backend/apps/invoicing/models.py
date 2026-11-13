@@ -387,6 +387,11 @@ class FactuurHerinnering(models.Model):
         verbose_name='Opgegeven',
         help_text='Na herhaald mislukken wordt niet meer geprobeerd.',
     )
+    handmatig = models.BooleanField(
+        default=False,
+        verbose_name='Handmatig verstuurd',
+        help_text='Zelf verstuurd vanuit het scherm; telt niet als slot van het schema.',
+    )
 
     class Meta:
         verbose_name = 'Betalingsherinnering'
@@ -395,6 +400,7 @@ class FactuurHerinnering(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=['invoice', 'ronde'],
+                condition=models.Q(handmatig=False),
                 name='uniek_herinnering_per_ronde',
             )
         ]

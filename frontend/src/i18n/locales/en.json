@@ -624,7 +624,22 @@
     "reminderInterval": "Every how many days",
     "reminderCount": "Number of reminders",
     "reminderSchedule": "Reminder on day {{dagen}} after the due date.",
-    "reminderNoRecipients": "Note: the mailing list has no contacts, so nothing can be sent.",
+    "reminderNoRecipients": "Note: no recipient selected, so nothing can be sent.",
+    "reminderCompanyEmail": "Company address",
+    "reminderInvalidEmail": "Enter a valid email address",
+    "reminderNoSelection": "Select at least one recipient",
+    "reminderNoInvoices": "Select at least one invoice",
+    "reminderSendConfirm": "Send a reminder for {{aantal}} invoice(s) now to {{ontvangers}}?",
+    "reminderSent": "Reminder sent for: {{nummers}}",
+    "reminderSendError": "Sending failed",
+    "reminderRecipients": "Send to",
+    "reminderNoCandidates": "No email addresses known yet; add one below.",
+    "reminderNewEmail": "New email address",
+    "reminderSendNowTitle": "Send a reminder now",
+    "reminderNothingOverdue": "There are no overdue invoices.",
+    "reminderDue": "due {{datum}}",
+    "reminderLast": "last reminder {{datum}}",
+    "reminderSendNow": "Send reminder now",
     "reminderLoadError": "The setting could not be loaded.",
     "reminderSaveError": "The setting could not be saved.",
     "addContact": "Add contact",
@@ -3291,5 +3306,12 @@
     "ongoing": "ongoing",
     "periodSaved": "Period saved",
     "periodDeleteConfirm": "Delete this period? The charter will no longer see hours from this period."
+  },
+  "appUpdate": {
+    "title": "An update is coming",
+    "text": "Save your work. The app will be unavailable for a few minutes during the update.",
+    "countdown": "until update",
+    "busyTitle": "The application is being updated",
+    "busyText": "Please wait; the page reloads automatically once the update is finished."
   }
 }

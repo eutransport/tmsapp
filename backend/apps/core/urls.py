@@ -5,6 +5,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     PublicSettingsView, 
+    UpdateStatusView,
     AdminSettingsViewSet, 
     DashboardStatsView,
     DashboardStatsPerAdministratieView,
@@ -38,6 +39,9 @@ urlpatterns = [
     
     # Public settings (no auth required)
     path('settings/', PublicSettingsView.as_view(), name='public-settings'),
+
+    # Aangekondigde update, voor de banner (no auth required)
+    path('update-status/', UpdateStatusView.as_view(), name='update-status'),
 
     # Android app download
     path('app/android/', AndroidAppInfoView.as_view(), name='android-app-info'),

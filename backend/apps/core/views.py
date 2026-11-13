@@ -191,6 +191,36 @@ class PublicSettingsView(APIView):
         return Response(serializer.data)
 
 
+class UpdateStatusView(APIView):
+    """Of er een update is aangekondigd, voor de banner in de webapp.
+
+    Openbaar, zodat ook het inlogscherm de banner toont. De servertijd gaat
+    mee zodat het aftellen klopt, ook als de klok van het toestel afwijkt.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = []
+
+    # Daarna gaat de banner sowieso weg, ook als het script nooit '--klaar' meldt.
+    MAX_DUUR = timedelta(minutes=30)
+
+    def get(self, request):
+        from .models import UpdateAankondiging
+
+        nu = timezone.now()
+        aankondiging = (
+            UpdateAankondiging.objects
+            .filter(afgerond_om__isnull=True, start_om__gte=nu - self.MAX_DUUR)
+            .order_by('-aangemaakt_op')
+            .first()
+        )
+        return Response({
+            'gepland': aankondiging is not None,
+            'start_om': aankondiging.start_om.isoformat() if aankondiging else None,
+            'server_tijd': nu.isoformat(),
+        })
+
+
 class AdminSettingsViewSet(ViewSet):
     """
     Admin endpoint for managing all app settings.

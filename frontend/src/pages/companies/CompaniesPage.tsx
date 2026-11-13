@@ -30,6 +30,7 @@ import {
   deleteMailingContact,
   getHerinneringInstelling,
   saveHerinneringInstelling,
+  verstuurHerinneringNu,
   HerinneringInstelling,
 } from '@/api/companies'
 import { getAllVehicles } from '@/api/fleet'
@@ -679,11 +680,27 @@ function HerinneringPanel({ company, onClose, onSaved }: {
   const [laden, setLaden] = useState(true)
   const [bezig, setBezig] = useState(false)
   const [fout, setFout] = useState<string | null>(null)
+  const [melding, setMelding] = useState<string | null>(null)
+  const [extra, setExtra] = useState<string[]>([])
+  const [gekozen, setGekozen] = useState<string[]>([])
+  const [nieuwAdres, setNieuwAdres] = useState('')
+  const [facturen, setFacturen] = useState<string[]>([])
+
+  const standaard = (data: HerinneringInstelling) => {
+    const lijst = data.mailinglijst.map(c => c.email)
+    return lijst.length ? lijst : (data.bedrijf_email ? [data.bedrijf_email] : [])
+  }
+
+  const verwerk = (data: HerinneringInstelling) => {
+    setInstelling(data)
+    setGekozen(data.ontvangers.length ? data.ontvangers : standaard(data))
+    setFacturen(data.te_laat.map(f => f.id))
+  }
 
   useEffect(() => {
     let actueel = true
     getHerinneringInstelling(company.id)
-      .then(data => { if (actueel) setInstelling(data) })
+      .then(data => { if (actueel) verwerk(data) })
       .catch(() => { if (actueel) setFout(t('companies.reminderLoadError', 'Instelling laden mislukt')) })
       .finally(() => { if (actueel) setLaden(false) })
     return () => { actueel = false }
@@ -693,21 +710,104 @@ function HerinneringPanel({ company, onClose, onSaved }: {
     setInstelling(vorig => (vorig ? { ...vorig, ...velden } : vorig))
   }
 
+  const zelfde = (a: string[], b: string[]) =>
+    a.length === b.length && a.every(x => b.some(y => y.toLowerCase() === x.toLowerCase()))
+
+  const kandidaten: { email: string; naam: string }[] = []
+  if (instelling) {
+    const voegToe = (email: string, naam: string) => {
+      if (email && !kandidaten.some(k => k.email.toLowerCase() === email.toLowerCase())) {
+        kandidaten.push({ email, naam })
+      }
+    }
+    instelling.mailinglijst.forEach(c => voegToe(c.email, c.naam))
+    voegToe(instelling.bedrijf_email, t('companies.reminderCompanyEmail', 'Bedrijfsadres'))
+    instelling.ontvangers.forEach(e => voegToe(e, ''))
+    extra.forEach(e => voegToe(e, ''))
+  }
+
+  const wisselOntvanger = (email: string) => {
+    setGekozen(vorig =>
+      vorig.some(e => e.toLowerCase() === email.toLowerCase())
+        ? vorig.filter(e => e.toLowerCase() !== email.toLowerCase())
+        : [...vorig, email]
+    )
+  }
+
+  const adresToevoegen = () => {
+    const adres = nieuwAdres.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adres)) {
+      setFout(t('companies.reminderInvalidEmail', 'Vul een geldig e-mailadres in'))
+      return
+    }
+    setFout(null)
+    if (!kandidaten.some(k => k.email.toLowerCase() === adres.toLowerCase())) {
+      setExtra(vorig => [...vorig, adres])
+    }
+    if (!gekozen.some(e => e.toLowerCase() === adres.toLowerCase())) {
+      setGekozen(vorig => [...vorig, adres])
+    }
+    setNieuwAdres('')
+  }
+
   const opslaan = async () => {
     if (!instelling) return
+    if (instelling.actief && gekozen.length === 0) {
+      setFout(t('companies.reminderNoSelection', 'Kies minstens één ontvanger'))
+      return
+    }
     setBezig(true)
     setFout(null)
     try {
+      // Komt de keuze overeen met de mailinglijst, dan blijft hij meebewegen met die lijst.
+      const ontvangers = gekozen.length === 0 || zelfde(gekozen, standaard(instelling)) ? [] : gekozen
       const data = await saveHerinneringInstelling(company.id, {
         actief: instelling.actief,
         interval_dagen: instelling.interval_dagen,
         max_herinneringen: instelling.max_herinneringen,
+        ontvangers,
       })
-      setInstelling(data)
+      verwerk(data)
       onSaved()
       onClose()
     } catch {
       setFout(t('companies.reminderSaveError', 'Instelling opslaan mislukt'))
+    } finally {
+      setBezig(false)
+    }
+  }
+
+  const nuVersturen = async () => {
+    if (!instelling) return
+    if (gekozen.length === 0) {
+      setFout(t('companies.reminderNoSelection', 'Kies minstens één ontvanger'))
+      return
+    }
+    if (facturen.length === 0) {
+      setFout(t('companies.reminderNoInvoices', 'Kies minstens één factuur'))
+      return
+    }
+    if (!window.confirm(t('companies.reminderSendConfirm', 'Herinnering voor {{aantal}} factuur/facturen nu versturen naar {{ontvangers}}?', {
+      aantal: facturen.length,
+      ontvangers: gekozen.join(', '),
+    }))) return
+
+    setBezig(true)
+    setFout(null)
+    setMelding(null)
+    try {
+      const uitkomst = await verstuurHerinneringNu(company.id, gekozen, facturen)
+      if (uitkomst.verstuurd.length) {
+        setMelding(t('companies.reminderSent', 'Herinnering verstuurd voor: {{nummers}}', {
+          nummers: uitkomst.verstuurd.join(', '),
+        }))
+      }
+      if (uitkomst.fouten.length) {
+        setFout(uitkomst.fouten.join('\n'))
+      }
+      verwerk(await getHerinneringInstelling(company.id))
+    } catch (err: any) {
+      setFout(err?.response?.data?.error || t('companies.reminderSendError', 'Versturen mislukt'))
     } finally {
       setBezig(false)
     }
@@ -736,7 +836,7 @@ function HerinneringPanel({ company, onClose, onSaved }: {
     { length: instelling.max_herinneringen },
     (_, i) => instelling.interval_dagen * (i + 1)
   )
-  const geenOntvangers = (company.mailing_contacts_count || 0) === 0 && !company.email
+  const geenOntvangers = gekozen.length === 0
 
   return (
     <div className="space-y-5">
@@ -744,7 +844,8 @@ function HerinneringPanel({ company, onClose, onSaved }: {
         {t('companies.reminderIntro', 'Stuur automatisch een betalingsherinnering als een factuur van {{naam}} te laat is.', { naam: company.naam })}
       </p>
 
-      {fout && <p className="text-sm text-red-600">{fout}</p>}
+      {fout && <p className="whitespace-pre-line text-sm text-red-600">{fout}</p>}
+      {melding && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800">{melding}</p>}
 
       <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3">
         <input
@@ -804,9 +905,90 @@ function HerinneringPanel({ company, onClose, onSaved }: {
 
       {instelling.actief && geenOntvangers && (
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-          {t('companies.reminderNoRecipients', 'Let op: er staan geen contacten in de mailinglijst, dus er kan niets verstuurd worden.')}
+          {t('companies.reminderNoRecipients', 'Let op: er is geen ontvanger gekozen, dus er kan niets verstuurd worden.')}
         </p>
       )}
+
+      <div className="space-y-2">
+        <p className="label">{t('companies.reminderRecipients', 'Versturen naar')}</p>
+        {kandidaten.length === 0 && (
+          <p className="text-sm text-gray-500">
+            {t('companies.reminderNoCandidates', 'Nog geen e-mailadressen bekend; voeg er hieronder een toe.')}
+          </p>
+        )}
+        <div className="space-y-1">
+          {kandidaten.map(k => (
+            <label key={k.email} className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={gekozen.some(e => e.toLowerCase() === k.email.toLowerCase())}
+                onChange={() => wisselOntvanger(k.email)}
+                className="h-4 w-4 rounded border-gray-300 text-primary-600"
+              />
+              <span className="text-gray-900">{k.email}</span>
+              {k.naam && <span className="text-gray-500">({k.naam})</span>}
+            </label>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="email"
+            value={nieuwAdres}
+            onChange={e => setNieuwAdres(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); adresToevoegen() } }}
+            placeholder={t('companies.reminderNewEmail', 'Nieuw e-mailadres')}
+            className="input flex-1"
+          />
+          <button type="button" onClick={adresToevoegen} className="btn-secondary">
+            <PlusIcon className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-2 border-t pt-4">
+        <p className="label">{t('companies.reminderSendNowTitle', 'Nu een herinnering versturen')}</p>
+        {instelling.te_laat.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            {t('companies.reminderNothingOverdue', 'Er staan geen te late facturen open.')}
+          </p>
+        ) : (
+          <>
+            <div className="max-h-48 space-y-1 overflow-y-auto">
+              {instelling.te_laat.map(f => (
+                <label key={f.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={facturen.includes(f.id)}
+                    onChange={() => setFacturen(vorig =>
+                      vorig.includes(f.id) ? vorig.filter(id => id !== f.id) : [...vorig, f.id]
+                    )}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                  />
+                  <span className="font-medium text-gray-900">{f.factuurnummer}</span>
+                  <span className="text-gray-500">
+                    {t('companies.reminderDue', 'vervallen {{datum}}', {
+                      datum: new Date(f.vervaldatum).toLocaleDateString('nl-NL'),
+                    })}
+                    {' · € '}{Number(f.totaal).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}
+                    {f.laatste_herinnering && ` · ${t('companies.reminderLast', 'laatste herinnering {{datum}}', {
+                      datum: new Date(f.laatste_herinnering).toLocaleDateString('nl-NL'),
+                    })}`}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={nuVersturen}
+              className="btn-secondary inline-flex items-center gap-2"
+              disabled={bezig || facturen.length === 0 || gekozen.length === 0}
+            >
+              <EnvelopeIcon className="h-4 w-4" />
+              {t('companies.reminderSendNow', 'Herinnering nu versturen')}
+            </button>
+          </>
+        )}
+      </div>
 
       <div className="flex justify-end gap-2 border-t pt-3">
         <button onClick={onClose} className="btn-secondary" disabled={bezig}>

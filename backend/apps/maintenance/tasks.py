@@ -77,6 +77,13 @@ def _recipients(record, instellingen=None) -> list[str]:
             adres = str(adres).strip()
             if adres and adres not in adressen:
                 adressen.append(adres)
+
+    # Zelfde terugval als de melding in de app: anders komt er wel een
+    # pushbericht binnen maar nooit een mail.
+    if not adressen:
+        for user in _onderhoud_beheerders():
+            if user.email and user.email not in adressen:
+                adressen.append(user.email)
     return adressen
 
 

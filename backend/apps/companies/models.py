@@ -89,6 +89,12 @@ class HerinneringInstelling(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(10)],
         verbose_name='Aantal herinneringen',
     )
+    ontvangers = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Ontvangers',
+        help_text='Leeg = alle actieve contacten uit de mailinglijst (of het bedrijfsadres).',
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

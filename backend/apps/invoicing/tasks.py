@@ -58,7 +58,19 @@ def _taal_van(bedrijf_id):
     return (instelling.taal if instelling else 'nl') or 'nl'
 
 
+def _uniek(adressen):
+    gezien = set()
+    return [a for a in adressen if not (a.lower() in gezien or gezien.add(a.lower()))]
+
+
 def _ontvangers(bedrijf):
+    """Ingestelde ontvangers, anders de mailinglijst, anders het bedrijfsadres."""
+    instelling = getattr(bedrijf, 'herinnering_instelling', None)
+    gekozen = [str(a).strip() for a in (getattr(instelling, 'ontvangers', None) or [])]
+    gekozen = [a for a in gekozen if a]
+    if gekozen:
+        return _uniek(gekozen)
+
     adressen = list(
         MailingListContact.objects.filter(bedrijf=bedrijf, is_active=True)
         .exclude(email='')
@@ -66,9 +78,7 @@ def _ontvangers(bedrijf):
     )
     if not adressen and bedrijf.email:
         adressen = [bedrijf.email]
-    # Dubbelen eruit, volgorde behouden.
-    gezien = set()
-    return [a for a in adressen if not (a.lower() in gezien or gezien.add(a.lower()))]
+    return _uniek(adressen)
 
 
 def _bedrag(waarde: Decimal) -> str:
@@ -77,8 +87,8 @@ def _bedrag(waarde: Decimal) -> str:
     return f'{met_punten},{decimalen}'
 
 
-def _verstuur(factuur: Invoice, ronde: int, dagen_te_laat: int) -> bool:
-    ontvangers = _ontvangers(factuur.bedrijf)
+def _verstuur(factuur: Invoice, ronde: int, dagen_te_laat: int, ontvangers=None) -> bool:
+    ontvangers = ontvangers if ontvangers is not None else _ontvangers(factuur.bedrijf)
     if not ontvangers:
         logger.warning('Geen ontvangers voor herinnering %s', factuur.factuurnummer)
         return False
@@ -154,7 +164,7 @@ def _poging(slot, mislukt: list) -> bool:
     slot.laatste_poging = timezone.now()
     slot.fout = ''
     try:
-        slot.gelukt = _verstuur(factuur, slot.ronde, slot.dagen_te_laat)
+        slot.gelukt = _verstuur(factuur, slot.ronde, slot.dagen_te_laat, slot.ontvangers or None)
         if not slot.gelukt:
             slot.fout = 'Geen ontvangers of geen SMTP-server ingesteld.'
     except Exception as fout:
@@ -318,7 +328,7 @@ def _herkansingen(bedrijven, nieuw):
     """
     sloten = (
         FactuurHerinnering.objects
-        .filter(gelukt=False, opgegeven=False, pogingen__lt=MAX_POGINGEN)
+        .filter(gelukt=False, opgegeven=False, handmatig=False, pogingen__lt=MAX_POGINGEN)
         .exclude(pk__in=nieuw)
         .select_related('invoice', 'invoice__bedrijf')
     )
@@ -336,3 +346,59 @@ def _herkansingen(bedrijven, nieuw):
             continue
         open_sloten.append(slot)
     return open_sloten
+
+
+def openstaande_facturen(bedrijf):
+    """Verstuurde verkoopfacturen van dit bedrijf waarvan de vervaldatum voorbij is."""
+    return (
+        Invoice.objects
+        .filter(
+            bedrijf=bedrijf,
+            type=InvoiceType.VERKOOP,
+            status=InvoiceStatus.VERZONDEN,
+            vervaldatum__lt=timezone.localdate(),
+        )
+        .order_by('vervaldatum')
+    )
+
+
+def verstuur_handmatig(bedrijf, ontvangers, factuur_ids=None) -> dict:
+    """Direct een herinnering sturen voor de te late facturen van een bedrijf.
+
+    Werkt los van het schema en het portaal; de gebruiker kiest zelf de
+    ontvangers. Elke poging wordt vastgelegd als handmatige herinnering.
+    """
+    vandaag = timezone.localdate()
+    facturen = openstaande_facturen(bedrijf).select_related('bedrijf')
+    if factuur_ids:
+        facturen = facturen.filter(pk__in=factuur_ids)
+
+    verstuurd, fouten = [], []
+    for factuur in facturen:
+        eerder = FactuurHerinnering.objects.filter(invoice=factuur, gelukt=True).count()
+        dagen = (vandaag - factuur.vervaldatum).days
+        slot = FactuurHerinnering.objects.create(
+            invoice=factuur,
+            ronde=eerder + 1,
+            dagen_te_laat=min(dagen, 32767),
+            ontvangers=ontvangers,
+            handmatig=True,
+            pogingen=1,
+            laatste_poging=timezone.now(),
+        )
+        try:
+            slot.gelukt = _verstuur(factuur, slot.ronde, dagen, ontvangers)
+            if not slot.gelukt:
+                slot.fout = 'Geen ontvangers of geen SMTP-server ingesteld.'
+        except Exception as fout:
+            logger.exception('Handmatige herinnering %s mislukt', factuur.factuurnummer)
+            slot.fout = f'{type(fout).__name__}: {fout}'[:500]
+        slot.opgegeven = not slot.gelukt
+        slot.save(update_fields=['gelukt', 'fout', 'opgegeven'])
+
+        if slot.gelukt:
+            verstuurd.append(factuur.factuurnummer)
+        else:
+            fouten.append(f'{factuur.factuurnummer}: {slot.fout}')
+
+    return {'verstuurd': verstuurd, 'fouten': fouten}

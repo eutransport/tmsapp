@@ -4,17 +4,37 @@ from .models import Company, HerinneringInstelling, MailingListContact
 
 class HerinneringInstellingSerializer(serializers.ModelSerializer):
     dagen_reeks = serializers.SerializerMethodField()
+    ontvangers = serializers.ListField(
+        child=serializers.EmailField(), required=False, max_length=50
+    )
 
     class Meta:
         model = HerinneringInstelling
         fields = [
             'id', 'bedrijf', 'actief', 'interval_dagen', 'max_herinneringen',
-            'dagen_reeks', 'updated_at',
+            'ontvangers', 'dagen_reeks', 'updated_at',
         ]
         read_only_fields = ['id', 'bedrijf', 'updated_at']
 
+    def validate_ontvangers(self, value):
+        gezien, uniek = set(), []
+        for adres in value:
+            if adres.lower() not in gezien:
+                gezien.add(adres.lower())
+                uniek.append(adres)
+        return uniek
+
     def get_dagen_reeks(self, obj):
         return obj.dagen_reeks()
+
+
+class HerinneringVersturenSerializer(serializers.Serializer):
+    ontvangers = serializers.ListField(
+        child=serializers.EmailField(), min_length=1, max_length=50
+    )
+    facturen = serializers.ListField(
+        child=serializers.UUIDField(), required=False, allow_empty=True
+    )
 
 
 class MailingListContactSerializer(serializers.ModelSerializer):

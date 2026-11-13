@@ -183,6 +183,15 @@ update() {
         exit 0
     fi
     
+    # Banner + pushmelding; UPDATE_WACHT=0 slaat het wachten over.
+    local wacht="${UPDATE_WACHT:-60}"
+    print_step "Announcing update to users (banner + push notification)..."
+    if (cd "$INSTALL_DIR/backend" && sudo -u "$SERVICE_USER" ./venv/bin/python manage.py kondig_update_aan --seconden "$wacht"); then
+        [ "$wacht" -gt 0 ] && sleep "$wacht"
+    else
+        print_warning "Could not announce update - continuing"
+    fi
+
     # Stop application for update
     print_step "Stopping application..."
     supervisorctl stop tms
@@ -227,6 +236,8 @@ update() {
     
     if [ "$HTTP_CODE" = "200" ]; then
         echo -e "${GREEN}✓ Health check passed${NC}"
+        (cd "$INSTALL_DIR/backend" && sudo -u "$SERVICE_USER" ./venv/bin/python manage.py kondig_update_aan --klaar) \
+            || print_warning "Could not clear update banner - it disappears after 30 minutes"
     else
         print_warning "Health check returned: $HTTP_CODE"
         
