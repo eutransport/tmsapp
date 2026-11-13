@@ -27,6 +27,18 @@ class UpdateAankondigingTests(TestCase):
 
         call_command('kondig_update_aan', '--klaar', stdout=mock.Mock())
         self.assertFalse(self.status()['gepland'])
+        self.assertEqual(service.return_value.send_to_all.call_count, 2)
+        self.assertEqual(service.return_value.send_to_all.call_args.kwargs['data'], {'type': 'app_update_klaar'})
+
+    @mock.patch('apps.notifications.services.get_push_service')
+    def test_nieuwe_versie_rondt_zelf_af_met_een_push(self, service):
+        service.return_value.is_configured.return_value = True
+        UpdateAankondiging.objects.create(start_om=timezone.now() - timedelta(minutes=2))
+        with mock.patch('apps.core.views.PROCES_START', timezone.now()):
+            self.assertFalse(self.status()['gepland'])
+            self.assertFalse(self.status()['gepland'])
+        service.return_value.send_to_all.assert_called_once()
+        self.assertFalse(UpdateAankondiging.objects.filter(afgerond_om__isnull=True).exists())
 
     def test_vergeten_klaarmelding_verloopt(self):
         UpdateAankondiging.objects.create(start_om=timezone.now() - timedelta(hours=1))

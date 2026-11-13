@@ -22,6 +22,9 @@ from django.core.cache import cache
 from django.utils import timezone
 from datetime import timedelta
 
+# Moment waarop deze backendversie is gestart (per worker).
+PROCES_START = timezone.now()
+
 from apps.core.permissions import IsAdminOnly
 
 
@@ -214,6 +217,11 @@ class UpdateStatusView(APIView):
             .order_by('-aangemaakt_op')
             .first()
         )
+        # Dit proces is na het startmoment opgestart: de nieuwe versie draait,
+        # dus de update is klaar, ook als het script '--klaar' niet meldde.
+        if aankondiging and aankondiging.start_om <= PROCES_START:
+            UpdateAankondiging.rond_af(start_om__lte=PROCES_START)
+            aankondiging = None
         return Response({
             'gepland': aankondiging is not None,
             'start_om': aankondiging.start_om.isoformat() if aankondiging else None,

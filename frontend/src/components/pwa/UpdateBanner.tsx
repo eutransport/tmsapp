@@ -27,6 +27,7 @@ export default function UpdateBanner() {
   // Verschil tussen de klok van de server en die van dit toestel.
   const verschil = useRef(0)
   const aangekondigd = useRef(false)
+  const wasWeg = useRef(false)
 
   useEffect(() => {
     let actief = true
@@ -38,6 +39,12 @@ export default function UpdateBanner() {
         const { data } = await api.get<UpdateStatus>('/core/update-status/', { timeout: 8000 })
         if (!actief) return
         verschil.current = new Date(data.server_tijd).getTime() - Date.now()
+
+        if (wasWeg.current) {
+          // Server was weg en is terug: de update is klaar, nieuwe versie ophalen.
+          window.location.reload()
+          return
+        }
 
         if (data.gepland && data.start_om) {
           aangekondigd.current = true
@@ -55,6 +62,7 @@ export default function UpdateBanner() {
         if (!actief) return
         // Server weg na een aankondiging betekent: de update loopt.
         if (aangekondigd.current) {
+          wasWeg.current = true
           setBezig(true)
           volgende = POLL_ACTIEF
         }

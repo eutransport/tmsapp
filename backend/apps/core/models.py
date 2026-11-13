@@ -12,6 +12,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.validators import FileExtensionValidator
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -1123,3 +1124,27 @@ class UpdateAankondiging(models.Model):
 
     def __str__(self):
         return f'Update {self.start_om:%d-%m-%Y %H:%M}'
+
+    @classmethod
+    def rond_af(cls, push=True, **filters):
+        """Sluit open aankondigingen en meld dat de app weer beschikbaar is.
+
+        De update() is atomair: bij gelijktijdige aanroepen (meerdere workers,
+        script) gaat de pushmelding maar één keer de deur uit.
+        """
+        aantal = cls.objects.filter(afgerond_om__isnull=True, **filters).update(afgerond_om=timezone.now())
+        if aantal and push:
+            try:
+                from apps.notifications.services import get_push_service
+
+                service = get_push_service()
+                if service.is_configured():
+                    service.send_to_all(
+                        title='De applicatie is weer beschikbaar',
+                        body='De update is afgerond. Je kunt de app weer gebruiken.',
+                        url='/',
+                        data={'type': 'app_update_klaar'},
+                    )
+            except Exception:  # noqa: BLE001
+                logging.getLogger(__name__).exception('Pushmelding na update mislukt')
+        return aantal

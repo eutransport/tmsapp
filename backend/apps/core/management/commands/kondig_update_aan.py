@@ -28,7 +28,7 @@ class Command(BaseCommand):
         nu = timezone.now()
 
         if opties['klaar']:
-            aantal = UpdateAankondiging.objects.filter(afgerond_om__isnull=True).update(afgerond_om=nu)
+            aantal = UpdateAankondiging.rond_af(push=not opties['geen_push'])
             self.stdout.write(self.style.SUCCESS(f'Update afgerond ({aantal} aankondiging(en) gesloten).'))
             return
 
